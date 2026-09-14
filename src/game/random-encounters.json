@@ -1,0 +1,52 @@
+{
+  "regions": [
+    {
+      "id": "forest",
+      "name": "Floresta Tropical",
+      "encounterIds": [
+        "random-encounter-1",
+        "random-encounter-2"
+      ]
+    },
+    {
+      "id": "mountain",
+      "name": "Montanha",
+      "encounterIds": []
+    },
+    {
+      "id": "swamp",
+      "name": "Pântano",
+      "encounterIds": []
+    },
+    {
+      "id": "ice",
+      "name": "Gelo",
+      "encounterIds": []
+    },
+    {
+      "id": "dead-nature",
+      "name": "Natureza Morta",
+      "encounterIds": []
+    },
+    {
+      "id": "underworld",
+      "name": "Submundo",
+      "encounterIds": []
+    },
+    {
+      "id": "aquatic",
+      "name": "Aquática",
+      "encounterIds": []
+    },
+    {
+      "id": "road",
+      "name": "Estrada",
+      "encounterIds": []
+    },
+    {
+      "id": "plains",
+      "name": "Planície",
+      "encounterIds": []
+    }
+  ]
+}

@@ -1,0 +1,679 @@
+let ctx: AudioContext | null = null;
+let master: GainNode | null = null;
+let sfx: GainNode | null = null;
+let music: GainNode | null = null;
+let muted = false;
+const AUDIO_SETTINGS_KEY = "ember-ashes-audio-v1";
+const clampVolume = (value: number) => Math.max(0, Math.min(1, value));
+let musicVolume = 0.65;
+let sfxVolume = 1;
+let musicTimer = 0;
+let htmlPrime: HTMLAudioElement | null = null;
+let retryTimer = 0;
+const htmlUrls: Record<string, string> = {};
+
+if (typeof window !== "undefined") {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(AUDIO_SETTINGS_KEY) ?? "{}") as { music?: unknown; sfx?: unknown };
+    if (typeof saved.music === "number") musicVolume = clampVolume(saved.music);
+    if (typeof saved.sfx === "number") sfxVolume = clampVolume(saved.sfx);
+  } catch {
+    // Audio preferences are optional; defaults keep the game playable when storage is blocked.
+  }
+}
+
+function persistAudioSettings(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify({ music: musicVolume, sfx: sfxVolume }));
+  } catch {
+    // A private-storage browser can still use the current session's settings.
+  }
+}
+
+function applyMusicVolume(): void {
+  if (typeof document === "undefined") return;
+  document.querySelectorAll<HTMLAudioElement>("audio[data-ember-music-base]").forEach((el) => {
+    const base = Number(el.dataset.emberMusicBase ?? "0.4");
+    el.volume = clampVolume(base * musicVolume);
+  });
+}
+
+export function getAudioVolumes(): { music: number; sfx: number } {
+  return { music: musicVolume, sfx: sfxVolume };
+}
+
+export function setMusicVolume(value: number): void {
+  musicVolume = clampVolume(value);
+  applyMusicVolume();
+  persistAudioSettings();
+}
+
+export function setSfxVolume(value: number): void {
+  sfxVolume = clampVolume(value);
+  if (sfx && ctx) sfx.gain.setTargetAtTime(sfxVolume, ctx.currentTime, 0.02);
+  persistAudioSettings();
+}
+
+if (typeof window !== "undefined") {
+  const g = window as Window & { __brasaMusic?: number };
+  if (g.__brasaMusic) {
+    clearInterval(g.__brasaMusic);
+    g.__brasaMusic = 0;
+  }
+}
+
+function wavTone(freq: number, dur: number, volume: number, kind: "sine" | "square" | "noise" = "sine"): string {
+  const key = `${kind}:${freq}:${dur}:${volume}`;
+  if (htmlUrls[key]) return htmlUrls[key];
+  const sr = 22050;
+  const n = Math.max(2, Math.floor(sr * dur));
+  const pcm = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const env = Math.min(1, i / (sr * 0.012)) * Math.min(1, (n - i) / (sr * 0.05));
+    let s: number;
+    if (kind === "noise") s = Math.random() * 2 - 1;
+    else if (kind === "square") s = Math.sin((2 * Math.PI * freq * i) / sr) > 0 ? 1 : -1;
+    else s = Math.sin((2 * Math.PI * freq * i) / sr);
+    pcm[i] = (s * env * volume * 32767) | 0;
+  }
+  const bytes = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(bytes);
+  const ascii = (o: number, t: string) => {
+    for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i));
+  };
+  ascii(0, "RIFF");
+  v.setUint32(4, 36 + n * 2, true);
+  ascii(8, "WAVE");
+  ascii(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true);
+  v.setUint32(28, sr * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  ascii(36, "data");
+  v.setUint32(40, n * 2, true);
+  new Uint8Array(bytes, 44).set(new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength));
+  const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+  htmlUrls[key] = url;
+  return url;
+}
+
+function playHtml(url: string, volume = 0.7): void {
+  if (muted || typeof Audio === "undefined") return;
+  const a = new Audio(url);
+  a.volume = Math.min(1, volume * sfxVolume);
+  void a.play().catch(() => {});
+}
+
+function ac(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (!ctx) {
+    const C = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!C) return null;
+    ctx = new C({ latencyHint: "interactive" });
+    master = ctx.createGain();
+    sfx = ctx.createGain();
+    music = ctx.createGain();
+    sfx.gain.value = sfxVolume;
+    music.gain.value = 0.35;
+    sfx.connect(master);
+    music.connect(master);
+    master.connect(ctx.destination);
+    master.gain.value = muted ? 0 : 1;
+  }
+  return ctx;
+}
+
+function silentTick(c: AudioContext): void {
+  const buf = c.createBuffer(1, 1, c.sampleRate);
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  src.connect(c.destination);
+  try {
+    src.start(0);
+  } catch {
+    // ignore
+  }
+}
+
+function htmlUnlock(): void {
+  if (typeof Audio === "undefined") return;
+  if (!htmlPrime) {
+    htmlPrime = new Audio(wavTone(440, 0.04, 0.0008));
+    htmlPrime.volume = 0.01;
+  }
+  htmlPrime.currentTime = 0;
+  void htmlPrime.play().catch(() => {});
+}
+
+export function unlockAudio(): void {
+  htmlUnlock();
+  const c = ac();
+  if (!c) return;
+  if (c.state === "suspended") {
+    void c.resume().then(() => {
+      if (ctx && ctx.state === "running") silentTick(ctx);
+    });
+  }
+  silentTick(c);
+}
+
+export function setMuted(next: boolean): void {
+  muted = next;
+  if (master && ctx) {
+    master.gain.setTargetAtTime(next ? 0 : 1, ctx.currentTime, 0.02);
+  }
+  if (!next) {
+    unlockAudio();
+  } else {
+    stopMusic();
+  }
+}
+
+export function isMuted(): boolean {
+  return muted;
+}
+
+function beep(freq: number, dur: number, type: OscillatorType, gain = 0.22, slide = 0): void {
+  if (muted) return;
+  const c = ac();
+  if (!c || c.state !== "running") {
+    playHtml(wavTone(freq, dur, Math.min(0.9, gain * 2.4), type === "square" ? "square" : "sine"), Math.min(1, gain * 3));
+    if (c && c.state === "suspended") void c.resume();
+    return;
+  }
+  if (!sfx) return;
+  const t0 = c.currentTime;
+  const osc = c.createOscillator();
+  const g = c.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g);
+  g.connect(sfx);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.02);
+}
+
+function noise(dur: number, gain = 0.22): void {
+  if (muted) return;
+  const c = ac();
+  if (!c || c.state !== "running") {
+    playHtml(wavTone(180, dur, Math.min(0.8, gain * 2), "noise"), Math.min(1, gain * 2.5));
+    if (c && c.state === "suspended") void c.resume();
+    return;
+  }
+  if (!sfx) return;
+  const n = c.createBuffer(1, Math.floor(c.sampleRate * dur), c.sampleRate);
+  const data = n.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  const src = c.createBufferSource();
+  src.buffer = n;
+  const g = c.createGain();
+  const t0 = c.currentTime;
+  g.gain.setValueAtTime(gain, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  const f = c.createBiquadFilter();
+  f.type = "bandpass";
+  f.frequency.value = 1800;
+  src.connect(f);
+  f.connect(g);
+  g.connect(sfx);
+  src.start(t0);
+  src.stop(t0 + dur + 0.02);
+}
+
+/** One-shot effect from a file in public/game/MUSIC/SoundFX, layered over whatever music or
+ * synthesised beep is already playing rather than replacing it — unlike playFile, this never
+ * touches the theme/track elements, so it can't interrupt them. A fresh Audio() per call: the
+ * previous play is left to finish on its own instead of being cut short by the next one. */
+function playSfxFile(file: string, volume = 0.55): void {
+  if (muted || typeof Audio === "undefined") return;
+  const el = new Audio(`/game/MUSIC/SoundFX/${file}`);
+  el.volume = volume * sfxVolume;
+  el.play().catch(() => {});
+}
+
+export const sfxPlay = {
+  // Each common game event uses a short layered cue rather than a single UI beep.
+  // These are deliberately compact: combat stays readable even during multi-target actions.
+  select: () => {
+    beep(430, 0.09, "triangle", 0.13, 86);
+    setTimeout(() => beep(690, 0.1, "sine", 0.1, 44), 28);
+  },
+  move: () => {
+    noise(0.055, 0.07);
+    beep(136, 0.11, "sine", 0.11, -36);
+  },
+  ui: () => {
+    beep(560, 0.075, "triangle", 0.11, 112);
+    setTimeout(() => beep(812, 0.065, "sine", 0.075, 42), 20);
+  },
+  purchase: () => {
+    // Three short metallic drops: unmistakably coins, restrained enough for repeated buys.
+    beep(1180, 0.055, "square", 0.08, -210);
+    setTimeout(() => beep(940, 0.07, "triangle", 0.11, -150), 45);
+    setTimeout(() => beep(1320, 0.11, "sine", 0.12, -180), 105);
+  },
+  hit: () => {
+    noise(0.12, 0.26);
+    beep(122, 0.16, "sawtooth", 0.2, -70);
+    setTimeout(() => beep(310, 0.06, "square", 0.075, -120), 12);
+  },
+  crit: () => {
+    noise(0.16, 0.34);
+    beep(104, 0.22, "sawtooth", 0.22, -60);
+    setTimeout(() => beep(424, 0.13, "square", 0.16, 118), 22);
+    setTimeout(() => beep(638, 0.15, "triangle", 0.11, 94), 58);
+  },
+  death: () => {
+    noise(0.24, 0.18);
+    beep(126, 0.52, "sawtooth", 0.21, -88);
+    setTimeout(() => beep(68, 0.42, "sine", 0.15, -22), 105);
+  },
+  turn: () => {
+    beep(246, 0.15, "triangle", 0.12, 140);
+    setTimeout(() => beep(494, 0.12, "sine", 0.1, 80), 65);
+  },
+  win: () => {
+    beep(262, 0.16, "sine", 0.13, 96);
+    setTimeout(() => beep(392, 0.2, "triangle", 0.17, 70), 90);
+    setTimeout(() => beep(523, 0.24, "triangle", 0.18, 92), 186);
+    setTimeout(() => beep(784, 0.46, "sine", 0.16, 64), 280);
+  },
+  lose: () => {
+    noise(0.18, 0.13);
+    beep(196, 0.56, "sine", 0.2, -126);
+    setTimeout(() => beep(98, 0.44, "sawtooth", 0.14, -46), 120);
+  },
+  spell: () => {
+    beep(246, 0.2, "sine", 0.12, 188);
+    setTimeout(() => beep(492, 0.2, "triangle", 0.15, 208), 42);
+    setTimeout(() => beep(738, 0.16, "sine", 0.1, 122), 84);
+  },
+  /** Soft, uncanny thread-and-dream sound for Web of Dreams. Kept procedural so it works
+   * without loading a new file and remains under the existing SFX mute control. */
+  dreamingWeb: () => {
+    noise(0.34, 0.14);
+    beep(312, 0.42, "sine", 0.19, -118);
+    setTimeout(() => beep(466, 0.24, "triangle", 0.16, -86), 72);
+    setTimeout(() => beep(622, 0.3, "sine", 0.12, -164), 146);
+  },
+  meleeAttack: () => {
+    noise(0.075, 0.2);
+    beep(176, 0.12, "sawtooth", 0.19, 138);
+  },
+  arrowAttack: () => {
+    beep(740, 0.055, "triangle", 0.17, -250);
+    setTimeout(() => beep(260, 0.11, "sine", 0.12, -92), 18);
+  },
+  magicAttack: () => {
+    beep(286, 0.18, "sine", 0.18, 240);
+    setTimeout(() => beep(568, 0.16, "triangle", 0.14, 122), 34);
+  },
+  heal: () => {
+    beep(392, 0.16, "sine", 0.12, 88);
+    setTimeout(() => beep(587, 0.2, "triangle", 0.15, 104), 62);
+    setTimeout(() => beep(880, 0.3, "sine", 0.12, 66), 126);
+  },
+  stun: () => {
+    noise(0.1, 0.24);
+    beep(194, 0.27, "square", 0.19, -142);
+    setTimeout(() => beep(82, 0.22, "sawtooth", 0.14, -32), 48);
+  },
+  miss: () => {
+    beep(498, 0.12, "sine", 0.12, -230);
+    setTimeout(() => beep(246, 0.1, "triangle", 0.08, -70), 42);
+  },
+  chest: () => {
+    noise(0.07, 0.11);
+    beep(318, 0.08, "square", 0.13, 120);
+    setTimeout(() => beep(706, 0.09, "triangle", 0.15, 128), 58);
+    setTimeout(() => beep(1014, 0.16, "sine", 0.12, 88), 120);
+  },
+  loot: () => {
+    beep(620, 0.08, "triangle", 0.13, 136);
+    setTimeout(() => beep(932, 0.11, "sine", 0.15, 110), 46);
+    setTimeout(() => beep(1244, 0.15, "triangle", 0.11, 74), 98);
+  },
+  thrust: () => {
+    noise(0.07, 0.18);
+    beep(176, 0.13, "sawtooth", 0.17, 220);
+    setTimeout(() => beep(388, 0.08, "triangle", 0.1, 145), 24);
+  },
+  sweep: () => {
+    noise(0.14, 0.2);
+    beep(148, 0.22, "sawtooth", 0.18, 178);
+    setTimeout(() => beep(334, 0.14, "triangle", 0.1, 116), 54);
+  },
+  trip: () => {
+    noise(0.13, 0.26);
+    beep(164, 0.23, "square", 0.19, -152);
+    setTimeout(() => beep(84, 0.28, "sawtooth", 0.16, -52), 66);
+  },
+  levelUp: () => playSfxFile("LevelUp.mp3", 0.6),
+};
+
+let introEl: HTMLAudioElement | null = null;
+let battleEl: HTMLAudioElement | null = null;
+let earlyEl: HTMLAudioElement | null = null;
+let templeEl: HTMLAudioElement | null = null;
+let aldeiaEl: HTMLAudioElement | null = null;
+let siegeEl: HTMLAudioElement | null = null;
+let innEl: HTMLAudioElement | null = null;
+let hillEl: HTMLAudioElement | null = null;
+let portaoEl: HTMLAudioElement | null = null;
+let worldMapEl: HTMLAudioElement | null = null;
+type Theme = "intro" | "battle" | "early" | "temple" | "aldeia" | "siege" | "inn" | "hill" | "portao" | "worldMap";
+let currentTheme: Theme = "intro";
+let currentFile: string | null = null;
+
+if (typeof window !== "undefined") {
+  const g = window as Window & { __emberIntro?: HTMLAudioElement };
+  if (g.__emberIntro) introEl = g.__emberIntro;
+}
+
+function attachTrack(el: HTMLAudioElement, volume: number): HTMLAudioElement {
+  el.loop = true;
+  el.preload = "auto";
+  el.dataset.emberMusicBase = String(volume);
+  el.volume = volume * musicVolume;
+  if (typeof document !== "undefined" && document.body && !el.isConnected) {
+    el.setAttribute("playsinline", "");
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function getTrack(theme: Theme): HTMLAudioElement | null {
+  if (typeof Audio === "undefined") return null;
+  if (theme === "intro") return menuElement();
+  if (theme === "temple") {
+    if (!templeEl) templeEl = attachTrack(new Audio("/game/MUSIC/temple.mp3"), 0.42);
+    return templeEl;
+  }
+  if (theme === "aldeia") {
+    if (!aldeiaEl) aldeiaEl = attachTrack(new Audio("/game/MUSIC/aldeia.mp3?v=2"), 0.4);
+    return aldeiaEl;
+  }
+  if (theme === "siege") {
+    if (!siegeEl) siegeEl = attachTrack(new Audio("/game/MUSIC/siege.mp3"), 0.4);
+    return siegeEl;
+  }
+  if (theme === "inn") {
+    if (!innEl) innEl = attachTrack(new Audio("/game/MUSIC/inn.mp3"), 0.4);
+    return innEl;
+  }
+  if (theme === "hill") {
+    if (!hillEl) hillEl = attachTrack(new Audio("/game/MUSIC/hill.mp3"), 0.4);
+    return hillEl;
+  }
+  if (theme === "portao") {
+    if (!portaoEl) portaoEl = attachTrack(new Audio("/game/MUSIC/portao.mp3"), 0.4);
+    return portaoEl;
+  }
+  if (theme === "early") {
+    if (!earlyEl) earlyEl = attachTrack(new Audio("/game/MUSIC/early.mp3"), 0.4);
+    return earlyEl;
+  }
+  if (theme === "worldMap") {
+    // The world map's own piece, under the name it was delivered as. Encoded because that
+    // name carries spaces.
+    if (!worldMapEl)
+      worldMapEl = attachTrack(new Audio(`/game/MUSIC/${encodeURIComponent("Tragic Architecture True Persona-WorldMap-Balanced-High.mp3")}`), 0.4);
+    return worldMapEl;
+  }
+  // The battle theme's own track, recovered from an earlier build's output where it was the
+  // only copy left — it had gone missing from public/game/MUSIC while the code still asked
+  // for it, which is why nothing played here.
+  if (!battleEl) battleEl = attachTrack(new Audio("/game/MUSIC/music.mp3"), 0.4);
+  return battleEl;
+}
+
+function menuElement(): HTMLAudioElement | null {
+  if (typeof Audio === "undefined") return null;
+  if (typeof document !== "undefined") {
+    document.querySelectorAll("audio").forEach((node) => {
+      if (node === introEl) return;
+      if (node.id === "ember-intro" || /\/game\/music\/intro\.(wav|mp3)/.test(node.src)) {
+        node.pause();
+        node.remove();
+      }
+    });
+  }
+  if (introEl) return introEl;
+  const node = new Audio("/game/MUSIC/intro.mp3");
+  node.id = "ember-intro";
+  node.loop = true;
+  node.preload = "auto";
+  node.dataset.emberMusicBase = "0.7";
+  node.volume = 0.7 * musicVolume;
+  if (typeof document !== "undefined" && document.body) {
+    node.setAttribute("playsinline", "");
+    document.body.appendChild(node);
+  }
+  introEl = node;
+  if (typeof window !== "undefined") {
+    (window as Window & { __emberIntro?: HTMLAudioElement }).__emberIntro = node;
+  }
+  return node;
+}
+
+/** HMR and older builds may leave a detached intro element behind. Keep the title track
+ * exclusive even when it is no longer the module's current introEl reference. */
+function pauseIntroTracks(except: HTMLAudioElement | null = null): void {
+  if (typeof document !== "undefined") {
+    document.querySelectorAll("audio").forEach((node) => {
+      if (node === except) return;
+      if (/\/game\/music\/intro\.mp3(?:[?#]|$)/i.test(node.src)) node.pause();
+    });
+  }
+  if (introEl && introEl !== except) introEl.pause();
+}
+
+function kickPlay(el: HTMLAudioElement): void {
+  if (muted) return;
+  if (!el.paused && !el.ended) return;
+  el.muted = false;
+  el.defaultMuted = false;
+  const baseVolume = Number(el.dataset.emberMusicBase ?? (el === introEl ? "0.7" : el === templeEl ? "0.42" : "0.4"));
+  el.volume = clampVolume(baseVolume * musicVolume);
+  const tryOnce = () => {
+    if (muted) return;
+    if (!el.paused && !el.ended) {
+      if (retryTimer) {
+        clearInterval(retryTimer);
+        retryTimer = 0;
+      }
+      return;
+    }
+    void el.play().then(() => {
+      if (retryTimer) {
+        clearInterval(retryTimer);
+        retryTimer = 0;
+      }
+    }).catch(() => {
+      if (muted || retryTimer) return;
+      retryTimer = window.setInterval(() => {
+        if (muted) return;
+        const want = currentTheme === "intro" ? menuElement() : getTrack(currentTheme);
+        if (!want || (!want.paused && !want.ended)) {
+          if (retryTimer) {
+            clearInterval(retryTimer);
+            retryTimer = 0;
+          }
+          return;
+        }
+        void want.play().then(() => {
+          if (retryTimer) {
+            clearInterval(retryTimer);
+            retryTimer = 0;
+          }
+        }).catch(() => {});
+      }, 400);
+    });
+  };
+  tryOnce();
+}
+
+/** Tracks played by file name rather than by theme — what a mission's own music setting
+ * asks for. One element per file, made once and kept, same as the fixed themes. */
+const fileEls = new Map<string, HTMLAudioElement>();
+
+function getFileTrack(file: string): HTMLAudioElement | null {
+  if (typeof Audio === "undefined") return null;
+  const have = fileEls.get(file);
+  if (have) return have;
+  const el = attachTrack(new Audio(`/game/MUSIC/${encodeURIComponent(file)}`), 0.4);
+  fileEls.set(file, el);
+  return el;
+}
+
+/** Plays one specific file from public/game/MUSIC, silencing everything else — the escape
+ * hatch from the fixed Theme list, so a mission can name its own track. */
+export function playFile(file: string): void {
+  currentFile = file;
+  if (muted) return;
+  const want = getFileTrack(file);
+  pauseIntroTracks(want === introEl ? introEl : null);
+  silenceAllBut(want);
+  if (!want) return;
+  kickPlay(want);
+}
+/** Stops every track except the one asked for, themes and per-file alike. */
+function silenceAllBut(want: HTMLAudioElement | null): void {
+  const others = [introEl, battleEl, earlyEl, templeEl, aldeiaEl, siegeEl, innEl, hillEl, portaoEl, worldMapEl, ...fileEls.values()];
+  for (const el of others) {
+    if (!el || el === want) continue;
+    el.pause();
+  }
+}
+
+export function playTheme(theme: Theme): void {
+  currentTheme = theme;
+  currentFile = null;
+  if (muted) return;
+  const want = getTrack(theme);
+  pauseIntroTracks(want === introEl ? introEl : null);
+  if (battleEl && battleEl !== want) {
+    battleEl.pause();
+  }
+  if (earlyEl && earlyEl !== want) {
+    earlyEl.pause();
+  }
+  if (templeEl && templeEl !== want) {
+    templeEl.pause();
+  }
+  if (aldeiaEl && aldeiaEl !== want) {
+    aldeiaEl.pause();
+  }
+  if (siegeEl && siegeEl !== want) {
+    siegeEl.pause();
+  }
+  if (innEl && innEl !== want) {
+    innEl.pause();
+  }
+  if (hillEl && hillEl !== want) {
+    hillEl.pause();
+  }
+  if (portaoEl && portaoEl !== want) {
+    portaoEl.pause();
+  }
+  if (worldMapEl && worldMapEl !== want) {
+    worldMapEl.pause();
+  }
+  // A mission that named its own track may be playing; a fixed theme has to silence it too.
+  for (const el of fileEls.values()) {
+    if (el === want) continue;
+    el.pause();
+  }
+  if (!want) return;
+  kickPlay(want);
+}
+
+export function preloadMenuMusic(): void {
+  playMenuMusic();
+}
+
+export function playMenuMusic(): void {
+  currentTheme = "intro";
+  currentFile = null;
+  if (muted) return;
+  battleEl?.pause();
+  earlyEl?.pause();
+  templeEl?.pause();
+  aldeiaEl?.pause();
+  siegeEl?.pause();
+  innEl?.pause();
+  hillEl?.pause();
+  portaoEl?.pause();
+  worldMapEl?.pause();
+  const el = menuElement();
+  if (!el) return;
+  // Returning to the title is another hard boundary: custom mission tracks must not linger.
+  pauseIntroTracks(el);
+  silenceAllBut(el);
+  kickPlay(el);
+}
+
+export function startMusic(): void {
+  if (currentFile) playFile(currentFile);
+  else playTheme(currentTheme);
+}
+
+export function stopMusic(): void {
+  if (musicTimer) {
+    clearInterval(musicTimer);
+    musicTimer = 0;
+  }
+  if (retryTimer) {
+    clearInterval(retryTimer);
+    retryTimer = 0;
+  }
+  if (typeof window !== "undefined") {
+    const g = window as Window & { __brasaMusic?: number };
+    if (g.__brasaMusic) {
+      clearInterval(g.__brasaMusic);
+      g.__brasaMusic = 0;
+    }
+  }
+  introEl?.pause();
+  battleEl?.pause();
+  earlyEl?.pause();
+  templeEl?.pause();
+  aldeiaEl?.pause();
+  siegeEl?.pause();
+  innEl?.pause();
+  hillEl?.pause();
+  portaoEl?.pause();
+  worldMapEl?.pause();
+  for (const el of fileEls.values()) el.pause();
+}
+
+export function resumeAudio(): void {
+  unlockAudio();
+}
+
+export function installAudioUnlock(): () => void {
+  if (typeof window === "undefined") return () => {};
+  const arm = () => {
+    unlockAudio();
+    startMusic();
+  };
+  const opts: AddEventListenerOptions = { capture: true };
+  window.addEventListener("pointerdown", arm, opts);
+  window.addEventListener("keydown", arm, opts);
+  return () => {
+    window.removeEventListener("pointerdown", arm, opts);
+    window.removeEventListener("keydown", arm, opts);
+  };
+}
+
+
+

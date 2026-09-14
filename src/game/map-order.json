@@ -1,0 +1,22 @@
+{
+  "stonebridge": [
+    "vau",
+    "bosque",
+    "aldeia",
+    "thebridge"
+  ],
+  "ruins": [
+    "muralha",
+    "fortaleza",
+    "templo",
+    "cripta"
+  ],
+  "estalagem": [
+    "estalagem"
+  ],
+  "dungeon": [
+    "colina",
+    "passagem",
+    "profundezas"
+  ]
+}

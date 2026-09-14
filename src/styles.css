@@ -1,0 +1,331 @@
+@import url("https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,650&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Newsreader", "Times New Roman", serif;
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-bg: #111111;
+  --color-surface: #1c1c1c;
+  --color-surface-2: #272727;
+  --color-fg: #f0f0f0;
+  --color-muted: #b4b4b4;
+  --color-subtle: #8a8a8a;
+  --color-border: #4a4a4a;
+  --color-accent: #d8d8d8;
+  --color-accent-fg: #111111;
+  --color-danger: #b54a32;
+  --color-player: #8a97a1;
+  --color-enemy: #a35a4a;
+  --color-move: #3d6a8a;
+  --color-ok: #6a8f6e;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  html,
+  body,
+  #app {
+    height: 100%;
+    min-height: 100dvh;
+    min-height: 100svh;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    overscroll-behavior: none;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    margin: 0;
+    overflow: hidden;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    font-family: var(--font-display);
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* NEVER change title-hero / title-veil. Game title screen is frozen. Version lives in GameApp only. */
+.title-hero {
+  background-image: url("/game/assets/title-bg.jpg");
+  background-size: cover;
+  background-position: center 42%;
+}
+
+.title-veil {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-bg) 35%, transparent) 0%,
+    color-mix(in oklab, var(--color-bg) 72%, transparent) 48%,
+    color-mix(in oklab, var(--color-bg) 94%, transparent) 100%
+  );
+}
+
+/* The map editor is a working surface: editable fields must read as controls,
+   not disappear into the surrounding panel. */
+.map-editor input:not([type="checkbox"]),
+.map-editor textarea,
+.map-editor select {
+  background-color: var(--color-surface-2) !important;
+  border-color: var(--color-border);
+  color: var(--color-fg);
+}
+
+.map-editor input:not([type="checkbox"]):focus,
+.map-editor textarea:focus,
+.map-editor select:focus {
+  border-color: var(--color-accent);
+  outline: 2px solid color-mix(in oklab, var(--color-accent) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.cutscene-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.cutscene-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 720px) and (orientation: portrait) {
+  .cutscene-stage {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: 100dvh;
+    height: 100dvw;
+    transform: translate(-50%, -50%) rotate(90deg);
+    transform-origin: center center;
+  }
+}
+
+@keyframes inn-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(201, 150, 88, 0.22);
+    border-color: #5a4a38;
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(201, 150, 88, 0.5);
+    border-color: #c9a070;
+  }
+}
+
+.inn-open {
+  animation: inn-glow 2.8s ease-in-out infinite;
+  border-color: #8a6a48;
+}
+
+.ember-window {
+  position: relative;
+  color: var(--color-fg);
+  background-color: color-mix(in oklab, var(--color-surface) 92%, transparent);
+  border: 1px solid var(--color-border);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 18px 48px rgba(0, 0, 0, 0.55);
+}
+
+.backpack-window {
+  background-image:
+    linear-gradient(rgba(7, 6, 5, 0.34), rgba(7, 6, 5, 0.48)),
+    url("/game/ui/backpack-background.jpg");
+  background-position: center;
+  background-size: cover;
+}
+
+.equipment-backdrop {
+  background-image: url("/game/ui/equipment-background.jpg");
+  background-position: center;
+  background-size: cover;
+}
+
+.equipment-surface {
+  background-color: transparent;
+}
+
+.ember-veil {
+  background:
+    radial-gradient(ellipse at center, transparent 20%, rgba(0, 0, 0, 0.55) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.72));
+}
+
+.ember-chip {
+  background-color: color-mix(in oklab, var(--color-bg) 55%, transparent);
+  border: 1px solid var(--color-border);
+}
+
+/* The condition sigil is a small piece of battle-sheet chrome: aged iron around a
+   painted icon, with a restrained semantic wash instead of a loud status banner. */
+.status-condition {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #000;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.18);
+  transition-property: box-shadow, border-color, transform;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.status-condition:focus,
+.status-condition:hover {
+  outline: none;
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.28);
+}
+
+.status-condition-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  background-image: url("/game/icons/status/condition-atlas-001.png");
+  background-repeat: no-repeat;
+  background-size: 200% 200%;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+
+.status-condition-icon-healthy { background-position: 0% 0%; }
+.status-condition-icon-poisoned { background-position: 100% 0%; }
+.status-condition-icon-diseased { background-position: 0% 100%; }
+.status-condition-icon-hungry { background-position: 100% 100%; }
+
+.status-condition-icon-lg {
+  width: 96px;
+  height: 96px;
+  flex: 0 0 96px;
+  background-image: url("/game/icons/status/condition-atlas-001.png");
+  background-repeat: no-repeat;
+  background-size: 200% 200%;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+}
+
+.status-condition-ok { border-color: color-mix(in oklab, var(--color-ok) 70%, var(--color-border)); }
+.status-condition-danger { border-color: color-mix(in oklab, var(--color-danger) 74%, var(--color-border)); }
+.status-condition-warn { border-color: #8f6b3e; }
+
+/* Sized to sit comfortably alongside the compact battle HUD instead of dominating the
+   screen — a modal-sized sheet, not a full-art inspector. */
+.status-panel {
+  max-width: min(27rem, calc(100vw - 2rem));
+  max-height: 85dvh;
+}
+
+.status-panel-portrait {
+  width: 108px;
+  height: 130px;
+}
+
+.status-panel img.size-5 {
+  width: 1.25rem;
+  height: 1.25rem;
+  background-color: #000;
+}
+
+@keyframes locked-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(214, 60, 60, 0);
+    border-color: var(--color-border);
+  }
+  30% {
+    box-shadow: 0 0 16px rgba(214, 60, 60, 0.85);
+    border-color: #d63c3c;
+  }
+}
+
+.locked-flash {
+  animation: locked-flash 0.5s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Scrollbars are part of the world UI, not operating-system chrome: black iron track,
+   tarnished bronze rim, and an ember-lit grip. */
+:root {
+  scrollbar-color: #8e5b2c #100d0c;
+  scrollbar-width: thin;
+}
+
+.ember-scrollbar,
+.ember-scrollbar * {
+  scrollbar-color: #8e5b2c #100d0c;
+  scrollbar-width: thin;
+}
+
+.ember-scrollbar::-webkit-scrollbar,
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+.ember-scrollbar::-webkit-scrollbar-track,
+::-webkit-scrollbar-track {
+  background: linear-gradient(90deg, #090808 0%, #201713 48%, #090808 100%);
+  border: 1px solid #4b3020;
+  box-shadow: inset 0 0 0 1px #050505, inset 0 0 8px rgba(0, 0, 0, 0.9);
+}
+
+.ember-scrollbar::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb {
+  min-height: 34px;
+  min-width: 34px;
+  border: 3px solid #17100d;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #d1a05f 0%, #7b4826 36%, #2a1710 68%, #ad7138 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 211, 139, 0.35), 0 0 7px rgba(190, 85, 24, 0.32);
+}
+
+.ember-scrollbar::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #f0c57b 0%, #a96330 38%, #3a1c10 68%, #d78a42 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 231, 172, 0.62), 0 0 11px rgba(231, 110, 31, 0.58);
+}
+
+.ember-scrollbar::-webkit-scrollbar-corner,
+::-webkit-scrollbar-corner {
+  background: #100d0c;
+}
