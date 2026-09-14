@@ -1511,6 +1511,9 @@ const LANCER_TRIO: ClassId[] = ["lancer", "aldric", "sandoval", "sentinel", "tem
 // Light armor: scouts, the warrior line, the lancer line, and the rogue. Front-liners
 // still wear mail/plate — leather is the lighter option (often +mov), not a scout exclusive.
 const LEATHER_WEARERS: ClassId[] = [...ARCHER_TRIO, ...WARRIOR_TRIO, ...LANCER_TRIO, "rogue"];
+// Shields go on anyone who isn't a bow/blade skirmisher or a spellcaster — everyone else,
+// healers and rogue included, can brace one.
+const SHIELD_WEARERS: ClassId[] = [...WARRIOR_TRIO, ...LANCER_TRIO, ...HEAL_TRIO, "rogue"];
 
 export const WEAPONS: Record<string, WeaponDef> = {
   // Mago Negro / Elementalista / Bruxo — cajados arcanos, pool compartilhado (any of the
@@ -1581,17 +1584,11 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "adaga-sombria": wpn("adaga-sombria", "Adaga Sombria", ARCHER_TRIO, 8),
   "adaga-de-veneno": wpn("adaga-de-veneno", "Adaga de Veneno", ARCHER_TRIO, 9),
 
-  // Lanceiro / Sentinela / Templário — lança e lança-e-escudo, exclusivo dessa linha.
-  // Lanças alcançam 2 hexes; a versão com escudo troca alcance por defesa mais de perto.
+  // Lanceiro / Sentinela / Templário — lança, exclusiva dessa linha.
   "lanca": wpn("lanca", "Lança", LANCER_TRIO, 1, REACH),
   "partisan": wpn("partisan", "Partisan", LANCER_TRIO, 2, REACH),
   "guisarme": wpn("guisarme", "Guisarme", LANCER_TRIO, 3, REACH),
   "lanca-de-defesa": wpn("lanca-de-defesa", "Lança de Defesa", LANCER_TRIO, 4, REACH),
-  "espada-e-escudo": wpn("espada-e-escudo", "Espada e Escudo", LANCER_TRIO, 5),
-  "maca-e-escudo-sentinel": wpn("maca-e-escudo-sentinel", "Maça e Escudo", LANCER_TRIO, 6),
-  "maca-e-escudo-templar": wpn("maca-e-escudo-templar", "Maça e Escudo", LANCER_TRIO, 7),
-  "lanca-e-escudo-sentinel": wpn("lanca-e-escudo-sentinel", "Lança e Escudo", LANCER_TRIO, 8, REACH),
-  "lanca-e-escudo-templar": wpn("lanca-e-escudo-templar", "Lança e Escudo", LANCER_TRIO, 9, REACH),
 
   "bastao-purificacao-sombrio": wpn("bastao-purificacao-sombrio", "Bastão da Purificação Sombria", HEAL_TRIO, 6, REACH),
   "bastao-caos-fraturado": wpn("bastao-caos-fraturado", "Bastão do Caos Fraturado", ARCANE_ALL, 7, REACH, "conjurer"),
@@ -1612,7 +1609,6 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "martelo-belico": wpn("martelo-belico", "Martelo Bélico", [...WARRIOR_TRIO, "cleric"], 7),
   "malho-do-juizo": wpn("malho-do-juizo", "Malho do Juízo", [...WARRIOR_TRIO, "cleric"], 8),
   "lamina-consagrada": wpn("lamina-consagrada", "Lâmina Consagrada", WARRIOR_TRIO, 7),
-  "espada-escudo-exilado": wpn("espada-escudo-exilado", "Espada e Escudo do Exilado", LANCER_TRIO, 7),
 };
 
 export function weaponIcon(id: string): string {
@@ -1711,15 +1707,27 @@ export const EQUIPMENT_SLOTS: { id: EquipSlot; label: string }[] = [
 export const EQUIPMENT: Record<string, EquipmentDef> = {
   // ---- offHand: shields (Shield Bash), the dmgMul ladder climbs from a real penalty to
   // none at all on the strongest ("it will scale all the way to no penalty").
-  broquel: { id: "broquel", name: "Broquel", slot: "offHand", kind: "shield", usableBy: ["swordsman", "heavyKnight", "paladin"], def: 1, dmgMul: 0.5, price: 60 },
-  "shield-buckler": { id: "shield-buckler", name: "Broquel de Aço", slot: "offHand", kind: "shield", usableBy: ["swordsman", "heavyKnight", "paladin"], def: 1, dmgMul: 0.6, price: 90 },
-  "shield-round": { id: "shield-round", name: "Escudo Redondo", slot: "offHand", kind: "shield", usableBy: ["swordsman", "heavyKnight", "paladin"], def: 2, dmgMul: 0.7, price: 150 },
-  "shield-heater": { id: "shield-heater", name: "Escudo em Coração", slot: "offHand", kind: "shield", usableBy: ["swordsman", "heavyKnight", "paladin"], def: 2, dmgMul: 0.8, price: 220 },
-  "shield-kite": { id: "shield-kite", name: "Escudo em Pipa", slot: "offHand", kind: "shield", usableBy: ["swordsman", "heavyKnight", "paladin"], def: 3, dmgMul: 0.9, price: 320 },
-  "shield-tower": { id: "shield-tower", name: "Escudo Torre", slot: "offHand", kind: "shield", usableBy: ["swordsman", "heavyKnight", "paladin"], def: 4, dmgMul: 1, price: 450 },
-  "cross-kite-shield": { id: "cross-kite-shield", name: "Escudo em Cunha com Cruz", slot: "offHand", kind: "shield", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 3, dmgMul: 0.85, price: 380 },
-  "ancient-round-shield": { id: "ancient-round-shield", name: "Escudo Redondo Ancestral", slot: "offHand", kind: "shield", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 2, dmgMul: 0.7, price: 260 },
-  "venom-heart-shield": { id: "venom-heart-shield", name: "Escudo do Coração Venenoso", slot: "offHand", kind: "shield", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 2, res: 2, dmgMul: 0.75, price: 300 },
+  broquel: { id: "broquel", name: "Broquel", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 1, dmgMul: 0.5, price: 60 },
+  "shield-buckler": { id: "shield-buckler", name: "Broquel de Aço", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 1, dmgMul: 0.6, price: 90 },
+  "shield-round": { id: "shield-round", name: "Escudo Redondo", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 2, dmgMul: 0.7, price: 150 },
+  "shield-heater": { id: "shield-heater", name: "Escudo em Coração", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 2, dmgMul: 0.8, price: 220 },
+  "shield-kite": { id: "shield-kite", name: "Escudo em Pipa", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, dmgMul: 0.9, price: 320 },
+  "shield-tower": { id: "shield-tower", name: "Escudo Torre", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 4, dmgMul: 1, price: 450 },
+  "cross-kite-shield": { id: "cross-kite-shield", name: "Escudo em Cunha com Cruz", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, dmgMul: 0.85, price: 380 },
+  "ancient-round-shield": { id: "ancient-round-shield", name: "Escudo Redondo Ancestral", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 2, dmgMul: 0.7, price: 260 },
+  "venom-heart-shield": { id: "venom-heart-shield", name: "Escudo do Coração Venenoso", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 2, res: 2, dmgMul: 0.75, price: 300 },
+  "golden-lion-shield": { id: "golden-lion-shield", name: "Escudo do Leão Dourado", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, dmgMul: 0.85, price: 340 },
+  "wooden-star-shield": { id: "wooden-star-shield", name: "Escudo Estelar de Madeira", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 2, dmgMul: 0.75, price: 260 },
+  "dark-fang-shield": { id: "dark-fang-shield", name: "Escudo das Presas Sombrias", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, res: 1, dmgMul: 0.85, price: 360 },
+  "blood-cross-shield": { id: "blood-cross-shield", name: "Escudo da Cruz Ensanguentada", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, dmgMul: 0.8, price: 300 },
+  "griffin-shield": { id: "griffin-shield", name: "Escudo do Grifo", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, res: 1, dmgMul: 0.85, price: 380 },
+  "crimson-skull-shield": { id: "crimson-skull-shield", name: "Escudo da Caveira Rubra", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, res: 1, dmgMul: 0.8, price: 340 },
+  "white-tree-shield": { id: "white-tree-shield", name: "Escudo da Árvore Branca", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, res: 2, dmgMul: 0.85, price: 400 },
+  "battle-cross-shield": { id: "battle-cross-shield", name: "Escudo Cruzado de Batalha", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, dmgMul: 0.85, price: 340 },
+  "holy-paladin-shield": { id: "holy-paladin-shield", name: "Escudo do Paladino Sagrado", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 4, res: 1, dmgMul: 0.9, price: 500 },
+  "radiant-lion-shield": { id: "radiant-lion-shield", name: "Escudo do Leão Radiante", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, res: 1, dmgMul: 0.85, price: 420 },
+  "tattered-raven-shield": { id: "tattered-raven-shield", name: "Escudo do Corvo Andrajoso", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 2, res: 2, dmgMul: 0.75, price: 320 },
+  "crimson-banner-shield": { id: "crimson-banner-shield", name: "Escudo Bandeira Carmesim", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, dmgMul: 0.8, price: 300 },
   // ---- offHand: light weapon (off-hand attack, no Shield Bash)
   "adaga-secundaria": { id: "adaga-secundaria", name: "Adaga Secundária", slot: "offHand", kind: "weapon", usableBy: ARCHER_TRIO, dice: 1, faces: 4, bonus: 0, minRange: 1, maxRange: 1, price: 70 },
 

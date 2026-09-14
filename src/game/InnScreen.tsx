@@ -230,6 +230,7 @@ export function InnScreen({
       <img src="/game/assets/brief-estalagem.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-bg/80 via-bg/25 to-bg/10" />
       <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
+        {/* Back/exit always sits at the far left, across every screen, so it never gets lost. */}
         <button type="button" onClick={onLeave} className="h-10 px-3 rounded-md ember-chip text-xs uppercase tracking-[0.14em]">
           Sair
         </button>
@@ -571,6 +572,7 @@ function SmithPanel({
     <section className="shop-surface relative h-dvh min-h-0 flex flex-col overflow-hidden bg-bg">
       <img src="/game/ui/smith-background.jpg" alt="" className="absolute inset-0 h-full w-full object-cover object-left" />
       <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
+        {/* Back always sits at the far left, across every screen, so it never gets lost. */}
         <button type="button" onClick={onBack} className="h-10 px-3 rounded-md ember-chip text-xs uppercase tracking-[0.14em]">
           <ChevronLeft className="size-4 inline -mt-0.5" /> Voltar
         </button>

@@ -181,9 +181,15 @@ export function PaperDollScreen({
     >
       <div className="equipment-surface flex h-full min-h-0 w-full flex-col overflow-hidden ember-window p-2">
         <div className="mb-2 flex shrink-0 items-start justify-between gap-3">
-          <div>
-            <p className="font-display text-xl leading-tight">{heroName}</p>
-            <p className="text-xs text-muted">{CLASSES[classId].name}</p>
+          <div className="flex items-start gap-3 min-w-0">
+            {/* Back always sits at the far left, across every screen, so it never gets lost. */}
+            <button type="button" onClick={onClose} className="h-9 px-3 flex items-center gap-1.5 rounded-md border border-border bg-bg/80 text-xs" aria-label="Voltar">
+              <ChevronLeft className="size-4" /> Voltar
+            </button>
+            <div>
+              <p className="font-display text-xl leading-tight">{heroName}</p>
+              <p className="text-xs text-muted">{CLASSES[classId].name}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {availableHeroes && availableHeroes.length > 1 && onHeroChange && (
@@ -212,9 +218,6 @@ export function PaperDollScreen({
                 Mochila
               </button>
             )}
-            <button type="button" onClick={onClose} className="h-9 px-3 flex items-center gap-1.5 rounded-md border border-border bg-bg/80 text-xs" aria-label="Voltar">
-              <ChevronLeft className="size-4" /> Voltar
-            </button>
           </div>
         </div>
 
@@ -534,12 +537,18 @@ export function BackpackScreen({
     >
       <div className="backpack-window flex h-full min-h-0 w-full flex-col overflow-hidden ember-window p-2">
         <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <img src={BAG_ICON} alt="" className="size-9 shrink-0 object-contain" />
-              <h2 className="font-display text-2xl leading-none">Mochila</h2>
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Back always sits at the far left, across every screen, so it never gets lost. */}
+            <button type="button" onClick={onClose} className="h-9 px-3 flex items-center gap-1.5 rounded-md border border-border bg-bg text-xs" aria-label="Voltar">
+              <ChevronLeft className="size-4" /> Voltar
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <img src={BAG_ICON} alt="" className="size-9 shrink-0 object-contain" />
+                <h2 className="font-display text-2xl leading-none">Mochila</h2>
+              </div>
+              <p className="mt-1 text-xs text-muted">{heroName} · clique um item para equipar</p>
             </div>
-            <p className="mt-1 text-xs text-muted">{heroName} · clique um item para equipar</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {availableHeroes && availableHeroes.length > 1 && onHeroChange && (
@@ -570,9 +579,6 @@ export function BackpackScreen({
                 Equipar
               </button>
             )}
-            <button type="button" onClick={onClose} className="h-9 px-3 flex items-center gap-1.5 rounded-md border border-border bg-bg text-xs" aria-label="Voltar">
-              <ChevronLeft className="size-4" /> Voltar
-            </button>
           </div>
         </div>
 
