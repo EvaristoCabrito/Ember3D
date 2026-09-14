@@ -1164,8 +1164,11 @@ export function GameApp() {
           muted={muted}
           weapons={save.weapons}
           equipped={save.equipped}
-          heroClass={Object.fromEntries(DEFAULT_HEROES.map((h) => [h.name, save.promotions[h.name] ?? h.classId]))}
+          heroClass={Object.fromEntries(
+            [...DEFAULT_HEROES, ...(testMode ? TEST_EXTRA_HEROES : [])].map((h) => [h.name, save.promotions[h.name] ?? h.classId]),
+          )}
           save={testMode ? { ...save, ember: testEmber } : save}
+          test={testMode}
           onMute={() => {
             unlockAudio();
             setMutedUi((v) => !v);
@@ -1192,7 +1195,7 @@ export function GameApp() {
             const rec = activeSave(bank);
             const item = EQUIPMENT[itemId];
             const price = item?.price ?? 0;
-            if (!item || price <= 0) return false;
+            if (!item || (price <= 0 && !testMode)) return false;
             if (!partyBagHasRoom(rec)) return false;
             const held = testMode ? testEmber : (rec.ember ?? 0);
             if (held < price) return false;
@@ -2332,6 +2335,14 @@ const DEFAULT_HEROES: { name: string; classId: ClassId }[] = [
   { name: "Neera", classId: "neera" },
   { name: "Voss", classId: "voss" },
   { name: "Salazar", classId: "salazar" },
+];
+
+/** Aldric and Malrec join later in the story but aren't in HERO_NAMES/DEFAULT_HEROES yet,
+ * so the Inn/Smith never lists them normally. Test mode adds them so their gear/weapon
+ * compatibility can be reviewed ahead of that. */
+const TEST_EXTRA_HEROES: { name: string; classId: ClassId }[] = [
+  { name: "Aldric", classId: "aldric" },
+  { name: "Malrec", classId: "conjurer" },
 ];
 
 /** The editor's spawn lists, in display order. A spawn's class decides whether it is listed

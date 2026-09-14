@@ -1443,14 +1443,8 @@ export const LOCKPICK_PRICE = 6;
 export const RATION_STACK_MAX = 30;
 export const RATIONS_PRICE = 3;
 
-/** A small flat bread-loaf glyph, self-contained so the ration system ships without a
- * new binary asset — swap for real art later by pointing this at a PNG instead. Used
- * anywhere rations need an icon: the backpack slot, the Inn shop row, chest-loot toasts. */
-export const RATIONS_ICON =
-  "data:image/svg+xml;utf8," +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" fill="#000"/><path d="M12 4c4.4 0 7 2.2 7 5.4 0 1.4-.6 2.6-1.7 3.6.9.5 1.7 1.3 1.7 2.5C19 18.1 15.9 20 12 20s-7-1.9-7-4.5c0-1.2.8-2 1.7-2.5C5.6 12 5 10.8 5 9.4 5 6.2 7.6 4 12 4Z" fill="#d8a44f" stroke="#8a5a24" stroke-width="1"/><path d="M8.5 9.5c1-1 5-1 7 0M8 13c1.3-.8 6.7-.8 8 0" stroke="#8a5a24" stroke-width="1" fill="none" stroke-linecap="round"/></svg>`,
-  );
+/** Shared true-alpha artwork used by the backpack, Inn shop and loot notices. */
+export const RATIONS_ICON = "/game/icons/rations.png";
 
 /** Chest-loot odds (BattleEngine.useLockpick): Ember gain is emberBase + 1..emberDice, and
  * gearChance is an independent roll for one extra weapon/equipment drop on top of the
@@ -1598,6 +1592,27 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "maca-e-escudo-templar": wpn("maca-e-escudo-templar", "Maça e Escudo", LANCER_TRIO, 7),
   "lanca-e-escudo-sentinel": wpn("lanca-e-escudo-sentinel", "Lança e Escudo", LANCER_TRIO, 8, REACH),
   "lanca-e-escudo-templar": wpn("lanca-e-escudo-templar", "Lança e Escudo", LANCER_TRIO, 9, REACH),
+
+  "bastao-purificacao-sombrio": wpn("bastao-purificacao-sombrio", "Bastão da Purificação Sombria", HEAL_TRIO, 6, REACH),
+  "bastao-caos-fraturado": wpn("bastao-caos-fraturado", "Bastão do Caos Fraturado", ARCANE_ALL, 7, REACH, "conjurer"),
+  "bastao-pacto-sangue": wpn("bastao-pacto-sangue", "Bastão do Pacto de Sangue", ARCANE_ALL, 8, REACH, "warlock"),
+  "bastao-vacuo-negro": wpn("bastao-vacuo-negro", "Bastão do Vácuo Negro", ARCANE_ALL, 9, REACH, "mage"),
+  "espada-juramento-negro": wpn("espada-juramento-negro", "Espada do Juramento Negro", WARRIOR_TRIO, 4),
+  "montante-da-ruina": wpn("montante-da-ruina", "Montante da Ruína", WARRIOR_TRIO, 6),
+  "espadao-do-carrasco": wpn("espadao-do-carrasco", "Espadão do Carrasco", WARRIOR_TRIO, 7),
+  "zweihander-profana": wpn("zweihander-profana", "Zweihänder Profana", WARRIOR_TRIO, 8),
+  "arco-composto-de-chifre": wpn("arco-composto-de-chifre", "Arco Composto de Chifre", ARCHER_TRIO, 2, RANGED),
+  "arco-do-cacador-sombrio": wpn("arco-do-cacador-sombrio", "Arco do Caçador Sombrio", ARCHER_TRIO, 3, RANGED),
+  "arco-elfico-de-cinzas": wpn("arco-elfico-de-cinzas", "Arco Élfico de Cinzas", ARCHER_TRIO, 4, RANGED),
+  "arco-longo-de-teixo": wpn("arco-longo-de-teixo", "Arco Longo de Teixo", ARCHER_TRIO, 5, RANGED),
+  "adaga-viperina": wpn("adaga-viperina", "Adaga Viperina", ARCHER_TRIO, 6),
+  "misericordia-sombria": wpn("misericordia-sombria", "Misericórdia Sombria", ARCHER_TRIO, 7),
+  "punhal-do-salteador": wpn("punhal-do-salteador", "Punhal do Salteador", ARCHER_TRIO, 8),
+  "katar-sepulcral": wpn("katar-sepulcral", "Katar Sepulcral", ARCHER_TRIO, 9),
+  "martelo-belico": wpn("martelo-belico", "Martelo Bélico", [...WARRIOR_TRIO, "cleric"], 7),
+  "malho-do-juizo": wpn("malho-do-juizo", "Malho do Juízo", [...WARRIOR_TRIO, "cleric"], 8),
+  "lamina-consagrada": wpn("lamina-consagrada", "Lâmina Consagrada", WARRIOR_TRIO, 7),
+  "espada-escudo-exilado": wpn("espada-escudo-exilado", "Espada e Escudo do Exilado", LANCER_TRIO, 7),
 };
 
 export function weaponIcon(id: string): string {
@@ -1704,6 +1719,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   "shield-tower": { id: "shield-tower", name: "Escudo Torre", slot: "offHand", kind: "shield", usableBy: ["swordsman", "heavyKnight", "paladin"], def: 4, dmgMul: 1, price: 450 },
   "cross-kite-shield": { id: "cross-kite-shield", name: "Escudo em Cunha com Cruz", slot: "offHand", kind: "shield", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 3, dmgMul: 0.85, price: 380 },
   "ancient-round-shield": { id: "ancient-round-shield", name: "Escudo Redondo Ancestral", slot: "offHand", kind: "shield", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 2, dmgMul: 0.7, price: 260 },
+  "venom-heart-shield": { id: "venom-heart-shield", name: "Escudo do Coração Venenoso", slot: "offHand", kind: "shield", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 2, res: 2, dmgMul: 0.75, price: 300 },
   // ---- offHand: light weapon (off-hand attack, no Shield Bash)
   "adaga-secundaria": { id: "adaga-secundaria", name: "Adaga Secundária", slot: "offHand", kind: "weapon", usableBy: ARCHER_TRIO, dice: 1, faces: 4, bonus: 0, minRange: 1, maxRange: 1, price: 70 },
 
@@ -1717,6 +1733,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   "great-helm": { id: "great-helm", name: "Elmo de Grande Porte", slot: "head", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 5, price: 260 },
   "full-helm": { id: "full-helm", name: "Elmo Completo Gótico", slot: "head", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 4, price: 210 },
   "worn-woolen-hood": { id: "worn-woolen-hood", name: "Capuz de Lã Gasto", slot: "head", usableBy: [...ARCANE_ALL, ...ARCHER_TRIO], res: 1, price: 35 },
+  "plague-doctor-mask": { id: "plague-doctor-mask", name: "Máscara do Médico da Peste", slot: "head", usableBy: [...ARCANE_ALL, ...ARCHER_TRIO, ...HEAL_TRIO], mag: 1, res: 2, price: 160 },
 
   // ---- chest: cloth for casters, leather for scouts/rogues/warriors, chain for clerics, plate for
   // the frontline — warriors sit in both leather and plate so they can pick mobility or bulk.
@@ -1729,6 +1746,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   "knights-cuirass": { id: "knights-cuirass", name: "Couraça de Cavaleiro", slot: "chest", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 4, price: 270 },
   "dark-scale-cuirass": { id: "dark-scale-cuirass", name: "Couraça Escamada Sombria", slot: "chest", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 4, res: 1, price: 300 },
   "brutal-knight-cuirass": { id: "brutal-knight-cuirass", name: "Couraça Brutal de Cavaleiro Pesado", slot: "chest", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 5, price: 340 },
+  "wanderer-brigandine": { id: "wanderer-brigandine", name: "Brigantina do Andarilho Sombrio", slot: "chest", usableBy: LEATHER_WEARERS, hp: 3, def: 2, res: 2, price: 240 },
 
   // ---- shoulders (pauldrons/mantles — leather for scouts/warriors, steel for the frontline)
   "leather-shoulder-guards": { id: "leather-shoulder-guards", name: "Protetores de Ombro de Couro", slot: "shoulders", usableBy: LEATHER_WEARERS, def: 2, price: 90 },
@@ -1777,12 +1795,16 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   // ---- waist
   "plain-leather-belt": { id: "plain-leather-belt", name: "Cinto de Couro Simples", slot: "waist", hp: 2, price: 30 },
   "heavy-iron-buckle": { id: "heavy-iron-buckle", name: "Fivela de Ferro Pesada", slot: "waist", def: 1, price: 45 },
-  "small-leather-pouch": { id: "small-leather-pouch", name: "Bolsa de Couro Pequena", slot: "waist", hp: 3, price: 50 },
-  "large-adventurers-pouch": { id: "large-adventurers-pouch", name: "Bolsa Grande de Aventureiro", slot: "waist", hp: 5, price: 180 },
-  "equipment-satchel": { id: "equipment-satchel", name: "Sacola de Equipamento", slot: "waist", hp: 6, def: 1, price: 350 },
+  // Bags are rare capacity upgrades, not ordinary early-shop waist gear. Their prices
+  // describe their value for later merchants/loot tables; Vargan explicitly filters them.
+  "small-leather-pouch": { id: "small-leather-pouch", name: "Bolsa de Couro Pequena", slot: "waist", hp: 3, price: 800 },
+  "large-adventurers-pouch": { id: "large-adventurers-pouch", name: "Bolsa Grande de Aventureiro", slot: "waist", hp: 5, price: 2500 },
+  "equipment-satchel": { id: "equipment-satchel", name: "Sacola de Equipamento", slot: "waist", hp: 6, def: 1, price: 6000 },
   "double-buckle-belt": { id: "double-buckle-belt", name: "Cinto de Fivela Dupla", slot: "waist", def: 1, hp: 2, price: 70 },
+  "ornamental-belt-end": { id: "ornamental-belt-end", name: "Ponteira de Cinto Ornamentada", slot: "waist", res: 1, price: 80 },
   "ornate-dagger-belt": { id: "ornate-dagger-belt", name: "Cinturão Ornamentado com Bainha", slot: "waist", atk: 1, price: 90 },
   "utility-pouch-belt": { id: "utility-pouch-belt", name: "Cinturão de Utilidades", slot: "waist", atk: 1, hp: 2, price: 120 },
+  "iron-ration-bowl": { id: "iron-ration-bowl", name: "Tigela de Campanha de Ferro", slot: "waist", hp: 4, res: 1, price: 100 },
 
   // ---- neck (holy/arcane trinkets)
   amulet: { id: "amulet", name: "Amuleto de Cordão de Couro", slot: "neck", mag: 1, price: 70 },
@@ -1795,6 +1817,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   "steel-gorget": { id: "steel-gorget", name: "Goguete de Aço Medieval", slot: "neck", usableBy: [...WARRIOR_TRIO, ...LANCER_TRIO], def: 2, price: 110 },
   "ornate-pendant": { id: "ornate-pendant", name: "Pingente Medieval Ornamentado", slot: "neck", res: 1, mag: 1, price: 130 },
   "ancient-pendant": { id: "ancient-pendant", name: "Pingente Ancestral", slot: "neck", mag: 2, price: 240 },
+  "venom-flask-charm": { id: "venom-flask-charm", name: "Frasco-Talismã Venenoso", slot: "neck", mag: 2, res: 1, price: 180 },
 
   // ---- rings (magic items, ring1/ring2 share this pool — see offHandBlocked usage note)
   "plain-iron-ring": { id: "plain-iron-ring", name: "Anel de Ferro Simples", slot: "ring1", hp: 3, price: 40 },
@@ -1889,6 +1912,10 @@ export function weaponTooltip(w: WeaponDef, enh = 0): string {
   const lines = [`${w.name}${enh > 0 ? ` +${enh}` : ""}`, `${weaponDiceLabel(w.id)} · ${weaponRangeLabel(w.id)}`, "Espaço: Mão principal"];
   if (w.twoHanded) lines.push("Duas mãos");
   if (w.ranged) lines.push("À distância");
+  const usableByPlayable = w.usableBy?.filter(isPlayableClassForDisplay) ?? [];
+  if (usableByPlayable.length > 0) {
+    lines.push(`Usável: ${usableByPlayable.map((c) => CLASSES[c]?.name ?? c).join(", ")}`);
+  }
   if (w.bonusClass && isPlayableClassForDisplay(w.bonusClass)) lines.push(`+10% dano · ${CLASSES[w.bonusClass]?.name ?? w.bonusClass}`);
   if (w.price) lines.push(`${w.price} Gold`);
   return lines.join("\n");
@@ -1917,12 +1944,12 @@ export function equipmentIcon(id: string): string {
   return `/game/icons/equipment/${id}.png`;
 }
 
-/** 10 slots per recruited hero. Bigger waist bags add extra only after they are bought
- * and equipped — the small leather pouch is not an upgrade. */
+/** 10 slots per recruited hero. Rare waist bags add capacity only while equipped. */
 export const PARTY_BAG_PER_HERO = 10;
 export const POUCH_UPGRADE_BONUS: Record<string, number> = {
-  "large-adventurers-pouch": 15,
-  "equipment-satchel": 30,
+  "small-leather-pouch": 5,
+  "large-adventurers-pouch": 10,
+  "equipment-satchel": 15,
 };
 
 export function isPouch(id: string | null | undefined): boolean {
@@ -1958,8 +1985,12 @@ export function partyPouchId(equipment: Record<string, Partial<Record<string, st
 }
 
 export function pouchUpgradeBonus(equipment: SaveData["equipment"] | undefined): number {
-  const id = partyPouchId(equipment);
-  return id ? POUCH_UPGRADE_BONUS[id] ?? 0 : 0;
+  let total = 0;
+  for (const slots of Object.values(equipment ?? {})) {
+    const id = slots.waist;
+    if (id) total += POUCH_UPGRADE_BONUS[id] ?? 0;
+  }
+  return total;
 }
 
 export function partyBagCapacity(save: Pick<SaveData, "completed" | "equipment">): number {

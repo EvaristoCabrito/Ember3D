@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BAG_MAX, CLASSES, EQUIPMENT, HERO_NAMES, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_ICON, RATIONS_PRICE, WEAPON_MAX_ENH, WEAPONS, equipmentIcon, equipmentTooltip, equipmentTypeSlotName, heroRecruited, isPlayableClassForDisplay, lockpickTooltip, partyBagHasRoom, partyPouchId, potionTooltip, pouchIcon, weaponDiceLabel, weaponEnhCost, weaponIcon, weaponPower, weaponRangeLabel, weaponSellValue, weaponTooltip, weaponsForClass, potionLabel } from "./data";
+import { BAG_MAX, CLASSES, EQUIPMENT, HERO_NAMES, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_ICON, RATIONS_PRICE, WEAPON_MAX_ENH, WEAPONS, equipmentIcon, equipmentTooltip, equipmentTypeSlotName, heroRecruited, isPlayableClassForDisplay, isPouch, lockpickTooltip, partyBagHasRoom, partyPouchId, potionTooltip, pouchIcon, weaponDiceLabel, weaponEnhCost, weaponIcon, weaponPower, weaponRangeLabel, weaponSellValue, weaponTooltip, potionLabel } from "./data";
 import { ItemTip, PartyInventoryOverlay } from "./InventoryScreens";
 import type { Bag, ClassId, EquipSlot, PotionId, SaveData } from "./types";
 import { GoldAmount } from "./GoldAmount";
@@ -50,6 +50,11 @@ const ICONS: Record<PotionId, string> = {
 
 const EMPTY_CART: Record<PotionId, number> = { weak: 0, mid: 0, potent: 0, disease: 0, manaSmall: 0, manaMid: 0, manaLarge: 0 };
 
+/** Aldric and Malrec join later in the story but aren't in HERO_NAMES yet, so they normally
+ * never appear in the Inn/Smith. Test mode appends them so their gear/weapon compatibility
+ * can be reviewed ahead of that. */
+const TEST_EXTRA_HERO_NAMES = ["Aldric", "Malrec"] as const;
+
 export function InnScreen({
   bags,
   ember,
@@ -58,6 +63,7 @@ export function InnScreen({
   equipped,
   heroClass,
   save,
+  test,
   onMute,
   onLeave,
   onPay,
@@ -77,6 +83,8 @@ export function InnScreen({
   equipped: Record<string, string>;
   heroClass: Record<string, ClassId>;
   save: SaveData;
+  /** Test/review mode — the Smith stocks every weapon, item, and piece of gear in the game. */
+  test?: boolean;
   onMute: () => void;
   onLeave: () => void;
   onPay: (hero: string, cart: Record<PotionId, number>, lockpicks: number) => boolean;
@@ -204,6 +212,7 @@ export function InnScreen({
         equipped={equipped}
         heroClass={heroClass}
         save={save}
+        test={test}
         onMute={onMute}
         onBack={() => setView("npc")}
         onBuyWeapon={onBuyWeapon}
@@ -282,7 +291,9 @@ export function InnScreen({
           <div className="shop-panel ember-window rounded-xl p-3 flex flex-col gap-2">
             <p className="text-xs uppercase tracking-[0.16em] text-muted">Adega · quem leva</p>
             <div className="flex flex-wrap gap-1">
-              {HERO_NAMES.filter((name) => heroRecruited(name, save.completed)).map((name) => (
+              {(test ? [...HERO_NAMES, ...TEST_EXTRA_HERO_NAMES] : HERO_NAMES)
+                .filter((name) => test || heroRecruited(name, save.completed))
+                .map((name) => (
                 <Button
                   key={name}
                   className="shop-hero-selector"
@@ -306,7 +317,7 @@ export function InnScreen({
                 const qty = cart[kind] ?? 0;
                 return (
                   <ItemTip key={kind} text={potionTooltip(kind)} className="block">
-                    <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
+                    <div className="tavern-item-window flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
                       <img src={ICONS[kind]} alt="" className="size-6 rounded-sm object-cover bg-black" />
                       <span className="flex-1 text-sm min-w-0">
                         {potionLabel(kind)}
@@ -314,13 +325,13 @@ export function InnScreen({
                           comprar {qty} · tem {have} / {POTION_CARRY_MAX[kind]} · {price} Gold
                         </span>
                       </span>
-                      <button type="button" className="size-8 grid place-items-center rounded-md border border-border" onClick={() => add(kind, -1)} disabled={qty <= 0}>
+                      <button type="button" className="size-8 grid place-items-center rounded-md border border-border bg-surface-2" onClick={() => add(kind, -1)} disabled={qty <= 0}>
                         −
                       </button>
                       <span className="w-6 text-center text-sm tabular-nums">{qty}</span>
                       <button
                         type="button"
-                        className="size-8 grid place-items-center rounded-md border border-border"
+                        className="size-8 grid place-items-center rounded-md border border-border bg-surface-2"
                         onClick={() => add(kind, 1)}
                         disabled={have + qty >= POTION_CARRY_MAX[kind]}
                       >
@@ -331,7 +342,7 @@ export function InnScreen({
                 );
               })}
               <ItemTip text={lockpickTooltip()} className="block">
-                <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
+                <div className="tavern-item-window flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
                   <img src="/game/icons/lockpick.png" alt="" className="size-6 rounded-sm object-cover bg-black" />
                   <span className="flex-1 text-sm min-w-0">
                     Gazua
@@ -339,13 +350,13 @@ export function InnScreen({
                       comprar {lockpickQty} · tem {bag.lockpick ?? 0} / {BAG_MAX} · {LOCKPICK_PRICE} Gold
                     </span>
                   </span>
-                  <button type="button" className="size-8 grid place-items-center rounded-md border border-border" onClick={() => addLockpick(-1)} disabled={lockpickQty <= 0}>
+                  <button type="button" className="size-8 grid place-items-center rounded-md border border-border bg-surface-2" onClick={() => addLockpick(-1)} disabled={lockpickQty <= 0}>
                     −
                   </button>
                   <span className="w-6 text-center text-sm tabular-nums">{lockpickQty}</span>
                   <button
                     type="button"
-                    className="size-8 grid place-items-center rounded-md border border-border"
+                    className="size-8 grid place-items-center rounded-md border border-border bg-surface-2"
                     onClick={() => addLockpick(1)}
                     disabled={(bag.lockpick ?? 0) + lockpickQty >= BAG_MAX}
                   >
@@ -369,7 +380,7 @@ export function InnScreen({
 
             <p className="mt-2 text-xs uppercase tracking-[0.16em] text-muted">Rações · para toda a party</p>
             <ItemTip text="Alimenta o grupo inteiro por um dia cada, no mapa. Empilha até 30 por espaço na mochila." className="block">
-              <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
+              <div className="tavern-item-window flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
                 <img src={RATIONS_ICON} alt="" className="size-6 rounded-sm object-cover bg-black" />
                 <span className="flex-1 text-sm min-w-0">
                   Rações
@@ -377,13 +388,13 @@ export function InnScreen({
                     comprar {rationsQty} · tem {save.rations} · {RATIONS_PRICE} Gold cada
                   </span>
                 </span>
-                <button type="button" className="size-8 grid place-items-center rounded-md border border-border" onClick={() => setRationsQty((q) => Math.max(0, q - 1))} disabled={rationsQty <= 0}>
+                <button type="button" className="size-8 grid place-items-center rounded-md border border-border bg-surface-2" onClick={() => setRationsQty((q) => Math.max(0, q - 1))} disabled={rationsQty <= 0}>
                   −
                 </button>
                 <span className="w-6 text-center text-sm tabular-nums">{rationsQty}</span>
                 <button
                   type="button"
-                  className="size-8 grid place-items-center rounded-md border border-border"
+                  className="size-8 grid place-items-center rounded-md border border-border bg-surface-2"
                   onClick={() => setRationsQty((q) => Math.min(q + 1, RATION_STACK_MAX * 20))}
                   disabled={!partyBagHasRoom(save, Math.ceil((save.rations + rationsQty + 1) / RATION_STACK_MAX) - Math.ceil(save.rations / RATION_STACK_MAX))}
                 >
@@ -425,6 +436,7 @@ function SmithPanel({
   equipped,
   heroClass,
   save,
+  test,
   onMute,
   onBack,
   onBuyWeapon,
@@ -440,6 +452,7 @@ function SmithPanel({
   equipped: Record<string, string>;
   heroClass: Record<string, ClassId>;
   save: SaveData;
+  test?: boolean;
   onMute: () => void;
   onBack: () => void;
   onBuyWeapon: (hero: string, weaponId: string) => boolean;
@@ -460,12 +473,23 @@ function SmithPanel({
 
   const classId = heroClass[hero];
   // Purchases still enter the shared Mochila, but the selected hero is the compatibility
-  // filter: Vargan never offers that hero a weapon they cannot wield.
-  const pool = useMemo(() => [...weaponsForClass(classId)].filter((weapon) => weapon.price > 0).sort((a, b) => weaponPower(a) - weaponPower(b)), [classId]);
+  // filter: Vargan never offers that hero a weapon they cannot wield. This stays on in
+  // test mode too — it's how per-class gear gets reviewed, one hero tab at a time.
+  // Test mode only drops the OTHER stock-limiting rules below (price floor, half-stock
+  // slicing, pouch exclusion) so nothing compatible with the selected hero is hidden.
+  const pool = useMemo(
+    () =>
+      Object.values(WEAPONS)
+        .filter((weapon) => test || weapon.price > 0)
+        .filter((weapon) => weapon.usableBy.includes(classId))
+        .sort((a, b) => weaponPower(a) - weaponPower(b)),
+    [classId, test],
+  );
   const smithEquipment = useMemo(() => {
     const bySlot = new Map<string, (typeof EQUIPMENT)[string][]>();
     for (const item of Object.values(EQUIPMENT)) {
-      if ((item.price ?? 0) <= 0) continue;
+      if (!test && (item.price ?? 0) <= 0) continue;
+      if (!test && isPouch(item.id)) continue;
       if (item.slot === "ring1" || item.slot === "ring2") continue;
       if (item.usableBy && !item.usableBy.includes(classId)) continue;
       const key = item.slot;
@@ -473,15 +497,17 @@ function SmithPanel({
     }
     return [...bySlot.values()].flatMap((items) => {
       const ranked = items.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-      return ranked.slice(0, Math.ceil(ranked.length / 2));
+      return test ? ranked : ranked.slice(0, Math.ceil(ranked.length / 2));
     }).sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-  }, [classId]);
+  }, [classId, test]);
   const smithRings = useMemo(
     () =>
       Object.values(EQUIPMENT)
-        .filter((item) => (item.slot === "ring1" || item.slot === "ring2") && (item.price ?? 0) > 0 && (!item.usableBy || item.usableBy.includes(classId)))
+        .filter((item) => item.slot === "ring1" || item.slot === "ring2")
+        .filter((item) => test || (item.price ?? 0) > 0)
+        .filter((item) => !item.usableBy || item.usableBy.includes(classId))
         .sort((a, b) => (a.price ?? 0) - (b.price ?? 0)),
-    [classId],
+    [classId, test],
   );
   const equippedId = equipped[hero];
   const equippedWeapon = equippedId ? WEAPONS[equippedId] : null;
@@ -586,7 +612,9 @@ function SmithPanel({
         <div className="shop-panel ember-window rounded-xl p-3 flex flex-col gap-2">
           <p className="text-xs uppercase tracking-[0.16em] text-muted">Equipamento exibido</p>
           <div className="flex flex-wrap gap-1">
-            {HERO_NAMES.filter((name) => heroRecruited(name, save.completed)).map((name) => (
+            {(test ? [...HERO_NAMES, ...TEST_EXTRA_HERO_NAMES] : HERO_NAMES)
+              .filter((name) => test || heroRecruited(name, save.completed))
+              .map((name) => (
               <Button
                 key={name}
                 className="shop-hero-selector"
