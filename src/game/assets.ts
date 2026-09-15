@@ -64,8 +64,8 @@ const HERO_PORTRAIT: Partial<Record<string, string>> = {
   voss: "/game/portraits/voss.png",
   salazar: "/game/portraits/salazar.png",
   malrec: "/game/portraits/malrec.png",
-  aldric: "/game/portraits/aldric.png",
-  defaultLancer: "/game/portraits/aldric.png",
+  aldric: "/game/portraits/aldric-profile-001.jpg?v=3",
+  defaultLancer: "/game/portraits/aldric-profile-001.jpg?v=3",
   sandoval: "/game/portraits/sandoval-001.jpg?v=1",
   conjurer: "/game/portraits/conjurer-002.png?v=2",
 };

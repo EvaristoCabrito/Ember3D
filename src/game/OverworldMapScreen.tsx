@@ -5,8 +5,8 @@ import type { Mission, SaveData, WorldLocation } from "./types";
 import { PartyInventoryOverlay } from "./InventoryScreens";
 import { heroRecruited } from "./data";
 import { GoldAmount } from "./GoldAmount";
-import { getAudioVolumes, setMusicVolume, setSfxVolume, sfxPlay, unlockAudio } from "./audio";
-import { canStepOverworld, hexToWorld, isOverworldCell, locationExpired, neighborsOf, type OverworldEvent, worldToHex } from "./overworld";
+import { getAudioVolumes, setCutsceneVolume, setMusicVolume, setSfxVolume, sfxPlay, unlockAudio } from "./audio";
+import { canStepOverworld, hexToWorld, isOverworldCell, locationExpired, neighborsOf, OVERWORLD_START_HEX, type OverworldEvent, worldToHex } from "./overworld";
 import { HungerBar } from "./HungerBar";
 import { portraitFor } from "./assets";
 import { key } from "./pathfinding";
@@ -104,6 +104,7 @@ export function OverworldMapScreen({
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
   const [movementOpen, setMovementOpen] = useState(false);
+  const [confirmVau, setConfirmVau] = useState(false);
   const [inventoryHero, setInventoryHero] = useState<string | null>(null);
   const stepLock = useRef(false);
   useEffect(() => {
@@ -244,13 +245,30 @@ export function OverworldMapScreen({
   );
   const partyWorld = hexToWorld(overworldPos.col, overworldPos.row);
 
+  // Standing at the western edge with O Vau still unfought — clicking Kael here has nothing
+  // to walk to (canStepOverworld keeps that edge closed until Vau is won) and nowhere to open
+  // a chapter list either, so it asks outright instead of just toggling an empty move prompt.
+  const atStartPreVau =
+    !test && !save.completed.includes("vau") && overworldPos.col === OVERWORLD_START_HEX.x && overworldPos.row === OVERWORLD_START_HEX.y;
+
   const walkTo = (col: number, row: number) => {
     if (!movementOpen || stepLock.current || !isOverworldCell(col, row)) return;
     stepLock.current = true;
     setMovementOpen(false);
     onStep(col, row);
-    const loc = locations.find((l) => { const h = worldToHex(l.x, l.y); return h.x === col && h.y === row; });
-    if (loc) enterLocation(loc, status(loc));
+    // Walking onto a location's hex only arrives there — it no longer pops the mission
+    // list open on its own. The pin now reads as "standing here" (see standingOn) and
+    // waits for its own click, same as any other pin, so arriving never yanks a panel
+    // over the map before the player has looked around.
+    //
+    // One scripted exception: Bosque Morto is an ambush, not a chapter the player opts into
+    // from a list — it finds the party the moment they set out from the ford, so their very
+    // first step after O Vau (and before Bosque is played) launches it directly, no click
+    // needed. Never in test mode: testing needs to walk and map every hex freely, not get
+    // funneled into a forced battle.
+    if (!test && save.completed.includes("vau") && !save.completed.includes("bosque")) {
+      onPick("bosque");
+    }
   };
 
   const enterLocation = (loc: WorldLocation, st: LocationStatus) => {
@@ -339,6 +357,24 @@ export function OverworldMapScreen({
                     setAudioLevels((levels) => ({ ...levels, sfx }));
                   }}
                   aria-label="Volume dos efeitos"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-muted">
+                  Cutscenes <span className="tabular-nums text-fg">{Math.round(audioLevels.cutscene * 100)}%</span>
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={audioLevels.cutscene}
+                  onChange={(e) => {
+                    const cutscene = Number(e.target.value);
+                    setCutsceneVolume(cutscene);
+                    setAudioLevels((levels) => ({ ...levels, cutscene }));
+                  }}
+                  aria-label="Volume das cutscenes"
                 />
               </label>
               <div className="flex items-center justify-between gap-2">
@@ -465,9 +501,15 @@ export function OverworldMapScreen({
                 for this sprite, just the idle loop, so distance covered does the talking). */}
             <button
               type="button"
-              aria-label="Mover Kael"
+              aria-label={atStartPreVau ? "Entrar na missão" : "Mover Kael"}
               aria-expanded={movementOpen}
-              onClick={() => setMovementOpen((value) => !value)}
+              onClick={() => {
+                if (atStartPreVau) {
+                  setConfirmVau(true);
+                  return;
+                }
+                setMovementOpen((value) => !value);
+              }}
               className="absolute z-20 -translate-x-1/2 -translate-y-full min-w-11 min-h-11 transition-all duration-500 ease-in-out focus-visible:outline-2 focus-visible:outline-accent"
               style={{ left: `${partyWorld.x}%`, top: `${partyWorld.y}%` }}
             >
@@ -484,9 +526,11 @@ export function OverworldMapScreen({
       )}
 
       <div className="absolute z-20 bottom-4 left-4 rounded-lg border border-border bg-bg/95 p-3 max-w-[calc(100%-6rem)]">
-        <p className="text-xs text-muted mb-2" aria-live="polite">{movementOpen ? "Escolha um hexágono · 1 dia" : "Clique em Kael para mover"}</p>
+        <p className="text-xs text-muted mb-2" aria-live="polite">
+          {atStartPreVau ? "Clique em Kael para entrar na missão" : movementOpen ? "Escolha um hexágono · 1 dia" : "Clique em Kael para mover"}
+        </p>
         <div className="flex gap-3">
-          {([['Kael', 'kaelFinal'], ['Neera', 'nira'], ['Voss', 'voss'], ['Salazar', 'salazar'], ['Aldric', 'aldric'], ['Malrec', 'malrec']] as const).filter(([name]) => test || heroRecruited(name, save.completed)).map(([name, sprite]) => (
+          {([['Kael', 'kaelFinal'], ['Neera', 'nira'], ['Voss', 'voss'], ['Salazar', 'salazar'], ['Aldric', 'aldric'], ['Malrec', 'conjurer']] as const).filter(([name]) => test || heroRecruited(name, save.completed)).map(([name, sprite]) => (
             <div key={name} className="w-10" title={name}>
               <button type="button" aria-label={`Inventário de ${name}`} onClick={() => setInventoryHero(name)} className="min-h-11">
                 <img src={portraitFor(sprite).src} alt={name} className="w-10 h-12 object-cover rounded" />
@@ -505,6 +549,33 @@ export function OverworldMapScreen({
             <button type="button" onClick={onDismissEvent} className="mt-4 h-11 w-full rounded-md border border-border bg-bg text-sm font-medium">
               OK
             </button>
+          </div>
+        </div>
+      )}
+
+      {confirmVau && (
+        <div className="absolute inset-0 z-40 ember-veil flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Entrar na missão">
+          <div className="w-full max-w-sm bg-surface border border-border rounded-lg px-5 py-4 text-sm text-fg shadow-lg shadow-bg/40">
+            <p className="font-display text-xl text-center mb-4">Entrar na missão?</p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmVau(false)}
+                className="h-11 flex-1 rounded-md border border-border bg-bg text-sm font-medium"
+              >
+                Não
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmVau(false);
+                  onPick("vau");
+                }}
+                className="h-11 flex-1 rounded-md border border-accent bg-accent/20 text-sm font-medium"
+              >
+                Sim
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -56,7 +56,10 @@ export function canStepOverworld(save: SaveData, from: Point, to: Point, test = 
   if (test) return true;
   if (STONE_BRIDGE_MISSION_IDS.every((missionId) => save.completed.includes(missionId))) return true;
   const atStart = from.x === OVERWORLD_START_HEX.x && from.y === OVERWORLD_START_HEX.y;
-  return atStart && to.x > from.x;
+  // O Vau is fought right at the western edge, before the party has taken a single step —
+  // the party has nowhere to walk to yet until it's cleared, so the east move (the only one
+  // this edge ever offers) stays closed until save.completed says so.
+  return atStart && to.x > from.x && save.completed.includes("vau");
 }
 
 /** The only notion of adjacency the RPG map is allowed to use. */
@@ -128,6 +131,35 @@ const OVERWORLD_OFF_MAP_HEXES = new Set<string>([
   // From Verdant Refuge (9,11), two steps southwest: (9,12) is fine (roots), but (8,13)
   // sits right on the boundary between rocky ground and the blank margin below it.
   key(8, 13),
+  // Lower-right (SE) neighbor of OVERWORLD_START_HEX (1,8) — off the western landmass edge.
+  key(1, 9),
+  // Lower-right (SE) neighbor of Stone Bridge (2,8), one step further along the same
+  // blank margin below the ford.
+  key(2, 9),
+  // Traced walking east then SE twice from Stone Bridge: (2,8) -> E -> (3,8) -> SE -> (3,9)
+  // -> SE -> (4,10) -> SE -> (4,11). The west neighbor at each SE landing was reported as
+  // blank margin: west of (4,10) is (3,10), west of (4,11) is (3,11).
+  key(3, 10),
+  key(3, 11),
+  // Lower-left (SW) and lower-right (SE) neighbors of the Frozen Swamp hex (5,11) — both
+  // reported as blank margin south of the swamp.
+  key(5, 12),
+  key(6, 12),
+  // One step east of Frozen Swamp then one more east — (7,11) is blank margin.
+  key(7, 11),
+  // Lower-right (SE) neighbor of (6,11), directly below the party's current hex.
+  key(7, 12),
+  // From (6,11), NE to (7,10), then that hex's own E (8,10) is blank margin. Its NE, (7,9),
+  // turned out to actually be on the landmass (walkable from (6,9)'s east side) — reported
+  // and restored rather than left wrongly excluded.
+  key(8, 10),
+  // East of the restored (7,9), across the party's actual walked path — blank margin.
+  key(8, 9),
+  // From the Inn (5,7): 3x E to (8,7), then SE to (9,8) — that hex's own SE, (9,9), is blank
+  // margin.
+  key(9, 9),
+  // One step east of (9,8), at (10,8) — its own SE, (10,9), is blank margin.
+  key(10, 9),
 ]);
 
 /** Finite logical board, independent of the map's rendered dimensions and zoom. */

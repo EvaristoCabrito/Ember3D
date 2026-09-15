@@ -7,6 +7,10 @@ const AUDIO_SETTINGS_KEY = "ember-ashes-audio-v1";
 const clampVolume = (value: number) => Math.max(0, Math.min(1, value));
 let musicVolume = 0.65;
 let sfxVolume = 1;
+// Cutscenes carry their own dialogue/sfx track, not just background music — on by default
+// and independent of the master mute toggle (see CutsceneScreen), same as music/sfx are
+// independent of each other. Its own slider in the audio settings panel, defaulting to full.
+let cutsceneVolume = 1;
 let musicTimer = 0;
 let htmlPrime: HTMLAudioElement | null = null;
 let retryTimer = 0;
@@ -14,9 +18,10 @@ const htmlUrls: Record<string, string> = {};
 
 if (typeof window !== "undefined") {
   try {
-    const saved = JSON.parse(window.localStorage.getItem(AUDIO_SETTINGS_KEY) ?? "{}") as { music?: unknown; sfx?: unknown };
+    const saved = JSON.parse(window.localStorage.getItem(AUDIO_SETTINGS_KEY) ?? "{}") as { music?: unknown; sfx?: unknown; cutscene?: unknown };
     if (typeof saved.music === "number") musicVolume = clampVolume(saved.music);
     if (typeof saved.sfx === "number") sfxVolume = clampVolume(saved.sfx);
+    if (typeof saved.cutscene === "number") cutsceneVolume = clampVolume(saved.cutscene);
   } catch {
     // Audio preferences are optional; defaults keep the game playable when storage is blocked.
   }
@@ -25,7 +30,7 @@ if (typeof window !== "undefined") {
 function persistAudioSettings(): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify({ music: musicVolume, sfx: sfxVolume }));
+    window.localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify({ music: musicVolume, sfx: sfxVolume, cutscene: cutsceneVolume }));
   } catch {
     // A private-storage browser can still use the current session's settings.
   }
@@ -39,13 +44,18 @@ function applyMusicVolume(): void {
   });
 }
 
-export function getAudioVolumes(): { music: number; sfx: number } {
-  return { music: musicVolume, sfx: sfxVolume };
+export function getAudioVolumes(): { music: number; sfx: number; cutscene: number } {
+  return { music: musicVolume, sfx: sfxVolume, cutscene: cutsceneVolume };
 }
 
 export function setMusicVolume(value: number): void {
   musicVolume = clampVolume(value);
   applyMusicVolume();
+  persistAudioSettings();
+}
+
+export function setCutsceneVolume(value: number): void {
+  cutsceneVolume = clampVolume(value);
   persistAudioSettings();
 }
 

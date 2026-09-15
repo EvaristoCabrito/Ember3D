@@ -3,7 +3,7 @@ import { Check, ChevronLeft, Lock, MapPin, SlidersHorizontal, Volume2, VolumeX, 
 import { missionsForLocation } from "./mapstore";
 import type { Mission, WorldLocation } from "./types";
 import { GoldAmount } from "./GoldAmount";
-import { getAudioVolumes, setMusicVolume, setSfxVolume, sfxPlay, unlockAudio } from "./audio";
+import { getAudioVolumes, setCutsceneVolume, setMusicVolume, setSfxVolume, sfxPlay, unlockAudio } from "./audio";
 
 export type LocationStatus = "locked" | "available" | "done";
 
@@ -250,6 +250,24 @@ export function WorldMapScreen({
                     setAudioLevels((levels) => ({ ...levels, sfx }));
                   }}
                   aria-label="Volume dos efeitos"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-muted">
+                  Cutscenes <span className="tabular-nums text-fg">{Math.round(audioLevels.cutscene * 100)}%</span>
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={audioLevels.cutscene}
+                  onChange={(event) => {
+                    const cutscene = Number(event.target.value);
+                    setCutsceneVolume(cutscene);
+                    setAudioLevels((levels) => ({ ...levels, cutscene }));
+                  }}
+                  aria-label="Volume das cutscenes"
                 />
               </label>
               <div className="flex items-center justify-between gap-2">

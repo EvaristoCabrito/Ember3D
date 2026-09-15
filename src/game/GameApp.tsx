@@ -2,13 +2,13 @@ import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactN
 import { ChevronDown, ChevronLeft, ChevronUp, Dices, Grip, Pencil, RotateCcw, Shuffle, SlidersHorizontal, Swords, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { loadGameArt, portraitFor, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
-import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
+import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { BattleCanvas } from "./BattleCanvas";
 import { InnScreen } from "./InnScreen";
 import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
 import { DialogEditor } from "./DialogEditor";
-import { BARRICADE_LIKE_DECOR, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FIREBALL, formatSpellUseGains, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, type SpellTier } from "./data";
+import { BARRICADE_LIKE_DECOR, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FIREBALL, formatSpellUseGains, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, type SpellTier } from "./data";
 import { BattleEngine } from "./engine";
 import { MapPreviewCanvas, type PreviewUnitSelection } from "./MapPreviewCanvas";
 import { WorldMapScreen } from "./WorldMapScreen";
@@ -475,15 +475,19 @@ function mapStatusUnit(save: SaveData, hero: string): UnitPublic {
   const cls = CLASSES[classId];
   const level = save.levels[hero] ?? 1;
   const stats = statsFor(classId, level);
+  const gear = save.equipment[hero] ?? {};
+  const gearBonus = gearStatBonus(Object.values(gear));
   const emptySpells = { tier1: 0, tier2: 0, tier3: 0, tier4: 0, tier5: 0, tier6: 0, tier7: 0, tier8: 0, tier9: 0, tier10: 0 };
+  const maxHp = stats.hp + gearBonus.hp;
   return {
     id: `map:${hero}`, name: hero, classId, className: cls.name, role: cls.role, side: "player", sprite: hero === "Kael" ? CLASSES.kaelFinal.sprite : cls.sprite,
-    hp: save.unitHp[hero] ?? stats.hp, maxHp: stats.hp, atk: stats.atk, mag: stats.mag, def: stats.def, res: stats.res,
-    initiative: cls.init ?? 0, initiativeRoll: cls.init ?? 0, mov: stats.mov, movLeft: stats.mov, minRange: cls.minRange, maxRange: cls.maxRange,
+    hp: Math.min(maxHp, save.unitHp[hero] ?? maxHp), maxHp, atk: stats.atk + gearBonus.atk, mag: stats.mag + gearBonus.mag, def: stats.def + gearBonus.def, res: stats.res + gearBonus.res,
+    initiative: cls.init ?? 0, initiativeRoll: cls.init ?? 0, mov: stats.mov + gearBonus.mov, movLeft: stats.mov + gearBonus.mov, minRange: cls.minRange, maxRange: cls.maxRange,
     moved: false, acted: false, x: save.overworldPos.col, y: save.overworldPos.row, level, xp: save.xp[hero] ?? 0,
     bag: save.bags[hero] ?? { mid: 0, weak: 0, potent: 0, disease: 0, manaSmall: 0, manaMid: 0, manaLarge: 0, lockpick: 0 },
     spells: emptySpells, weaponId: save.equipped[hero] ?? null, weaponEnh: 0, size: cls.size, diseased: false, poisoned: false,
     hungry: false, hungerPct: 0, fullness: save.heroHunger[hero], stunned: false, crippled: false, offHandId: null, summoned: false, asleep: false, restrained: false,
+    gear,
   };
 }
 
@@ -941,7 +945,7 @@ export function GameApp() {
       stopMusic();
       return;
     }
-    if (screen === "boot" || screen === "cutscene" || screen === "epilogue") {
+    if (screen === "boot" || screen === "cutscene" || screen === "epilogue" || screen === "vauIntro") {
       stopMusic();
       return;
     }
@@ -1002,15 +1006,18 @@ export function GameApp() {
   // screen first if they haven't yet. Every "return to the map" spot in this file goes
   // through here rather than naming "worldMap" directly, so both maps share one entry point.
   const goToMap = useCallback(() => {
-    // Modo teste asks every single time — that's the point of it, jumping between the two
-    // maps to test both. A real campaign still remembers the pick for the rest of the
-    // session so it doesn't nag on every return trip to the map mid-playthrough.
-    if (mapMode && !testMode) {
+    // Asked once, right when a campaign (real or test) actually starts — every later trip
+    // back to the map, from anywhere (a finished mission, the Inn, etc.), goes straight to
+    // whichever map was picked that first time. Test mode used to re-ask on every single
+    // return specifically so both maps stayed easy to reach for testing; picking one from
+    // the Map Editor's own test menu still works for that, so this no longer needs to nag
+    // on every trip back.
+    if (mapMode) {
       setScreen(mapMode === "classic" ? "worldMap" : "overworldMap");
       return;
     }
     setScreen("mapChoice");
-  }, [mapMode, testMode]);
+  }, [mapMode]);
 
   const leaveBoot = useCallback(() => {
     // Entering the world map is a hard music boundary: do not leave intro.mp3 under it.
@@ -1080,7 +1087,7 @@ export function GameApp() {
   return (
     <main className="relative h-dvh min-h-0 bg-bg text-fg overflow-hidden">
       {screen === "boot" && (
-        <CutsceneScreen src="/game/title-open.mp4" muted={false} onSkip={leaveBoot} />
+        <CutsceneScreen src="/game/title-open.mp4" onSkip={leaveBoot} />
       )}
       {screen === "title" && (
         <TitleScreen
@@ -1131,7 +1138,25 @@ export function GameApp() {
           onBack={() => setScreen(testMode ? "testMenu" : "title")}
           onPick={(mode) => {
             setMapMode(mode);
+            // Picking the RPG map on a brand-new campaign (nothing completed, nothing in
+            // progress) plays its own intro before O Vau's briefing instead of landing on
+            // the hex map first — a returning campaign, or the classic map, skips straight
+            // to its usual screen same as ever.
+            if (mode === "rpg" && !testMode && save.completed.length === 0 && !save.pendingMission) {
+              setScreen("vauIntro");
+              return;
+            }
             setScreen(mode === "classic" ? "worldMap" : "overworldMap");
+          }}
+        />
+      )}
+
+      {screen === "vauIntro" && (
+        <CutsceneScreen
+          src="/game/vau-intro.mp4"
+          onSkip={() => {
+            setMissionId("vau");
+            setScreen("briefing");
           }}
         />
       )}
@@ -1449,7 +1474,6 @@ export function GameApp() {
                 ? "/game/thebridge-intro.mp4"
                 : "/game/asherah-rite.mp4"
           }
-          muted={muted}
           onSkip={() => startBattle(missionId === "aldeia" ? "aldeia" : missionId === "thebridge" ? "thebridge" : "templo")}
         />
       )}
@@ -1457,7 +1481,6 @@ export function GameApp() {
       {screen === "epilogue" && (
         <CutsceneScreen
           src={missionId === "portao" ? "/game/portao-end.mp4" : "/game/temple-aftermath.mp4"}
-          muted={muted}
           onSkip={() => setScreen("victory")}
         />
       )}
@@ -1706,11 +1729,9 @@ export function GameApp() {
 
 function CutsceneScreen({
   src,
-  muted,
   onSkip,
 }: {
   src: string;
-  muted: boolean;
   onSkip: () => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -1736,8 +1757,29 @@ function CutsceneScreen({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.muted = muted;
+    // Cutscene audio is its own setting (see the "Cutscenes" slider in Áudio/Volumes),
+    // always on by default — never tied to the game's own master mute toggle.
+    const cutsceneVolume = getAudioVolumes().cutscene;
+    el.volume = cutsceneVolume;
+    el.muted = cutsceneVolume <= 0;
+    let stuckTimer = 0;
+    const clearStuckTimer = () => {
+      if (stuckTimer) {
+        window.clearTimeout(stuckTimer);
+        stuckTimer = 0;
+      }
+    };
+    // The only auto-skip left: a genuinely broken/blocked video that never actually starts
+    // playing. Anything that does start plays all the way to its own end (onEnded) or until
+    // "Pular" is clicked — never cut off by a blind clock partway through.
+    const armStuckTimer = () => {
+      clearStuckTimer();
+      stuckTimer = window.setTimeout(() => {
+        if (el.paused) onSkip();
+      }, 8000);
+    };
     const kick = () => {
+      armStuckTimer();
       void el.play().catch(() => {
         el.muted = true;
         void el.play().catch(() => {});
@@ -1745,12 +1787,13 @@ function CutsceneScreen({
     };
     kick();
     el.addEventListener("canplay", kick);
-    const t = window.setTimeout(onSkip, 20000);
+    el.addEventListener("playing", clearStuckTimer);
     return () => {
       el.removeEventListener("canplay", kick);
-      window.clearTimeout(t);
+      el.removeEventListener("playing", clearStuckTimer);
+      clearStuckTimer();
     };
-  }, [muted, src, onSkip]);
+  }, [src, onSkip]);
   return (
     <section className="relative h-dvh w-dvw bg-black overflow-hidden">
       <div className="cutscene-stage">
@@ -2350,8 +2393,8 @@ function cellIndex(x: number, y: number, cols: number, rows: number): number {
 }
 
 const DECO_SHUFFLE_EXCLUDE_KEY = "ember-deco-shuffle-exclude";
-const EDITOR_COLS_DEFAULT = 10;
-const EDITOR_ROWS_DEFAULT = 8;
+const EDITOR_COLS_DEFAULT = 20;
+const EDITOR_ROWS_DEFAULT = 20;
 
 /** Default level for a newly added spawn: enough spell slots unlocked to actually test
  * with, without being maxed out. */
@@ -5857,6 +5900,24 @@ function BattleScreen({
                       aria-label="Volume dos efeitos"
                     />
                   </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-muted">
+                      Cutscenes <span className="tabular-nums text-fg">{Math.round(audioLevels.cutscene * 100)}%</span>
+                    </span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={audioLevels.cutscene}
+                      onChange={(event) => {
+                        const cutscene = Number(event.target.value);
+                        setCutsceneVolume(cutscene);
+                        setAudioLevels((levels) => ({ ...levels, cutscene }));
+                      }}
+                      aria-label="Volume das cutscenes"
+                    />
+                  </label>
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs text-muted">Deixe Música em 0% para ouvir somente os efeitos.</p>
                     <Button size="sm" variant="quiet" onClick={() => { unlockAudio(); sfxPlay.magicAttack(); }}>
@@ -6105,16 +6166,34 @@ function damageFormula(mag: number, mul: number, dice: number, faces: number, bo
   return roll ? `${total} (${magExpr}) + ${roll}` : `${total} (${magExpr})`;
 }
 
+/** Which equipped pieces (if any) are boosting one core stat, and by how much — the status
+ * sheet turns the stat blue and names them in a hover tooltip instead of just showing the
+ * post-gear number with no explanation of where it came from. */
+function gearContributors(gear: Partial<Record<EquipSlot, string>>, stat: "hp" | "atk" | "mag" | "def" | "res" | "mov"): { total: number; lines: string[] } {
+  let total = 0;
+  const lines: string[] = [];
+  for (const id of Object.values(gear)) {
+    if (!id) continue;
+    const item = EQUIPMENT[id];
+    const amount = item?.[stat] ?? 0;
+    if (!amount) continue;
+    total += amount;
+    lines.push(`${item!.name} ${amount > 0 ? "+" : ""}${amount}`);
+  }
+  return { total, lines };
+}
+
 function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustStatPoint, bagIcon, onClose, onOpenInventory, onOpenEquipment, onCycle }: { unit: UnitPublic; statPointAllocation: StatPointAllocation; unspentStatPoints: number; onAdjustStatPoint?: (stat: StatPointAttribute, delta: 1 | -1) => boolean; bagIcon?: string; onClose: () => void; onOpenInventory?: () => void; onOpenEquipment?: () => void; /** Switches which unit the sheet shows — any living unit still in the fight, either side. */ onCycle?: (dir: 1 | -1) => void }) {
   const [showConditionDetail, setShowConditionDetail] = useState(false);
-  const stats: Array<{ label: string; value: string | number; stat?: StatPointAttribute }> = [
-    { label: "VIT", value: unit.maxHp, stat: "hp" },
-    { label: "ATK", value: unit.atk, stat: "atk" },
-    { label: "MAG", value: unit.mag, stat: "mag" },
-    { label: "DEF", value: unit.def, stat: "def" },
-    { label: "RES", value: unit.res, stat: "res" },
+  const gearStat = (stat: "hp" | "atk" | "mag" | "def" | "res" | "mov") => gearContributors(unit.gear, stat);
+  const stats: Array<{ label: string; value: string | number; stat?: StatPointAttribute; gear?: { total: number; lines: string[] } }> = [
+    { label: "VIT", value: unit.maxHp, stat: "hp", gear: gearStat("hp") },
+    { label: "ATK", value: unit.atk, stat: "atk", gear: gearStat("atk") },
+    { label: "MAG", value: unit.mag, stat: "mag", gear: gearStat("mag") },
+    { label: "DEF", value: unit.def, stat: "def", gear: gearStat("def") },
+    { label: "RES", value: unit.res, stat: "res", gear: gearStat("res") },
     { label: "INI", value: unit.initiative },
-    { label: "MOV", value: unit.movLeft < unit.mov ? `${unit.movLeft}/${unit.mov}` : unit.mov },
+    { label: "MOV", value: unit.movLeft < unit.mov ? `${unit.movLeft}/${unit.mov}` : unit.mov, gear: gearStat("mov") },
     { label: "Alcance", value: rangeLabel(unit.minRange, unit.maxRange) },
   ];
   const base = PROMOTED_BASE[unit.classId] ?? unit.classId;
@@ -6254,10 +6333,16 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
 
         <p className="text-xs uppercase tracking-[0.18em] text-muted mb-2">Atributos</p>
         <div className="grid grid-cols-4 gap-1.5 mb-4">
-          {stats.map(({ label, value, stat }) => (
+          {stats.map(({ label, value, stat, gear }) => (
             <div key={label} className="bg-bg border border-border rounded-md px-1 py-1 text-center">
               <p className="text-[9px] uppercase tracking-wide text-muted">{label}</p>
-              <p className="text-xs font-medium tabular-nums">{value}</p>
+              {gear && gear.total !== 0 ? (
+                <ItemTip text={`Bônus de equipamento:\n${gear.lines.join("\n")}`} className="block">
+                  <p className="text-xs font-medium tabular-nums text-sky-300">{value}</p>
+                </ItemTip>
+              ) : (
+                <p className="text-xs font-medium tabular-nums">{value}</p>
+              )}
               {stat && onAdjustStatPoint ? (
                 <div className="mt-0.5 flex items-center justify-center gap-0.5">
                   <button

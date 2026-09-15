@@ -113,7 +113,7 @@ export type SpellKind =
   | "intimidatingPresence"
   | "stampede"
   | "shock";
-export type ScreenId = "boot" | "title" | "campaign" | "mapChoice" | "worldMap" | "overworldMap" | "briefing" | "cutscene" | "epilogue" | "battle" | "victory" | "defeat" | "inn" | "testMenu" | "mapEditor";
+export type ScreenId = "boot" | "title" | "campaign" | "mapChoice" | "vauIntro" | "worldMap" | "overworldMap" | "briefing" | "cutscene" | "epilogue" | "battle" | "victory" | "defeat" | "inn" | "testMenu" | "mapEditor";
 export type Phase = "player" | "enemy";
 export type InputMode = "idle" | "selected" | "awaitAction" | "awaitAttack" | "awaitOffHand" | "awaitSpell" | "awaitPotion" | "locked";
 
@@ -532,6 +532,9 @@ export interface UnitPublic {
   /** True while this unit's current cell sits inside an active Web of Dreams zone — purely a
    * display flag; the movement penalty it implies is computed live off the zone, not stored. */
   restrained: boolean;
+  /** Worn gear by slot — lets the status sheet explain which stats gear is boosting (see
+   * gearStatBonus) and which specific piece is behind each one. */
+  gear: Partial<Record<EquipSlot, string>>;
 }
 
 export interface WeaponDef {

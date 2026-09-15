@@ -436,6 +436,7 @@ function pub(u: Unit, restrained: boolean, movLeft: number): UnitPublic {
     summoned: u.summoned,
     asleep: u.asleep,
     restrained,
+    gear: { ...u.gear },
   };
 }
 
@@ -502,9 +503,6 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
   // The overworld hunger penalty is party-wide and player-only — see Roster.hungerPenaltyPct.
   const hungerPenaltyPct = side === "player" ? Math.min(0.9, Math.max(0, roster?.hungerPenaltyPct ?? 0)) : 0;
   const hungerKeep = 1 - hungerPenaltyPct;
-  const hpCap = roster?.hp[spawn.name];
-  const maxHp = Math.round((st.hp + point("hp")) * hungerKeep);
-  const hp = hpCap != null && hpCap > 0 ? Math.min(maxHp, hpCap) : maxHp;
   const weapon = side === "player" ? (roster?.weapons?.[spawn.name] ?? { id: starterWeaponFor(classId), enh: 0 }) : null;
   // Range is a weapon property (D&D-weapon-style), not a class stat — falls back to the
   // class baseline only when there's no equipped weapon to read it from (e.g. enemies).
@@ -515,9 +513,12 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
   // what's saved in equipment — enforced here too, not just at the equip screen.
   const offHandId = side === "player" && !weaponDef?.twoHanded ? (roster?.offHand?.[spawn.name] ?? null) : null;
   const gear: Partial<Record<EquipSlot, string>> = side === "player" ? { ...(roster?.equipment?.[spawn.name] ?? {}) } : {};
-  // Worn gear contributes to combat stats. Only DEF is read today; gearStatBonus computes
-  // the whole set, so turning another stat on is a change here and in reapplyGear below.
+  // Worn gear contributes to every core combat stat, not just DEF — kept in sync with
+  // reapplyGear below, which redoes this same math after a slot changes mid-battle.
   const gearBonus = gearStatBonus(Object.values(gear));
+  const hpCap = roster?.hp[spawn.name];
+  const maxHp = Math.round((st.hp + point("hp") + gearBonus.hp) * hungerKeep);
+  const hp = hpCap != null && hpCap > 0 ? Math.min(maxHp, hpCap) : maxHp;
   return {
     id: `${side}-${spawn.name}-${i}`,
     name: spawn.name,
@@ -530,14 +531,14 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
     y: spawn.y,
     hp,
     maxHp,
-    atk: Math.round((st.atk + point("atk")) * hungerKeep),
-    mag: Math.round((st.mag + point("mag")) * hungerKeep),
+    atk: Math.round((st.atk + point("atk") + gearBonus.atk) * hungerKeep),
+    mag: Math.round((st.mag + point("mag") + gearBonus.mag) * hungerKeep),
     def: Math.round((st.def + point("def") + gearBonus.def) * hungerKeep),
-    res: Math.round((st.res + point("res")) * hungerKeep),
+    res: Math.round((st.res + point("res") + gearBonus.res) * hungerKeep),
     initiative: initiativeBonus(cls.id),
     initiativeRoll: 0,
     statPointAllocation,
-    mov: st.mov,
+    mov: st.mov + gearBonus.mov,
     gear,
     minRange,
     maxRange,
@@ -4758,22 +4759,22 @@ export class BattleEngine {
     return true;
   }
 
-  /** Recomputes whatever worn gear contributes, after a slot changed mid-battle.
-   *
-   * Only DEF is applied; gearStatBonus already returns hp/atk/mag/res/mov too, so adding
-   * one is a line here and the matching line in spawnUnit. Kept as its own step rather
-   * than folded into the equip methods so both entry points stay in sync. */
+  /** Recomputes whatever worn gear contributes, after a slot changed mid-battle. Every core
+   * stat gearStatBonus returns is applied here, kept in sync with the matching lines in
+   * spawnUnit — folded into its own step rather than the equip methods so both entry points
+   * stay in sync. */
   private reapplyGear(u: Unit): void {
     const base = statsFor(u.classId, u.level);
     const bonus = gearStatBonus(Object.values(u.gear));
     // Re-applied fresh every time rather than mutated once (unlike crippled) — see
     // Unit.hungerPenaltyPct's own doc comment.
     const hungerKeep = 1 - u.hungerPenaltyPct;
-    u.maxHp = Math.round((base.hp + (u.statPointAllocation.hp ?? 0)) * hungerKeep);
-    u.atk = Math.round((base.atk + (u.statPointAllocation.atk ?? 0)) * hungerKeep);
-    u.mag = Math.round((base.mag + (u.statPointAllocation.mag ?? 0)) * hungerKeep);
+    u.maxHp = Math.round((base.hp + (u.statPointAllocation.hp ?? 0) + bonus.hp) * hungerKeep);
+    u.atk = Math.round((base.atk + (u.statPointAllocation.atk ?? 0) + bonus.atk) * hungerKeep);
+    u.mag = Math.round((base.mag + (u.statPointAllocation.mag ?? 0) + bonus.mag) * hungerKeep);
     u.def = Math.round((base.def + (u.statPointAllocation.def ?? 0) + bonus.def) * hungerKeep);
-    u.res = Math.round((base.res + (u.statPointAllocation.res ?? 0)) * hungerKeep);
+    u.res = Math.round((base.res + (u.statPointAllocation.res ?? 0) + bonus.res) * hungerKeep);
+    u.mov = base.mov + bonus.mov;
     u.hp = Math.min(u.maxHp, u.hp);
   }
 
@@ -5468,12 +5469,14 @@ export class BattleEngine {
     this.lastClickCell = cell;
     if (same && (this.mode === "awaitAction" || this.mode === "selected") && selected && occupies(selected, cell.x, cell.y)) {
       this.wait();
-      // activeTurnUnit(), not a plain array scan — this.units is roster order (Kael first),
-      // which isn't necessarily whose turn is actually next. Selecting the wrong unit here
-      // makes select() fall through to its "not your turn yet" inspect() branch instead of
-      // actually selecting, and that inspect pops the status sheet on whoever got picked.
+      // turnOrder interleaves both sides by initiative, so whoever's up next here is just as
+      // often an enemy as it is an ally. select() falls through to inspect() for anyone who
+      // isn't a controllable player unit — right for an explicit click on a foe, wrong here:
+      // ending your own turn should never pop somebody else's status sheet open as a side
+      // effect. Only ever auto-select the next unit when it's actually a player unit whose
+      // turn it now is; an enemy up next is left alone for the engine's own turn dispatcher.
       const next = this.activeTurnUnit();
-      if (next) this.select(next);
+      if (next && next.side === "player") this.select(next);
       return;
     }
     this.cursor = cell;
