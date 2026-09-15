@@ -921,7 +921,7 @@ export function GameApp() {
     bootAudio();
     // Cinematics are bound to a mission id, never its campaign position. Moving or adding
     // chapters therefore cannot detach this scene from Aldeia Queimada.
-    if (missionId === "templo" || missionId === "aldeia") {
+    if (missionId === "templo" || missionId === "aldeia" || missionId === "thebridge") {
       setScreen("cutscene");
       return;
     }
@@ -1015,8 +1015,9 @@ export function GameApp() {
   const leaveBoot = useCallback(() => {
     // Entering the world map is a hard music boundary: do not leave intro.mp3 under it.
     playTheme("worldMap");
-    goToMap();
-  }, [goToMap]);
+    // Every new campaign chooses its map after the intro, even after a previous game.
+    setScreen("mapChoice");
+  }, []);
 
   const goToTitle = useCallback(() => {
     stopMusic();
@@ -1441,9 +1442,15 @@ export function GameApp() {
 
       {screen === "cutscene" && (
         <CutsceneScreen
-          src={missionId === "aldeia" ? "/game/aldeia-intro.mp4" : "/game/asherah-rite.mp4"}
+          src={
+            missionId === "aldeia"
+              ? "/game/aldeia-intro.mp4"
+              : missionId === "thebridge"
+                ? "/game/thebridge-intro.mp4"
+                : "/game/asherah-rite.mp4"
+          }
           muted={muted}
-          onSkip={() => startBattle(missionId === "aldeia" ? "aldeia" : "templo")}
+          onSkip={() => startBattle(missionId === "aldeia" ? "aldeia" : missionId === "thebridge" ? "thebridge" : "templo")}
         />
       )}
 

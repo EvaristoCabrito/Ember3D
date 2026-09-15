@@ -2,6 +2,7 @@ This conversation belongs to a Grok project. The project's files are mounted at 
 
 ## Filesystem authorization — mandatory
 
+- User standing restriction: only access and modify the shared folder `C:\EmberAshes032-master`. Never operate on any other folder. Keep project memory inside this folder.
 - Work only inside `C:\EmberAshes032-master`.
 - Do not access, inspect, copy, modify, rename, move, or delete anything outside `C:\EmberAshes032-master` unless the user explicitly authorizes the exact external path and action in the current request.
 - Do not create repositories, clones, worktrees, backups, duplicate project folders, or recovery copies.
