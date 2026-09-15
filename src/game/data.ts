@@ -1535,7 +1535,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   // them and hits 10% harder in that class's own hands (see combat.ts's
   // weaponClassBonusMul) — the name is the tell: primal/pure-arcane pieces go to the base
   // Mago, elemental ones to the Elementalista, pact/corruption ones to the Bruxo.
-  "cajado-de-osso": wpn("cajado-de-osso", "Cajado de Osso", ARCANE_ALL, 1, REACH, "mage"),
+  "cajado-de-osso": wpn("cajado-de-osso", "Cajado do Crescente Negro", ARCANE_ALL, 1, REACH, "mage"),
   "cajado-abissal": wpn("cajado-abissal", "Cajado Abissal", ARCANE_ALL, 9, REACH, undefined, 2),
   "cajado-de-ebano": wpn("cajado-de-ebano", "Cajado de Ébano", ARCANE_ALL, 3, REACH, "mage"),
   "cajado-igneo": wpn("cajado-igneo", "Cajado Ígneo", ARCANE_ALL, 4, REACH, "elementalist"),
@@ -1671,7 +1671,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "cajado-da-galhada": wpn("cajado-da-galhada", "Cajado da Galhada", HEAL_TRIO, 1),
   "cajado-cristal-sombrio": wpn("cajado-cristal-sombrio", "Cajado de Cristal Sombrio", ARCANE_ALL, 7, REACH, undefined, 2),
   "cajado-caveira-carneiro": wpn("cajado-caveira-carneiro", "Cajado da Caveira de Carneiro", ARCANE_ALL, 8, REACH, undefined, 2),
-  "cajado-crescente-negro": wpn("cajado-crescente-negro", "Cajado do Crescente Negro", ARCANE_ALL, 2, REACH, "warlock"),
+  "cajado-crescente-negro": wpn("cajado-crescente-negro", "Cajado de Osso", ARCANE_ALL, 2, REACH, "warlock"),
   "cajado-da-trepadeira": wpn("cajado-da-trepadeira", "Cajado da Trepadeira", HEAL_TRIO, 3, MELEE, undefined, 1),
 
   // Swords4 (base line, replaces the lost checkerboard Swords1 art) and swords3Stronger
@@ -4374,9 +4374,12 @@ export const WORLD_LOCATIONS: WorldLocation[] = [
   // reshaped (it went from 768x1376 to a 1408 square) — the image renders at its natural
   // aspect and the markers ride along.
   { id: "stonebridge", name: "Stone Bridge", x: 14, y: 62, missionIds: ["vau", "aldeia"] },
-  { id: "ruins", name: "Ruins", x: 79, y: 23, missionIds: ["muralha", "fortaleza", "templo", "cripta"] },
-  { id: "estalagem", name: "Inn", x: 50, y: 53, missionIds: ["estalagem"] },
-  { id: "dungeon", name: "The Sunken Ruins", x: 12, y: 78, missionIds: ["colina", "passagem", "profundezas"] },
+  // x/y is the RPG hex map's own hex(9,4) center, same treatment as vertente above.
+  { id: "ruins", name: "Ruins", x: 77.94, y: 30, missionIds: ["muralha", "fortaleza", "templo", "cripta"] },
+  // x/y is the RPG hex map's own hex(6,8) center, same treatment as vertente above.
+  { id: "estalagem", name: "Inn", x: 51.96, y: 60, missionIds: ["estalagem"] },
+  // x/y is the RPG hex map's own hex(1,11) center, same treatment as vertente above.
+  { id: "dungeon", name: "The Sunken Ruins", x: 12.99, y: 82.5, missionIds: ["colina", "passagem", "profundezas"] },
   { id: "watchtower", name: "Watchtower", x: 24, y: 50, missionIds: ["bosque"] },
   // Locked until content exists for them — the art draws them either way, so the world
   // reads as a place with more in it than the campaign has reached.
@@ -4385,12 +4388,15 @@ export const WORLD_LOCATIONS: WorldLocation[] = [
   { id: "vertente", name: "Fortified Temple Complex", x: 51.96, y: 15, missionIds: [] },
   { id: "village", name: "Village", x: 22, y: 25, missionIds: [] },
   { id: "farm", name: "Farm", x: 14, y: 38, missionIds: [] },
-  { id: "misty-cave", name: "Misty Cave", x: 51, y: 37, missionIds: [] },
+  // x/y is the RPG hex map's own hex(6,6) center, same treatment as vertente above.
+  { id: "misty-cave", name: "Misty Cave", x: 51.96, y: 45, missionIds: [] },
   { id: "cemetery", name: "Cemetery", x: 86, y: 52, missionIds: [] },
-  // x/y is the RPG hex map's own hex(5,11) center, same treatment as vertente above.
-  { id: "frozen-swamp", name: "Frozen Swamp", x: 47.63, y: 82.5, missionIds: [] },
+  // x/y is the RPG hex map's own hex(6,10) center, same treatment as vertente above.
+  { id: "frozen-swamp", name: "Frozen Swamp", x: 51.96, y: 75, missionIds: [] },
   // x/y is the RPG hex map's own hex(9,11) center, same treatment as vertente above.
   { id: "forest", name: "The Verdant Refuge", x: 82.27, y: 82.5, missionIds: [] },
+  // x/y is the RPG hex map's own hex(4,8) center, same treatment as vertente above.
+  { id: "wisp-forest", name: "Wisp Forest", x: 34.64, y: 60, missionIds: [] },
 ];
 
 export function locationForMission(missionId: string): WorldLocation | undefined {

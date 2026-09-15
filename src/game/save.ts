@@ -32,6 +32,15 @@ const HERO_BASE_CLASS: Record<(typeof HEROES)[number], ClassId> = {
   Salazar: "healer",
 };
 
+/** Aldric and Malrec join later in the story (see HERO_NAMES vs ALL_HERO_NAMES in data.ts)
+ * but their starter gear is seeded into a fresh save from day one anyway, same as everyone
+ * else's — otherwise their cheapest weapon would sit in the Smith's for-sale list instead
+ * of already being owned and equipped the moment they're actually recruited. */
+const LATE_HERO_BASE_CLASS: Record<string, ClassId> = {
+  Aldric: "aldric",
+  Malrec: "conjurer",
+};
+
 function clampInt(value: unknown, min: number, max: number): number {
   const n = Math.floor(Number(value));
   if (!Number.isFinite(n)) return min;
@@ -449,6 +458,12 @@ function starterEquipment(): { weapons: Record<string, number>; equipped: Record
   const equipped: Record<string, string> = {};
   for (const hero of HEROES) {
     const id = hero === "Salazar" ? "cajado-da-galhada" : starterWeaponFor(HERO_BASE_CLASS[hero]);
+    if (!id) continue;
+    weapons[id] = 0;
+    equipped[hero] = id;
+  }
+  for (const [hero, classId] of Object.entries(LATE_HERO_BASE_CLASS)) {
+    const id = starterWeaponFor(classId);
     if (!id) continue;
     weapons[id] = 0;
     equipped[hero] = id;

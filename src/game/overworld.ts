@@ -137,10 +137,10 @@ const OVERWORLD_OFF_MAP_HEXES = new Set<string>([
   // blank margin below the ford.
   key(2, 9),
   // Traced walking east then SE twice from Stone Bridge: (2,8) -> E -> (3,8) -> SE -> (3,9)
-  // -> SE -> (4,10) -> SE -> (4,11). The west neighbor at each SE landing was reported as
-  // blank margin: west of (4,10) is (3,10), west of (4,11) is (3,11).
+  // -> SE -> (4,10) -> SE -> (4,11). West of (4,10) is (3,10), blank margin. West of (4,11),
+  // (3,11), turned out to actually be on the landmass (walkable from Frozen Swamp's west
+  // side) — reported and restored rather than left wrongly excluded.
   key(3, 10),
-  key(3, 11),
   // Lower-left (SW) and lower-right (SE) neighbors of the Frozen Swamp hex (5,11) — both
   // reported as blank margin south of the swamp.
   key(5, 12),
@@ -160,6 +160,11 @@ const OVERWORLD_OFF_MAP_HEXES = new Set<string>([
   key(9, 9),
   // One step east of (9,8), at (10,8) — its own SE, (10,9), is blank margin.
   key(10, 9),
+  // From Frozen Swamp (5,11): W, SW, SW lands at (3,13) — its own W, (2,13), is blank margin.
+  key(2, 13),
+  // Upper-left (NW) and upper-right (NE) neighbors of Misty Cave (6,6) — both blank margin.
+  key(5, 5),
+  key(6, 5),
 ]);
 
 /** Finite logical board, independent of the map's rendered dimensions and zoom. */
