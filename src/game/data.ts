@@ -3294,8 +3294,6 @@ const RAW_MISSIONS: Mission[] = [
       { name: "Kael", classId: "kaelFinal", x: 2, y: 6 },
       { name: "Neera", classId: "neera", x: 3, y: 6 },
       { name: "Voss", classId: "voss", x: 4, y: 6 },
-      { name: "Aldric", classId: "aldric", x: 1, y: 6 },
-      { name: "Malrec", classId: "conjurer", x: 5, y: 6 },
     ],
     enemySpawns: [
       { name: "Soldado", classId: "soldier", x: 1, y: 0 },
@@ -4426,7 +4424,11 @@ const HERO_JOIN_INDEX: Record<string, number> = (() => {
  * (first playerSpawn in "cripta", index 6) becomes recruited on completing mission 06,
  * "Nave Enforcada" (index 5), where Asherah falls and he's found as her prisoner. */
 export function heroRecruited(name: string, completed: string[]): boolean {
-  const joinIndex = HERO_JOIN_INDEX[name] ?? 0;
+  const joinIndex = HERO_JOIN_INDEX[name];
+  // Not found in any mission's playerSpawns at all (e.g. authored in ALL_HERO_NAMES
+  // but their joining mission doesn't exist yet) — must read as "not recruited",
+  // never fall through to the joinIndex<=0 starter case below.
+  if (joinIndex == null) return false;
   if (joinIndex <= 0) return true;
   return completed.some((id) => (missionById(id)?.index ?? -1) >= joinIndex - 1);
 }
