@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { BAG_MAX, CLASSES, EMPTY_BAG, EQUIPMENT, EQUIPMENT_SLOTS, HERO_NAMES, POTION_CARRY_MAX, RATION_STACK_MAX, RATIONS_ICON, WEAPONS, equipmentFitsSlot, equipmentIcon, equipmentStatSummary, equipmentTooltip, equipmentTypeSlotName, heroRecruited, isPlayableClassForDisplay, lockpickTooltip, offHandBlocked, partyBagCapacity, partyBagUsed, potionLabel, potionTooltip, weaponDiceLabel, weaponIcon, weaponPower, weaponRangeLabel, weaponTooltip, weaponsForClass } from "./data";
+import { ALL_HERO_NAMES, BAG_MAX, CLASSES, EMPTY_BAG, EQUIPMENT, EQUIPMENT_SLOTS, POTION_CARRY_MAX, RATION_STACK_MAX, RATIONS_ICON, WEAPONS, equipmentFitsSlot, equipmentIcon, equipmentStatSummary, equipmentTooltip, equipmentTypeSlotName, heroRecruited, isPlayableClassForDisplay, lockpickTooltip, offHandBlocked, partyBagCapacity, partyBagUsed, potionLabel, potionTooltip, weaponDiceLabel, weaponIcon, weaponPower, weaponRangeLabel, weaponTooltip, weaponsForClass } from "./data";
 import type { ClassId, EquipSlot, PotionId, SaveData } from "./types";
 import { GOLD_ICON, GoldAmount } from "./GoldAmount";
+import { fullness } from "./hunger";
+import { HungerBar } from "./HungerBar";
 
 const POTIONS: PotionId[] = ["weak", "mid", "potent", "disease", "manaSmall", "manaMid", "manaLarge"];
 const BAG_ICON = "/game/icons/refresh-001/packs/small-pouch.png";
-const HERO_BASE_CLASS: Record<string, ClassId> = { Kael: "kaelFinal", Neera: "neera", Voss: "voss", Salazar: "salazar" };
+const HERO_BASE_CLASS: Record<string, ClassId> = { Kael: "kaelFinal", Neera: "neera", Voss: "voss", Salazar: "salazar", Aldric: "aldric", Malrec: "conjurer" };
 
 type DollSlot = "mainHand" | EquipSlot;
 /** Inner arch niches of equipment-male/female.jpg (1168×784), measured from the
@@ -139,6 +141,7 @@ export function PaperDollScreen({
   save,
   onClose,
   onSwitchToBackpack,
+  onOpenStatus,
   onEquipWeapon,
   onEquipItem,
   glowSlot = null,
@@ -151,6 +154,7 @@ export function PaperDollScreen({
   save: SaveData;
   onClose: () => void;
   onSwitchToBackpack?: () => void;
+  onOpenStatus?: (hero: string) => void;
   onEquipWeapon?: (hero: string, weaponId: string) => void;
   onEquipItem?: (hero: string, slot: EquipSlot, itemId: string | null) => void;
   /** Briefly highlights the slot the same way the Inn glows an open location — for when a
@@ -192,6 +196,11 @@ export function PaperDollScreen({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {onOpenStatus && (
+              <button type="button" onClick={() => onOpenStatus(heroName)} className="h-9 px-3 rounded-md border border-border bg-bg text-xs">
+                Status
+              </button>
+            )}
             {availableHeroes && availableHeroes.length > 1 && onHeroChange && (
               <div className="flex items-center gap-1">
                 <button
@@ -417,17 +426,29 @@ export function BackpackScreen({
   save,
   onClose,
   onSwitchToDoll,
+  onOpenStatus,
   onEquipWeapon,
   onEquipItem,
   embedded = false,
   availableHeroes,
   onHeroChange,
+  onUseRation,
+  onUseRationAll,
+  test,
 }: {
   heroName: string;
+  onUseRation?: (hero: string) => void;
+  /** "Alimentar todos" — one ration per hero in availableHeroes, off the shared party
+   * stock. Omit to leave the button off (see PartyInventoryOverlay's doc on this prop). */
+  onUseRationAll?: (heroes: string[]) => number;
+  /** Modo teste: bag capacity counts every named hero, not just whoever the story has
+   * recruited yet — same god-mode rule as everywhere else. */
+  test?: boolean;
   classId?: ClassId;
   save: SaveData;
   onClose: () => void;
   onSwitchToDoll?: () => void;
+  onOpenStatus?: (hero: string) => void;
   /** Clicking a weapon here equips it straight onto this hero — only offered when the
    * weapon actually fits their class (see weaponsForClass below). */
   onEquipWeapon?: (hero: string, weaponId: string) => void;
@@ -441,6 +462,12 @@ export function BackpackScreen({
   availableHeroes?: string[];
   onHeroChange?: (name: string) => void;
 }) {
+  const [rationNote, setRationNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!rationNote) return;
+    const timer = window.setTimeout(() => setRationNote(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [rationNote]);
   const bag = save.bags[heroName] ?? EMPTY_BAG;
   const weaponEntries = Object.entries(save.weapons).filter(([id]) => {
     const wielder = Object.entries(save.equipped).find(([, v]) => v === id)?.[0];
@@ -464,7 +491,7 @@ export function BackpackScreen({
   // Shared stash: unequipped weapons + loose gear. Potions/gazuas stay per-hero and
   // never count. Each physical piece takes one cell — copies do not stack.
   const bagCount = partyBagUsed(save);
-  const bagCapacity = partyBagCapacity(save);
+  const bagCapacity = partyBagCapacity(save, test);
   const heroEquip = save.equipment[heroName] ?? {};
   /** Which slot a click-to-equip should fill: rings pick whichever finger is free (ring1
    * first), everything else has exactly one slot — except offHand, which has none at all
@@ -494,8 +521,9 @@ export function BackpackScreen({
       key: `rations:${i}`,
       name: "Rações",
       icon: RATIONS_ICON,
-      tip: `${count} de comida — alimenta o grupo por dias na estrada.`,
+      tip: `${count} rações · usar 1 para encher a saciedade de ${heroName} até 100%. Atual: ${fullness(save.heroHunger[heroName])}%.`,
       count,
+      onClick: onUseRation && fullness(save.heroHunger[heroName]) < 100 ? () => onUseRation(heroName) : undefined,
     });
   }
   for (const [id, enh] of weaponEntries) {
@@ -547,10 +575,35 @@ export function BackpackScreen({
                 <img src={BAG_ICON} alt="" className="size-9 shrink-0 object-contain" />
                 <h2 className="font-display text-2xl leading-none">Mochila</h2>
               </div>
-              <p className="mt-1 text-xs text-muted">{heroName} · clique um item para equipar</p>
+              <p className="mt-1 text-xs text-muted">{heroName} · clique nas rações para comer ou num item para equipar</p>
+              <HungerBar name={heroName} value={save.heroHunger[heroName]} />
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {rationNote && <p className="text-xs text-accent">{rationNote}</p>}
+            {onUseRationAll && availableHeroes && availableHeroes.length > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const fed = onUseRationAll(availableHeroes);
+                  setRationNote(
+                    fed === 0
+                      ? "Ninguém comeu — sem rações ou já saciados."
+                      : fed === availableHeroes.length
+                        ? "Todos comeram."
+                        : `${fed} comeram — rações não deram pros demais.`,
+                  );
+                }}
+                className="h-9 px-3 rounded-md border border-border bg-bg text-xs"
+              >
+                Alimentar todos
+              </button>
+            )}
+            {onOpenStatus && (
+              <button type="button" onClick={() => onOpenStatus(heroName)} className="h-9 px-3 rounded-md border border-border bg-bg text-xs">
+                Status
+              </button>
+            )}
             {availableHeroes && availableHeroes.length > 1 && onHeroChange && (
               <div className="flex items-center gap-1">
                 <button
@@ -640,7 +693,7 @@ export function BackpackScreen({
                 <ItemTip key={kind} text={potionTooltip(kind)} className="block">
                   <div className="flex items-center gap-2 rounded-md border border-border/80 bg-bg/75 px-2 py-1.5 backdrop-blur-[2px]">
                     <img src={`/game/icons/potion-${kind}.png?v=ds2`} alt="" className="size-8 shrink-0 object-contain" />
-                    <p className="min-w-0 flex-1 truncate text-sm">
+                    <p className="min-w-0 flex-1 truncate text-xs">
                       {potionLabel(kind)}
                       <span className="block text-[10px] uppercase tracking-wide text-muted">
                         {bag[kind] ?? 0} / {POTION_CARRY_MAX[kind]}
@@ -675,14 +728,28 @@ export function PartyInventoryOverlay({
   heroName,
   classId,
   save,
+  test,
   onClose,
   onEquipWeapon,
   onEquipItem,
   initialView = "equipment",
+  onUseRation,
+  onUseRationAll,
+  onOpenStatus,
 }: {
   heroName: string;
+  onUseRation?: (hero: string) => void;
+  /** Mochila's "Alimentar todos" — one ration per hero currently in the switcher, off the
+   * shared party stock. Omit to leave the button off entirely (battle, say, where rations
+   * come out of loot too and need per-unit bookkeeping this bulk action doesn't do). */
+  onUseRationAll?: (heroes: string[]) => number;
+  onOpenStatus?: (hero: string) => void;
   classId: ClassId;
   save: SaveData;
+  /** Modo teste: every hero shows in the switcher regardless of story recruitment, same
+   * freedom test mode gives everywhere else — see the RPG map's party row and the Smith's
+   * own hero selector. */
+  test?: boolean;
   onClose: () => void;
   onEquipWeapon?: (hero: string, weaponId: string) => void;
   onEquipItem?: (hero: string, slot: EquipSlot, itemId: string | null) => void;
@@ -695,7 +762,7 @@ export function PartyInventoryOverlay({
   const [glowSlot, setGlowSlot] = useState<"mainHand" | EquipSlot | null>(null);
   const [view, setView] = useState<"equipment" | "backpack">(initialView);
   const [selectedHero, setSelectedHero] = useState(heroName);
-  const availableHeroes = HERO_NAMES.filter((name) => heroRecruited(name, save.completed));
+  const availableHeroes = ALL_HERO_NAMES.filter((name) => test || heroRecruited(name, save.completed));
   const selectedClass = save.promotions[selectedHero] ?? HERO_BASE_CLASS[selectedHero] ?? classId;
   const glowTimer = useRef<number | null>(null);
   const flashGlow = (slot: "mainHand" | EquipSlot) => {
@@ -727,6 +794,10 @@ export function PartyInventoryOverlay({
             heroName={selectedHero}
             classId={selectedClass}
             save={save}
+            test={test}
+            onUseRation={onUseRation}
+            onUseRationAll={onUseRationAll}
+            onOpenStatus={onOpenStatus}
             onClose={onClose}
             onSwitchToDoll={() => setView("equipment")}
             onEquipWeapon={onEquipWeapon && handleEquipWeapon}
@@ -742,6 +813,7 @@ export function PartyInventoryOverlay({
             save={save}
             onClose={onClose}
             onSwitchToBackpack={() => setView("backpack")}
+            onOpenStatus={onOpenStatus}
             onEquipWeapon={onEquipWeapon}
             onEquipItem={onEquipItem}
             glowSlot={glowSlot}

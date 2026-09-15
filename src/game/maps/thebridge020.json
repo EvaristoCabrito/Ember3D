@@ -1,12 +1,12 @@
 {
-  "serial": 18,
-  "savedAt": 1789266922683,
+  "serial": 20,
+  "savedAt": 1789445745330,
   "draft": {
     "id": "thebridge",
     "index": 3,
     "title": "A Ponte de Pedra",
     "place": "Cruzando a Ponte para Mordavia",
-    "briefing": "",
+    "briefing": "A travessia pela antiga Ponte de Pedra rumo a Mordavia exige coragem absoluta,\n\nUm nevoeiro denso cobre o abismo abaixo enquanto forças hostis bloqueiam o único acesso seguro para a terra desconhecida, \n\nPara garantir passagem livre e avançar na jornada, elimine cada um dos oponentes que guardam o caminho",
     "objective": "Derrote todos os inimigos",
     "win": "rout",
     "hub": false,

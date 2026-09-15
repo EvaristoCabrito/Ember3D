@@ -1155,6 +1155,13 @@ export const CLASSES: Record<ClassId, ClassDef> = {
 
 export const HERO_NAMES = ["Kael", "Neera", "Voss", "Salazar"] as const;
 
+/** Every hero name that can ever occupy a party slot, starters plus the two who join later
+ * in the story (Aldric, Malrec) — HERO_NAMES stays the narrower "starts in the save" tuple
+ * other code keys off of, this is the roster for anything that must react to a NEW recruit
+ * showing up (Mochila/Equipar's hero switcher, the RPG map's party row, etc.), gated the
+ * same way as everyone else: heroRecruited(name, save.completed). */
+export const ALL_HERO_NAMES = ["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"] as const;
+
 export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def: number; res: number }> = {
   swordsman: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   archer: { hp: 3, atk: 2, mag: 0, def: 1, res: 1 },
@@ -1490,9 +1497,10 @@ const WEAPON_RUNGS: { dice: number; faces: number; bonus: number; price: number 
 // wielding it. MELEE = swords/axes/maces/daggers/staves, REACH = spears/polearms
 // (can strike from 2 without exposing themselves at 1), RANGED = bows (can't strike
 // adjacent, gets the elevated-terrain bonus in effectiveMaxRange).
-type RangeSpec = { minRange: number; maxRange: number; ranged?: boolean };
+type RangeSpec = { minRange: number; maxRange: number; ranged?: boolean; twoHanded?: boolean };
 const MELEE: RangeSpec = { minRange: 1, maxRange: 1 };
 const REACH: RangeSpec = { minRange: 1, maxRange: 2 };
+const SPEAR: RangeSpec = { minRange: 1, maxRange: 2, twoHanded: true };
 const RANGED: RangeSpec = { minRange: 2, maxRange: 3, ranged: true };
 
 // extraBonus: once a class pool has more weapons than the 9-rung table has distinct dice
@@ -1500,7 +1508,7 @@ const RANGED: RangeSpec = { minRange: 2, maxRange: 3, ranged: true };
 // a pure stat-twin of the first lap — a small price premium comes with it.
 function wpn(id: string, name: string, usableBy: ClassId[], rung: number, range: RangeSpec = MELEE, bonusClass?: ClassId, extraBonus = 0): WeaponDef {
   const r = WEAPON_RUNGS[rung - 1]!;
-  return { id, name, usableBy, dice: r.dice, faces: r.faces, bonus: r.bonus + extraBonus, price: r.price + extraBonus * 60, minRange: range.minRange, maxRange: range.maxRange, ranged: range.ranged, bonusClass };
+  return { id, name, usableBy, dice: r.dice, faces: r.faces, bonus: r.bonus + extraBonus, price: r.price + extraBonus * 60, minRange: range.minRange, maxRange: range.maxRange, ranged: range.ranged, twoHanded: range.twoHanded, bonusClass };
 }
 
 const ARCANE_MAGE_TRIO: ClassId[] = ["mage", "voss", "elementalist", "warlock"];
@@ -1528,7 +1536,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   // weaponClassBonusMul) — the name is the tell: primal/pure-arcane pieces go to the base
   // Mago, elemental ones to the Elementalista, pact/corruption ones to the Bruxo.
   "cajado-de-osso": wpn("cajado-de-osso", "Cajado de Osso", ARCANE_ALL, 1, REACH, "mage"),
-  "cajado-abissal": wpn("cajado-abissal", "Cajado Abissal", ARCANE_ALL, 2, REACH, "warlock"),
+  "cajado-abissal": wpn("cajado-abissal", "Cajado Abissal", ARCANE_ALL, 9, REACH, undefined, 2),
   "cajado-de-ebano": wpn("cajado-de-ebano", "Cajado de Ébano", ARCANE_ALL, 3, REACH, "mage"),
   "cajado-igneo": wpn("cajado-igneo", "Cajado Ígneo", ARCANE_ALL, 4, REACH, "elementalist"),
   "bastao-do-pacto": wpn("bastao-do-pacto", "Bastão do Pacto", ARCANE_ALL, 5, REACH, "warlock"),
@@ -1554,7 +1562,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   // Curandeiro / Bispo / Clérigo — cajados de cura, pool compartilhado.
   // Progressão contígua 1D4→2D12, sem pular tier — cada rung do 1 ao 9 tem um cajado.
-  "cajado-da-renovacao": wpn("cajado-da-renovacao", "Cajado da Renovação", HEAL_TRIO, 1),
+  "cajado-da-renovacao": wpn("cajado-da-renovacao", "Cajado da Renovação", HEAL_TRIO, 2, MELEE, undefined, 1),
   "cajado-da-esperanca": wpn("cajado-da-esperanca", "Cajado da Esperança", HEAL_TRIO, 2),
   "cajado-da-graca": wpn("cajado-da-graca", "Cajado da Graça", HEAL_TRIO, 3),
   "cetro-da-luz": wpn("cetro-da-luz", "Cetro da Luz", HEAL_TRIO, 4),
@@ -1603,24 +1611,24 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "adaga-de-veneno": wpn("adaga-de-veneno", "Adaga de Veneno", ARCHER_TRIO, 4),
 
   // Lanceiro / Sentinela / Templário — lança, exclusiva dessa linha.
-  "lanca": wpn("lanca", "Lança", LANCER_TRIO, 1, REACH),
-  "partisan": wpn("partisan", "Partisan", LANCER_TRIO, 2, REACH),
-  "guisarme": wpn("guisarme", "Guisarme", LANCER_TRIO, 3, REACH),
-  "lanca-de-defesa": wpn("lanca-de-defesa", "Lança de Defesa", LANCER_TRIO, 4, REACH),
-  "lanca-da-faixa-vermelha": wpn("lanca-da-faixa-vermelha", "Lança da Faixa Vermelha", LANCER_TRIO, 1, REACH, undefined, 1),
-  "lanca-diamantada": wpn("lanca-diamantada", "Lança Diamantada", LANCER_TRIO, 2, REACH, undefined, 1),
-  "lanca-da-faixa-sombria": wpn("lanca-da-faixa-sombria", "Lança da Faixa Sombria", LANCER_TRIO, 1, REACH, undefined, 2),
-  "lanca-fluida-carmesim": wpn("lanca-fluida-carmesim", "Lança Fluida Carmesim", LANCER_TRIO, 2, REACH, undefined, 2),
-  "lanca-alada-azul": wpn("lanca-alada-azul", "Lança Alada Azul", LANCER_TRIO, 3, REACH, undefined, 1),
-  "lanca-serpente-rubra": wpn("lanca-serpente-rubra", "Lança da Serpente Rubra", LANCER_TRIO, 3, REACH, undefined, 2),
-  "lanca-da-trepadeira": wpn("lanca-da-trepadeira", "Lança da Trepadeira", LANCER_TRIO, 4, REACH, undefined, 1),
-  "lanca-da-estrela-polar": wpn("lanca-da-estrela-polar", "Lança da Estrela Polar", LANCER_TRIO, 5, REACH),
-  "lanca-do-anjo-guardiao": wpn("lanca-do-anjo-guardiao", "Lança do Anjo Guardião", LANCER_TRIO, 6, REACH),
-  "lanca-do-lobo-carmesim": wpn("lanca-do-lobo-carmesim", "Lança do Lobo Carmesim", LANCER_TRIO, 7, REACH),
-  "lanca-da-esmeralda-viva": wpn("lanca-da-esmeralda-viva", "Lança da Esmeralda Viva", LANCER_TRIO, 8, REACH),
-  "lanca-da-estrela-celeste": wpn("lanca-da-estrela-celeste", "Lança da Estrela Celeste", LANCER_TRIO, 9, REACH),
+  "lanca": wpn("lanca", "Lança", LANCER_TRIO, 1, SPEAR),
+  "partisan": wpn("partisan", "Partisan", LANCER_TRIO, 2, SPEAR),
+  "guisarme": wpn("guisarme", "Guisarme", LANCER_TRIO, 3, SPEAR),
+  "lanca-de-defesa": wpn("lanca-de-defesa", "Lança de Defesa", LANCER_TRIO, 4, SPEAR),
+  "lanca-da-faixa-vermelha": wpn("lanca-da-faixa-vermelha", "Lança da Faixa Vermelha", LANCER_TRIO, 1, SPEAR, undefined, 1),
+  "lanca-diamantada": wpn("lanca-diamantada", "Lança Diamantada", LANCER_TRIO, 2, SPEAR, undefined, 1),
+  "lanca-da-faixa-sombria": wpn("lanca-da-faixa-sombria", "Lança da Faixa Sombria", LANCER_TRIO, 1, SPEAR, undefined, 2),
+  "lanca-fluida-carmesim": wpn("lanca-fluida-carmesim", "Lança Fluida Carmesim", LANCER_TRIO, 2, SPEAR, undefined, 2),
+  "lanca-alada-azul": wpn("lanca-alada-azul", "Lança Alada Azul", LANCER_TRIO, 3, SPEAR, undefined, 1),
+  "lanca-serpente-rubra": wpn("lanca-serpente-rubra", "Lança da Serpente Rubra", LANCER_TRIO, 3, SPEAR, undefined, 2),
+  "lanca-da-trepadeira": wpn("lanca-da-trepadeira", "Lança da Trepadeira", LANCER_TRIO, 4, SPEAR, undefined, 1),
+  "lanca-da-estrela-polar": wpn("lanca-da-estrela-polar", "Lança da Estrela Polar", LANCER_TRIO, 5, SPEAR),
+  "lanca-do-anjo-guardiao": wpn("lanca-do-anjo-guardiao", "Lança do Anjo Guardião", LANCER_TRIO, 6, SPEAR),
+  "lanca-do-lobo-carmesim": wpn("lanca-do-lobo-carmesim", "Lança do Lobo Carmesim", LANCER_TRIO, 7, SPEAR),
+  "lanca-da-esmeralda-viva": wpn("lanca-da-esmeralda-viva", "Lança da Esmeralda Viva", LANCER_TRIO, 8, SPEAR),
+  "lanca-da-estrela-celeste": wpn("lanca-da-estrela-celeste", "Lança da Estrela Celeste", LANCER_TRIO, 9, SPEAR),
 
-  "bastao-purificacao-sombrio": wpn("bastao-purificacao-sombrio", "Bastão da Purificação Sombria", HEAL_TRIO, 1, REACH),
+  "bastao-purificacao-sombrio": wpn("bastao-purificacao-sombrio", "Bastão da Purificação Sombria", HEAL_TRIO, 5, REACH, undefined, 1),
   "bastao-caos-fraturado": wpn("bastao-caos-fraturado", "Bastão do Caos Fraturado", ARCANE_ALL, 1, REACH, "conjurer", 2),
   "bastao-pacto-sangue": wpn("bastao-pacto-sangue", "Bastão do Pacto de Sangue", ARCANE_ALL, 2, REACH, "warlock", 2),
   "bastao-vacuo-negro": wpn("bastao-vacuo-negro", "Bastão do Vácuo Negro", ARCANE_ALL, 3, REACH, "mage", 2),
@@ -1660,10 +1668,10 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "cajado-da-vinha": wpn("cajado-da-vinha", "Cajado da Vinha", HEAL_TRIO, 1, MELEE, undefined, 1),
   "cajado-espinhos-carmesim": wpn("cajado-espinhos-carmesim", "Cajado dos Espinhos Carmesim", ARCANE_ALL, 5, REACH, undefined, 2),
   "cajado-orbe-crescente": wpn("cajado-orbe-crescente", "Cajado do Orbe Crescente", ARCANE_ALL, 6, REACH, undefined, 2),
-  "cajado-da-galhada": wpn("cajado-da-galhada", "Cajado da Galhada", HEAL_TRIO, 2, MELEE, undefined, 1),
+  "cajado-da-galhada": wpn("cajado-da-galhada", "Cajado da Galhada", HEAL_TRIO, 1),
   "cajado-cristal-sombrio": wpn("cajado-cristal-sombrio", "Cajado de Cristal Sombrio", ARCANE_ALL, 7, REACH, undefined, 2),
   "cajado-caveira-carneiro": wpn("cajado-caveira-carneiro", "Cajado da Caveira de Carneiro", ARCANE_ALL, 8, REACH, undefined, 2),
-  "cajado-crescente-negro": wpn("cajado-crescente-negro", "Cajado do Crescente Negro", ARCANE_ALL, 9, REACH, undefined, 2),
+  "cajado-crescente-negro": wpn("cajado-crescente-negro", "Cajado do Crescente Negro", ARCANE_ALL, 2, REACH, "warlock"),
   "cajado-da-trepadeira": wpn("cajado-da-trepadeira", "Cajado da Trepadeira", HEAL_TRIO, 3, MELEE, undefined, 1),
 
   // Swords4 (base line, replaces the lost checkerboard Swords1 art) and swords3Stronger
@@ -2251,8 +2259,16 @@ export function pouchUpgradeBonus(equipment: SaveData["equipment"] | undefined):
   return total;
 }
 
-export function partyBagCapacity(save: Pick<SaveData, "completed" | "equipment">): number {
-  const heroes = Math.max(1, HERO_NAMES.filter((name) => heroRecruited(name, save.completed)).length);
+/** Modo teste: every named hero counts toward capacity, not just whoever the story has
+ * actually recruited — same god-mode rule every other test-mode party list already
+ * follows (Mochila's hero switcher, the RPG map's party row, etc.), so a full six-hero
+ * test roster gets its full 60 slots instead of getting docked for whichever hero hasn't
+ * formally joined this save yet. */
+export function partyBagCapacity(save: Pick<SaveData, "completed" | "equipment">, test = false): number {
+  // ALL_HERO_NAMES (all 6 possible party members), not HERO_NAMES (just the 4 starters) —
+  // Aldric and Malrec joining the party adds their own 10 slots same as anyone else, so a
+  // full six-hero roster tops out at 60, not stuck at 40.
+  const heroes = Math.max(1, ALL_HERO_NAMES.filter((name) => test || heroRecruited(name, save.completed)).length);
   return PARTY_BAG_PER_HERO * heroes + pouchUpgradeBonus(save.equipment);
 }
 
@@ -2264,8 +2280,8 @@ export function partyBagUsed(save: Pick<SaveData, "weapons" | "equipped" | "loos
   return weapons + gear + rationStacks;
 }
 
-export function partyBagHasRoom(save: Pick<SaveData, "completed" | "equipment" | "weapons" | "equipped" | "looseEquipment" | "rations">, extra = 1): boolean {
-  return partyBagUsed(save) + extra <= partyBagCapacity(save);
+export function partyBagHasRoom(save: Pick<SaveData, "completed" | "equipment" | "weapons" | "equipped" | "looseEquipment" | "rations">, extra = 1, test = false): boolean {
+  return partyBagUsed(save) + extra <= partyBagCapacity(save, test);
 }
 
 export function equipmentForClass(classId: ClassId, slot: EquipSlot): EquipmentDef[] {
@@ -4369,13 +4385,16 @@ export const WORLD_LOCATIONS: WorldLocation[] = [
   { id: "watchtower", name: "Watchtower", x: 24, y: 50, missionIds: ["bosque"] },
   // Locked until content exists for them — the art draws them either way, so the world
   // reads as a place with more in it than the campaign has reached.
-  { id: "vertente", name: "Fortified Temple Complex", x: 52, y: 9, missionIds: [] },
+  // x/y is the RPG hex map's own hex(6,2) center — dead center under the main keep/
+  // entrance stairs, not just "close enough" to the art.
+  { id: "vertente", name: "Fortified Temple Complex", x: 51.96, y: 15, missionIds: [] },
   { id: "village", name: "Village", x: 22, y: 25, missionIds: [] },
   { id: "farm", name: "Farm", x: 14, y: 38, missionIds: [] },
   { id: "misty-cave", name: "Misty Cave", x: 51, y: 37, missionIds: [] },
   { id: "cemetery", name: "Cemetery", x: 86, y: 52, missionIds: [] },
   { id: "frozen-swamp", name: "Frozen Swamp", x: 48, y: 78, missionIds: [] },
-  { id: "forest", name: "The Verdant Refuge", x: 84, y: 80, missionIds: [] },
+  // x/y is the RPG hex map's own hex(9,11) center, same treatment as vertente above.
+  { id: "forest", name: "The Verdant Refuge", x: 82.27, y: 82.5, missionIds: [] },
 ];
 
 export function locationForMission(missionId: string): WorldLocation | undefined {

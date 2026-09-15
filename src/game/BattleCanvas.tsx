@@ -126,6 +126,8 @@ export function BattleCanvas({
         hud.inspected?.id,
         hud.pendingFoe?.id,
         hud.selected?.hp,
+        hud.selected?.fullness,
+        hud.inspected?.fullness,
         hud.inspected?.hp,
         hud.selected?.bag.mid,
         hud.selected?.bag.weak,

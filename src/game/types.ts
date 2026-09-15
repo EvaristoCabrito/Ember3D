@@ -446,6 +446,7 @@ export interface Unit {
    * value that can be current going into the next mission too, not something this
    * battle inflicts on itself. */
   hungerPenaltyPct: number;
+  fullness: number;
   /** Equipped off-hand EquipmentDef id (kind "weapon" or "shield"), or null. */
   offHandId: string | null;
   /** Everything this unit is wearing, by slot. Carried on the unit (not just in the save)
@@ -522,6 +523,7 @@ export interface UnitPublic {
   /** 0..90 — the live stat penalty this unit is carrying from hunger, in percent. Only
    * meaningful alongside `hungry: true`; see hungerPenaltyFor in overworld.ts. */
   hungerPct?: number;
+  fullness?: number;
   stunned: boolean;
   crippled: boolean;
   offHandId: string | null;
@@ -774,6 +776,7 @@ export interface BattleUnitSnap {
   crippled: boolean;
   /** Optional for compatibility with battle saves created before hunger existed. */
   hungerPenaltyPct?: number;
+  fullness?: number;
   offHandId: string | null;
   gear: Partial<Record<EquipSlot, string>>;
   summoned: boolean;
@@ -861,10 +864,12 @@ export interface SaveData {
   /** RPG map only: current hex position and day count. Unused by the classic map. */
   overworldPos: { col: number; row: number };
   gameClock: number;
-  /** Party-wide ration stock — 1 unit feeds the whole living party for one day on the
-   * RPG map. A real backpack item: stacks up to RATION_STACK_MAX per slot (see
-   * partyBagUsed). Consumed and topped up on both maps' economies (Inn purchase, chest
-   * loot), but only ever ticks down by the overworld day clock. */
+  /** Cumulative travel cost; each adjacent step costs one, including backtracking. */
+  overworldMoveBudgetUsed: number;
+  /** Fullness remaining per hero (0..120). Missing heroes start full. */
+  heroHunger: Record<string, number>;
+  /** Party-wide ration stock. One ration refills one character's fullness to 100%; inn
+   * meals are bought separately. A real backpack item that stacks by RATION_STACK_MAX. */
   rations: number;
   /** Consecutive days the party went unfed on the RPG map (0 = fine). Drives the Hungry
    * status once past the 3-day grace period — see hungerPenaltyFor in overworld.ts.

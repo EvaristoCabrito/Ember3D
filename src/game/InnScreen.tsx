@@ -6,6 +6,8 @@ import { ItemTip, PartyInventoryOverlay } from "./InventoryScreens";
 import type { Bag, ClassId, EquipSlot, PotionId, SaveData } from "./types";
 import { GoldAmount } from "./GoldAmount";
 import { playTheme, sfxPlay, stopMusic, unlockAudio } from "./audio";
+import { fullness, INN_MEAL_PRICE } from "./hunger";
+import { HungerBar } from "./HungerBar";
 
 const BAG_ICON = pouchIcon(null);
 
@@ -56,6 +58,11 @@ const EMPTY_CART: Record<PotionId, number> = { weak: 0, mid: 0, potent: 0, disea
 const TEST_EXTRA_HERO_NAMES = ["Aldric", "Malrec"] as const;
 
 export function InnScreen({
+  onUseRation,
+  onUseRationAll,
+  onBuyMeal,
+  onBuyMealAll,
+  onOpenStatus,
   bags,
   ember,
   muted,
@@ -77,6 +84,15 @@ export function InnScreen({
   onSeenSmithIntro,
 }: {
   bags: Record<string, Bag>;
+  onUseRation: (hero: string) => void;
+  onUseRationAll?: (heroes: string[]) => number;
+  onBuyMeal: (hero: string) => boolean;
+  /** Feeds every hero currently shown in the Adega's hero row in one go, cheapest way to
+   * clear hunger for the whole party — same per-hero price and 120% cap as Comer, just
+   * skips whoever's already full or has no Gold left by the time their turn comes.
+   * Returns how many actually ate, for the note text. */
+  onBuyMealAll: (heroes: string[]) => number;
+  onOpenStatus: (hero: string) => void;
   ember: number;
   muted: boolean;
   weapons: Record<string, number>;
@@ -119,6 +135,13 @@ export function InnScreen({
     return () => window.clearTimeout(timer);
   }, [rationsNote]);
   const bag = bags[hero] ?? { mid: 0, weak: 0, potent: 0, disease: 0, manaSmall: 0, manaMid: 0, manaLarge: 0, lockpick: 0 };
+  // Same roster the Adega's own hero-selector row shows — Todos feeds exactly whoever
+  // Comer could already feed one at a time, never a hero outside that list.
+  const partyRoster = useMemo(
+    () =>
+      (test ? [...HERO_NAMES, ...TEST_EXTRA_HERO_NAMES] : HERO_NAMES).filter((name) => test || heroRecruited(name, save.completed)),
+    [test, save.completed],
+  );
 
   const total = useMemo(
     () => POTION_ORDER.reduce((n, kind) => n + cart[kind] * POTION_PRICE[kind], 0) + lockpickQty * LOCKPICK_PRICE,
@@ -219,6 +242,7 @@ export function InnScreen({
         onBuyEquipment={onBuyEquipment}
         onEquipWeapon={onEquipWeapon}
         onEquipItem={onEquipItem}
+        onOpenStatus={onOpenStatus}
         onUpgradeWeapon={onUpgradeWeapon}
         onSellWeapon={onSellWeapon}
       />
@@ -292,9 +316,7 @@ export function InnScreen({
           <div className="shop-panel ember-window rounded-xl p-3 flex flex-col gap-2">
             <p className="text-xs uppercase tracking-[0.16em] text-muted">Adega · quem leva</p>
             <div className="flex flex-wrap gap-1">
-              {(test ? [...HERO_NAMES, ...TEST_EXTRA_HERO_NAMES] : HERO_NAMES)
-                .filter((name) => test || heroRecruited(name, save.completed))
-                .map((name) => (
+              {partyRoster.map((name) => (
                 <Button
                   key={name}
                   className="shop-hero-selector"
@@ -312,6 +334,33 @@ export function InnScreen({
               ))}
             </div>
             <div className="flex flex-col gap-1">
+              <div className="rounded-md border border-border p-3">
+                <p className="text-sm">Refeição para {hero} · {INN_MEAL_PRICE} Gold</p>
+                <p className="text-xs text-muted">Enche a saciedade até 120% · bônus de 20%</p>
+                <HungerBar name={hero} value={save.heroHunger[hero]} />
+                <div className="flex gap-1.5 mt-2">
+                  <Button className="flex-1" disabled={ember < INN_MEAL_PRICE || fullness(save.heroHunger[hero]) >= 120 || (save.unitHp[hero] ?? 1) <= 0} onClick={() => setNote(onBuyMeal(hero) ? `${hero} comeu. Saciedade: 120%.` : "Falta Gold ou o personagem já está satisfeito.")}>
+                    Comer · {INN_MEAL_PRICE} Gold
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    variant="quiet"
+                    disabled={ember < INN_MEAL_PRICE || !partyRoster.some((name) => fullness(save.heroHunger[name]) < 120 && (save.unitHp[name] ?? 1) > 0)}
+                    onClick={() => {
+                      const fed = onBuyMealAll(partyRoster);
+                      setNote(
+                        fed === 0
+                          ? "Ninguém comeu. Falta Gold ou já estão satisfeitos."
+                          : fed === partyRoster.length
+                            ? "Todos comeram. Saciedade: 120%."
+                            : `${fed} comeram · Gold não deu pros demais.`,
+                      );
+                    }}
+                  >
+                    Todos · {INN_MEAL_PRICE} Gold cada
+                  </Button>
+                </div>
+              </div>
               {POTION_ORDER.map((kind) => {
                 const price = POTION_PRICE[kind];
                 const have = bag[kind] ?? 0;
@@ -397,7 +446,7 @@ export function InnScreen({
                   type="button"
                   className="size-8 grid place-items-center rounded-md border border-border bg-surface-2"
                   onClick={() => setRationsQty((q) => Math.min(q + 1, RATION_STACK_MAX * 20))}
-                  disabled={!partyBagHasRoom(save, Math.ceil((save.rations + rationsQty + 1) / RATION_STACK_MAX) - Math.ceil(save.rations / RATION_STACK_MAX))}
+                  disabled={!partyBagHasRoom(save, Math.ceil((save.rations + rationsQty + 1) / RATION_STACK_MAX) - Math.ceil(save.rations / RATION_STACK_MAX), test)}
                 >
                   +
                 </button>
@@ -420,6 +469,16 @@ export function InnScreen({
           heroName={hero}
           classId={heroClass[hero] ?? "swordsman"}
           save={save}
+          test={test}
+          onUseRation={onUseRation}
+          onUseRationAll={onUseRationAll}
+          onOpenStatus={(h) => {
+            // The status sheet renders behind this overlay (both share z-40, and this one
+            // mounts later) — close it first or the "Status" button looks like it does
+            // nothing while it's actually opening right behind the Mochila/Equipar screen.
+            setInvView(null);
+            onOpenStatus(h);
+          }}
           onClose={() => setInvView(null)}
           onEquipWeapon={onEquipWeapon}
           onEquipItem={onEquipItem}
@@ -444,6 +503,7 @@ function SmithPanel({
   onBuyEquipment,
   onEquipWeapon,
   onEquipItem,
+  onOpenStatus,
   onUpgradeWeapon,
   onSellWeapon,
 }: {
@@ -460,6 +520,7 @@ function SmithPanel({
   onBuyEquipment: (itemId: string) => boolean;
   onEquipWeapon: (hero: string, weaponId: string) => void;
   onEquipItem?: (hero: string, slot: EquipSlot, itemId: string | null) => void;
+  onOpenStatus: (hero: string) => void;
   onUpgradeWeapon: (weaponId: string) => boolean;
   onSellWeapon: (weaponId: string) => number | false;
 }) {
@@ -518,7 +579,7 @@ function SmithPanel({
 
   const buy = (weaponId: string) => {
     setNote(null);
-    if (!partyBagHasRoom(save)) {
+    if (!partyBagHasRoom(save, 1, test)) {
       setNote("Mochila cheia.");
       return;
     }
@@ -531,7 +592,7 @@ function SmithPanel({
   };
   const buyEquipment = (itemId: string) => {
     setNote(null);
-    if (!partyBagHasRoom(save)) {
+    if (!partyBagHasRoom(save, 1, test)) {
       setNote("Mochila cheia.");
       return;
     }
@@ -566,7 +627,7 @@ function SmithPanel({
   };
 
   const nextEnhCost = equippedEnh < WEAPON_MAX_ENH ? weaponEnhCost(equippedEnh + 1) : null;
-  const bagFull = !partyBagHasRoom(save);
+  const bagFull = !partyBagHasRoom(save, 1, test);
 
   return (
     <section className="shop-surface relative h-dvh min-h-0 flex flex-col overflow-hidden bg-bg">
@@ -772,16 +833,18 @@ function SmithPanel({
           {note && <p className="text-sm text-accent">{note}</p>}
         </div>
       </div>
-      <div className="relative z-10 p-4 pt-0 pb-[max(1rem,env(safe-area-inset-bottom))] max-w-lg mx-auto w-full">
-        <Button variant="ghost" className="w-full" onClick={onBack}>
-          <ChevronLeft className="size-4" /> Voltar à estalagem
-        </Button>
-      </div>
       {invView && (
         <PartyInventoryOverlay
           heroName={hero}
           classId={heroClass[hero] ?? "swordsman"}
           save={save}
+          test={test}
+          onOpenStatus={(h) => {
+            // Same reasoning as the NPC panel's overlay: close this one first so the status
+            // sheet (same z-40 layer, mounted earlier in the tree) isn't hidden behind it.
+            setInvView(null);
+            onOpenStatus(h);
+          }}
           onClose={() => setInvView(null)}
           onEquipWeapon={onEquipWeapon}
           onEquipItem={onEquipItem}

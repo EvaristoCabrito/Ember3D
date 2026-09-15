@@ -1,4 +1,5 @@
-import { statsFor } from "./data";
+import { heroRecruited, statsFor, WORLD_LOCATIONS } from "./data";
+import { DAILY_HUNGER_COST, drainHunger } from "./hunger";
 import { missionsForLocation } from "./mapstore";
 import { cubeRound, cubeToOddr, hexNeighbors, key, oddrToCube } from "./pathfinding";
 import type { ClassId, Point, SaveData, WorldLocation } from "./types";
@@ -34,6 +35,30 @@ export function hexToWorld(col: number, row: number): { x: number; y: number } {
   return { x, y };
 }
 
+/** One hex west of Stone Bridge; this is also the hard western edge of the map. */
+export const OVERWORLD_START_HEX = (() => {
+  const stoneBridge = WORLD_LOCATIONS.find((location) => location.id === "stonebridge");
+  const bridge = worldToHex(stoneBridge?.x ?? 14, stoneBridge?.y ?? 62);
+  return { x: bridge.x - 1, y: bridge.y };
+})();
+
+export const OVERWORLD_WEST_EDGE_COL = OVERWORLD_START_HEX.x;
+
+const STONE_BRIDGE_MISSION_IDS = WORLD_LOCATIONS.find((location) => location.id === "stonebridge")?.missionIds ?? [];
+
+/** The opening is deliberately linear: leave the western edge by the east hex, complete
+ * the full Stone Bridge mission set, then the full three-way travel choice opens up. Kept in the logic layer so a
+ * click or a future renderer cannot bypass the tutorial route. */
+export function canStepOverworld(save: SaveData, from: Point, to: Point, test = false): boolean {
+  // Modo teste: full freedom to walk anywhere, same as every other test-mode override —
+  // testing movement range/random encounters needs the whole grid open, not just the
+  // linear tutorial route out of Stone Bridge.
+  if (test) return true;
+  if (STONE_BRIDGE_MISSION_IDS.every((missionId) => save.completed.includes(missionId))) return true;
+  const atStart = from.x === OVERWORLD_START_HEX.x && from.y === OVERWORLD_START_HEX.y;
+  return atStart && to.x > from.x;
+}
+
 /** The only notion of adjacency the RPG map is allowed to use. */
 export function neighborsOf(col: number, row: number): Point[] {
   return hexNeighbors(col, row);
@@ -41,6 +66,76 @@ export function neighborsOf(col: number, row: number): Point[] {
 
 export function isNeighbor(a: Point, b: Point): boolean {
   return neighborsOf(a.x, a.y).some((n) => n.x === b.x && n.y === b.y);
+}
+
+/** Hand-picked cutouts inside the otherwise-rectangular [0,100]x[0,100] bounds — the art's
+ * landmass is a ragged silhouette, not a rectangle, so a handful of hexes near its edges
+ * land mathematically in-bounds while actually sitting on the blank parchment margin (e.g.
+ * the three hexes just past Village to the north, over open sky above the coastline). Add
+ * to this set rather than reshaping the bounds check itself, which every other hex still
+ * relies on. */
+const OVERWORLD_OFF_MAP_HEXES = new Set<string>([
+  key(2, 1),
+  key(1, 1),
+  key(1, 2),
+  // Upper-right neighbor of (3,2) (east of the coastline edge hex) — well above the
+  // mountain ridge line, same blank-sky margin as the three above.
+  key(3, 1),
+  // One more step east, same story — still above the ridge near Fortified Temple Complex.
+  key(4, 1),
+  // Upper-right of (5,2) — sits right on the castle's silhouette edge, over sky rather
+  // than roofline.
+  key(5, 1),
+  // Upper-right of (7,2) — open sky above the mountain ridge east of the castle.
+  key(7, 1),
+  // Upper-right of (6,2), the Fortified Temple Complex icon's own hex — blank sky right at
+  // the citadel's roofline edge.
+  key(6, 1),
+  // Two steps east of the citadel then one upper-right, at (8,1) — another mountain-ridge
+  // edge. Both its upper neighbors (NW and NE) are blank sky above the peak.
+  key(8, 0),
+  key(9, 0),
+  // Direct east of (8,1) — same blank sky above the ridge.
+  key(9, 1),
+  // From (8,1): SE to (9,2), then east to (10,2) — a thin peninsula tip, another edge.
+  // Its upper-right (10,1) is open sky above the ridge; its direct east (11,2) is past the
+  // tip, over blank parchment.
+  key(10, 1),
+  key(11, 2),
+  // One hex south of (10,2), at (10,3) near the Ruins — direct east is past the cliff edge,
+  // over blank parchment.
+  key(11, 3),
+  // Rest of column 11, surveyed top to bottom against the art: land only at rows 4
+  // (mountain cliff) and 6 (graveyard cliff near the Ruins) — row 10 looked like forest
+  // canopy at a glance but is actually mostly blank at its edge, see below. Every other
+  // row here is blank parchment past the coastline/cliff edge.
+  key(11, 0),
+  key(11, 5),
+  key(11, 7),
+  key(11, 8),
+  key(11, 9),
+  key(11, 11),
+  key(11, 12),
+  key(11, 13),
+  // Southeast corner of The Verdant Refuge's landmass (around hex (9,11)) — (11,12) above
+  // is already covered by the column-11 sweep; these two are the rest of that same blank
+  // corner, just past the tree roots' southern edge.
+  key(10, 13),
+  key(9, 13),
+  // (11,10) was marked land in the column-11 sweep but a closer look shows it's mostly
+  // over blank parchment, right at the canopy's edge — reclassifying it here.
+  key(11, 10),
+  // From Verdant Refuge (9,11), two steps southwest: (9,12) is fine (roots), but (8,13)
+  // sits right on the boundary between rocky ground and the blank margin below it.
+  key(8, 13),
+]);
+
+/** Finite logical board, independent of the map's rendered dimensions and zoom. */
+export function isOverworldCell(col: number, row: number): boolean {
+  if (!Number.isInteger(col) || !Number.isInteger(row)) return false;
+  if (OVERWORLD_OFF_MAP_HEXES.has(key(col, row))) return false;
+  const p = hexToWorld(col, row);
+  return col >= OVERWORLD_WEST_EDGE_COL && p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100;
 }
 
 /** Every named location, keyed by its hex — built from whatever location list the map is
@@ -83,6 +178,11 @@ const HERO_BASE_CLASS: Record<string, ClassId> = {
   Neera: "archer",
   Voss: "mage",
   Salazar: "healer",
+  // Join later in the story (and only playable early via test mode) but once recruited
+  // they're full party members — same daily hunger drain/recovery as everyone else, not a
+  // silent exemption because this map predates them.
+  Aldric: "aldric",
+  Malrec: "conjurer",
 };
 
 function maxHpFor(save: SaveData, hero: string): number {
@@ -123,16 +223,26 @@ export function teleportOverworld(save: SaveData, col: number, row: number): Sav
  * the save unchanged, no event) if the target hex isn't actually a neighbor of the current
  * position — the UI is expected to only ever offer neighbors, but this is the one place
  * that enforces it regardless. */
-export function stepOverworld(save: SaveData, toCol: number, toRow: number, locations: WorldLocation[]): { save: SaveData; event: OverworldEvent | null } {
+export function stepOverworld(save: SaveData, toCol: number, toRow: number, locations: WorldLocation[], test = false): { save: SaveData; event: OverworldEvent | null } {
   const from = { x: save.overworldPos.col, y: save.overworldPos.row };
   const to = { x: toCol, y: toRow };
-  if ((from.x === to.x && from.y === to.y) || !isNeighbor(from, to)) return { save, event: null };
+  if (!isOverworldCell(toCol, toRow) || !isNeighbor(from, to) || !canStepOverworld(save, from, to, test)) return { save, event: null };
 
-  const livingHeroes = Object.keys(HERO_BASE_CLASS).filter((hero) => (save.unitHp[hero] ?? maxHpFor(save, hero)) > 0).length;
-  const fed = save.rations > 0;
-  const rations = fed ? Math.max(0, save.rations - livingHeroes) : 0;
+  const heroHunger = { ...save.heroHunger };
+  // Modo teste: everyone shown in the party feels the same daily drain, full stop — not
+  // gated on heroRecruited OR on unitHp (a hero who never formally joined this save, or
+  // whose HP record is stale/zeroed from before they were recruited, still ages). Same
+  // god-mode rule this whole file already follows for canStepOverworld. A real campaign
+  // still gates on both, same as ever.
+  const ages = (hero: string) => test || (heroRecruited(hero, save.completed) && (save.unitHp[hero] ?? maxHpFor(save, hero)) > 0);
+  for (const hero of Object.keys(HERO_BASE_CLASS)) {
+    if (ages(hero)) heroHunger[hero] = drainHunger(heroHunger[hero], DAILY_HUNGER_COST);
+  }
+
+  const fed = Object.keys(HERO_BASE_CLASS).filter(ages).every((hero) => (heroHunger[hero] ?? 100) > 0);
+  const rations = save.rations;
   const prevPenalty = hungerPenaltyFor(save.hungerStreak);
-  let hungerStreak = fed ? 0 : save.hungerStreak + 1;
+  const hungerStreak = fed ? 0 : save.hungerStreak + 1;
 
   const unitHp: Record<string, number> = { ...save.unitHp };
   // Recovery only happens on a day the party actually ate — "não ativa a recuperação de
@@ -168,17 +278,13 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
     emberDelta = pick.ember ?? 0;
   }
 
-  // Arriving at an Inn (a hub location, same check the map screens use to style its pin)
-  // cures the streak outright — "até retornar a alguma estalagem."
-  if (landedLocation && missionsForLocation(landedLocation).some((m) => m.hub)) {
-    hungerStreak = 0;
-  }
-
   return {
     save: {
       ...save,
       overworldPos: { col: toCol, row: toRow },
       gameClock: save.gameClock + 1,
+      overworldMoveBudgetUsed: (save.overworldMoveBudgetUsed ?? 0) + 1,
+      heroHunger,
       rations: Math.max(0, rations + rationsDelta),
       ember: Math.max(0, save.ember + emberDelta),
       hungerStreak,

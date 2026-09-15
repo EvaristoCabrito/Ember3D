@@ -13,6 +13,8 @@ import { BattleEngine } from "./engine";
 import { MapPreviewCanvas, type PreviewUnitSelection } from "./MapPreviewCanvas";
 import { WorldMapScreen } from "./WorldMapScreen";
 import { OverworldMapScreen } from "./OverworldMapScreen";
+import { HungerBar } from "./HungerBar";
+import { buyInnMeal, fullness, useRation } from "./hunger";
 import { hungerPenaltyFor, stepOverworld, teleportOverworld, type OverworldEvent } from "./overworld";
 import { GoldAmount } from "./GoldAmount";
 import { DISPLAY_VERSION } from "./version";
@@ -252,6 +254,7 @@ const BRIEF_ART: Record<string, string> = {
   vertente: "/game/assets/brief-vertente.jpg?v=2",
   portao: "/game/assets/brief-portao.jpg",
   profundezas: "/game/assets/profundezas-bg.jpg?v=2",
+  thebridge: "/game/assets/brief-thebridge.jpg?v=2",
 };
 
 function briefArt(id: string): string | null {
@@ -463,6 +466,27 @@ function slotCount(action: SlotAction, unit: UnitPublic): number {
   return tier ? unit.spells[tierKey(tier)] : 0;
 }
 
+const MAP_STATUS_CLASS: Record<string, ClassId> = { Kael: "swordsman", Neera: "archer", Voss: "mage", Salazar: "healer", Aldric: "aldric", Malrec: "conjurer" };
+
+/** Adapts persistent campaign data to the exact UnitPublic contract consumed by the shared
+ * battle status sheet. The sheet itself stays singular; only its data source changes. */
+function mapStatusUnit(save: SaveData, hero: string): UnitPublic {
+  const classId = save.promotions[hero] ?? MAP_STATUS_CLASS[hero] ?? "swordsman";
+  const cls = CLASSES[classId];
+  const level = save.levels[hero] ?? 1;
+  const stats = statsFor(classId, level);
+  const emptySpells = { tier1: 0, tier2: 0, tier3: 0, tier4: 0, tier5: 0, tier6: 0, tier7: 0, tier8: 0, tier9: 0, tier10: 0 };
+  return {
+    id: `map:${hero}`, name: hero, classId, className: cls.name, role: cls.role, side: "player", sprite: hero === "Kael" ? CLASSES.kaelFinal.sprite : cls.sprite,
+    hp: save.unitHp[hero] ?? stats.hp, maxHp: stats.hp, atk: stats.atk, mag: stats.mag, def: stats.def, res: stats.res,
+    initiative: cls.init ?? 0, initiativeRoll: cls.init ?? 0, mov: stats.mov, movLeft: stats.mov, minRange: cls.minRange, maxRange: cls.maxRange,
+    moved: false, acted: false, x: save.overworldPos.col, y: save.overworldPos.row, level, xp: save.xp[hero] ?? 0,
+    bag: save.bags[hero] ?? { mid: 0, weak: 0, potent: 0, disease: 0, manaSmall: 0, manaMid: 0, manaLarge: 0, lockpick: 0 },
+    spells: emptySpells, weaponId: save.equipped[hero] ?? null, weaponEnh: 0, size: cls.size, diseased: false, poisoned: false,
+    hungry: false, hungerPct: 0, fullness: save.heroHunger[hero], stunned: false, crippled: false, offHandId: null, summoned: false, asleep: false, restrained: false,
+  };
+}
+
 export function GameApp() {
   const [resumeEditorDraft] = useState<MapDraft | null>(() => (typeof window === "undefined" ? null : readEditorResume()));
   const [screen, setScreen] = useState<ScreenId>(() => (resumeEditorDraft ? "mapEditor" : "title"));
@@ -471,6 +495,9 @@ export function GameApp() {
   // again instead of silently remembering last time's choice.
   const [mapMode, setMapMode] = useState<"classic" | "rpg" | null>(null);
   const [overworldEvent, setOverworldEvent] = useState<OverworldEvent | null>(null);
+  const [mapStatusHero, setMapStatusHero] = useState<string | null>(null);
+  const [mapInventoryRequestHero, setMapInventoryRequestHero] = useState<string | null>(null);
+  const [mapInventoryRequestView, setMapInventoryRequestView] = useState<"backpack" | "equipment">("backpack");
   const [bank, setBank] = useState<SaveBank>(() => (typeof window === "undefined" ? { version: 7, lastSlot: 0, muted: false, slots: [null, null, null, null, null] } : loadBank()));
   const save = activeSave(bank);
   const [art, setArt] = useState<GameArt | null>(null);
@@ -605,6 +632,7 @@ export function GameApp() {
       battle: engine.captureSnapshot(),
       bags: { ...data.bags, ...engine.remainingBags() },
       unitHp: { ...data.unitHp, ...engine.battlePlayerHp() },
+      heroHunger: { ...data.heroHunger, ...engine.battlePlayerHunger() },
     };
   };
 
@@ -694,7 +722,7 @@ export function GameApp() {
       // test here — zeroing it in test mode would hide the very feature it exists to let
       // the player verify. Applies the same in test mode and real play.
       const hungerPenaltyPct = hungerPenaltyFor(save.hungerStreak);
-      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct }, Date.now() % 100000);
+      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger: save.heroHunger }, Date.now() % 100000);
       if (resume && resume.missionId === m.id) battle.applySnapshot(resume);
       if (typeof window !== "undefined" && window.innerWidth < 720) battle.zoom = 0;
       awardedRef.current = null;
@@ -822,7 +850,7 @@ export function GameApp() {
       for (const id of engine.lootWeapons) {
         if (weapons[id] != null) continue;
         const probe = { ...save, weapons: { ...weapons, [id]: 0 }, looseEquipment };
-        if (!partyBagHasRoom(probe)) {
+        if (!partyBagHasRoom(probe, 1, testMode)) {
           found.push(`${WEAPONS[id]!.name} (mochila cheia)`);
           continue;
         }
@@ -834,7 +862,7 @@ export function GameApp() {
       // whichever hero they want from the Paperdoll picker afterward.
       for (const id of engine.lootEquipment) {
         const probe = { ...save, weapons, looseEquipment: { ...looseEquipment, [id]: (looseEquipment[id] ?? 0) + 1 } };
-        if (!partyBagHasRoom(probe)) {
+        if (!partyBagHasRoom(probe, 1, testMode)) {
           found.push(`${EQUIPMENT[id]!.name} (mochila cheia)`);
           continue;
         }
@@ -847,6 +875,7 @@ export function GameApp() {
         completed,
         unitHp: hp,
         bags,
+        heroHunger: { ...save.heroHunger, ...engine.battlePlayerHunger() },
         levels,
         xp,
         weapons,
@@ -998,12 +1027,45 @@ export function GameApp() {
   const onOverworldStep = useCallback(
     (col: number, row: number) => {
       const rec = activeSave(bank);
-      const { save: next, event } = stepOverworld(rec, col, row, campaignLocations);
+      const { save: next, event } = stepOverworld(rec, col, row, campaignLocations, testMode);
       if (next !== rec) persistCurrent(next);
       if (event) setOverworldEvent(event);
     },
-    [bank, campaignLocations],
+    [bank, campaignLocations, testMode],
   );
+  const consumeRation = (hero: string) => {
+    const rec = activeSave(bank);
+    if (screen === "battle" && engine) {
+      const unit = engine.units.find((u) => u.name === hero && u.side === "player" && !u.summoned && u.alive);
+      if (!unit || engine.getHud().busy || fullness(unit.fullness) >= 100 || rec.rations + engine.lootRations < 1) return;
+      unit.fullness = 100;
+      if (rec.rations > 0) persistCurrent(withLiveBattle({ ...rec, rations: rec.rations - 1 }));
+      else {
+        engine.lootRations -= 1;
+        persistCurrent(withLiveBattle(rec));
+      }
+      onHud(engine.getHud());
+      return;
+    }
+    const next = useRation(rec, hero);
+    if (next !== rec) persistCurrent(next);
+  };
+  /** Mochila's "Alimentar todos" — one ration per hero in the given roster, off the shared
+   * party stock. Inn/overworld only (mirrors consumeRation's plain, non-battle branch;
+   * battle rations come out of engine.lootRations too and need that per-unit bookkeeping,
+   * not worth threading through a bulk action here). */
+  const consumeRationAll = (heroes: string[]) => {
+    const rec = activeSave(bank);
+    let next = rec;
+    let fed = 0;
+    for (const hero of heroes) {
+      const after = useRation(next, hero);
+      if (after !== next) fed++;
+      next = after;
+    }
+    if (fed > 0) persistCurrent(next);
+    return fed;
+  };
   // Modo teste only: a non-adjacent pin jumps straight there, free of charge — see
   // OverworldMapScreen's onTeleport doc. Adjacent pins/wild hexes still go through
   // onOverworldStep above even in test mode, so the day clock and rations stay testable.
@@ -1138,12 +1200,39 @@ export function GameApp() {
           gameClock={save.gameClock}
           rations={save.rations}
           hungerStreak={save.hungerStreak}
+          heroHunger={save.heroHunger}
+          save={save}
+          onUseRation={consumeRation}
+          onUseRationAll={consumeRationAll}
+          inventoryRequestHero={mapInventoryRequestHero}
+          inventoryRequestView={mapInventoryRequestView}
+          onInventoryRequestHandled={() => setMapInventoryRequestHero(null)}
+          onOpenStatus={setMapStatusHero}
           event={overworldEvent}
           onDismissEvent={() => setOverworldEvent(null)}
           onStep={onOverworldStep}
           onTeleport={onOverworldTeleport}
           onBack={() => setScreen(testMode ? "testMenu" : "title")}
           onPick={openMission}
+        />
+      )}
+      {(screen === "overworldMap" || screen === "inn") && mapStatusHero && (
+        <StatusPanel
+          unit={mapStatusUnit(save, mapStatusHero)}
+          statPointAllocation={save.statPointAllocations[mapStatusHero] ?? {}}
+          unspentStatPoints={Math.max(0, ((save.levels[mapStatusHero] ?? 1) - 1) * STAT_POINTS_PER_LEVEL - Object.values(save.statPointAllocations[mapStatusHero] ?? {}).reduce((total, value) => total + (value ?? 0), 0))}
+          bagIcon={pouchIcon(equippedPouchId(save.equipment, mapStatusHero))}
+          onClose={() => setMapStatusHero(null)}
+          onOpenInventory={screen === "overworldMap" ? () => {
+              setMapStatusHero(null);
+              setMapInventoryRequestView("backpack");
+              setMapInventoryRequestHero(mapStatusHero);
+            } : undefined}
+          onOpenEquipment={screen === "overworldMap" ? () => {
+              setMapStatusHero(null);
+              setMapInventoryRequestView("equipment");
+              setMapInventoryRequestHero(mapStatusHero);
+            } : undefined}
         />
       )}
 
@@ -1159,6 +1248,33 @@ export function GameApp() {
 
       {screen === "inn" && (
         <InnScreen
+          onUseRation={consumeRation}
+          onUseRationAll={consumeRationAll}
+          onOpenStatus={setMapStatusHero}
+          onBuyMeal={(hero) => {
+            const rec = activeSave(bank);
+            const source = testMode ? { ...rec, ember: testEmber } : rec;
+            const next = buyInnMeal(source, hero);
+            if (next === source) return false;
+            if (testMode) setTestEmber(next.ember);
+            persistCurrent({ ...next, ember: testMode ? rec.ember : next.ember });
+            return true;
+          }}
+          onBuyMealAll={(heroes) => {
+            const rec = activeSave(bank);
+            const source = testMode ? { ...rec, ember: testEmber } : rec;
+            let next = source;
+            let fed = 0;
+            for (const hero of heroes) {
+              const after = buyInnMeal(next, hero);
+              if (after !== next) fed++;
+              next = after;
+            }
+            if (fed === 0) return 0;
+            if (testMode) setTestEmber(next.ember);
+            persistCurrent({ ...next, ember: testMode ? rec.ember : next.ember });
+            return fed;
+          }}
           bags={save.bags}
           ember={testMode ? testEmber : (save.ember ?? 0)}
           muted={muted}
@@ -1178,7 +1294,7 @@ export function GameApp() {
             const rec = activeSave(bank);
             const w = WEAPONS[weaponId];
             if (!w || rec.weapons[weaponId] != null) return false;
-            if (!partyBagHasRoom(rec)) return false;
+            if (!partyBagHasRoom(rec, 1, testMode)) return false;
             const held = testMode ? testEmber : (rec.ember ?? 0);
             if (held < w.price) return false;
             if (testMode) setTestEmber(held - w.price);
@@ -1196,7 +1312,7 @@ export function GameApp() {
             const item = EQUIPMENT[itemId];
             const price = item?.price ?? 0;
             if (!item || (price <= 0 && !testMode)) return false;
-            if (!partyBagHasRoom(rec)) return false;
+            if (!partyBagHasRoom(rec, 1, testMode)) return false;
             const held = testMode ? testEmber : (rec.ember ?? 0);
             if (held < price) return false;
             if (testMode) setTestEmber(held - price);
@@ -1213,7 +1329,7 @@ export function GameApp() {
             const rec = activeSave(bank);
             if (!weaponId) {
               const next = unequipSharedWeapon(rec, hero);
-              if (!partyBagHasRoom(next, 0)) return;
+              if (!partyBagHasRoom(next, 0, testMode)) return;
               persistCurrent({ ...next, pendingMission: null });
               return;
             }
@@ -1224,7 +1340,7 @@ export function GameApp() {
             const rec = activeSave(bank);
             if (!itemId) {
               const next = unequipSharedItem(rec, hero, slot);
-              if (!partyBagHasRoom(next, 0)) return;
+              if (!partyBagHasRoom(next, 0, testMode)) return;
               persistCurrent({ ...next, pendingMission: null });
               return;
             }
@@ -1306,7 +1422,7 @@ export function GameApp() {
           onBuyRations={(qty: number) => {
             if (qty <= 0) return false;
             const rec = activeSave(bank);
-            if (!partyBagHasRoom(rec, Math.ceil((rec.rations + qty) / RATION_STACK_MAX) - Math.ceil(rec.rations / RATION_STACK_MAX))) return false;
+            if (!partyBagHasRoom(rec, Math.ceil((rec.rations + qty) / RATION_STACK_MAX) - Math.ceil(rec.rations / RATION_STACK_MAX), testMode)) return false;
             const cost = RATIONS_PRICE * qty;
             const held = testMode ? testEmber : (rec.ember ?? 0);
             if (held < cost) return false;
@@ -1341,6 +1457,7 @@ export function GameApp() {
 
       {screen === "battle" && engine && (
         <BattleScreen
+          onUseRation={consumeRation}
           engine={engine}
           hud={hud}
           paused={paused}
@@ -1357,7 +1474,7 @@ export function GameApp() {
             const rec = activeSave(bank);
             if (!weaponId) {
               const next = unequipSharedWeapon(rec, hero);
-              if (!partyBagHasRoom(next, 0)) return;
+              if (!partyBagHasRoom(next, 0, testMode)) return;
               persistCurrent(withLiveBattle(next));
               return;
             }
@@ -1369,7 +1486,7 @@ export function GameApp() {
             const rec = activeSave(bank);
             if (!itemId) {
               const next = unequipSharedItem(rec, hero, slot);
-              if (!partyBagHasRoom(next, 0)) return;
+              if (!partyBagHasRoom(next, 0, testMode)) return;
               persistCurrent(withLiveBattle(next));
               return;
             }
@@ -1559,6 +1676,7 @@ export function GameApp() {
                   battle: engine.captureSnapshot(),
                   bags: { ...save.bags, ...engine.remainingBags() },
                   unitHp: { ...save.unitHp, ...engine.battlePlayerHp() },
+                  heroHunger: { ...save.heroHunger, ...engine.battlePlayerHunger() },
                   spellUses: engine.spentTiers(),
                   levels,
                   xp,
@@ -4973,6 +5091,7 @@ function BriefingScreen({
 }
 
 function BattleScreen({
+  onUseRation,
   engine,
   hud,
   paused,
@@ -4993,6 +5112,7 @@ function BattleScreen({
   playtest = false,
 }: {
   engine: BattleEngine;
+  onUseRation: (hero: string) => void;
   hud: HudSnapshot;
   paused: boolean;
   muted: boolean;
@@ -5141,6 +5261,7 @@ function BattleScreen({
   for (const id of engine.lootEquipment) liveLooseEquipment[id] = (liveLooseEquipment[id] ?? 0) + 1;
   const liveSave: SaveData = {
     ...save,
+    heroHunger: { ...save.heroHunger, ...engine.battlePlayerHunger() },
     ember: save.ember + engine.lootEmber,
     rations: save.rations + engine.lootRations,
     bags: { ...save.bags, ...Object.fromEntries(engine.units.filter((u) => u.side === "player").map((u) => [u.name, u.bag])) },
@@ -5489,6 +5610,7 @@ function BattleScreen({
                   alt=""
                   className={portraitFor(unit.sprite).framed ? "h-16 w-12 sm:h-20 sm:w-14 object-cover rounded-md" : "h-14 w-14 object-contain"}
                 />
+                {unit.side === "player" && <HungerBar name={unit.name} value={unit.fullness} />}
               </button>
               <button
                 type="button"
@@ -5795,6 +5917,14 @@ function BattleScreen({
           heroName={statusUnit.name}
           classId={statusUnit.classId}
           save={liveSave}
+          test={playtest}
+          onUseRation={onUseRation}
+          onOpenStatus={(hero) => {
+            const selected = engine.units.find((unit) => unit.name === hero && unit.side === "player");
+            if (selected) setBrowseId(selected.id);
+            setInvView(null);
+            setShowStatus(true);
+          }}
           initialView={invView === "pack" ? "backpack" : "equipment"}
           // Opened from the status panel, so closing goes back to it instead of dropping
           // straight to the battlefield — losing that context on the way out was the "no
@@ -6018,6 +6148,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                   </span>
                 )}
               </div>
+              {unit.side === "player" && <HungerBar name={unit.name} value={unit.fullness} />}
             </div>
             <div className="min-w-0">
               <p className="font-display text-xl leading-tight truncate">{unit.name}</p>

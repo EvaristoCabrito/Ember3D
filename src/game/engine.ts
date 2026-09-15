@@ -31,6 +31,7 @@ import {
 } from "./pathfinding";
 import { packExplored, relight, sightReaches, unpackExplored } from "./fog";
 import { buildDecorOverlay, hexDef, type DecorOverlay } from "./hexprops";
+import { ACTION_HUNGER_COST, drainHunger, fullness } from "./hunger";
 import { sfxPlay } from "./audio";
 import type {
   Bag,
@@ -430,6 +431,7 @@ function pub(u: Unit, restrained: boolean, movLeft: number): UnitPublic {
     crippled: u.crippled,
     hungry: u.hungerPenaltyPct > 0,
     hungerPct: Math.round(u.hungerPenaltyPct * 100),
+    fullness: u.fullness,
     offHandId: u.offHandId,
     summoned: u.summoned,
     asleep: u.asleep,
@@ -472,6 +474,7 @@ interface Roster {
    * overworld.ts), applied uniformly to every player spawn. Party-wide, not per-hero,
    * since hungerStreak itself is party-wide. */
   hungerPenaltyPct?: number;
+  heroHunger?: Record<string, number>;
 }
 
 /** Remaining uses for one spell tier at spawn — the class/level cap minus whatever the
@@ -601,6 +604,7 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
     stunTurns: 0,
     crippled: false,
     hungerPenaltyPct,
+    fullness: fullness(roster?.heroHunger?.[spawn.name]),
     offHandId,
     // Summon-ness is a property of the class, not of how the unit got here: one placed
     // straight onto a map in the editor is outside the party's defeat check just like one
@@ -673,6 +677,7 @@ function unitFromSnap(snap: BattleUnitSnap): Unit {
     stunTurns: snap.stunTurns,
     crippled: snap.crippled,
     hungerPenaltyPct: snap.hungerPenaltyPct ?? 0,
+    fullness: fullness(snap.fullness),
     offHandId: snap.offHandId,
     gear: { ...snap.gear },
     summoned: snap.summoned,
@@ -1149,6 +1154,10 @@ export class BattleEngine {
     this.pendingDialog = null;
   }
 
+  battlePlayerHunger(): Record<string, number> {
+    return Object.fromEntries(this.units.filter((u) => u.side === "player" && !u.summoned).map((u) => [u.name, u.fullness]));
+  }
+
   battlePlayerHp(): Record<string, number> {
     const out: Record<string, number> = {};
     for (const u of this.units) {
@@ -1271,6 +1280,7 @@ export class BattleEngine {
         stunTurns: u.stunTurns,
         crippled: u.crippled,
         hungerPenaltyPct: u.hungerPenaltyPct,
+        fullness: u.fullness,
         offHandId: u.offHandId,
         gear: { ...u.gear },
         summoned: u.summoned,
@@ -2277,6 +2287,7 @@ export class BattleEngine {
    * action was taken from a position a rewind would erase.
    */
   private finishAction(u: Unit): void {
+    if (u.side === "player" && !u.summoned) u.fullness = drainHunger(u.fullness, ACTION_HUNGER_COST);
     u.acted = true;
     this.pendingFoeId = null;
     this.inspectedId = null;
@@ -4328,6 +4339,7 @@ export class BattleEngine {
       stunTurns: 0,
       crippled: false,
       hungerPenaltyPct: 0,
+      fullness: 100,
       offHandId: null,
       gear: {},
       summoned: true,
@@ -5456,7 +5468,11 @@ export class BattleEngine {
     this.lastClickCell = cell;
     if (same && (this.mode === "awaitAction" || this.mode === "selected") && selected && occupies(selected, cell.x, cell.y)) {
       this.wait();
-      const next = this.units.find((u) => u.side === "player" && u.alive && !u.moved);
+      // activeTurnUnit(), not a plain array scan — this.units is roster order (Kael first),
+      // which isn't necessarily whose turn is actually next. Selecting the wrong unit here
+      // makes select() fall through to its "not your turn yet" inspect() branch instead of
+      // actually selecting, and that inspect pops the status sheet on whoever got picked.
+      const next = this.activeTurnUnit();
       if (next) this.select(next);
       return;
     }

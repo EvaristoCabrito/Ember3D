@@ -1,15 +1,12 @@
-import { EQUIPMENT, EXP_TO_LEVEL, MAX_GRID, MAX_LEVEL, POTION_CARRY_MAX, BAG_MAX, PROMOTIONS, STAT_POINTS_PER_LEVEL, WEAPONS, WORLD_LOCATIONS, emberFromCompleted, equipmentFitsSlot, starterWeaponFor, startingBags } from "./data";
+import { EQUIPMENT, EXP_TO_LEVEL, MAX_GRID, MAX_LEVEL, POTION_CARRY_MAX, BAG_MAX, PROMOTIONS, STAT_POINTS_PER_LEVEL, WEAPONS, emberFromCompleted, equipmentFitsSlot, starterWeaponFor, startingBags } from "./data";
 import { ALL_MISSIONS } from "./mapstore";
-import { worldToHex } from "./overworld";
+import { OVERWORLD_START_HEX } from "./overworld";
+import { cleanHunger, fullness } from "./hunger";
 import { TIER_KEYS } from "./types";
 import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogLine, DialogTree, EquipSlot, Phase, SaveBank, SaveData, Side, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, TierKey } from "./types";
 
-/** Where a fresh party starts on the RPG map — Stone Bridge, the campaign's own opening
- * location. Falls back to the grid origin if that location is ever renamed/removed. */
-const START_HEX = (() => {
-  const stoneBridge = WORLD_LOCATIONS.find((l) => l.id === "stonebridge");
-  return worldToHex(stoneBridge?.x ?? 14, stoneBridge?.y ?? 62);
-})();
+/** Fresh parties begin one hex left of Stone Bridge, on the map's west edge. */
+const START_HEX = OVERWORLD_START_HEX;
 
 export const SLOT_COUNT = 5;
 export const SAVE_VERSION = 12;
@@ -326,6 +323,8 @@ function cleanBattleUnit(raw: unknown): BattleUnitSnap | null {
     stunned: u.stunned === true,
     stunTurns: clampInt(u.stunTurns, 0, 9),
     crippled: u.crippled === true,
+    fullness: fullness(u.fullness),
+    hungerPenaltyPct: typeof u.hungerPenaltyPct === "number" ? Math.max(0, Math.min(0.9, u.hungerPenaltyPct)) : 0,
     offHandId: typeof u.offHandId === "string" && EQUIPMENT[u.offHandId] ? u.offHandId : null,
     gear,
     summoned: u.summoned === true,
@@ -449,7 +448,7 @@ function starterEquipment(): { weapons: Record<string, number>; equipped: Record
   const weapons: Record<string, number> = {};
   const equipped: Record<string, string> = {};
   for (const hero of HEROES) {
-    const id = starterWeaponFor(HERO_BASE_CLASS[hero]);
+    const id = hero === "Salazar" ? "cajado-da-galhada" : starterWeaponFor(HERO_BASE_CLASS[hero]);
     if (!id) continue;
     weapons[id] = 0;
     equipped[hero] = id;
@@ -480,6 +479,8 @@ export function emptySave(muted = false): SaveData {
     seenSmithIntro: false,
     overworldPos: { col: START_HEX.x, row: START_HEX.y },
     gameClock: 0,
+    overworldMoveBudgetUsed: 0,
+    heroHunger: {},
     rations: STARTING_RATIONS,
     hungerStreak: 0,
   };
@@ -527,7 +528,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
   // class's free starter weapon, same as a brand new save already does.
   for (const hero of HEROES) {
     if (equipped[hero]) continue;
-    const id = starterWeaponFor(HERO_BASE_CLASS[hero]);
+    const id = hero === "Salazar" ? "cajado-da-galhada" : starterWeaponFor(HERO_BASE_CLASS[hero]);
     if (!id) continue;
     weapons[id] = weapons[id] ?? 0;
     equipped[hero] = id;
@@ -562,6 +563,8 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     seenSmithIntro: raw.seenSmithIntro === true,
     overworldPos: cleanOverworldPos(raw.overworldPos),
     gameClock: clampInt(raw.gameClock, 0, 999999),
+    overworldMoveBudgetUsed: clampInt(raw.overworldMoveBudgetUsed ?? raw.gameClock, 0, 999999),
+    heroHunger: cleanHunger(raw.heroHunger),
     rations: typeof raw.rations === "number" ? clampInt(raw.rations, 0, 999999) : STARTING_RATIONS,
     hungerStreak: clampInt(raw.hungerStreak, 0, 999999),
   };

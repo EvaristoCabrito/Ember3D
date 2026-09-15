@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Check, ChevronLeft, Lock, MapPin, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
 import { missionsForLocation } from "./mapstore";
-import type { Mission, WorldLocation } from "./types";
+import type { Mission, SaveData, WorldLocation } from "./types";
+import { PartyInventoryOverlay } from "./InventoryScreens";
+import { heroRecruited } from "./data";
 import { GoldAmount } from "./GoldAmount";
 import { getAudioVolumes, setMusicVolume, setSfxVolume, sfxPlay, unlockAudio } from "./audio";
-import { hexToWorld, locationExpired, neighborsOf, type OverworldEvent, worldToHex } from "./overworld";
+import { canStepOverworld, hexToWorld, isOverworldCell, locationExpired, neighborsOf, type OverworldEvent, worldToHex } from "./overworld";
+import { HungerBar } from "./HungerBar";
+import { portraitFor } from "./assets";
 import { key } from "./pathfinding";
 
 export type LocationStatus = "locked" | "available" | "done";
@@ -52,6 +56,14 @@ export function OverworldMapScreen({
   gameClock,
   rations,
   hungerStreak,
+  heroHunger,
+  save,
+  onUseRation,
+  onUseRationAll,
+  inventoryRequestHero,
+  inventoryRequestView,
+  onInventoryRequestHandled,
+  onOpenStatus,
   event,
   onDismissEvent,
   onStep,
@@ -70,6 +82,14 @@ export function OverworldMapScreen({
   gameClock: number;
   rations: number;
   hungerStreak: number;
+  heroHunger: Record<string, number>;
+  save: SaveData;
+  onUseRation: (hero: string) => void;
+  onUseRationAll?: (heroes: string[]) => number;
+  inventoryRequestHero?: string | null;
+  inventoryRequestView?: "backpack" | "equipment";
+  onInventoryRequestHandled?: () => void;
+  onOpenStatus: (hero: string) => void;
   event: OverworldEvent | null;
   onDismissEvent: () => void;
   /** Commits one hex step (or a no-op re-click on the current hex) — day/ration/recovery
@@ -83,6 +103,22 @@ export function OverworldMapScreen({
   onPick: (missionId: string) => void;
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
+  const [movementOpen, setMovementOpen] = useState(false);
+  const [inventoryHero, setInventoryHero] = useState<string | null>(null);
+  const stepLock = useRef(false);
+  useEffect(() => {
+    if (!inventoryRequestHero) return;
+    setInventoryHero(inventoryRequestHero);
+    onInventoryRequestHandled?.();
+  }, [inventoryRequestHero, onInventoryRequestHandled]);
+  useEffect(() => {
+    stepLock.current = false;
+  }, [overworldPos.col, overworldPos.row]);
+  useEffect(() => {
+    const cancel = (e: KeyboardEvent) => { if (e.key === "Escape") setMovementOpen(false); };
+    window.addEventListener("keydown", cancel);
+    return () => window.removeEventListener("keydown", cancel);
+  }, []);
   const [artOk, setArtOk] = useState(true);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -136,13 +172,6 @@ export function OverworldMapScreen({
     mounted.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Auto-dismiss a step's event toast so it doesn't require an extra tap on a phone.
-  useEffect(() => {
-    if (!event) return;
-    const id = window.setTimeout(onDismissEvent, 4000);
-    return () => window.clearTimeout(id);
-  }, [event, onDismissEvent]);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.pointerType === "touch") return;
@@ -198,14 +227,12 @@ export function OverworldMapScreen({
     return set;
   }, [overworldPos.col, overworldPos.row]);
 
-  const occupiedHexes = useMemo(() => new Set(locations.map((l) => { const h = worldToHex(l.x, l.y); return key(h.x, h.y); })), [locations]);
-
   const wildDots = useMemo(
     () =>
       neighborsOf(overworldPos.col, overworldPos.row)
-        .filter((n) => !occupiedHexes.has(key(n.x, n.y)))
+        .filter((n) => isOverworldCell(n.x, n.y) && canStepOverworld(save, { x: overworldPos.col, y: overworldPos.row }, n, test))
         .map((n) => ({ ...n, world: hexToWorld(n.x, n.y) })),
-    [overworldPos.col, overworldPos.row, occupiedHexes],
+    [overworldPos.col, overworldPos.row, test],
   );
 
   // Standing exactly on a location's hex snaps the marker to that location's own authored
@@ -215,7 +242,16 @@ export function OverworldMapScreen({
     () => locations.find((l) => { const h = worldToHex(l.x, l.y); return h.x === overworldPos.col && h.y === overworldPos.row; }),
     [locations, overworldPos.col, overworldPos.row],
   );
-  const partyWorld = standingOn ? { x: standingOn.x, y: standingOn.y } : hexToWorld(overworldPos.col, overworldPos.row);
+  const partyWorld = hexToWorld(overworldPos.col, overworldPos.row);
+
+  const walkTo = (col: number, row: number) => {
+    if (!movementOpen || stepLock.current || !isOverworldCell(col, row)) return;
+    stepLock.current = true;
+    setMovementOpen(false);
+    onStep(col, row);
+    const loc = locations.find((l) => { const h = worldToHex(l.x, l.y); return h.x === col && h.y === row; });
+    if (loc) enterLocation(loc, status(loc));
+  };
 
   const enterLocation = (loc: WorldLocation, st: LocationStatus) => {
     if (locationExpired(loc, gameClock)) {
@@ -349,7 +385,7 @@ export function OverworldMapScreen({
             <div className="w-[70dvw] h-[70dvh] max-w-md" />
           )}
           <div className="absolute inset-0">
-            {locations.map((loc) => {
+            {locations.filter((loc) => test || loc.id === standingOn?.id).map((loc) => {
               const st = status(loc);
               const missions = missionsForLocation(loc);
               const multi = missions.length > 1;
@@ -367,12 +403,13 @@ export function OverworldMapScreen({
                   key={loc.id}
                   type="button"
                   onClick={() => {
+                    if (loc.id === standingOn?.id) { enterLocation(loc, st); return; }
+                    if (walkable) { walkTo(hex.x, hex.y); return; }
                     if (!isReachable) {
                       showHint("Ande até lá primeiro.");
                       return;
                     }
-                    if (walkable) onStep(hex.x, hex.y);
-                    else onTeleport?.(hex.x, hex.y);
+                    onTeleport?.(hex.x, hex.y);
                     enterLocation(loc, st);
                   }}
                   className={`group absolute -translate-x-1/2 -translate-y-1/2 ${isReachable ? "" : "opacity-70"}`}
@@ -410,28 +447,32 @@ export function OverworldMapScreen({
             {/* Wild-hex stepping stones: the invisible grid's only visible trace, and only
                 right around the party — not pre-authored pins, so they appear and vanish as
                 it moves instead of cluttering the whole map. */}
-            {wildDots.map((dot) => (
+            {movementOpen && wildDots.map((dot) => (
               <button
                 key={key(dot.x, dot.y)}
                 type="button"
-                onClick={() => onStep(dot.x, dot.y)}
-                className="group absolute -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${dot.world.x}%`, top: `${dot.world.y}%` }}
-                aria-label="Andar"
+                onClick={() => walkTo(dot.x, dot.y)}
+                className="overworld-step absolute -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${dot.world.x}%`, top: `${dot.world.y}%`, width: `${Math.sqrt(3) * 5}%`, height: "10%" }}
+                aria-label={`Andar para ${dot.x}, ${dot.y} · 1 dia`}
               >
-                <span className="block size-3 rounded-full bg-accent/70 border border-accent group-hover:scale-125 transition-transform" />
+                <span>1 dia</span>
               </button>
             ))}
 
             {/* The party's own marker — a tiny idle Kael, sliding hex to hex as the party
                 steps (the transition is what reads as "movement": there's no walk-cycle art
                 for this sprite, just the idle loop, so distance covered does the talking). */}
-            <div
-              className="absolute -translate-x-1/2 -translate-y-full pointer-events-none transition-all duration-500 ease-in-out"
+            <button
+              type="button"
+              aria-label="Mover Kael"
+              aria-expanded={movementOpen}
+              onClick={() => setMovementOpen((value) => !value)}
+              className="absolute z-20 -translate-x-1/2 -translate-y-full min-w-11 min-h-11 transition-all duration-500 ease-in-out focus-visible:outline-2 focus-visible:outline-accent"
               style={{ left: `${partyWorld.x}%`, top: `${partyWorld.y}%` }}
             >
               <KaelMarker facingLeft={facingLeft} />
-            </div>
+            </button>
           </div>
         </div>
       </div>
@@ -442,12 +483,27 @@ export function OverworldMapScreen({
         </div>
       )}
 
+      <div className="absolute z-20 bottom-4 left-4 rounded-lg border border-border bg-bg/95 p-3 max-w-[calc(100%-6rem)]">
+        <p className="text-xs text-muted mb-2" aria-live="polite">{movementOpen ? "Escolha um hexágono · 1 dia" : "Clique em Kael para mover"}</p>
+        <div className="flex gap-3">
+          {([['Kael', 'kaelFinal'], ['Neera', 'nira'], ['Voss', 'voss'], ['Salazar', 'salazar'], ['Aldric', 'aldric'], ['Malrec', 'malrec']] as const).filter(([name]) => test || heroRecruited(name, save.completed)).map(([name, sprite]) => (
+            <div key={name} className="w-10" title={name}>
+              <button type="button" aria-label={`Inventário de ${name}`} onClick={() => setInventoryHero(name)} className="min-h-11">
+                <img src={portraitFor(sprite).src} alt={name} className="w-10 h-12 object-cover rounded" />
+              </button>
+              <HungerBar name={name} value={heroHunger[name]} />
+            </div>
+          ))}
+        </div>
+        {standingOn && <button className="text-xs text-accent mt-2 min-h-11" onClick={() => enterLocation(standingOn, status(standingOn))}>Explorar {standingOn.name}</button>}
+      </div>
+
       {event && (
-        <div className="absolute z-30 bottom-[max(5rem,calc(env(safe-area-inset-bottom)+5rem))] left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm bg-surface/95 border border-border rounded-lg px-4 py-3 text-sm text-fg shadow-lg shadow-bg/40">
-          <div className="flex items-start justify-between gap-3">
+        <div className="absolute inset-0 z-40 ember-veil flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Evento da viagem">
+          <div className="w-full max-w-sm bg-surface border border-border rounded-lg px-5 py-4 text-sm text-fg shadow-lg shadow-bg/40">
             <p>{event.text}</p>
-            <button type="button" onClick={onDismissEvent} className="shrink-0 size-6 grid place-items-center rounded-md border border-border" aria-label="Fechar">
-              <X className="size-3" />
+            <button type="button" onClick={onDismissEvent} className="mt-4 h-11 w-full rounded-md border border-border bg-bg text-sm font-medium">
+              OK
             </button>
           </div>
         </div>
@@ -498,8 +554,30 @@ export function OverworldMapScreen({
           onClose={() => setOpen(null)}
         />
       )}
+      {inventoryHero && (
+        <PartyInventoryOverlay
+          heroName={inventoryHero}
+          classId={mapHeroClass(inventoryHero, save)}
+          save={save}
+          test={test}
+          initialView={inventoryRequestView ?? "backpack"}
+          onUseRation={onUseRation}
+          onUseRationAll={onUseRationAll}
+          onOpenStatus={(hero) => {
+            setInventoryHero(null);
+            onOpenStatus(hero);
+          }}
+          onClose={() => setInventoryHero(null)}
+        />
+      )}
     </section>
   );
+}
+
+const MAP_HERO_CLASS = { Kael: "swordsman", Neera: "archer", Voss: "mage", Salazar: "healer", Aldric: "aldric", Malrec: "conjurer" } as const;
+
+function mapHeroClass(hero: string, save: SaveData) {
+  return save.promotions[hero] ?? MAP_HERO_CLASS[hero as keyof typeof MAP_HERO_CLASS] ?? "swordsman";
 }
 
 function LocationPanel({
