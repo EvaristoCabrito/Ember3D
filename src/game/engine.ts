@@ -32,6 +32,7 @@ import {
 import { packExplored, relight, sightReaches, unpackExplored } from "./fog";
 import { buildDecorOverlay, hexDef, type DecorOverlay } from "./hexprops";
 import { ACTION_HUNGER_COST, drainHunger, fullness } from "./hunger";
+import { HUNGER_PENALTY_MAX } from "./overworld";
 import { sfxPlay } from "./audio";
 import type {
   Bag,
@@ -473,9 +474,21 @@ interface Roster {
   spellSpent?: Record<string, Partial<Record<TierKey, number>>>;
   /** 0..0.9 — the party's current overworld hunger penalty (see hungerPenaltyFor in
    * overworld.ts), applied uniformly to every player spawn. Party-wide, not per-hero,
-   * since hungerStreak itself is party-wide. */
+   * since hungerStreak itself is party-wide. At the 0.9 cap, a hero whose OWN fullness has
+   * also bottomed out is benched from the fight entirely instead of just docked (see
+   * heroUnconscious) — heroHunger is per-hero, so one fed today still fights normally even
+   * while the rest of the party is still starving. */
   hungerPenaltyPct?: number;
   heroHunger?: Record<string, number>;
+}
+
+/** True once a hero is starving badly enough to be benched outright rather than merely
+ * fighting at reduced stats — the party's hunger streak has hit its worst tier AND this
+ * specific hero's own fullness is still at zero (feeding just them, even while the rest of
+ * the party stays hungry, keeps them off this list). */
+function heroUnconscious(name: string, roster?: Roster): boolean {
+  if (!roster) return false;
+  return (roster.hungerPenaltyPct ?? 0) >= HUNGER_PENALTY_MAX && fullness(roster.heroHunger?.[name]) <= 0;
 }
 
 /** Remaining uses for one spell tier at spawn — the class/level cap minus whatever the
@@ -962,7 +975,7 @@ export class BattleEngine {
     this.refreshDecorOverlay();
     this.rng = mulberry32(seed + mission.index * 97);
     this.units = [
-      ...mission.playerSpawns.map((s, i) => spawnUnit(s, "player", i, roster)),
+      ...mission.playerSpawns.filter((s) => !heroUnconscious(s.name, roster)).map((s, i) => spawnUnit(s, "player", i, roster)),
       ...mission.enemySpawns.map((s, i) => spawnUnit(s, "enemy", i, roster, enemyLevelFor(mission.index))),
       ...(mission.neutralSpawns ?? []).map((s, i) => spawnUnit(s, "neutral", i, roster, enemyLevelFor(mission.index))),
     ];
@@ -983,6 +996,10 @@ export class BattleEngine {
     if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       this.reducedMotion = true;
     }
+    // The heroUnconscious filter above can (rarely) bench every last player spawn — the
+    // whole party starved out at once — leaving no one to take a turn. Catch that here
+    // rather than softlocking on a battle nobody can ever act in.
+    this.evaluateEnd();
   }
 
   /** One battle-opening roll per unit: 1d20 + its archetype modifier. The class data's
@@ -5849,9 +5866,14 @@ export class BattleEngine {
 
   /** A small deliberate margin beyond the tactical board. It lets the player pan across
    * the dark perimeter and see a mission's painted backdrop, without giving the camera
-   * enough empty room to lose the battlefield. */
+   * enough empty room to lose the battlefield.
+   *
+   * The Ponte de Pedra gets one extra hex-row's worth on top of the usual margin, on both
+   * the top and bottom edge (the same margin.y clamps both, symmetrically) — its own
+   * painted backdrop (thebridge-bg.jpg) needs more room to actually show above and below
+   * the board than the default margin leaves. */
   private cameraMargin(tile: number): { x: number; y: number } {
-    return { x: 0, y: tile * 3 };
+    return { x: 0, y: tile * (this.mission.id === "thebridge" ? 4.5 : 3) };
   }
 
   private clampCam(): void {
@@ -6204,14 +6226,17 @@ export class BattleEngine {
       const castDuration = u.sprite === "conjurer" ? 0.65 : 0.4;
       return Math.min(n - 1, Math.floor(Math.min(0.99, animationT / castDuration) * n));
     }
-    const frames = this.art.attacks[u.sprite];
-    if (!frames || frames.length < 4) return null;
-    const n = frames.length;
-    const long = n >= 12;
     if (a.type === "combat") {
       const counter = a.stage.startsWith("counter");
       const actor = counter ? a.def : a.att;
       if (u.id !== actor) return null;
+      // A dedicated counter pose (currently just theButcher's counter-*.png) for the
+      // defender's stages only — falls back to the same attacks cut every sprite without
+      // one already used for countering, same as before this existed.
+      const frames = (counter ? this.art.counters[u.sprite] : undefined) ?? this.art.attacks[u.sprite];
+      if (!frames || frames.length < 4) return null;
+      const n = frames.length;
+      const long = n >= 12;
       // stepCombat's real per-stage clocks (see lunge/impactAt/recover there): 0.2s lunge,
       // 0.18s hit, 0.16s recover, same for every sprite. animationT runs at `pace` of real
       // time, so the divisor has to run at that same pace — otherwise a stage ends in real
@@ -6774,11 +6799,13 @@ export class BattleEngine {
       const atkPool = faceRight ? this.art.attacks[u.sprite] : (this.art.attacksLeft[u.sprite] ?? this.art.attacks[u.sprite]);
       const walk = atk == null && moving ? walkPool : undefined;
       // attackPose computes its index against whichever pool it picked (casts for a spell/heal
-      // cast, when the caster has one — attacks otherwise), so this has to mirror that same
-      // choice or the index lands in the wrong array.
+      // cast, counters for the defender's own counter stages, attacks otherwise), so this has
+      // to mirror that same choice or the index lands in the wrong array.
       const casting = this.active && (this.active.type === "spell" || this.active.type === "heal") && this.active.att === u.id;
       const castPool = faceRight ? this.art.casts[u.sprite] : (this.art.castsLeft[u.sprite] ?? this.art.casts[u.sprite]);
-      const frames = atk != null ? (casting ? (castPool ?? atkPool) : atkPool) : walk ?? idle ?? this.art.sprites[u.sprite];
+      const countering = this.active?.type === "combat" && this.active.stage.startsWith("counter") && this.active.def === u.id;
+      const counterPool = faceRight ? this.art.counters[u.sprite] : (this.art.countersLeft[u.sprite] ?? this.art.counters[u.sprite]);
+      const frames = atk != null ? (casting ? (castPool ?? atkPool) : countering ? (counterPool ?? atkPool) : atkPool) : walk ?? idle ?? this.art.sprites[u.sprite];
       const n = frames?.length ?? 0;
       const fi = atk != null ? atk : walk ? this.walkFrame(u, n) : this.idleFrame(u, n || 4);
       const walkDirs = moving ? this.art.walkDirs[u.sprite] : undefined;
@@ -6814,7 +6841,13 @@ export class BattleEngine {
       ctx.translate(px + sway, py + footY + bob - lift);
       // Dedicated left/right walk+attack cuts already face the enemy, so flipping
       // them would put the spear/staff on the wrong side. Idle still flips.
-      const dirAction = (u.sprite === "malrec" || u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval") && (atk != null || moving);
+      // theButcher (The Butcher — distinct from "punisher"/Carrasco) only has a dedicated
+      // left cut for its walk, not its attack (see walksLeft.theButcher in assets.ts) —
+      // its attack still falls back to the mirrored right-facing pool, so it stays out of
+      // the attack half of this check.
+      const dirActionWalk = (u.sprite === "malrec" || u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval" || u.sprite === "theButcher") && moving;
+      const dirActionAttack = (u.sprite === "malrec" || u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval") && atk != null;
+      const dirAction = dirActionWalk || dirActionAttack;
       const flip = dirAction ? 1 : u.facing;
       if (u.sprite === "kael" || u.sprite === "kaelEarly" || u.sprite === "malrec" || u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval" || u.sprite === "conjurer") ctx.scale(flip, 1);
       else ctx.scale(flip * (1 - breath * 0.22), 1 + breath);

@@ -68,6 +68,7 @@ const HERO_PORTRAIT: Partial<Record<string, string>> = {
   defaultLancer: "/game/portraits/aldric-profile-001.jpg?v=3",
   sandoval: "/game/portraits/sandoval-001.jpg?v=1",
   conjurer: "/game/portraits/conjurer-002.png?v=2",
+  theButcher: "/game/portraits/the-butcher-portrait-001.jpg?v=1",
 };
 
 /** The one place the portrait-or-sprite-frame fallback lives — used by the unit inspect
@@ -80,7 +81,7 @@ export function portraitFor(sprite: SpriteId): { src: string; framed: boolean } 
 }
 
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
-const SPRITES: SpriteId[] = ["kael", "nira", "voss", "salazar", "malrec", "aldric", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "morvenian-wolf", "butcher", "birolho", "birolho2", "birolho3", "familiar", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer"];
+const SPRITES: SpriteId[] = ["kael", "nira", "voss", "salazar", "malrec", "aldric", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "morvenian-wolf", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "familiar", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer"];
 
 const LOAD_POOL = 8;
 let loadActive = 0;
@@ -188,7 +189,10 @@ export async function loadGameArt(): Promise<GameArt> {
     "morvenian-wolf": { n: 6, bust: "" },
     birolho: { n: 4, bust: "" },
     birolho2: { n: 4, bust: "" },
-    butcher: { n: 4, bust: "" },
+    punisher: { n: 4, bust: "" },
+    // The Butcher — real 36-frame axe swing, a distinct unit/sprite from punisher/Carrasco
+    // above (see WALK_FRAMES.theButcher below for the matching walk cut).
+    theButcher: { n: 36, bust: "?v=the-butcher-001" },
     lancer: { n: 6, bust: "?v=3" },
     sandoval: { n: 6, bust: "?v=sandoval-complete-001" },
     kaelFinal: { n: 36, bust: "?v=kael-final-002" },
@@ -231,6 +235,22 @@ export async function loadGameArt(): Promise<GameArt> {
       castsLeft[id] = await Promise.all(Array.from({ length: n }, (_, i) => loadImage(spriteFrameSrc(id, `cast-left-${i + 1}`, bust))));
     }),
   );
+  // Counter pose: counter-*.png, same shape as the attack table — a sprite absent from here
+  // falls back to its attacks cut (the same swing used for a normal attack) for the
+  // defender's counter stages, same as every sprite did before this existed.
+  const COUNTER_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
+    theButcher: { n: 36, bust: "?v=the-butcher-counter-001" },
+  };
+  const counters: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
+  await Promise.all(
+    (Object.keys(COUNTER_FRAMES) as SpriteId[]).map(async (id) => {
+      const { n, bust } = COUNTER_FRAMES[id]!;
+      counters[id] = await Promise.all(Array.from({ length: n }, (_, i) => loadImage(spriteFrameSrc(id, `counter-${i + 1}`, bust))));
+    }),
+  );
+  // No sprite has a dedicated left-facing counter cut yet — every counters entry mirrors
+  // via the regular flip, same as attacksLeft does for a sprite absent from that table.
+  const countersLeft: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   // Walk cycles: move-*.png, same shape as the attack table. A sprite absent from here has
   // no walk cut and falls back to its idle loop played faster, as every sprite used to.
   const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
@@ -247,6 +267,9 @@ export async function loadGameArt(): Promise<GameArt> {
     kaelFinal: { n: 36, bust: "?v=kael-final-002" },
     conjurer: { n: 36, bust: "?v=conjurer-complete-003" },
     birolho3: { n: 12, bust: "" },
+    // Right-facing cut; see the dedicated walksLeft.theButcher load below for its own
+    // authored left-facing cut (not the CSS mirror every other sprite here falls back to).
+    theButcher: { n: 36, bust: "?v=the-butcher-001" },
   };
   const walks: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   await Promise.all(
@@ -266,6 +289,14 @@ export async function loadGameArt(): Promise<GameArt> {
       walksLeft[id] = await Promise.all(Array.from({ length: walkN }, (_, i) => loadImage(spriteFrameSrc(id, `move-left-${i + 1}`, bust))));
       attacksLeft[id] = await Promise.all(Array.from({ length: atkN }, (_, i) => loadImage(spriteFrameSrc(id, `atk-left-${i + 1}`, bust))));
     }),
+  );
+  // The Butcher has its own authored left-facing walk cut, but no dedicated left-facing
+  // attack cut — so it only gets a walksLeft entry (loaded on its own, not through
+  // DIR_LEFT, which always loads both together). Its attack keeps using the CSS
+  // mirror-flip of the right-facing attacks pool when facing left (see the render loop's
+  // dirAction). Distinct from "punisher"/Carrasco, which has no walk cut of its own at all.
+  walksLeft.theButcher = await Promise.all(
+    Array.from({ length: WALK_FRAMES.theButcher!.n }, (_, i) => loadImage(spriteFrameSrc("theButcher", `move-left-${i + 1}`, WALK_FRAMES.theButcher!.bust))),
   );
   const impact = await Promise.all([1, 2, 3, 4].map((n) => loadImage(`/game/fx/impact-${n}.png`)));
   const fireballCore = await loadImage("/game/fx/fireball-core-v1.png?v=1");
@@ -306,11 +337,15 @@ export async function loadGameArt(): Promise<GameArt> {
       back: await loadImage("/game/sprites/birolho2/back.png"),
       side: await loadImage("/game/sprites/birolho2/1.png"),
     },
-    butcher: {
-      front: await loadImage("/game/sprites/butcher/front.png"),
-      back: await loadImage("/game/sprites/butcher/back.png"),
-      side: await loadImage("/game/sprites/butcher/front.png"),
+    punisher: {
+      front: await loadImage("/game/sprites/punisher/front.png"),
+      back: await loadImage("/game/sprites/punisher/back.png"),
+      side: await loadImage("/game/sprites/punisher/front.png"),
     },
+    // theButcher has no walkDirs entry: it has real walk-cycle frames instead (see
+    // WALK_FRAMES.theButcher / walksLeft.theButcher above) — walkDirs would otherwise take
+    // priority over them while moving (see the render loop's img lookup), leaving that
+    // animation dead code.
   };
-  return { tiles, decorations, sprites, attacks, attacksLeft, casts, castsLeft, walks, walksLeft, idles, walkDirs, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, backdrops };
+  return { tiles, decorations, sprites, attacks, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, walkDirs, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, backdrops };
 }

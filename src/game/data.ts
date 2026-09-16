@@ -579,9 +579,9 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     init: 7,
   },
   // Stats are a first pass — placeholder numbers to get it on the board, to be balanced later.
-  butcher: {
-    id: "butcher",
-    name: "Açougueiro",
+  punisher: {
+    id: "punisher",
+    name: "Carrasco",
     role: "Carrasco",
     hp: 55,
     atk: 13,
@@ -591,9 +591,28 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     mov: 3,
     minRange: 1,
     maxRange: 1,
-    sprite: "butcher",
+    sprite: "punisher",
     size: 1,
     init: 5,
+  },
+  // The Butcher — a distinct, much stronger unit from a separately authored 36-frame sheet
+  // (attack + left/right walk cycles). Deliberately not `boss: true`; stats sit above
+  // Sandoval's (a story boss) on purpose, he's meant to hit as hard as one.
+  theButcher: {
+    id: "theButcher",
+    name: "The Butcher",
+    role: "Chefe",
+    hp: 72,
+    atk: 19,
+    mag: 0,
+    def: 11,
+    res: 6,
+    mov: 4,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "theButcher",
+    size: 1,
+    init: 6,
   },
   // Stats are a first pass — placeholder numbers to get it on the board, to be balanced later.
   birolho: {
@@ -1173,7 +1192,10 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   captain: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   wardog: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   morvenianWolf: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
-  butcher: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
+  punisher: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
+  // Boss-tier growth (matches sandoval below) — high stats scale up like an elite's, not
+  // a rank-and-file enemy's, if he's ever spawned at a later mission index.
+  theButcher: { hp: 5, atk: 3, mag: 0, def: 3, res: 2 },
   birolho: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
   birolho2: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
   birolho3: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
@@ -2291,7 +2313,9 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   pikeman: 3,
   wardog: 2,
   morvenianWolf: 3,
-  butcher: 5,
+  punisher: 5,
+  // Matches CLASSES.theButcher's stat boost — a tougher kill is worth more.
+  theButcher: 9,
   birolho: 9,
   birolho2: 9,
   birolho3: 9,

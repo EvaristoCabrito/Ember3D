@@ -79,6 +79,11 @@ export function InnScreen({
   onBuyEquipment,
   onEquipWeapon,
   onEquipItem,
+  onUsePotion,
+  onDiscardWeapon,
+  onDiscardEquipment,
+  onDiscardRation,
+  onDiscardBagItem,
   onUpgradeWeapon,
   onSellWeapon,
   onSeenSmithIntro,
@@ -110,6 +115,11 @@ export function InnScreen({
   onBuyEquipment: (itemId: string) => boolean;
   onEquipWeapon: (hero: string, weaponId: string) => void;
   onEquipItem?: (hero: string, slot: EquipSlot, itemId: string | null) => void;
+  onUsePotion?: (hero: string, kind: PotionId) => void;
+  onDiscardWeapon?: (weaponId: string) => void;
+  onDiscardEquipment?: (itemId: string) => void;
+  onDiscardRation?: () => void;
+  onDiscardBagItem?: (hero: string, kind: PotionId | "lockpick") => void;
   onUpgradeWeapon: (weaponId: string) => boolean;
   onSellWeapon: (weaponId: string) => number | false;
   onSeenSmithIntro: () => void;
@@ -242,6 +252,11 @@ export function InnScreen({
         onBuyEquipment={onBuyEquipment}
         onEquipWeapon={onEquipWeapon}
         onEquipItem={onEquipItem}
+        onUsePotion={onUsePotion}
+        onDiscardWeapon={onDiscardWeapon}
+        onDiscardEquipment={onDiscardEquipment}
+        onDiscardRation={onDiscardRation}
+        onDiscardBagItem={onDiscardBagItem}
         onOpenStatus={onOpenStatus}
         onUpgradeWeapon={onUpgradeWeapon}
         onSellWeapon={onSellWeapon}
@@ -482,6 +497,11 @@ export function InnScreen({
           onClose={() => setInvView(null)}
           onEquipWeapon={onEquipWeapon}
           onEquipItem={onEquipItem}
+          onUsePotion={onUsePotion}
+          onDiscardWeapon={onDiscardWeapon}
+          onDiscardEquipment={onDiscardEquipment}
+          onDiscardRation={onDiscardRation}
+          onDiscardBagItem={onDiscardBagItem}
           initialView={invView === "pack" ? "backpack" : "equipment"}
         />
       )}
@@ -503,6 +523,11 @@ function SmithPanel({
   onBuyEquipment,
   onEquipWeapon,
   onEquipItem,
+  onUsePotion,
+  onDiscardWeapon,
+  onDiscardEquipment,
+  onDiscardRation,
+  onDiscardBagItem,
   onOpenStatus,
   onUpgradeWeapon,
   onSellWeapon,
@@ -520,6 +545,11 @@ function SmithPanel({
   onBuyEquipment: (itemId: string) => boolean;
   onEquipWeapon: (hero: string, weaponId: string) => void;
   onEquipItem?: (hero: string, slot: EquipSlot, itemId: string | null) => void;
+  onUsePotion?: (hero: string, kind: PotionId) => void;
+  onDiscardWeapon?: (weaponId: string) => void;
+  onDiscardEquipment?: (itemId: string) => void;
+  onDiscardRation?: () => void;
+  onDiscardBagItem?: (hero: string, kind: PotionId | "lockpick") => void;
   onOpenStatus: (hero: string) => void;
   onUpgradeWeapon: (weaponId: string) => boolean;
   onSellWeapon: (weaponId: string) => number | false;
@@ -848,6 +878,11 @@ function SmithPanel({
           onClose={() => setInvView(null)}
           onEquipWeapon={onEquipWeapon}
           onEquipItem={onEquipItem}
+          onUsePotion={onUsePotion}
+          onDiscardWeapon={onDiscardWeapon}
+          onDiscardEquipment={onDiscardEquipment}
+          onDiscardRation={onDiscardRation}
+          onDiscardBagItem={onDiscardBagItem}
           initialView={invView === "pack" ? "backpack" : "equipment"}
         />
       )}

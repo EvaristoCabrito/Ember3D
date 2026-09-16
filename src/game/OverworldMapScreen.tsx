@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Check, ChevronLeft, Lock, MapPin, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
 import { missionsForLocation } from "./mapstore";
-import type { Mission, SaveData, WorldLocation } from "./types";
+import type { EquipSlot, Mission, PotionId, SaveData, WorldLocation } from "./types";
 import { PartyInventoryOverlay } from "./InventoryScreens";
 import { heroRecruited } from "./data";
 import { GoldAmount } from "./GoldAmount";
@@ -60,6 +60,13 @@ export function OverworldMapScreen({
   save,
   onUseRation,
   onUseRationAll,
+  onEquipWeapon,
+  onEquipItem,
+  onUsePotion,
+  onDiscardWeapon,
+  onDiscardEquipment,
+  onDiscardRation,
+  onDiscardBagItem,
   inventoryRequestHero,
   inventoryRequestView,
   onInventoryRequestHandled,
@@ -86,6 +93,15 @@ export function OverworldMapScreen({
   save: SaveData;
   onUseRation: (hero: string) => void;
   onUseRationAll?: (heroes: string[]) => number;
+  /** Wired into the Mochila/Paperdoll's own equip picker — omitted for a while, which left
+   * every tap there a silent no-op (see PartyInventoryOverlay below). */
+  onEquipWeapon?: (hero: string, weaponId: string) => void;
+  onEquipItem?: (hero: string, slot: EquipSlot, itemId: string | null) => void;
+  onUsePotion?: (hero: string, kind: PotionId) => void;
+  onDiscardWeapon?: (weaponId: string) => void;
+  onDiscardEquipment?: (itemId: string) => void;
+  onDiscardRation?: () => void;
+  onDiscardBagItem?: (hero: string, kind: PotionId | "lockpick") => void;
   inventoryRequestHero?: string | null;
   inventoryRequestView?: "backpack" | "equipment";
   onInventoryRequestHandled?: () => void;
@@ -244,6 +260,21 @@ export function OverworldMapScreen({
     [locations, overworldPos.col, overworldPos.row],
   );
   const partyWorld = hexToWorld(overworldPos.col, overworldPos.row);
+
+  // Fog of war: every hex the party has ever stood on (see stepOverworld in overworld.ts).
+  // The Inn is exempt from it entirely — always shown regardless — every other pin only
+  // shows once its own hex is in this set. Test mode ignores fog like it ignores every
+  // other travel restriction on this map.
+  const exploredSet = useMemo(() => new Set(save.exploredHexes ?? []), [save.exploredHexes]);
+  const isExplored = (loc: WorldLocation) => {
+    if (test || loc.id === "estalagem" || loc.id === standingOn?.id) return true;
+    const h = worldToHex(loc.x, loc.y);
+    return exploredSet.has(key(h.x, h.y));
+  };
+  /** Percent-of-image reveal radius around one explored hex — a bit more than one hex's own
+   * OVERWORLD_HEX_SIZE so the cleared patch reads as "the area around here," not just the
+   * single dot the party stood on. */
+  const FOG_REVEAL_RADIUS = 9;
 
   // Standing at the western edge with O Vau still unfought — clicking Kael here has nothing
   // to walk to (canStepOverworld keeps that edge closed until Vau is won) and nowhere to open
@@ -420,8 +451,36 @@ export function OverworldMapScreen({
           ) : (
             <div className="w-[70dvw] h-[70dvh] max-w-md" />
           )}
+          {artOk && !test && (
+            // Fog of war: dark everywhere except a soft radius around every hex the party
+            // has ever stood on (see exploredSet above). Test mode skips this like it skips
+            // every other travel restriction on this map — testing needs the whole map
+            // visible, not walked hex by hex. An SVG mask rather than CSS mask-composite:
+            // browser support for compositing many stacked mask layers is inconsistent,
+            // while an SVG <mask> just paints shapes on top of each other, so it works the
+            // same everywhere.
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
+              <defs>
+                <radialGradient id="ow-fog-reveal">
+                  <stop offset="0%" stopColor="#000" stopOpacity="1" />
+                  <stop offset="65%" stopColor="#000" stopOpacity="1" />
+                  <stop offset="100%" stopColor="#000" stopOpacity="0" />
+                </radialGradient>
+                <mask id="ow-fog-mask" maskContentUnits="userSpaceOnUse">
+                  <rect x="0" y="0" width="100" height="100" fill="#fff" />
+                  {[...exploredSet].map((hexKey) => {
+                    const [hx, hy] = hexKey.split(",").map(Number);
+                    if (!Number.isFinite(hx) || !Number.isFinite(hy)) return null;
+                    const p = hexToWorld(hx, hy);
+                    return <circle key={hexKey} cx={p.x} cy={p.y} r={FOG_REVEAL_RADIUS} fill="url(#ow-fog-reveal)" />;
+                  })}
+                </mask>
+              </defs>
+              <rect x="0" y="0" width="100" height="100" fill="rgba(8,6,4,0.78)" mask="url(#ow-fog-mask)" />
+            </svg>
+          )}
           <div className="absolute inset-0">
-            {locations.filter((loc) => test || loc.id === standingOn?.id).map((loc) => {
+            {locations.filter(isExplored).map((loc) => {
               const st = status(loc);
               const missions = missionsForLocation(loc);
               const multi = missions.length > 1;
@@ -634,6 +693,13 @@ export function OverworldMapScreen({
           initialView={inventoryRequestView ?? "backpack"}
           onUseRation={onUseRation}
           onUseRationAll={onUseRationAll}
+          onEquipWeapon={onEquipWeapon}
+          onEquipItem={onEquipItem}
+          onUsePotion={onUsePotion}
+          onDiscardWeapon={onDiscardWeapon}
+          onDiscardEquipment={onDiscardEquipment}
+          onDiscardRation={onDiscardRation}
+          onDiscardBagItem={onDiscardBagItem}
           onOpenStatus={(hero) => {
             setInventoryHero(null);
             onOpenStatus(hero);

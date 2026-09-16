@@ -8,6 +8,110 @@ import { HungerBar } from "./HungerBar";
 
 const POTIONS: PotionId[] = ["weak", "mid", "potent", "disease", "manaSmall", "manaMid", "manaLarge"];
 const BAG_ICON = "/game/icons/refresh-001/packs/small-pouch.png";
+
+/** Disease potions have no persistent effect outside of battle — diseased/poisoned is
+ * battle-only Unit state (see engine.ts's applyPotion), nothing survives between fights to
+ * cure. Every other potion heals or restores mana immediately when used from the Mochila. */
+function potionUsableOutsideBattle(kind: PotionId): boolean {
+  return kind !== "disease";
+}
+
+/** One item tapped in the Mochila: Usar / Jogar Fora / Equipar, each greyed out when that
+ * action doesn't apply to this item — a weapon/equipment piece never has Usar, a potion or
+ * ration never has Equipar. Jogar Fora always asks to confirm first since it's permanent. */
+function ItemActionSheet({
+  name,
+  icon,
+  tip,
+  onEquip,
+  onUse,
+  onDiscard,
+  onClose,
+}: {
+  name: string;
+  icon: string;
+  tip: string;
+  onEquip?: () => void;
+  onUse?: () => void;
+  onDiscard?: () => void;
+  onClose: () => void;
+}) {
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  return (
+    <div
+      className="absolute inset-0 z-50 ember-veil flex items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-xs ember-window rounded-xl p-4">
+        <div className="mb-3 flex items-center gap-2.5">
+          <img src={icon} alt="" className="size-11 shrink-0 object-contain" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{name}</p>
+            <p className="text-[11px] text-muted line-clamp-2">{tip}</p>
+          </div>
+          <button type="button" onClick={onClose} className="ml-auto size-7 shrink-0 grid place-items-center rounded-md border border-border" aria-label="Fechar">
+            <X className="size-3.5" />
+          </button>
+        </div>
+        {confirmDiscard ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-danger">Jogar fora {name}? Não pode ser desfeito.</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setConfirmDiscard(false)} className="h-10 flex-1 rounded-md border border-border bg-bg text-sm">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDiscard?.();
+                  onClose();
+                }}
+                className="h-10 flex-1 rounded-md border border-danger/60 bg-danger/15 text-sm text-danger"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            <button
+              type="button"
+              disabled={!onEquip}
+              onClick={() => {
+                onEquip?.();
+                onClose();
+              }}
+              className="h-10 rounded-md border border-border bg-bg text-sm disabled:opacity-40"
+            >
+              Equipar
+            </button>
+            <button
+              type="button"
+              disabled={!onUse}
+              onClick={() => {
+                onUse?.();
+                onClose();
+              }}
+              className="h-10 rounded-md border border-border bg-bg text-sm disabled:opacity-40"
+            >
+              Usar
+            </button>
+            <button
+              type="button"
+              disabled={!onDiscard}
+              onClick={() => setConfirmDiscard(true)}
+              className="h-10 rounded-md border border-border bg-bg text-sm text-danger disabled:text-fg disabled:opacity-40"
+            >
+              Jogar Fora
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 const HERO_BASE_CLASS: Record<string, ClassId> = { Kael: "kaelFinal", Neera: "neera", Voss: "voss", Salazar: "salazar", Aldric: "aldric", Malrec: "conjurer" };
 
 type DollSlot = "mainHand" | EquipSlot;
@@ -429,6 +533,11 @@ export function BackpackScreen({
   onOpenStatus,
   onEquipWeapon,
   onEquipItem,
+  onUsePotion,
+  onDiscardWeapon,
+  onDiscardEquipment,
+  onDiscardRation,
+  onDiscardBagItem,
   embedded = false,
   availableHeroes,
   onHeroChange,
@@ -455,6 +564,18 @@ export function BackpackScreen({
   /** Same, for a piece of shared Equipamento — only offered when it fits the hero's class
    * and a slot for it is actually free to pick automatically (see targetSlotFor below). */
   onEquipItem?: (hero: string, slot: EquipSlot, itemId: string | null) => void;
+  /** "Usar" on a potion — heals or restores mana immediately (see useHeroPotion in
+   * GameApp.tsx). Omitted, or the potion is a disease cure (see potionUsableOutsideBattle
+   * above), and Usar stays greyed out for that tile. */
+  onUsePotion?: (hero: string, kind: PotionId) => void;
+  /** "Jogar Fora" for a loose (unequipped) weapon — permanent, asked to confirm first. */
+  onDiscardWeapon?: (weaponId: string) => void;
+  /** Same, for one spare copy of a piece of shared Equipamento. */
+  onDiscardEquipment?: (itemId: string) => void;
+  /** Same, for one ration off the shared stock. */
+  onDiscardRation?: () => void;
+  /** Same, for one potion or one gazua out of a specific hero's personal bag. */
+  onDiscardBagItem?: (hero: string, kind: PotionId | "lockpick") => void;
   embedded?: boolean;
   /** Same hero-switcher the doll view offers — whoever's bag/potions are shown here can be
    * changed without leaving to the doll first. Whatever roster this is given (today's four
@@ -468,6 +589,7 @@ export function BackpackScreen({
     const timer = window.setTimeout(() => setRationNote(null), 2200);
     return () => window.clearTimeout(timer);
   }, [rationNote]);
+  const [sheetEntry, setSheetEntry] = useState<{ name: string; icon: string; tip: string; equip?: () => void; use?: () => void; discard?: () => void } | null>(null);
   const bag = save.bags[heroName] ?? EMPTY_BAG;
   const weaponEntries = Object.entries(save.weapons).filter(([id]) => {
     const wielder = Object.entries(save.equipped).find(([, v]) => v === id)?.[0];
@@ -509,11 +631,13 @@ export function BackpackScreen({
     tip: string;
     count?: number;
     isWeapon?: boolean;
-    onClick?: () => void;
+    equip?: () => void;
+    use?: () => void;
+    discard?: () => void;
   }[] = [];
   // Rations always come first — a stack per RATION_STACK_MAX, so the first stack pins to
   // slot 1, the second to slot 2 and so on, and the whole run vanishes the moment
-  // save.rations hits 0 freeing those slots back up. Not equippable, so no onClick.
+  // save.rations hits 0 freeing those slots back up. Never equippable.
   const rationStacks = Math.ceil(save.rations / RATION_STACK_MAX);
   for (let i = 0; i < rationStacks; i++) {
     const count = Math.min(RATION_STACK_MAX, save.rations - i * RATION_STACK_MAX);
@@ -523,7 +647,8 @@ export function BackpackScreen({
       icon: RATIONS_ICON,
       tip: `${count} rações · usar 1 para encher a saciedade de ${heroName} até 100%. Atual: ${fullness(save.heroHunger[heroName])}%.`,
       count,
-      onClick: onUseRation && fullness(save.heroHunger[heroName]) < 100 ? () => onUseRation(heroName) : undefined,
+      use: onUseRation && fullness(save.heroHunger[heroName]) < 100 ? () => onUseRation(heroName) : undefined,
+      discard: onDiscardRation,
     });
   }
   for (const [id, enh] of weaponEntries) {
@@ -536,7 +661,8 @@ export function BackpackScreen({
       icon: weaponIcon(id),
       tip: weaponTooltip(w, enh),
       isWeapon: true,
-      onClick: onEquipWeapon && fitsClass ? () => onEquipWeapon(heroName, id) : undefined,
+      equip: onEquipWeapon && fitsClass ? () => onEquipWeapon(heroName, id) : undefined,
+      discard: onDiscardWeapon ? () => onDiscardWeapon(id) : undefined,
     });
   }
   for (const [id] of equipmentEntries) {
@@ -551,7 +677,8 @@ export function BackpackScreen({
         name: item.name,
         icon: equipmentIcon(id),
         tip: equipmentTooltip(item),
-        onClick: onEquipItem && fitsClass && targetSlot ? () => onEquipItem(heroName, targetSlot, id) : undefined,
+        equip: onEquipItem && fitsClass && targetSlot ? () => onEquipItem(heroName, targetSlot, id) : undefined,
+        discard: onDiscardEquipment ? () => onDiscardEquipment(id) : undefined,
       });
     }
   }
@@ -575,7 +702,7 @@ export function BackpackScreen({
                 <img src={BAG_ICON} alt="" className="size-9 shrink-0 object-contain" />
                 <h2 className="font-display text-2xl leading-none">Mochila</h2>
               </div>
-              <p className="mt-1 text-xs text-muted">{heroName} · clique nas rações para comer ou num item para equipar</p>
+              <p className="mt-1 text-xs text-muted">{heroName} · clique num item para usar, equipar ou jogar fora</p>
               <HungerBar name={heroName} value={save.heroHunger[heroName]} />
             </div>
           </div>
@@ -667,10 +794,16 @@ export function BackpackScreen({
                   </>
                 ) : null;
                 const slotClass = `relative flex aspect-square w-full items-center justify-center rounded-md border border-border/80 shadow-inner backdrop-blur-[2px] ${entry?.isWeapon ? "bg-black" : "bg-bg/70"}`;
-                if (entry?.onClick) {
+                if (entry && (entry.equip || entry.use || entry.discard)) {
+                  const opened = entry;
                   return (
                     <ItemTip key={entry.key} text={entry.tip} className="block">
-                      <button type="button" onClick={entry.onClick} className={`${slotClass} hover:border-accent`} aria-label={`Equipar ${entry.name}`}>
+                      <button
+                        type="button"
+                        onClick={() => setSheetEntry({ name: opened.name, icon: opened.icon, tip: opened.tip, equip: opened.equip, use: opened.use, discard: opened.discard })}
+                        className={`${slotClass} hover:border-accent`}
+                        aria-label={opened.name}
+                      >
                         {inner}
                       </button>
                     </ItemTip>
@@ -689,34 +822,96 @@ export function BackpackScreen({
 
             <p className="mt-5 mb-2 text-xs uppercase tracking-[0.18em] text-muted">Poções e gazua de {heroName}</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {POTIONS.map((kind) => (
-                <ItemTip key={kind} text={potionTooltip(kind)} className="block">
+              {POTIONS.map((kind) => {
+                const count = bag[kind] ?? 0;
+                const canOpen = count > 0 && (onUsePotion || onDiscardBagItem);
+                const content = (
                   <div className="flex items-center gap-2 rounded-md border border-border/80 bg-bg/75 px-2 py-1.5 backdrop-blur-[2px]">
                     <img src={`/game/icons/potion-${kind}.png?v=ds2`} alt="" className="size-8 shrink-0 object-contain" />
                     <p className="min-w-0 flex-1 truncate text-xs">
                       {potionLabel(kind)}
                       <span className="block text-[10px] uppercase tracking-wide text-muted">
-                        {bag[kind] ?? 0} / {POTION_CARRY_MAX[kind]}
+                        {count} / {POTION_CARRY_MAX[kind]}
                       </span>
                     </p>
                   </div>
-                </ItemTip>
-              ))}
-              <ItemTip text={lockpickTooltip()} className="block">
-                <div className="flex items-center gap-2 rounded-md border border-border/80 bg-bg/75 px-2 py-1.5 backdrop-blur-[2px]">
-                  <img src="/game/icons/lockpick.png" alt="" className="size-8 shrink-0 object-contain" />
-                  <p className="min-w-0 flex-1 truncate text-sm">
-                    Gazua
-                    <span className="block text-[10px] uppercase tracking-wide text-muted">
-                      {bag.lockpick ?? 0} / {BAG_MAX}
-                    </span>
-                  </p>
-                </div>
-              </ItemTip>
+                );
+                return (
+                  <ItemTip key={kind} text={potionTooltip(kind)} className="block">
+                    {canOpen ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSheetEntry({
+                            name: potionLabel(kind),
+                            icon: `/game/icons/potion-${kind}.png?v=ds2`,
+                            tip: potionTooltip(kind),
+                            use: onUsePotion && potionUsableOutsideBattle(kind) ? () => onUsePotion(heroName, kind) : undefined,
+                            discard: onDiscardBagItem ? () => onDiscardBagItem(heroName, kind) : undefined,
+                          })
+                        }
+                        className="block w-full rounded-md text-left hover:opacity-90"
+                      >
+                        {content}
+                      </button>
+                    ) : (
+                      content
+                    )}
+                  </ItemTip>
+                );
+              })}
+              {(() => {
+                const count = bag.lockpick ?? 0;
+                const canOpen = count > 0 && !!onDiscardBagItem;
+                const content = (
+                  <div className="flex items-center gap-2 rounded-md border border-border/80 bg-bg/75 px-2 py-1.5 backdrop-blur-[2px]">
+                    <img src="/game/icons/lockpick.png" alt="" className="size-8 shrink-0 object-contain" />
+                    <p className="min-w-0 flex-1 truncate text-sm">
+                      Gazua
+                      <span className="block text-[10px] uppercase tracking-wide text-muted">
+                        {count} / {BAG_MAX}
+                      </span>
+                    </p>
+                  </div>
+                );
+                return (
+                  <ItemTip text={lockpickTooltip()} className="block">
+                    {canOpen ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSheetEntry({
+                            name: "Gazua",
+                            icon: "/game/icons/lockpick.png",
+                            tip: lockpickTooltip(),
+                            discard: () => onDiscardBagItem!(heroName, "lockpick"),
+                          })
+                        }
+                        className="block w-full rounded-md text-left hover:opacity-90"
+                      >
+                        {content}
+                      </button>
+                    ) : (
+                      content
+                    )}
+                  </ItemTip>
+                );
+              })()}
             </div>
           </div>
         </div>
       </div>
+      {sheetEntry && (
+        <ItemActionSheet
+          name={sheetEntry.name}
+          icon={sheetEntry.icon}
+          tip={sheetEntry.tip}
+          onEquip={sheetEntry.equip}
+          onUse={sheetEntry.use}
+          onDiscard={sheetEntry.discard}
+          onClose={() => setSheetEntry(null)}
+        />
+      )}
     </div>
   );
 }
@@ -732,6 +927,11 @@ export function PartyInventoryOverlay({
   onClose,
   onEquipWeapon,
   onEquipItem,
+  onUsePotion,
+  onDiscardWeapon,
+  onDiscardEquipment,
+  onDiscardRation,
+  onDiscardBagItem,
   initialView = "equipment",
   onUseRation,
   onUseRationAll,
@@ -753,6 +953,11 @@ export function PartyInventoryOverlay({
   onClose: () => void;
   onEquipWeapon?: (hero: string, weaponId: string) => void;
   onEquipItem?: (hero: string, slot: EquipSlot, itemId: string | null) => void;
+  onUsePotion?: (hero: string, kind: PotionId) => void;
+  onDiscardWeapon?: (weaponId: string) => void;
+  onDiscardEquipment?: (itemId: string) => void;
+  onDiscardRation?: () => void;
+  onDiscardBagItem?: (hero: string, kind: PotionId | "lockpick") => void;
   initialView?: "equipment" | "backpack";
 }) {
   // Equipping straight from the Mochila's shared lists (rather than through a picker on
@@ -802,6 +1007,11 @@ export function PartyInventoryOverlay({
             onSwitchToDoll={() => setView("equipment")}
             onEquipWeapon={onEquipWeapon && handleEquipWeapon}
             onEquipItem={onEquipItem && handleEquipItem}
+            onUsePotion={onUsePotion}
+            onDiscardWeapon={onDiscardWeapon}
+            onDiscardEquipment={onDiscardEquipment}
+            onDiscardRation={onDiscardRation}
+            onDiscardBagItem={onDiscardBagItem}
             availableHeroes={availableHeroes}
             onHeroChange={setSelectedHero}
             embedded

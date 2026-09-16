@@ -8,7 +8,7 @@ import { InnScreen } from "./InnScreen";
 import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
 import { DialogEditor } from "./DialogEditor";
-import { BARRICADE_LIKE_DECOR, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FIREBALL, formatSpellUseGains, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, type SpellTier } from "./data";
+import { BARRICADE_LIKE_DECOR, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FIREBALL, formatSpellUseGains, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, type SpellTier } from "./data";
 import { BattleEngine } from "./engine";
 import { MapPreviewCanvas, type PreviewUnitSelection } from "./MapPreviewCanvas";
 import { WorldMapScreen } from "./WorldMapScreen";
@@ -63,7 +63,7 @@ import {
   writeSlot,
   selectSlot,
 } from "./save";
-import type { BattleSnapshot, ClassId, DecorationPlacement, DialogTree, EquipSlot, GameArt, GrowthLine, HudSnapshot, Mission, PotionId, SaveBank, SaveData, ScreenId, SpellKind, Spawn, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, UnitPublic, WinCondition, WorldLocation } from "./types";
+import type { Bag, BattleSnapshot, ClassId, DecorationPlacement, DialogTree, EquipSlot, GameArt, GrowthLine, HudSnapshot, Mission, PotionId, SaveBank, SaveData, ScreenId, SpellKind, Spawn, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, UnitPublic, WinCondition, WorldLocation } from "./types";
 
 /** A map JSON write updates Vite's module list and can reload the app. This one-shot
  * snapshot restores the editor instead of sending the author to the title screen. */
@@ -139,6 +139,86 @@ function unequipSharedWeapon(save: SaveData, hero: string): SaveData {
   const equipped = { ...save.equipped };
   delete equipped[hero];
   return { ...save, equipped };
+}
+
+/** Discards one owned-but-unequipped weapon for good. Only ever offered on a weapon the
+ * "Itens da party" grid already shows — which itself only lists weapons nobody currently
+ * has equipped — so this never needs to touch save.equipped. */
+function discardSharedWeapon(save: SaveData, weaponId: string): SaveData {
+  if (save.weapons[weaponId] == null) return save;
+  const weapons = { ...save.weapons };
+  delete weapons[weaponId];
+  return { ...save, weapons };
+}
+
+/** Discards one spare copy of a piece of equipment from the party's shared stash. Only the
+ * loose pool, never a copy someone currently has on — see the "Jogar Fora" gate in
+ * InventoryScreens.tsx, which only enables when looseEquipment[itemId] > 0. */
+function discardSharedEquipment(save: SaveData, itemId: string): SaveData {
+  const reserve = save.looseEquipment[itemId] ?? 0;
+  if (reserve <= 0) return save;
+  const looseEquipment = { ...save.looseEquipment };
+  if (reserve <= 1) delete looseEquipment[itemId];
+  else looseEquipment[itemId] = reserve - 1;
+  return { ...save, looseEquipment };
+}
+
+/** Discards one ration from the party's shared stock. */
+function discardRation(save: SaveData): SaveData {
+  if (save.rations <= 0) return save;
+  return { ...save, rations: save.rations - 1 };
+}
+
+/** Discards one potion (or one gazua) from a specific hero's personal bag. */
+function discardBagItem(save: SaveData, hero: string, kind: keyof Bag): SaveData {
+  const bag = save.bags[hero];
+  if (!bag || (bag[kind] ?? 0) <= 0) return save;
+  return { ...save, bags: { ...save.bags, [hero]: { ...bag, [kind]: bag[kind] - 1 } } };
+}
+
+/** A hero's current max HP, gear and hunger included — the same formula the map's own
+ * status sheet uses (see mapStatusUnit), needed here too so an out-of-battle heal potion
+ * caps at the same ceiling the status sheet already shows. */
+function heroMaxHp(save: SaveData, hero: string): number {
+  const classId = save.promotions[hero] ?? MAP_STATUS_CLASS[hero] ?? "swordsman";
+  const stats = statsFor(classId, save.levels[hero] ?? 1);
+  const gearBonus = gearStatBonus(Object.values(save.equipment[hero] ?? {}));
+  const hungerKeep = 1 - hungerPenaltyFor(save.hungerStreak);
+  return Math.round((stats.hp + gearBonus.hp) * hungerKeep);
+}
+
+/** "Usar" a potion outside of battle — there is no live Unit to apply it to, so this
+ * mirrors BattleEngine.applyPotion's heal/mana branches directly against SaveData. Disease
+ * potions are skipped: diseased/poisoned is battle-only state (see Unit.diseased), nothing
+ * persists to cure between fights, so that branch is left for battle's own action bar. */
+function useHeroPotion(save: SaveData, hero: string, kind: PotionId): SaveData {
+  const bag = save.bags[hero];
+  if (!bag || (bag[kind] ?? 0) <= 0) return save;
+  const def = POTIONS[kind];
+  if (def.effect === "mana") {
+    const classId = save.promotions[hero] ?? MAP_STATUS_CLASS[hero] ?? "swordsman";
+    const level = save.levels[hero] ?? 1;
+    const spent = { ...(save.spellUses[hero] ?? {}) };
+    let restoredAny = false;
+    for (let t = 1; t <= 10; t++) {
+      const tk = tierKey(t as SpellTier);
+      if (tierUses(classId, t as SpellTier, level) <= 0) continue;
+      const cur = spent[tk] ?? 0;
+      if (cur <= 0) continue;
+      const next = Math.max(0, cur - (def.manaRestore ?? 0));
+      if (next !== cur) restoredAny = true;
+      spent[tk] = next;
+    }
+    if (!restoredAny) return save;
+    return { ...save, bags: { ...save.bags, [hero]: { ...bag, [kind]: bag[kind] - 1 } }, spellUses: { ...save.spellUses, [hero]: spent } };
+  }
+  if (def.effect === "disease") return save;
+  const maxHp = heroMaxHp(save, hero);
+  const current = save.unitHp[hero] ?? maxHp;
+  if (current >= maxHp) return save;
+  const gained = Math.min(rollPotion(kind, Math.random), maxHp - current);
+  if (gained <= 0) return save;
+  return { ...save, unitHp: { ...save.unitHp, [hero]: current + gained }, bags: { ...save.bags, [hero]: { ...bag, [kind]: bag[kind] - 1 } } };
 }
 function hudBlank(): HudSnapshot {
   return {
@@ -478,15 +558,27 @@ function mapStatusUnit(save: SaveData, hero: string): UnitPublic {
   const gear = save.equipment[hero] ?? {};
   const gearBonus = gearStatBonus(Object.values(gear));
   const emptySpells = { tier1: 0, tier2: 0, tier3: 0, tier4: 0, tier5: 0, tier6: 0, tier7: 0, tier8: 0, tier9: 0, tier10: 0 };
-  const maxHp = stats.hp + gearBonus.hp;
+  // Same source the battle roster reads (see startBattle's hungerPenaltyPct) — this used to
+  // be hardcoded to "never hungry" here, so the RPG map's own status sheet could never show
+  // the condition even after many unfed days, only a live battle could.
+  const hungerPenaltyPct = hungerPenaltyFor(save.hungerStreak);
+  // The condition badge used to be the only sign of this — VIT/ATK/MAG/DEF/RES themselves
+  // still read at full value here, unlike the live battle roster (see spawnUnit's
+  // hungerKeep), so the sheet warned about a penalty its own numbers never showed.
+  const hungerKeep = 1 - hungerPenaltyPct;
+  const maxHp = Math.round((stats.hp + gearBonus.hp) * hungerKeep);
   return {
     id: `map:${hero}`, name: hero, classId, className: cls.name, role: cls.role, side: "player", sprite: hero === "Kael" ? CLASSES.kaelFinal.sprite : cls.sprite,
-    hp: Math.min(maxHp, save.unitHp[hero] ?? maxHp), maxHp, atk: stats.atk + gearBonus.atk, mag: stats.mag + gearBonus.mag, def: stats.def + gearBonus.def, res: stats.res + gearBonus.res,
+    hp: Math.min(maxHp, save.unitHp[hero] ?? maxHp), maxHp,
+    atk: Math.round((stats.atk + gearBonus.atk) * hungerKeep),
+    mag: Math.round((stats.mag + gearBonus.mag) * hungerKeep),
+    def: Math.round((stats.def + gearBonus.def) * hungerKeep),
+    res: Math.round((stats.res + gearBonus.res) * hungerKeep),
     initiative: cls.init ?? 0, initiativeRoll: cls.init ?? 0, mov: stats.mov + gearBonus.mov, movLeft: stats.mov + gearBonus.mov, minRange: cls.minRange, maxRange: cls.maxRange,
     moved: false, acted: false, x: save.overworldPos.col, y: save.overworldPos.row, level, xp: save.xp[hero] ?? 0,
     bag: save.bags[hero] ?? { mid: 0, weak: 0, potent: 0, disease: 0, manaSmall: 0, manaMid: 0, manaLarge: 0, lockpick: 0 },
     spells: emptySpells, weaponId: save.equipped[hero] ?? null, weaponEnh: 0, size: cls.size, diseased: false, poisoned: false,
-    hungry: false, hungerPct: 0, fullness: save.heroHunger[hero], stunned: false, crippled: false, offHandId: null, summoned: false, asleep: false, restrained: false,
+    hungry: hungerPenaltyPct > 0, hungerPct: Math.round(hungerPenaltyPct * 100), fullness: save.heroHunger[hero], stunned: false, crippled: false, offHandId: null, summoned: false, asleep: false, restrained: false,
     gear,
   };
 }
@@ -564,6 +656,13 @@ export function GameApp() {
   }, [campaignLocations, campaignMissionRevision]);
   const [testMode, setTestMode] = useState(false);
   const [testEmber, setTestEmber] = useState(TEST_EMBER);
+  // Test mode's own overworld/Inn state (position, exploration, hunger, rations, gear) —
+  // kept entirely separate from the real save so wandering the RPG map, eating, or
+  // shopping in test mode can never write through to it. Reset to null on every fresh
+  // "Modo Teste" entry (see onTest below), so a test session always starts back at the
+  // western ford instead of resuming wherever a previous test session or the real
+  // playthrough left off.
+  const [testOverworld, setTestOverworld] = useState<SaveData | null>(null);
   const awardedRef = useRef<string | null>(null);
   const combatStartRef = useRef<SaveData | null>(null);
   const resumeBattleRef = useRef<BattleSnapshot | null>(null);
@@ -1032,18 +1131,60 @@ export function GameApp() {
     setScreen("title");
   }, []);
 
+  /** The base to start a fresh test-mode overworld/Inn session from: current roster/stats
+   * (so party composition still matches whatever test mode has going) with every
+   * overworld/Inn field reset to a brand-new save's defaults — the western ford, full
+   * rations, no exploration. See testOverworld above. */
+  const freshTestOverworld = useCallback((): SaveData => {
+    const fresh = emptySave(muted);
+    return {
+      ...save,
+      overworldPos: fresh.overworldPos,
+      gameClock: fresh.gameClock,
+      overworldMoveBudgetUsed: fresh.overworldMoveBudgetUsed,
+      heroHunger: fresh.heroHunger,
+      rations: fresh.rations,
+      hungerStreak: fresh.hungerStreak,
+      exploredHexes: fresh.exploredHexes,
+    };
+  }, [save, muted]);
+  /** The save every map/Inn handler below reads: the real bank normally, or test mode's
+   * own ephemeral overworld snapshot — never the real bank — while testing. */
+  const readMapSave = useCallback(
+    (): SaveData => (testMode ? (testOverworld ?? freshTestOverworld()) : activeSave(bank)),
+    [testMode, testOverworld, freshTestOverworld, bank],
+  );
+  /** Writes a map/Inn action's result back — to test mode's own state, never the real
+   * bank, while testing, so nothing done there ever becomes a real savegame. */
+  const writeMapSave = useCallback(
+    (next: SaveData) => {
+      if (testMode) setTestOverworld(next);
+      else persistCurrent(next);
+    },
+    [testMode],
+  );
+  // The map/Inn's own view of the save — test-safe (see readMapSave). Battle keeps reading
+  // `save`/`liveSave` directly; it already isolates test mode through its own dedicated
+  // overrides (testEmber, playtest roster building, ...), untouched by this.
+  const overworldSave = readMapSave();
   const onOverworldStep = useCallback(
     (col: number, row: number) => {
-      const rec = activeSave(bank);
+      const rec = readMapSave();
       const { save: next, event } = stepOverworld(rec, col, row, campaignLocations, testMode);
-      if (next !== rec) persistCurrent(next);
+      if (next !== rec) writeMapSave(next);
+      // A rolled road encounter launches straight into its battle — never shown as a
+      // dismissible text popup like every other overworld event.
+      if (event?.kind === "battle" && event.missionId) {
+        openMission(event.missionId);
+        return;
+      }
       if (event) setOverworldEvent(event);
     },
-    [bank, campaignLocations, testMode],
+    [campaignLocations, testMode, openMission, readMapSave, writeMapSave],
   );
   const consumeRation = (hero: string) => {
-    const rec = activeSave(bank);
     if (screen === "battle" && engine) {
+      const rec = activeSave(bank);
       const unit = engine.units.find((u) => u.name === hero && u.side === "player" && !u.summoned && u.alive);
       if (!unit || engine.getHud().busy || fullness(unit.fullness) >= 100 || rec.rations + engine.lootRations < 1) return;
       unit.fullness = 100;
@@ -1055,15 +1196,16 @@ export function GameApp() {
       onHud(engine.getHud());
       return;
     }
+    const rec = readMapSave();
     const next = useRation(rec, hero);
-    if (next !== rec) persistCurrent(next);
+    if (next !== rec) writeMapSave(next);
   };
   /** Mochila's "Alimentar todos" — one ration per hero in the given roster, off the shared
    * party stock. Inn/overworld only (mirrors consumeRation's plain, non-battle branch;
    * battle rations come out of engine.lootRations too and need that per-unit bookkeeping,
    * not worth threading through a bulk action here). */
   const consumeRationAll = (heroes: string[]) => {
-    const rec = activeSave(bank);
+    const rec = readMapSave();
     let next = rec;
     let fed = 0;
     for (const hero of heroes) {
@@ -1071,7 +1213,7 @@ export function GameApp() {
       if (after !== next) fed++;
       next = after;
     }
-    if (fed > 0) persistCurrent(next);
+    if (fed > 0) writeMapSave(next);
     return fed;
   };
   // Modo teste only: a non-adjacent pin jumps straight there, free of charge — see
@@ -1079,9 +1221,64 @@ export function GameApp() {
   // onOverworldStep above even in test mode, so the day clock and rations stay testable.
   const onOverworldTeleport = useCallback(
     (col: number, row: number) => {
-      persistCurrent(teleportOverworld(activeSave(bank), col, row));
+      writeMapSave(teleportOverworld(readMapSave(), col, row));
     },
-    [bank],
+    [readMapSave, writeMapSave],
+  );
+
+  // Shared outside-of-battle equip handlers — same shape the Inn's Mochila/Paperdoll have
+  // always used, now also handed to the RPG overworld map's own Mochila (see
+  // OverworldMapScreen), which used to render that picker without any onEquipWeapon/
+  // onEquipItem at all: every tap there was a silent no-op, so a hero's owned weapon could
+  // sit in the backpack forever looking "stuck."
+  const equipHeroWeapon = useCallback(
+    (hero: string, weaponId: string) => {
+      const rec = readMapSave();
+      if (!weaponId) {
+        const next = unequipSharedWeapon(rec, hero);
+        if (!partyBagHasRoom(next, 0, testMode)) return;
+        writeMapSave({ ...next, pendingMission: null });
+        return;
+      }
+      const next = equipSharedWeapon(rec, hero, weaponId);
+      if (next) writeMapSave({ ...next, pendingMission: null });
+    },
+    [testMode, readMapSave, writeMapSave],
+  );
+  const equipHeroItem = useCallback(
+    (hero: string, slot: EquipSlot, itemId: string | null) => {
+      const rec = readMapSave();
+      if (!itemId) {
+        const next = unequipSharedItem(rec, hero, slot);
+        if (!partyBagHasRoom(next, 0, testMode)) return;
+        writeMapSave({ ...next, pendingMission: null });
+        return;
+      }
+      const next = equipSharedItem(rec, hero, slot, itemId);
+      if (next) writeMapSave({ ...next, pendingMission: null });
+    },
+    [testMode, readMapSave, writeMapSave],
+  );
+
+  // Mochila's "Jogar Fora" / "Usar" actions (see ItemActionSheet in InventoryScreens.tsx) —
+  // outside of battle these just rewrite the save directly, same shape as the equip
+  // callbacks above.
+  const discardHeroWeapon = useCallback(
+    (weaponId: string) => writeMapSave({ ...discardSharedWeapon(readMapSave(), weaponId), pendingMission: null }),
+    [readMapSave, writeMapSave],
+  );
+  const discardHeroEquipment = useCallback(
+    (itemId: string) => writeMapSave({ ...discardSharedEquipment(readMapSave(), itemId), pendingMission: null }),
+    [readMapSave, writeMapSave],
+  );
+  const discardHeroRation = useCallback(() => writeMapSave({ ...discardRation(readMapSave()), pendingMission: null }), [readMapSave, writeMapSave]);
+  const discardHeroBagItem = useCallback(
+    (hero: string, kind: PotionId | "lockpick") => writeMapSave({ ...discardBagItem(readMapSave(), hero, kind), pendingMission: null }),
+    [readMapSave, writeMapSave],
+  );
+  const useHeroPotionOutside = useCallback(
+    (hero: string, kind: PotionId) => writeMapSave({ ...useHeroPotion(readMapSave(), hero, kind), pendingMission: null }),
+    [readMapSave, writeMapSave],
   );
 
   return (
@@ -1117,6 +1314,7 @@ export function GameApp() {
             bootAudio();
             setTestMode(true);
             setTestEmber(TEST_EMBER);
+            setTestOverworld(null);
             setLastGrowth(null);
             setLastLoot([]);
             setMissionId(null);
@@ -1222,14 +1420,21 @@ export function GameApp() {
             unlockAudio();
             setMutedUi((v) => !v);
           }}
-          overworldPos={save.overworldPos}
-          gameClock={save.gameClock}
-          rations={save.rations}
-          hungerStreak={save.hungerStreak}
-          heroHunger={save.heroHunger}
-          save={save}
+          overworldPos={overworldSave.overworldPos}
+          gameClock={overworldSave.gameClock}
+          rations={overworldSave.rations}
+          hungerStreak={overworldSave.hungerStreak}
+          heroHunger={overworldSave.heroHunger}
+          save={overworldSave}
           onUseRation={consumeRation}
           onUseRationAll={consumeRationAll}
+          onEquipWeapon={equipHeroWeapon}
+          onEquipItem={equipHeroItem}
+          onUsePotion={useHeroPotionOutside}
+          onDiscardWeapon={discardHeroWeapon}
+          onDiscardEquipment={discardHeroEquipment}
+          onDiscardRation={discardHeroRation}
+          onDiscardBagItem={discardHeroBagItem}
           inventoryRequestHero={mapInventoryRequestHero}
           inventoryRequestView={mapInventoryRequestView}
           onInventoryRequestHandled={() => setMapInventoryRequestHero(null)}
@@ -1242,12 +1447,19 @@ export function GameApp() {
           onPick={openMission}
         />
       )}
+      {screen === "overworldMap" && !overworldSave.seenOverworldIntro && (
+        <OverworldIntroScreen
+          onClose={() => {
+            writeMapSave({ ...overworldSave, seenOverworldIntro: true, pendingMission: null });
+          }}
+        />
+      )}
       {(screen === "overworldMap" || screen === "inn") && mapStatusHero && (
         <StatusPanel
-          unit={mapStatusUnit(save, mapStatusHero)}
-          statPointAllocation={save.statPointAllocations[mapStatusHero] ?? {}}
-          unspentStatPoints={Math.max(0, ((save.levels[mapStatusHero] ?? 1) - 1) * STAT_POINTS_PER_LEVEL - Object.values(save.statPointAllocations[mapStatusHero] ?? {}).reduce((total, value) => total + (value ?? 0), 0))}
-          bagIcon={pouchIcon(equippedPouchId(save.equipment, mapStatusHero))}
+          unit={mapStatusUnit(overworldSave, mapStatusHero)}
+          statPointAllocation={overworldSave.statPointAllocations[mapStatusHero] ?? {}}
+          unspentStatPoints={Math.max(0, ((overworldSave.levels[mapStatusHero] ?? 1) - 1) * STAT_POINTS_PER_LEVEL - Object.values(overworldSave.statPointAllocations[mapStatusHero] ?? {}).reduce((total, value) => total + (value ?? 0), 0))}
+          bagIcon={pouchIcon(equippedPouchId(overworldSave.equipment, mapStatusHero))}
           onClose={() => setMapStatusHero(null)}
           onOpenInventory={screen === "overworldMap" ? () => {
               setMapStatusHero(null);
@@ -1278,16 +1490,16 @@ export function GameApp() {
           onUseRationAll={consumeRationAll}
           onOpenStatus={setMapStatusHero}
           onBuyMeal={(hero) => {
-            const rec = activeSave(bank);
+            const rec = readMapSave();
             const source = testMode ? { ...rec, ember: testEmber } : rec;
             const next = buyInnMeal(source, hero);
             if (next === source) return false;
             if (testMode) setTestEmber(next.ember);
-            persistCurrent({ ...next, ember: testMode ? rec.ember : next.ember });
+            writeMapSave({ ...next, ember: testMode ? rec.ember : next.ember });
             return true;
           }}
           onBuyMealAll={(heroes) => {
-            const rec = activeSave(bank);
+            const rec = readMapSave();
             const source = testMode ? { ...rec, ember: testEmber } : rec;
             let next = source;
             let fed = 0;
@@ -1298,18 +1510,18 @@ export function GameApp() {
             }
             if (fed === 0) return 0;
             if (testMode) setTestEmber(next.ember);
-            persistCurrent({ ...next, ember: testMode ? rec.ember : next.ember });
+            writeMapSave({ ...next, ember: testMode ? rec.ember : next.ember });
             return fed;
           }}
-          bags={save.bags}
+          bags={overworldSave.bags}
           ember={testMode ? testEmber : (save.ember ?? 0)}
           muted={muted}
-          weapons={save.weapons}
-          equipped={save.equipped}
+          weapons={overworldSave.weapons}
+          equipped={overworldSave.equipped}
           heroClass={Object.fromEntries(
-            [...DEFAULT_HEROES, ...(testMode ? TEST_EXTRA_HEROES : [])].map((h) => [h.name, save.promotions[h.name] ?? h.classId]),
+            [...DEFAULT_HEROES, ...(testMode ? TEST_EXTRA_HEROES : [])].map((h) => [h.name, overworldSave.promotions[h.name] ?? h.classId]),
           )}
-          save={testMode ? { ...save, ember: testEmber } : save}
+          save={testMode ? { ...overworldSave, ember: testEmber } : overworldSave}
           test={testMode}
           onMute={() => {
             unlockAudio();
@@ -1317,14 +1529,14 @@ export function GameApp() {
           }}
           onLeave={goToMap}
           onBuyWeapon={(hero: string, weaponId: string) => {
-            const rec = activeSave(bank);
+            const rec = readMapSave();
             const w = WEAPONS[weaponId];
             if (!w || rec.weapons[weaponId] != null) return false;
             if (!partyBagHasRoom(rec, 1, testMode)) return false;
             const held = testMode ? testEmber : (rec.ember ?? 0);
             if (held < w.price) return false;
             if (testMode) setTestEmber(held - w.price);
-            persistCurrent({
+            writeMapSave({
               ...rec,
               ember: testMode ? rec.ember ?? 0 : held - w.price,
               emberSeeded: true,
@@ -1334,7 +1546,7 @@ export function GameApp() {
             return true;
           }}
           onBuyEquipment={(itemId: string) => {
-            const rec = activeSave(bank);
+            const rec = readMapSave();
             const item = EQUIPMENT[itemId];
             const price = item?.price ?? 0;
             if (!item || (price <= 0 && !testMode)) return false;
@@ -1342,7 +1554,7 @@ export function GameApp() {
             const held = testMode ? testEmber : (rec.ember ?? 0);
             if (held < price) return false;
             if (testMode) setTestEmber(held - price);
-            persistCurrent({
+            writeMapSave({
               ...rec,
               ember: testMode ? rec.ember ?? 0 : held - price,
               emberSeeded: true,
@@ -1351,37 +1563,22 @@ export function GameApp() {
             });
             return true;
           }}
-          onEquipWeapon={(hero: string, weaponId: string) => {
-            const rec = activeSave(bank);
-            if (!weaponId) {
-              const next = unequipSharedWeapon(rec, hero);
-              if (!partyBagHasRoom(next, 0, testMode)) return;
-              persistCurrent({ ...next, pendingMission: null });
-              return;
-            }
-            const next = equipSharedWeapon(rec, hero, weaponId);
-            if (next) persistCurrent({ ...next, pendingMission: null });
-          }}
-          onEquipItem={(hero: string, slot: EquipSlot, itemId: string | null) => {
-            const rec = activeSave(bank);
-            if (!itemId) {
-              const next = unequipSharedItem(rec, hero, slot);
-              if (!partyBagHasRoom(next, 0, testMode)) return;
-              persistCurrent({ ...next, pendingMission: null });
-              return;
-            }
-            const next = equipSharedItem(rec, hero, slot, itemId);
-            if (next) persistCurrent({ ...next, pendingMission: null });
-          }}
+          onEquipWeapon={equipHeroWeapon}
+          onEquipItem={equipHeroItem}
+          onUsePotion={useHeroPotionOutside}
+          onDiscardWeapon={discardHeroWeapon}
+          onDiscardEquipment={discardHeroEquipment}
+          onDiscardRation={discardHeroRation}
+          onDiscardBagItem={discardHeroBagItem}
           onUpgradeWeapon={(weaponId: string) => {
-            const rec = activeSave(bank);
+            const rec = readMapSave();
             const enh = rec.weapons[weaponId] ?? 0;
             if (enh >= WEAPON_MAX_ENH) return false;
             const cost = weaponEnhCost(enh + 1);
             const held = testMode ? testEmber : (rec.ember ?? 0);
             if (held < cost) return false;
             if (testMode) setTestEmber(held - cost);
-            persistCurrent({
+            writeMapSave({
               ...rec,
               ember: testMode ? rec.ember ?? 0 : held - cost,
               emberSeeded: true,
@@ -1391,7 +1588,7 @@ export function GameApp() {
             return true;
           }}
           onSellWeapon={(weaponId: string) => {
-            const rec = activeSave(bank);
+            const rec = readMapSave();
             const enh = rec.weapons[weaponId];
             if (enh == null) return false;
             const value = weaponSellValue(weaponId, enh);
@@ -1403,7 +1600,7 @@ export function GameApp() {
             for (const hero of Object.keys(equipped)) {
               if (equipped[hero] === weaponId) delete equipped[hero];
             }
-            persistCurrent({
+            writeMapSave({
               ...rec,
               ember: testMode ? rec.ember ?? 0 : held + value,
               emberSeeded: true,
@@ -1414,11 +1611,11 @@ export function GameApp() {
             return value;
           }}
           onSeenSmithIntro={() => {
-            const rec = activeSave(bank);
-            persistCurrent({ ...rec, seenSmithIntro: true, pendingMission: null });
+            const rec = readMapSave();
+            writeMapSave({ ...rec, seenSmithIntro: true, pendingMission: null });
           }}
           onPay={(hero: string, cart: Record<PotionId, number>, lockpicks: number) => {
-            const rec = activeSave(bank);
+            const rec = readMapSave();
             let cost = 0;
             const bag = { ...(rec.bags[hero] ?? startingBags()[hero]) };
             for (const kind of Object.keys(cart) as PotionId[]) {
@@ -1436,7 +1633,7 @@ export function GameApp() {
             const held = testMode ? testEmber : (rec.ember ?? 0);
             if (cost <= 0 || held < cost) return false;
             if (testMode) setTestEmber(held - cost);
-            persistCurrent({
+            writeMapSave({
               ...rec,
               ember: testMode ? rec.ember ?? 0 : held - cost,
               emberSeeded: true,
@@ -1447,13 +1644,13 @@ export function GameApp() {
           }}
           onBuyRations={(qty: number) => {
             if (qty <= 0) return false;
-            const rec = activeSave(bank);
+            const rec = readMapSave();
             if (!partyBagHasRoom(rec, Math.ceil((rec.rations + qty) / RATION_STACK_MAX) - Math.ceil(rec.rations / RATION_STACK_MAX), testMode)) return false;
             const cost = RATIONS_PRICE * qty;
             const held = testMode ? testEmber : (rec.ember ?? 0);
             if (held < cost) return false;
             if (testMode) setTestEmber(held - cost);
-            persistCurrent({
+            writeMapSave({
               ...rec,
               ember: testMode ? rec.ember ?? 0 : held - cost,
               emberSeeded: true,
@@ -2931,6 +3128,15 @@ function MapEditorScreen({
   }, []);
   useEffect(() => { void refreshRepoFiles(draft.id); }, [draft.id, refreshRepoFiles]);
   const repoLatest = repoFiles.reduce((latest, file) => Math.max(latest, file.serial), 0);
+  // "Arquivo mais novo"/"versão mais nova" used to be decided within each list on its own
+  // serial numbering — repository files (thebridge020.json...) and browser-local versions
+  // (v001, v002...) count on two completely independent counters, so the higher-numbered
+  // file could easily be older in real time than a local version saved after it. Compared
+  // by actual savedAt instead, across both lists, so only whichever one is truly the most
+  // recent save gets tagged, wherever it happens to live.
+  const latestRepoFile = repoFiles.reduce((best: MapFile | null, f) => (!best || f.savedAt > best.savedAt ? f : best), null);
+  const latestVersion = versions.reduce((best: MapVersion | null, v) => (!best || v.savedAt > best.savedAt ? v : best), null);
+  const trueLatestIsVersion = !!latestVersion && (!latestRepoFile || latestVersion.savedAt > latestRepoFile.savedAt);
   /** Every scenario the picker can open, from either store. Files on disk are the real
    * saves — a map authored offline exists only there — so they lead; a scenario that
    * lives only in this browser (no dev server when it was saved) still gets a row. */
@@ -3620,14 +3826,28 @@ function MapEditorScreen({
   // speakers regardless of whether their final art has landed yet.
   const portraitOptions = (() => {
     const seen = new Set<SpriteId>();
-    const out: { id: SpriteId; label: string }[] = [];
-    for (const c of [...EDITOR_HEROES.map((h) => h.classId), ...classOptions]) {
+    // Named heroes claim their sprite's slot under their own name (Kael, not "Guerreiro")
+    // even while they still share on-disk art with a generic class — this used to read
+    // CLASSES[c].name for every entry, which stamped every MC's option with their class's
+    // name instead, so none of them were findable by their actual name in the picker.
+    // Kept as their own group ahead of every other class (sorted only among themselves),
+    // not folded into the alphabetical class list, so they're the first thing the picker
+    // offers — every other unit is still in the list right after, nothing removed.
+    const heroes: { id: SpriteId; label: string }[] = [];
+    for (const h of EDITOR_HEROES) {
+      const sprite = CLASSES[h.classId].sprite;
+      if (seen.has(sprite)) continue;
+      seen.add(sprite);
+      heroes.push({ id: sprite, label: h.name });
+    }
+    const rest: { id: SpriteId; label: string }[] = [];
+    for (const c of classOptions) {
       const sprite = CLASSES[c].sprite;
       if (seen.has(sprite)) continue;
       seen.add(sprite);
-      out.push({ id: sprite, label: CLASSES[c].name });
+      rest.push({ id: sprite, label: CLASSES[c].name });
     }
-    return out.sort((a, b) => byName(a.label, b.label));
+    return [...heroes.sort((a, b) => byName(a.label, b.label)), ...rest.sort((a, b) => byName(a.label, b.label))];
   })();
   const decorOptions = Object.values(DECORATIONS).sort((a, b) => byName(a.name, b.name));
   const decorationSectionFor = (id: string) => {
@@ -4575,7 +4795,11 @@ function MapEditorScreen({
                     <span className={`font-bold tabular-nums ${f.serial === repoLatest ? "text-accent" : ""}`}>{serialLabel(f.serial)}</span>
                     <span className="text-muted flex-1 min-w-0 truncate">
                       {f.file ?? mapFileName(draft.id, f.serial)}
-                      {f.serial === activeSerial ? " · ativa na campanha" : f.serial === repoLatest ? " · arquivo mais novo" : ""}
+                      {f.serial === activeSerial
+                        ? " · ativa na campanha"
+                        : f.serial === repoLatest && !trueLatestIsVersion
+                          ? " · arquivo mais novo"
+                          : ""}
                     </span>
                     <Button size="sm" variant="quiet" onClick={() => setDraft(f.draft)}>
                       Carregar
@@ -4613,7 +4837,11 @@ function MapEditorScreen({
                     <span className={`font-bold tabular-nums ${activeSerial === v.serial ? "text-accent" : ""}`}>v{serialLabel(v.serial)}</span>
                     <span className="text-muted flex-1 min-w-0 truncate">
                       {new Date(v.savedAt).toLocaleString()}
-                      {activeSerial === v.serial ? " · ativa na campanha" : ""}
+                      {activeSerial === v.serial
+                        ? " · ativa na campanha"
+                        : trueLatestIsVersion && v.serial === latestVersion?.serial
+                          ? " · versão mais nova"
+                          : ""}
                     </span>
                     <Button size="sm" variant="quiet" onClick={() => setDraft(v.draft)}>
                       Carregar
@@ -5829,7 +6057,7 @@ function BattleScreen({
 
       {paused && (
         <div className="absolute inset-0 z-30 bg-bg/80 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm ember-window rounded-xl p-6">
+          <div className="w-full max-w-sm max-h-[85dvh] overflow-y-auto ember-window rounded-xl p-6">
             <h2 className="font-display text-2xl mb-4">Opções</h2>
             <p className="text-xs uppercase tracking-[0.18em] text-muted mb-2">Zoom</p>
             <div className="grid grid-cols-4 gap-1 mb-4">
@@ -6031,6 +6259,21 @@ function BattleScreen({
             if (!owned) engine.claimLoot("equipment", itemId);
             onEquipItem?.(hero, slot, itemId, !owned);
           }}
+          // Same aim-then-tap-a-target flow the action bar's own potion button already
+          // uses — Usar here just arms it and drops back to the battlefield instead of
+          // duplicating applyPotion's targeting logic. Only works for whichever unit is
+          // actually mid-turn (engine.usePotion reads this.selectedId itself), same
+          // restriction the action bar has always had; viewing another hero's Mochila
+          // still shows the button, it just quietly does nothing if tapped.
+          // Jogar Fora is intentionally left off mid-battle: permanently deleting party
+          // gear/supplies is not something to expose during a fight already in progress.
+          onUsePotion={(hero, kind) => {
+            if (statusUnit.id !== engine.selectedId) return;
+            engine.usePotion(kind);
+            onHud(engine.getHud());
+            setInvView(null);
+            setShowStatus(false);
+          }}
         />
       )}
 
@@ -6186,12 +6429,14 @@ function gearContributors(gear: Partial<Record<EquipSlot, string>>, stat: "hp" |
 function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustStatPoint, bagIcon, onClose, onOpenInventory, onOpenEquipment, onCycle }: { unit: UnitPublic; statPointAllocation: StatPointAllocation; unspentStatPoints: number; onAdjustStatPoint?: (stat: StatPointAttribute, delta: 1 | -1) => boolean; bagIcon?: string; onClose: () => void; onOpenInventory?: () => void; onOpenEquipment?: () => void; /** Switches which unit the sheet shows — any living unit still in the fight, either side. */ onCycle?: (dir: 1 | -1) => void }) {
   const [showConditionDetail, setShowConditionDetail] = useState(false);
   const gearStat = (stat: "hp" | "atk" | "mag" | "def" | "res" | "mov") => gearContributors(unit.gear, stat);
-  const stats: Array<{ label: string; value: string | number; stat?: StatPointAttribute; gear?: { total: number; lines: string[] } }> = [
-    { label: "VIT", value: unit.maxHp, stat: "hp", gear: gearStat("hp") },
-    { label: "ATK", value: unit.atk, stat: "atk", gear: gearStat("atk") },
-    { label: "MAG", value: unit.mag, stat: "mag", gear: gearStat("mag") },
-    { label: "DEF", value: unit.def, stat: "def", gear: gearStat("def") },
-    { label: "RES", value: unit.res, stat: "res", gear: gearStat("res") },
+  // Fome docks VIT/ATK/MAG/DEF/RES uniformly (see hungerKeep in mapStatusUnit/spawnUnit) —
+  // flagged per stat here so the number itself reads as reduced, not just the condition badge.
+  const stats: Array<{ label: string; value: string | number; stat?: StatPointAttribute; gear?: { total: number; lines: string[] }; penalized?: boolean }> = [
+    { label: "VIT", value: unit.maxHp, stat: "hp", gear: gearStat("hp"), penalized: unit.hungry },
+    { label: "ATK", value: unit.atk, stat: "atk", gear: gearStat("atk"), penalized: unit.hungry },
+    { label: "MAG", value: unit.mag, stat: "mag", gear: gearStat("mag"), penalized: unit.hungry },
+    { label: "DEF", value: unit.def, stat: "def", gear: gearStat("def"), penalized: unit.hungry },
+    { label: "RES", value: unit.res, stat: "res", gear: gearStat("res"), penalized: unit.hungry },
     { label: "INI", value: unit.initiative },
     { label: "MOV", value: unit.movLeft < unit.mov ? `${unit.movLeft}/${unit.mov}` : unit.mov, gear: gearStat("mov") },
     { label: "Alcance", value: rangeLabel(unit.minRange, unit.maxRange) },
@@ -6333,10 +6578,14 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
 
         <p className="text-xs uppercase tracking-[0.18em] text-muted mb-2">Atributos</p>
         <div className="grid grid-cols-4 gap-1.5 mb-4">
-          {stats.map(({ label, value, stat, gear }) => (
+          {stats.map(({ label, value, stat, gear, penalized }) => (
             <div key={label} className="bg-bg border border-border rounded-md px-1 py-1 text-center">
               <p className="text-[9px] uppercase tracking-wide text-muted">{label}</p>
-              {gear && gear.total !== 0 ? (
+              {penalized ? (
+                <ItemTip text={condition.detail} className="block">
+                  <p className="text-xs font-medium tabular-nums text-danger">{value}</p>
+                </ItemTip>
+              ) : gear && gear.total !== 0 ? (
                 <ItemTip text={`Bônus de equipamento:\n${gear.lines.join("\n")}`} className="block">
                   <p className="text-xs font-medium tabular-nums text-sky-300">{value}</p>
                 </ItemTip>
@@ -6760,6 +7009,37 @@ function PromotionScreen({
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Onboarding popup shown once, the first time the RPG overworld map screen itself opens —
+ * gated purely on the seenOverworldIntro flag, independent of whichever mission just ended.
+ * Covers both how to move on the map and what the hunger bar means, since the very next
+ * click the player makes here is the one that moves the party for the first time. */
+function OverworldIntroScreen({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="absolute inset-0 z-50 bg-bg/90 flex items-end sm:items-center justify-center p-4">
+      <div className="w-full max-w-md ember-window rounded-xl p-5 max-h-[90dvh] overflow-y-auto">
+        <p className="text-xs uppercase tracking-[0.18em] text-muted">Sistema</p>
+        <h2 className="font-display text-2xl leading-none mt-1 mb-2">Movimento e fome</h2>
+        <p className="text-sm text-muted mb-3">
+          Clique no personagem no mapa para ver os hexágonos que o grupo pode alcançar e escolher para onde ir. Cada
+          passo custa um dia.
+        </p>
+        <p className="text-sm text-muted mb-3">
+          Cada herói tem uma barra de saciedade. Ela desce ao longo da marcha pelo mapa e um pouco a cada ação em
+          combate. Rações (compradas na Estalagem ou achadas em batalha) e refeições na Estalagem enchem essa barra
+          de volta.
+        </p>
+        <p className="text-sm text-muted mb-3">
+          Se ela chegar a zero e o grupo continuar sem comer, começa o status de <strong className="text-fg">Fome</strong>:
+          uma penalidade de <strong className="text-fg">−10% em todos os atributos</strong>, que piora a cada dia
+          faminto até um teto de −90%.
+        </p>
+        <p className="text-sm text-muted mb-4">Fique de olho na barra e mantenha rações na mochila antes de partir.</p>
+        <Button onClick={onClose}>Entendi</Button>
       </div>
     </div>
   );

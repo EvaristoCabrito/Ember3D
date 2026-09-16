@@ -1,6 +1,6 @@
-import { EQUIPMENT, EXP_TO_LEVEL, MAX_GRID, MAX_LEVEL, POTION_CARRY_MAX, BAG_MAX, PROMOTIONS, STAT_POINTS_PER_LEVEL, WEAPONS, emberFromCompleted, equipmentFitsSlot, starterWeaponFor, startingBags } from "./data";
+import { EQUIPMENT, EXP_TO_LEVEL, MAX_GRID, MAX_LEVEL, POTION_CARRY_MAX, BAG_MAX, PROMOTIONS, STAT_POINTS_PER_LEVEL, WEAPONS, WORLD_LOCATIONS, emberFromCompleted, equipmentFitsSlot, starterWeaponFor, startingBags } from "./data";
 import { ALL_MISSIONS } from "./mapstore";
-import { OVERWORLD_START_HEX } from "./overworld";
+import { OVERWORLD_START_HEX, worldToHex } from "./overworld";
 import { cleanHunger, fullness } from "./hunger";
 import { TIER_KEYS } from "./types";
 import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogLine, DialogTree, EquipSlot, Phase, SaveBank, SaveData, Side, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, TierKey } from "./types";
@@ -45,6 +45,27 @@ function clampInt(value: unknown, min: number, max: number): number {
   const n = Math.floor(Number(value));
   if (!Number.isFinite(n)) return min;
   return Math.min(max, Math.max(min, n));
+}
+
+/** A save from before exploredHexes existed has no real travel history to recover — this
+ * gives it a reasonable one instead of dropping it into total fog: the starting ford, its
+ * current position, and every location whose scenario is already completed (they had to
+ * have walked there to play it). Real exploredHexes (an actual array) are trusted as-is. */
+function cleanExploredHexes(raw: unknown, completed: string[], overworldPos: { col: number; row: number }): string[] {
+  if (Array.isArray(raw)) {
+    const seen = new Set<string>();
+    for (const h of raw) {
+      if (typeof h === "string" && /^-?\d+,-?\d+$/.test(h)) seen.add(h);
+    }
+    if (seen.size > 0) return [...seen];
+  }
+  const set = new Set<string>([`${START_HEX.x},${START_HEX.y}`, `${overworldPos.col},${overworldPos.row}`]);
+  for (const loc of WORLD_LOCATIONS) {
+    if (!loc.missionIds.some((id) => completed.includes(id))) continue;
+    const hex = worldToHex(loc.x, loc.y);
+    set.add(`${hex.x},${hex.y}`);
+  }
+  return [...set];
 }
 
 function cloneBags(src?: Record<string, Bag>): Record<string, Bag> {
@@ -492,12 +513,14 @@ export function emptySave(muted = false): SaveData {
     pendingMission: null,
     battle: null,
     seenSmithIntro: false,
+    seenOverworldIntro: false,
     overworldPos: { col: START_HEX.x, row: START_HEX.y },
     gameClock: 0,
     overworldMoveBudgetUsed: 0,
     heroHunger: {},
     rations: STARTING_RATIONS,
     hungerStreak: 0,
+    exploredHexes: [`${START_HEX.x},${START_HEX.y}`],
   };
 }
 
@@ -554,6 +577,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     ember += emberFromCompleted(completed);
     emberSeeded = true;
   }
+  const overworldPos = cleanOverworldPos(raw.overworldPos);
 
   return {
     version: SAVE_VERSION,
@@ -576,12 +600,14 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     pendingMission: pending,
     battle: cleanBattle(raw.battle, pending),
     seenSmithIntro: raw.seenSmithIntro === true,
-    overworldPos: cleanOverworldPos(raw.overworldPos),
+    seenOverworldIntro: raw.seenOverworldIntro === true,
+    overworldPos,
     gameClock: clampInt(raw.gameClock, 0, 999999),
     overworldMoveBudgetUsed: clampInt(raw.overworldMoveBudgetUsed ?? raw.gameClock, 0, 999999),
     heroHunger: cleanHunger(raw.heroHunger),
     rations: typeof raw.rations === "number" ? clampInt(raw.rations, 0, 999999) : STARTING_RATIONS,
     hungerStreak: clampInt(raw.hungerStreak, 0, 999999),
+    exploredHexes: cleanExploredHexes(raw.exploredHexes, completed, overworldPos),
   };
 }
 

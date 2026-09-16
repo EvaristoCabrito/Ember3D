@@ -2091,7 +2091,7 @@
       },
       {
         "name": "Inimigo 10",
-        "classId": "butcher",
+        "classId": "punisher",
         "x": 37,
         "y": 1,
         "level": 2

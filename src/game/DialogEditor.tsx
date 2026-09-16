@@ -47,7 +47,18 @@ export function DialogEditor({
   };
   const addLine = () => {
     const line = emptyLine();
-    onChange(tree ? { ...tree, lines: [...tree.lines, line] } : { id: randomId("tree"), startId: line.id, lines: [line] });
+    if (!tree) {
+      onChange({ id: randomId("tree"), startId: line.id, lines: [line] });
+      return;
+    }
+    // Chains onto whatever line was added last, same as a player would expect a plain
+    // sequence of lines to just play in order — only when that line is still a dead end
+    // (no next, no branching replies already set on it), so this never overwrites a
+    // deliberate branch or a "leads to" the author already chose.
+    const last = tree.lines[tree.lines.length - 1];
+    const lines =
+      last && !last.next && !last.replies ? [...tree.lines.slice(0, -1), { ...last, next: line.id }, line] : [...tree.lines, line];
+    onChange({ ...tree, lines });
   };
 
   return (

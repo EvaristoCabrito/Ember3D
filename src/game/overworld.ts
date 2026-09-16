@@ -1,6 +1,6 @@
-import { heroRecruited, statsFor, WORLD_LOCATIONS } from "./data";
+import { CHEST_LOOT, EMPTY_BAG, EQUIPMENT, heroRecruited, MAX_LEVEL, partyBagHasRoom, POTION_CARRY_MAX, POTIONS, statsFor, weightedLootPick, weightedPotionPick, WEAPONS, WORLD_LOCATIONS } from "./data";
 import { DAILY_HUNGER_COST, drainHunger } from "./hunger";
-import { missionsForLocation } from "./mapstore";
+import { missionsForLocation, RANDOM_ENCOUNTER_REGIONS } from "./mapstore";
 import { cubeRound, cubeToOddr, hexNeighbors, key, oddrToCube } from "./pathfinding";
 import type { ClassId, Point, SaveData, WorldLocation } from "./types";
 
@@ -200,15 +200,23 @@ export function locationExpired(location: WorldLocation, gameClock: number): boo
 /** Flat share of missing HP a unit recovers per day traveled, so long as the party ate
  * that day (see `fed` in stepOverworld). */
 const RECOVERY_PCT = 0.08;
-/** Chance a step onto open wild ground (no location) triggers a text encounter. */
-const ENCOUNTER_CHANCE = 0.18;
+/** Chance a step onto open wild ground (no location) triggers a real battle, pulled from
+ * the "road" random-encounter region — the only region mapped to actual overworld travel
+ * so far (see RANDOM_ENCOUNTER_REGIONS in mapstore.ts). Checked before the flavor-text
+ * roll below, so the two can never both fire on the same step. */
+const BATTLE_ENCOUNTER_CHANCE = 0.15;
+/** Chance a step onto open wild ground (no location, and no battle rolled above) triggers
+ * a text-only flavor encounter. */
+const TEXT_ENCOUNTER_CHANCE = 0.25;
 /** Consecutive unfed days before Hungry actually kicks in — the grace period named in
  * the spec ("após 3 dias sem comida"). */
 const HUNGER_GRACE_DAYS = 3;
 /** Stat penalty added per day past the grace period, capped below. */
 const HUNGER_PENALTY_PER_DAY = 0.1;
-/** Cap on the hunger penalty — "chegando em 90% ele fica inconsciente." */
-const HUNGER_PENALTY_MAX = 0.9;
+/** Cap on the hunger penalty — "chegando em 90% ele fica inconsciente." Exported so the
+ * battle engine can bench a hero outright at this threshold (see BattleEngine's
+ * playerSpawns filter) instead of just docking their stats like every lesser tier. */
+export const HUNGER_PENALTY_MAX = 0.9;
 
 const HERO_BASE_CLASS: Record<string, ClassId> = {
   Kael: "swordsman",
@@ -238,13 +246,25 @@ export function hungerPenaltyFor(hungerStreak: number): number {
 }
 
 export interface OverworldEvent {
-  kind: "encounter" | "hungry";
+  kind: "encounter" | "hungry" | "battle";
   text: string;
+  /** Set only when kind is "battle" — the random-encounter Mission.id to launch. */
+  missionId?: string;
 }
 
-const ENCOUNTERS: { text: string; rations?: number; ember?: number }[] = [
-  { text: "Um bando de corvos assusta a coluna. Parte das rações se perde na correria.", rations: -2 },
-  { text: "Vestígios de um acampamento abandonado — e uma bolsa esquecida.", ember: 15 },
+/** Every encounter id assigned to the "road" region in random-encounters.json — the only
+ * region wired to real overworld travel so far (see BATTLE_ENCOUNTER_CHANCE above). */
+function roadEncounterIds(): string[] {
+  return RANDOM_ENCOUNTER_REGIONS.find((region) => region.id === "road")?.encounterIds ?? [];
+}
+
+const ENCOUNTERS: { text: string; rationsDice?: number; ember?: number; lootBag?: boolean }[] = [
+  // Rations lost are rolled (1d8), not fixed, and folded into the text shown to the
+  // player — see the rationsLost formatting in stepOverworld.
+  { text: "Um bando de corvos assusta a coluna e parte das rações se perde na correria.", rationsDice: 8 },
+  // Rolled like a regular small chest (see CHEST_LOOT) rather than a flat Ember number —
+  // see the lootBag branch in stepOverworld.
+  { text: "Vestígios de um acampamento abandonado — e uma bolsa esquecida.", lootBag: true },
   { text: "Chuva forte atrasa a marcha, mas ninguém se machuca." },
   { text: "Pegadas grandes demais cruzam o caminho. O grupo segue mais alerta, sem parar." },
 ];
@@ -307,18 +327,76 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
 
   let rationsDelta = 0;
   let emberDelta = 0;
+  let weapons = save.weapons;
+  let looseEquipment = save.looseEquipment;
+  let bags = save.bags;
   const landedLocation = locationAt(locations, toCol, toRow);
-  if (!event && !landedLocation && Math.random() < ENCOUNTER_CHANCE) {
-    const pick = ENCOUNTERS[Math.floor(Math.random() * ENCOUNTERS.length)]!;
-    event = { kind: "encounter", text: pick.text };
-    rationsDelta = pick.rations ?? 0;
-    emberDelta = pick.ember ?? 0;
+  const roadIds = roadEncounterIds();
+  if (!event && !landedLocation && roadIds.length > 0 && Math.random() < BATTLE_ENCOUNTER_CHANCE) {
+    event = { kind: "battle", text: "", missionId: roadIds[Math.floor(Math.random() * roadIds.length)] };
   }
+  if (!event && !landedLocation && Math.random() < TEXT_ENCOUNTER_CHANCE) {
+    const pick = ENCOUNTERS[Math.floor(Math.random() * ENCOUNTERS.length)]!;
+    if (pick.lootBag) {
+      // Same odds/shape as a regular small chest (see BattleEngine.useLockpick and
+      // CHEST_LOOT): guaranteed Ember, a guaranteed weighted potion, and two independent
+      // rolls for a piece of gear and a rations bonus. Applied straight to SaveData since
+      // there's no live battle unit to hand the potion to or a chest tile to open.
+      const gain = CHEST_LOOT.emberBase + Math.floor(Math.random() * CHEST_LOOT.emberDice);
+      emberDelta = gain;
+      const found: string[] = [];
+      const potionKind = weightedPotionPick(Math.random);
+      const recipient = Object.keys(HERO_BASE_CLASS).find(
+        (hero) => (test || heroRecruited(hero, save.completed)) && (bags[hero]?.[potionKind] ?? 0) < POTION_CARRY_MAX[potionKind],
+      );
+      if (recipient) {
+        bags = { ...bags, [recipient]: { ...(bags[recipient] ?? EMPTY_BAG), [potionKind]: (bags[recipient]?.[potionKind] ?? 0) + 1 } };
+        found.push(POTIONS[potionKind].name);
+      }
+      if (Math.random() < CHEST_LOOT.gearChance) {
+        const drop = weightedLootPick(Math.random, MAX_LEVEL, new Set(Object.keys(save.weapons)));
+        const probe =
+          drop.kind === "weapon"
+            ? { ...save, weapons: { ...weapons, [drop.id]: 0 } }
+            : { ...save, looseEquipment: { ...looseEquipment, [drop.id]: (looseEquipment[drop.id] ?? 0) + 1 } };
+        if (partyBagHasRoom(probe, 0, test)) {
+          if (drop.kind === "weapon") {
+            weapons = { ...weapons, [drop.id]: 0 };
+            found.push(WEAPONS[drop.id]!.name);
+          } else {
+            looseEquipment = { ...looseEquipment, [drop.id]: (looseEquipment[drop.id] ?? 0) + 1 };
+            found.push(EQUIPMENT[drop.id]!.name);
+          }
+        }
+      }
+      if (Math.random() < 0.4) {
+        const qty = 1 + Math.floor(Math.random() * 4);
+        rationsDelta += qty;
+        found.push(`Rações ×${qty}`);
+      }
+      event = { kind: "encounter", text: `${pick.text} +${gain} Gold${found.length > 0 ? " · achou " + found.join(", ") : ""}` };
+    } else {
+      // 1d8 rations lost, rolled fresh each time rather than a flat amount — the exact
+      // count is folded into the text shown to the player, not just implied by the flavor
+      // line.
+      const rationsLost = pick.rationsDice ? 1 + Math.floor(Math.random() * pick.rationsDice) : 0;
+      rationsDelta = -rationsLost;
+      emberDelta = pick.ember ?? 0;
+      event = {
+        kind: "encounter",
+        text: rationsLost > 0 ? `${pick.text} (−${rationsLost} ${rationsLost === 1 ? "ração" : "rações"})` : pick.text,
+      };
+    }
+  }
+
+  const exploredKey = key(toCol, toRow);
+  const exploredHexes = (save.exploredHexes ?? []).includes(exploredKey) ? save.exploredHexes : [...(save.exploredHexes ?? []), exploredKey];
 
   return {
     save: {
       ...save,
       overworldPos: { col: toCol, row: toRow },
+      exploredHexes,
       gameClock: save.gameClock + 1,
       overworldMoveBudgetUsed: (save.overworldMoveBudgetUsed ?? 0) + 1,
       heroHunger,
@@ -326,6 +404,9 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
       ember: Math.max(0, save.ember + emberDelta),
       hungerStreak,
       unitHp,
+      weapons,
+      looseEquipment,
+      bags,
     },
     event,
   };

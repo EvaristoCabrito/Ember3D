@@ -53,7 +53,8 @@ export type ClassId =
   | "wardog"
   | "troll"
   | "morvenianWolf"
-  | "butcher"
+  | "punisher"
+  | "theButcher"
   | "birolho"
   | "birolho2"
   | "birolho3"
@@ -86,7 +87,7 @@ export type ClassId =
   // computed live from its summoner (see castSummonFamiliar), CLASSES.familiar only
   // supplies a sprite/size/range fallback and satisfies the ClassId-keyed tables below.
   | "familiar";
-export type SpriteId = "kael" | "nira" | "voss" | "salazar" | "malrec" | "aldric" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "troll" | "morvenian-wolf" | "butcher" | "birolho" | "birolho2" | "birolho3" | "familiar" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer";
+export type SpriteId = "kael" | "nira" | "voss" | "salazar" | "malrec" | "aldric" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "troll" | "morvenian-wolf" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "familiar" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer";
 export type HealId = "cureMinor" | "cureWounds" | "cureLight";
 export type SpellKind =
   | "fireball"
@@ -721,6 +722,14 @@ export interface GameArt {
   /** Left-facing counterpart to `casts`, for the sprites that have one cut. Falls back to
    * `casts` (mirrored via the regular flip) for every sprite without one. */
   castsLeft: Partial<Record<SpriteId, HTMLImageElement[]>>;
+  /** A distinct pose for the defender's own counter-attack stages (counterLunge/Hit/
+   * Recover), for the few sprites that have one cut — falls back to `attacks` (the same
+   * swing used for a normal attack) for every sprite without one, same as it always did
+   * before this existed. */
+  counters: Partial<Record<SpriteId, HTMLImageElement[]>>;
+  /** Left-facing counterpart to `counters`. Falls back to `counters` (mirrored via the
+   * regular flip) for every sprite without one. */
+  countersLeft: Partial<Record<SpriteId, HTMLImageElement[]>>;
   idles: Partial<Record<SpriteId, HTMLImageElement[]>>;
   walkDirs: Partial<Record<SpriteId, WalkDirs>>;
   impact: HTMLImageElement[];
@@ -864,9 +873,17 @@ export interface SaveData {
   battle: BattleSnapshot | null;
   /** The Vargan forge intro has played for this party. Absent reads as not yet seen. */
   seenSmithIntro?: boolean;
+  /** The movement/hunger explainer, shown once the first time the RPG overworld map
+   * screen opens for this party. Absent reads as not yet seen. */
+  seenOverworldIntro?: boolean;
   /** RPG map only: current hex position and day count. Unused by the classic map. */
   overworldPos: { col: number; row: number };
   gameClock: number;
+  /** RPG map only: every hex ("col,row") the party has ever stood on — drives the fog of
+   * war (see OverworldMapScreen): a location pin other than the Inn only shows once its
+   * hex is in here, and the dark overlay clears in a radius around each one. Grows,
+   * never shrinks — nothing un-explores a hex once seen. */
+  exploredHexes: string[];
   /** Cumulative travel cost; each adjacent step costs one, including backtracking. */
   overworldMoveBudgetUsed: number;
   /** Fullness remaining per hero (0..120). Missing heroes start full. */

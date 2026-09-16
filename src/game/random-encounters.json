@@ -16,7 +16,9 @@
     {
       "id": "swamp",
       "name": "Pântano",
-      "encounterIds": []
+      "encounterIds": [
+        "random-encounter-4"
+      ]
     },
     {
       "id": "ice",
@@ -41,7 +43,10 @@
     {
       "id": "road",
       "name": "Estrada",
-      "encounterIds": []
+      "encounterIds": [
+        "random-encounter-5",
+        "random-encounter-3"
+      ]
     },
     {
       "id": "plains",

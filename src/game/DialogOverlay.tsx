@@ -47,7 +47,7 @@ export function DialogOverlay({ tree, onClose }: { tree: DialogTree; onClose: ()
               ))
             ) : (
               <Button className="w-full" onClick={() => advance(line.next)}>
-                Ok
+                {line.next ? "Próximo" : "Ok"}
               </Button>
             )}
           </div>

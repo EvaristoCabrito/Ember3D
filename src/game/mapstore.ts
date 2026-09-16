@@ -19,7 +19,7 @@ import SLOT_CONFIG from "./map-slots.json";
 import ORDER_CONFIG from "./map-order.json";
 import LOCATION_ORDER_CONFIG from "./location-order.json";
 import RANDOM_ENCOUNTER_CONFIG from "./random-encounters.json";
-import type { DecorationPlacement, DialogTree, Mission, Spawn, TerrainId, WinCondition, WorldLocation } from "./types";
+import type { ClassId, DecorationPlacement, DialogTree, Mission, Spawn, TerrainId, WinCondition, WorldLocation } from "./types";
 
 /** A spawn as edited in the Map Editor — the real Spawn shape plus a per-spawn test
  * level, which only exists for "Testar" (balance testing). It never leaves the editor:
@@ -122,6 +122,27 @@ export const RANDOM_ENCOUNTER_REGIONS = cleanEncounterRegions(RANDOM_ENCOUNTER_C
 export const RANDOM_ENCOUNTER_IDS = new Set(RANDOM_ENCOUNTER_REGIONS.flatMap((region) => region.encounterIds));
 export function isRandomEncounter(id: string): boolean { return RANDOM_ENCOUNTER_IDS.has(id); }
 
+/** Old saves/drafts from before "butcher" was split into "punisher" (unchanged, original
+ * unit) and "theButcher" (new, separate unit) still spell the old classId — remap it here
+ * so a browser-local draft or an older exported map file doesn't point at a class id that
+ * no longer exists (which crashed/froze the editor on load instead of failing loudly). */
+function legacyClassId(id: string): ClassId {
+  return (id === "butcher" ? "punisher" : id) as ClassId;
+}
+
+/** Rewrites every spawn's classId through legacyClassId — applied at every point a
+ * MapDraft is actually read (a saved file, an activated draft, a stored version), not
+ * just at play time (draftToMission), so the editor's own direct CLASSES[classId] lookups
+ * (spawn list labels, icons, ...) never see a stale id and crash/freeze on load. */
+function normalizeDraft(draft: MapDraft): MapDraft {
+  return {
+    ...draft,
+    playerSpawns: draft.playerSpawns.map((s) => ({ ...s, classId: legacyClassId(s.classId) })),
+    enemySpawns: draft.enemySpawns.map((s) => ({ ...s, classId: legacyClassId(s.classId) })),
+    neutralSpawns: draft.neutralSpawns?.map((s) => ({ ...s, classId: legacyClassId(s.classId) })),
+  };
+}
+
 export function draftToMission(d: MapDraft): Mission {
   const layout: string[] = [];
   for (let r = 0; r < d.rows; r++) {
@@ -148,9 +169,9 @@ export function draftToMission(d: MapDraft): Mission {
     baseVariant: d.baseVariant,
     tileRots: d.tileRots?.some((r) => r) ? d.tileRots : undefined,
     decorations: d.decorations.length > 0 ? d.decorations : undefined,
-    playerSpawns: d.playerSpawns.map(({ level: _level, ...s }) => s),
-    enemySpawns: d.enemySpawns.map(({ level: _level, ...s }) => s),
-    neutralSpawns: d.neutralSpawns?.length ? d.neutralSpawns.map(({ level: _level, ...s }) => s) : undefined,
+    playerSpawns: d.playerSpawns.map(({ level: _level, ...s }) => ({ ...s, classId: legacyClassId(s.classId) })),
+    enemySpawns: d.enemySpawns.map(({ level: _level, ...s }) => ({ ...s, classId: legacyClassId(s.classId) })),
+    neutralSpawns: d.neutralSpawns?.length ? d.neutralSpawns.map(({ level: _level, ...s }) => ({ ...s, classId: legacyClassId(s.classId) })) : undefined,
     music: d.music || undefined,
     hub: d.hub || undefined,
     autoTactics: d.autoTactics ? undefined : false,
@@ -180,7 +201,7 @@ export function savedMapFiles(): MapFile[] {
   return Object.entries(MAP_MODULES).flatMap(([path, file]) => {
     if (!file || typeof file !== "object") return [];
     const name = path.split("/").pop();
-    return [{ ...file, file: name }];
+    return [{ ...file, file: name, draft: normalizeDraft(file.draft) }];
   });
 }
 
@@ -267,7 +288,11 @@ export function loadVersionStore(): Record<string, MapVersion[]> {
     if (typeof window === "undefined") return {};
     const raw = window.localStorage.getItem(MAP_VERSIONS_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : {};
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, MapVersion[]>) : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    const store = parsed as Record<string, MapVersion[]>;
+    return Object.fromEntries(
+      Object.entries(store).map(([id, list]) => [id, Array.isArray(list) ? list.map((v) => ({ ...v, draft: normalizeDraft(v.draft) })) : list]),
+    );
   } catch {
     return {};
   }
@@ -312,7 +337,8 @@ export function loadActiveDrafts(): Record<string, MapDraft> {
     if (typeof window === "undefined") return {};
     const raw = window.localStorage.getItem(MAP_ACTIVE_DRAFTS_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : {};
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, MapDraft>) : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    return Object.fromEntries(Object.entries(parsed as Record<string, MapDraft>).map(([id, draft]) => [id, normalizeDraft(draft)]));
   } catch {
     return {};
   }
