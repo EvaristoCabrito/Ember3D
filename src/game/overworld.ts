@@ -230,6 +230,15 @@ const HERO_BASE_CLASS: Record<string, ClassId> = {
   Malrec: "conjurer",
 };
 
+/** Whether every hero who actually ages (test mode: everyone shown; real campaign: only
+ * recruited, living heroes — same gate stepOverworld's own drain uses) currently has any
+ * fullness left. Exported so a ration action outside of stepping (Alimentar todos, Inn)
+ * can clear hungerStreak the moment it's earned instead of waiting for the next step. */
+export function partyIsFed(save: SaveData, test = false): boolean {
+  const ages = (hero: string) => test || (heroRecruited(hero, save.completed) && (save.unitHp[hero] ?? maxHpFor(save, hero)) > 0);
+  return Object.keys(HERO_BASE_CLASS).filter(ages).every((hero) => (save.heroHunger[hero] ?? 100) > 0);
+}
+
 function maxHpFor(save: SaveData, hero: string): number {
   const classId = (save.promotions[hero] as ClassId | undefined) ?? HERO_BASE_CLASS[hero];
   if (!classId) return 0;

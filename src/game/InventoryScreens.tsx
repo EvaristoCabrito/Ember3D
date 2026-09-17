@@ -779,7 +779,7 @@ export function BackpackScreen({
           </div>
         )}
 
-        <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-bg/45 shadow-inner backdrop-blur-[1px]">
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border shadow-inner">
           <div className="relative h-full overflow-y-auto p-4">
             <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted">Itens da party</p>
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">

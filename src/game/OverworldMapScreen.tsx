@@ -341,6 +341,27 @@ export function OverworldMapScreen({
             Fome <span className="tabular-nums">{hungerStreak}d</span>
           </p>
         )}
+        {onUseRationAll && (
+          <button
+            type="button"
+            className="h-9 px-3 rounded-md border border-border bg-bg/70 text-sm"
+            onClick={() => {
+              const heroes = (["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"] as const).filter(
+                (name) => test || heroRecruited(name, save.completed),
+              );
+              const fed = onUseRationAll(heroes);
+              showHint(
+                fed === 0
+                  ? "Ninguém comeu — sem rações ou já saciados."
+                  : fed === heroes.length
+                    ? "Todos comeram."
+                    : `${fed} comeram — rações não deram pros demais.`,
+              );
+            }}
+          >
+            Alimentar todos
+          </button>
+        )}
         <button type="button" onClick={onMute} className="size-9 grid place-items-center rounded-md border border-border bg-bg/70" aria-label="Som">
           {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
         </button>
@@ -589,7 +610,7 @@ export function OverworldMapScreen({
         </div>
       )}
 
-      <div className="absolute z-20 bottom-4 left-4 rounded-lg border border-border bg-bg/95 p-3 max-w-[calc(100%-6rem)]">
+      <div className="map-party-panel absolute z-20 bottom-4 left-4 rounded-lg border border-border p-3 max-w-[calc(100%-6rem)]">
         <p className="text-xs text-muted mb-2" aria-live="polite">
           {atStartPreVau ? "Clique em Kael para entrar na missão" : movementOpen ? "Escolha um hexágono · 1 dia" : "Clique em Kael para mover"}
         </p>

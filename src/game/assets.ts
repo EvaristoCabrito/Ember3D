@@ -6,8 +6,8 @@ import type { GameArt, SpriteId, TerrainId } from "./types";
 // different variant in Mission.tileVariants — keep it as the tile that's safe
 // for existing maps.
 export const TILE_VARIANT_COUNT: Record<TerrainId, number> = {
-  plains: 15,
-  woods: 7,
+  plains: 17,
+  woods: 9,
   ruins: 7,
   water: 22,
   ember: 5,
@@ -22,6 +22,7 @@ export const TILE_VARIANT_COUNT: Record<TerrainId, number> = {
   door: 1,
   deadtree: 1,
   void: 1,
+  snow: 3,
 };
 
 /** The art file a tile variant paints with, without path or cache-buster — "woods002".
@@ -34,6 +35,8 @@ export function tileVariantName(id: TerrainId, variant: number): string {
     if (variant === 0) return "plains016";
     if (variant === 1) return "plains015";
     if (variant === 2) return "plains001";
+    if (variant === 15) return "plains017";
+    if (variant === 16) return "plains018";
     return `plains${String(variant).padStart(3, "0")}`;
   }
   if (id === "water" && variant === 0) return "water023";
@@ -41,6 +44,8 @@ export function tileVariantName(id: TerrainId, variant: number): string {
     if (variant === 0) return "woods005";
     if (variant === 1) return "woods006";
     if (variant === 6) return "woods007";
+    if (variant === 7) return "woods009";
+    if (variant === 8) return "woods010";
     return `woods${String(variant - 1).padStart(3, "0")}`;
   }
   if (id === "hill") return `hill${String(variant + 4).padStart(3, "0")}`;

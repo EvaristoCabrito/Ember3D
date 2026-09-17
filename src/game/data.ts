@@ -62,6 +62,7 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
   chest: { id: "chest", name: "Baú trancado", moveCost: 99, def: 0, atk: 0, passable: false },
   door: { id: "door", name: "Porta trancada", moveCost: 99, def: 0, atk: 0, passable: false, blocksShot: true },
   deadtree: { id: "deadtree", name: "Tronco caído", moveCost: 2, def: 1, atk: 2, passable: true, height: 1 },
+  snow: { id: "snow", name: "Neve", moveCost: 1, def: 0, atk: 0, passable: true },
   /** Pure void — a building block for closed/indoor maps: apaga o terreno e nem se atravessa, nem se vê através. */
   void: { id: "void", name: "Vazio", moveCost: 99, def: 0, atk: 0, passable: false, blocksShot: true },
 };
@@ -119,6 +120,11 @@ const DECO_ROW_TRIO = [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 }];
 const DECO_ROW_FIVE = [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 }, { dx: 3, dy: 0 }, { dx: 4, dy: 0 }];
 const DECO_QUAD = [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 }, { dx: 3, dy: 0 }];
 const DECO_ONE = [{ dx: 0, dy: 0 }];
+// A genuine 3x3 block (three rows, three columns) rather than a single row — a linear
+// footprint collapses vertical spread to 0, which stretches a roughly-square image (like a
+// wide ancestral tree) into a flat, deformed strip. Spreading it across both axes keeps the
+// bounding box's width/height ratio close to the source art's own.
+const DECO_BLOCK_3X3 = [0, 1, 2].flatMap((dy) => [0, 1, 2].map((dx) => ({ dx, dy: dy - 1 })));
 
 /** Props from the two supplied Wilds sheets. They remain manually placed editor art. */
 function decorationSet(entries: readonly (readonly [string, string])[], pairIds: ReadonlySet<string> = new Set()): Record<string, DecorationDef> {
@@ -176,6 +182,90 @@ const CITY_TWO_HEX = new Set(["city-supply-cart", "city-covered-wagon"]);
 const CITY_DECORATIONS = decorationSet([
   ["city-gate-banner", "Portão com estandarte"], ["city-palisade-banner", "Paliçada com estandarte"], ["city-spike-barricade-large", "Barricada de estacas grande"], ["city-spike-barricade", "Barricada de estacas"], ["city-palisade-frame", "Moldura de paliçada"], ["city-wooden-barricade", "Barricada de madeira"], ["city-banner-barricade", "Barricada com bandeira"], ["city-spike-barricade-low", "Estacas baixas"], ["city-wattle-fence", "Cerca trançada"], ["city-stone-banner-wall", "Muralha baixa com estandarte"], ["city-banner-post", "Mastro de estandarte"], ["city-lantern-post", "Poste de lanterna"], ["city-well", "Poço da cidade"], ["city-signpost", "Placa direcional"], ["city-market-stall", "Barraca de mercado"], ["city-supply-cart", "Carroça de suprimentos"], ["city-covered-wagon", "Carroça coberta"], ["city-covered-crate", "Caixa coberta"], ["city-workbench", "Bancada"], ["city-execution-block", "Bloco de execução"], ["city-provisions", "Mantimentos"], ["city-log-stack", "Pilha de lenha"], ["city-campfire", "Fogueira"], ["city-barrels", "Barris"], ["city-stool", "Banco de madeira"], ["city-shrine", "Oratório urbano"], ["city-stone-pillar", "Pilar de pedra"], ["city-notice-post", "Poste de avisos"], ["city-ring-pillar", "Pilar com argola"], ["city-brazier", "Braseiro"], ["city-clothesline", "Varal"], ["city-wheelbarrow", "Carrinho de mão"], ["city-gallows-cages", "Forca com gaiolas"],
 ], CITY_TWO_HEX);
+
+// 2026-09-16 art drop: 49 items cut from 11 AI-generated reference sheets (already
+// alpha-matted per item — plain crops, no background editing). Grouped by source folder
+// (City/Dungeon/Forest → city-/dungeon-/wilds- prefix), which is the intended placement
+// category regardless of what an individual item happens to depict. Several overlap in
+// theme with existing props (well, market stall, notice post, gallows, torture gear) but
+// are kept as separate ids rather than replacing anything, per direct instruction.
+const NEW_DECOR_2026: Record<string, DecorationDef> = {
+  "city-root-shrine": { id: "city-root-shrine", name: "Santuário Coberto de Raízes", footprint: DECO_PAIR },
+  "city-market-stall-2": { id: "city-market-stall-2", name: "Barraca de Mercado II", footprint: DECO_PAIR },
+  "city-bear-trap": { id: "city-bear-trap", name: "Armadilha de Urso", footprint: DECO_ONE },
+  "city-forge": { id: "city-forge", name: "Forja do Ferreiro", footprint: DECO_TRIO },
+  "city-well-2": { id: "city-well-2", name: "Poço II", footprint: DECO_ONE },
+  "city-supply-cart-2": { id: "city-supply-cart-2", name: "Carroça de Suprimentos II", footprint: DECO_PAIR },
+  "city-log-cart": { id: "city-log-cart", name: "Carroça de Lenha", footprint: DECO_PAIR },
+  "city-wreckage-pile": { id: "city-wreckage-pile", name: "Barricada Destruída", footprint: DECO_PAIR },
+  "city-notice-board-2": { id: "city-notice-board-2", name: "Quadro de Avisos II", footprint: DECO_ONE },
+  "city-gallows-2": { id: "city-gallows-2", name: "Forca II", footprint: DECO_PAIR },
+  "city-broken-chair": { id: "city-broken-chair", name: "Cadeira Quebrada", footprint: DECO_ONE },
+  "city-broken-pottery": { id: "city-broken-pottery", name: "Potes Quebrados", footprint: DECO_ONE },
+  "city-basket": { id: "city-basket", name: "Cesto de Vime", footprint: DECO_ONE },
+  "city-nailed-planks": { id: "city-nailed-planks", name: "Tábuas com Pregos", footprint: DECO_ONE },
+  "city-bucket": { id: "city-bucket", name: "Balde de Madeira", footprint: DECO_ONE },
+  "city-rope-coil": { id: "city-rope-coil", name: "Rolo de Corda", footprint: DECO_ONE },
+  "city-crate-stack": { id: "city-crate-stack", name: "Caixas Empilhadas", footprint: DECO_ONE },
+  "city-broken-barrel": { id: "city-broken-barrel", name: "Barril Quebrado", footprint: DECO_ONE },
+  "city-sack-pile": { id: "city-sack-pile", name: "Sacos de Grãos", footprint: DECO_ONE },
+  "city-firewood-pile": { id: "city-firewood-pile", name: "Pilha de Lenha", footprint: DECO_ONE },
+  "dungeon-ossuary": { id: "dungeon-ossuary", name: "Ossário", footprint: DECO_PAIR },
+  "dungeon-hanging-cage": { id: "dungeon-hanging-cage", name: "Gaiola Suspensa", footprint: DECO_ONE },
+  "dungeon-stone-door": { id: "dungeon-stone-door", name: "Porta de Pedra Trancada", footprint: DECO_PAIR, tile: "door" },
+  "wilds-snowy-dead-tree": { id: "wilds-snowy-dead-tree", name: "Árvore Morta Nevada", footprint: DECO_PAIR },
+  "wilds-mushroom-stump": { id: "wilds-mushroom-stump", name: "Toco Oco com Cogumelos", footprint: DECO_ONE },
+  "wilds-snowy-log": { id: "wilds-snowy-log", name: "Tronco Caído Nevado", footprint: DECO_PAIR },
+  "wilds-snowy-pines": { id: "wilds-snowy-pines", name: "Pinheiros Nevados", footprint: DECO_PAIR },
+  "wilds-camp": { id: "wilds-camp", name: "Acampamento", footprint: DECO_PAIR },
+  "wilds-snowy-bush": { id: "wilds-snowy-bush", name: "Arbusto Seco Nevado", footprint: DECO_ONE },
+  "wilds-iron-cage": { id: "wilds-iron-cage", name: "Gaiola de Ferro", footprint: DECO_ONE },
+  "wilds-chained-pillar": { id: "wilds-chained-pillar", name: "Pilar Acorrentado", footprint: DECO_ONE },
+  "wilds-torture-rack": { id: "wilds-torture-rack", name: "Mesa de Tortura", footprint: DECO_PAIR },
+  "wilds-ruined-gate": { id: "wilds-ruined-gate", name: "Portal em Ruínas", footprint: DECO_TRIO },
+  "wilds-brazier-tripod": { id: "wilds-brazier-tripod", name: "Braseiro de Tripé", footprint: DECO_ONE },
+  "wilds-altar-sarcophagus": { id: "wilds-altar-sarcophagus", name: "Sarcófago Ornamentado", footprint: DECO_PAIR },
+  "wilds-broken-column": { id: "wilds-broken-column", name: "Coluna Derrubada", footprint: DECO_PAIR },
+  "wilds-temple-door": { id: "wilds-temple-door", name: "Portal do Templo", footprint: DECO_PAIR },
+  "wilds-fallen-king": { id: "wilds-fallen-king", name: "Estátua de Rei Caído", footprint: DECO_PAIR },
+  "wilds-knight-statue": { id: "wilds-knight-statue", name: "Estátua de Cavaleiro", footprint: DECO_ONE },
+  "wilds-ivy-archway": { id: "wilds-ivy-archway", name: "Arco em Ruínas", footprint: DECO_PAIR },
+  "wilds-incense-burner": { id: "wilds-incense-burner", name: "Incensário Antigo", footprint: DECO_ONE },
+  "wilds-fountain": { id: "wilds-fountain", name: "Fonte de Pedra Ornamentada", footprint: DECO_PAIR },
+  "wilds-ancestral-tree": { id: "wilds-ancestral-tree", name: "Árvore Ancestral", footprint: DECO_BLOCK_3X3 },
+  "wilds-exposed-roots": { id: "wilds-exposed-roots", name: "Raízes Expostas", footprint: DECO_ONE },
+  "wilds-branch-pile": { id: "wilds-branch-pile", name: "Pilha de Galhos", footprint: DECO_ONE },
+  "wilds-mossy-log": { id: "wilds-mossy-log", name: "Tronco Musgoso com Cogumelos", footprint: DECO_ONE },
+  "wilds-dry-bush": { id: "wilds-dry-bush", name: "Moita Seca", footprint: DECO_ONE },
+  "wilds-tree-stump": { id: "wilds-tree-stump", name: "Toco de Árvore", footprint: DECO_ONE },
+  "wilds-mushroom-cluster": { id: "wilds-mushroom-cluster", name: "Cogumelos Silvestres", footprint: DECO_ONE },
+
+  // 2026-09-17 art drop: 22 items from the Ice reference sheets, same folder-as-category
+  // rule and plain-crop (already alpha-matted) treatment as the previous drop.
+  "ice-rope-coil": { id: "ice-rope-coil", name: "Corda Congelada", footprint: DECO_PAIR },
+  "ice-barrel": { id: "ice-barrel", name: "Barril Congelado", footprint: DECO_PAIR },
+  "ice-sack": { id: "ice-sack", name: "Saco Congelado", footprint: DECO_ONE },
+  "ice-bones": { id: "ice-bones", name: "Ossos Congelados", footprint: DECO_ONE },
+  "ice-crystal-spikes": { id: "ice-crystal-spikes", name: "Espinhos de Gelo", footprint: DECO_PAIR },
+  "ice-frozen-stump": { id: "ice-frozen-stump", name: "Toco Congelado", footprint: DECO_PAIR },
+  "ice-frozen-boulder": { id: "ice-frozen-boulder", name: "Rochedo Congelado", footprint: DECO_PAIR },
+  "ice-frozen-grass": { id: "ice-frozen-grass", name: "Moita Congelada", footprint: DECO_ONE },
+  "ice-bear-trap": { id: "ice-bear-trap", name: "Armadilha Congelada", footprint: DECO_ONE },
+  "ice-lantern-cage": { id: "ice-lantern-cage", name: "Lanterna Congelada", footprint: DECO_ONE },
+  "ice-chains": { id: "ice-chains", name: "Correntes Congeladas", footprint: DECO_ONE },
+  "ice-wooden-spikes": { id: "ice-wooden-spikes", name: "Estacas Congeladas", footprint: DECO_ONE },
+  "ice-shield": { id: "ice-shield", name: "Escudo Congelado", footprint: DECO_ONE },
+  "ice-skull": { id: "ice-skull", name: "Crânio Congelado", footprint: DECO_ONE },
+  "ice-firewood": { id: "ice-firewood", name: "Lenha Congelada", footprint: DECO_ONE },
+  "ice-broken-shield": { id: "ice-broken-shield", name: "Escudo Quebrado Congelado", footprint: DECO_ONE },
+  "ice-helmet": { id: "ice-helmet", name: "Elmo Congelado", footprint: DECO_ONE },
+  "ice-crate": { id: "ice-crate", name: "Caixote Congelado", footprint: DECO_ONE },
+  "ice-cairn": { id: "ice-cairn", name: "Pedras Empilhadas Congeladas", footprint: DECO_ONE },
+  "ice-tools-pile": { id: "ice-tools-pile", name: "Ferramentas Congeladas", footprint: DECO_ONE },
+  "ice-satchel": { id: "ice-satchel", name: "Alforje Congelado", footprint: DECO_ONE },
+  "ice-weapon-pile": { id: "ice-weapon-pile", name: "Armas Congeladas", footprint: DECO_ONE },
+};
+
 // Multi-hex terrain props: rendered as one image over their whole footprint instead of
 // clipped per hex (see DecorationDef). Cropped from LargeHexes1-3.jpg.
 export const DECORATIONS: Record<string, DecorationDef> = {
@@ -200,7 +290,9 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   gatehouse: { id: "gatehouse", name: "Portão Fortificado", footprint: DECO_PAIR },
   watchtower: { id: "watchtower", name: "Torre de Vigia", footprint: DECO_PAIR },
   "ancient-shrine": { id: "ancient-shrine", name: "Santuário Antigo", footprint: DECO_PAIR },
-  "locked-chest": { id: "locked-chest", name: "Baú trancado", footprint: DECO_ONE, tile: "chest" },
+  "locked-chest": { id: "locked-chest", name: "Baú Pequeno", footprint: DECO_ONE, tile: "chest" },
+  "chest-medium": { id: "chest-medium", name: "Baú Médio", footprint: DECO_ONE, tile: "chest" },
+  "chest-large": { id: "chest-large", name: "Baú Grande", footprint: DECO_ONE, tile: "chest" },
   // A prop, not a hex type: it lays "barricade" terrain under itself and every barricade
   // rule rides on that tile — impassable except to a troll (at cost 2, which also smashes
   // it), blocks shots, and lets whoever stands right behind it shoot over while staying
@@ -234,7 +326,13 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   ...WILDS_DECORATIONS,
   ...TORTURE_DECORATIONS,
   ...CITY_DECORATIONS,
+  ...NEW_DECOR_2026,
 };
+
+/** Every lockable-chest decoration id. Both size variants stamp "chest" terrain and open the
+ * same way (BattleEngine.useLockpick/adjacentLock) — callers that need "is this a chest"
+ * check membership here instead of one hardcoded id. */
+export const CHEST_DECOR_IDS = new Set(["locked-chest", "chest-medium", "chest-large"]);
 
 /** City props that read as a barricade/wall and should block like one — impassable, blocks
  * shots — without repainting the hex underneath to barricade terrain (that would replace
@@ -255,7 +353,7 @@ export const BARRICADE_LIKE_DECOR = new Set([
 ]);
 
 /** These packs are editor art only: scenario generation never places them by accident. */
-const MANUAL_DECORATION_IDS = new Set([...Object.keys(WILDS_DECORATIONS), ...Object.keys(TORTURE_DECORATIONS), ...Object.keys(CITY_DECORATIONS)]);
+const MANUAL_DECORATION_IDS = new Set([...Object.keys(WILDS_DECORATIONS), ...Object.keys(TORTURE_DECORATIONS), ...Object.keys(CITY_DECORATIONS), ...Object.keys(NEW_DECOR_2026)]);
 
 /** Every track in public/game/MUSIC, by file name, A-Z.
  *
@@ -1397,19 +1495,9 @@ export function gearPowerLevel(price: number): number {
   return Math.max(1, Math.min(MAX_LEVEL, Math.round(1 + t * (MAX_LEVEL - 1))));
 }
 
-/** How strong loot on a mission is allowed to roll, on that same 1-MAX_LEVEL scale —
- * matched to that mission's own enemies (enemyLevelFor), scaled up from its 1-4 range to
- * the full MAX_LEVEL so loot keeps pace with the whole campaign, not just its first
- * quarter. An early mission's enemies are weak, so its loot table only reaches low power
- * levels; missions near the end open up the full range. */
-export function missionGearLevel(missionIndex: number): number {
-  const enemyMax = 4; // enemyLevelFor's own ceiling
-  return Math.max(1, Math.min(MAX_LEVEL, Math.round((enemyLevelFor(missionIndex) / enemyMax) * MAX_LEVEL)));
-}
-
 /** Weighted random pick across every weapon and every offHand EquipmentDef, rarer as price
- * climbs, capped to maxLevel on the gearPowerLevel scale (see missionGearLevel) and — for
- * weapons — excluding anything in ownedWeaponIds so a drop never announces a weapon the
+ * climbs, capped to maxLevel on the gearPowerLevel scale (see BattleEngine.highestEnemyLevel)
+ * and — for weapons — excluding anything in ownedWeaponIds so a drop never announces a weapon the
  * recipient already has. Used for chest loot and enemy kill drops alike. */
 export function weightedLootPick(rng: () => number, maxLevel = MAX_LEVEL, ownedWeaponIds: ReadonlySet<string> = new Set()): LootDrop {
   const build = (level: number): [LootDrop, number][] => [
@@ -1477,16 +1565,26 @@ export const RATIONS_ICON = "/game/icons/rations.png";
 
 /** Chest-loot odds (BattleEngine.useLockpick): Ember gain is emberBase + 1..emberDice, and
  * gearChance is an independent roll for one extra weapon/equipment drop on top of the
- * guaranteed potion. The "better" numbers are for a chest listed in Mission.betterChests
- * (currently unused by any mission, kept for a future locked-loot-room) — same pool and
- * price range as a normal chest, just better odds. */
+ * guaranteed potion. Tier is picked by which chest decoration was opened — Baú Pequeno
+ * (locked-chest) rolls the base numbers, Baú Médio (chest-medium) the "better" ones, and
+ * Baú Grande (chest-large) the "best" ones; a chest listed in Mission.betterChests (a
+ * locked-loot-room, currently unused by any mission) also gets the "better" tier regardless
+ * of decoration. Same pool and price range throughout, just climbing odds — and gearTierMul
+ * stretches BattleEngine.highestEnemyLevel()'s cap (see weightedLootPick), so a bigger chest
+ * can hand out gear a plain one on the same map couldn't reach yet. */
 export const CHEST_LOOT = {
   emberBase: 3,
   emberDice: 6,
   gearChance: 0.4,
+  gearTierMul: 1,
   betterEmberBase: 5,
   betterEmberDice: 8,
   betterGearChance: 0.55,
+  betterGearTierMul: 1.35,
+  bestEmberBase: 8,
+  bestEmberDice: 10,
+  bestGearChance: 0.75,
+  bestGearTierMul: 1.75,
 };
 
 /** Chance a regular (non-boss) enemy drops a weapon on death — see BattleEngine.markDead.
@@ -3234,6 +3332,7 @@ const CHAR: Record<string, TerrainId> = {
   o: "door",
   t: "deadtree",
   v: "void",
+  u: "snow",
 };
 
 export function parseLayout(layout: string[]): TerrainId[] {
@@ -3263,6 +3362,7 @@ export const TILE_CHAR: Record<TerrainId, string> = {
   door: "o",
   deadtree: "t",
   void: "v",
+  snow: "u",
 };
 
 export function isRangedWeapon(unit: { maxRange: number; mag: number }): boolean {
@@ -4259,7 +4359,7 @@ function decorateOpenTerrain(mission: Mission): Mission {
   // sprinkle so a mapper's own chests are the ones that stay.
   const hasAuthoredChest =
     mission.layout.some((row) => row.includes("k")) ||
-    (mission.decorations ?? []).some((d) => d.id === "locked-chest");
+    (mission.decorations ?? []).some((d) => CHEST_DECOR_IDS.has(d.id));
   if (!hasAuthoredChest) {
     placeChests(grid, cols, rows, playerSpawns, enemySpawns, spawnSet, blockedExtra, seedFromId(mission.id), floorChar);
   }
@@ -4336,7 +4436,7 @@ export function scatterDecor(m: Mission, excludeIds?: ReadonlySet<string>): Miss
   // The Map Editor lets the author opt specific props out of this pool (per direct
   // instruction) — a piece that's too distinctive to see scattered at random, without
   // pulling it out of DECORATIONS entirely and losing manual placement too.
-  const ids = Object.keys(DECORATIONS).filter((id) => id !== "locked-chest" && !MANUAL_DECORATION_IDS.has(id) && !excludeIds?.has(id));
+  const ids = Object.keys(DECORATIONS).filter((id) => !CHEST_DECOR_IDS.has(id) && !MANUAL_DECORATION_IDS.has(id) && !excludeIds?.has(id));
   // Uncapped and generous: scenery is the thing a board should have lots of, and anything
   // unwanted is a click to clear.
   const want = Math.max(3, Math.round(((m.cols * m.rows) / 288) * 10));

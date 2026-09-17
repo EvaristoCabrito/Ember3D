@@ -15,7 +15,7 @@ import { WorldMapScreen } from "./WorldMapScreen";
 import { OverworldMapScreen } from "./OverworldMapScreen";
 import { HungerBar } from "./HungerBar";
 import { buyInnMeal, fullness, useRation } from "./hunger";
-import { hungerPenaltyFor, stepOverworld, teleportOverworld, type OverworldEvent } from "./overworld";
+import { hungerPenaltyFor, partyIsFed, stepOverworld, teleportOverworld, type OverworldEvent } from "./overworld";
 import { GoldAmount } from "./GoldAmount";
 import { DISPLAY_VERSION } from "./version";
 import {
@@ -26,6 +26,7 @@ import {
   MAP_ACTIVE_DRAFTS_KEY,
   MAP_VERSIONS_KEY,
   RANDOM_ENCOUNTER_REGIONS,
+  isRandomEncounter,
   draftToMission,
   latestSerialFor,
   loadActiveDrafts,
@@ -561,7 +562,9 @@ function mapStatusUnit(save: SaveData, hero: string): UnitPublic {
   // Same source the battle roster reads (see startBattle's hungerPenaltyPct) — this used to
   // be hardcoded to "never hungry" here, so the RPG map's own status sheet could never show
   // the condition even after many unfed days, only a live battle could.
-  const hungerPenaltyPct = hungerPenaltyFor(save.hungerStreak);
+  // A starvation streak sets how severe hunger would be, but this character is healthy
+  // immediately after being fed even if another party member still needs food.
+  const hungerPenaltyPct = fullness(save.heroHunger[hero]) <= 0 ? hungerPenaltyFor(save.hungerStreak) : 0;
   // The condition badge used to be the only sign of this — VIT/ATK/MAG/DEF/RES themselves
   // still read at full value here, unlike the live battle roster (see spawnUnit's
   // hungerKeep), so the sheet warned about a penalty its own numbers never showed.
@@ -820,12 +823,13 @@ export function GameApp() {
       const loc = campaignLocations.find((location) => location.missionIds.includes(m.id));
       const scenarioStart = !loc || loc.id === "stonebridge" || loc.missionIds.every((mid) => !save.completed.includes(mid));
       const spellSpent = testMode || scenarioStart ? undefined : save.spellUses;
-      // Unlike promotions/weapons/equipment above (test-mode setup conveniences, reset so
-      // every debug fight starts from a clean slate), hunger is the actual mechanic under
-      // test here — zeroing it in test mode would hide the very feature it exists to let
-      // the player verify. Applies the same in test mode and real play.
-      const hungerPenaltyPct = hungerPenaltyFor(save.hungerStreak);
-      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger: save.heroHunger }, Date.now() % 100000);
+      // Test mode is god mode (same as promotions/weapons/equipment above) — a real save's
+      // starved party must never bleed into a debug fight. Left ungated, a real save with
+      // heroHunger at 0 and a maxed hungerStreak benches every hero via heroUnconscious,
+      // leaving no player units and an instant defeat the moment the battle evaluates.
+      const hungerPenaltyPct = testMode ? 0 : hungerPenaltyFor(save.hungerStreak);
+      const heroHunger = testMode ? undefined : save.heroHunger;
+      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger }, Date.now() % 100000);
       if (resume && resume.missionId === m.id) battle.applySnapshot(resume);
       if (typeof window !== "undefined" && window.innerWidth < 720) battle.zoom = 0;
       awardedRef.current = null;
@@ -1187,7 +1191,7 @@ export function GameApp() {
       const rec = activeSave(bank);
       const unit = engine.units.find((u) => u.name === hero && u.side === "player" && !u.summoned && u.alive);
       if (!unit || engine.getHud().busy || fullness(unit.fullness) >= 100 || rec.rations + engine.lootRations < 1) return;
-      unit.fullness = 100;
+      if (!engine.feedUnit(unit.id)) return;
       if (rec.rations > 0) persistCurrent(withLiveBattle({ ...rec, rations: rec.rations - 1 }));
       else {
         engine.lootRations -= 1;
@@ -1197,8 +1201,13 @@ export function GameApp() {
       return;
     }
     const rec = readMapSave();
-    const next = useRation(rec, hero);
-    if (next !== rec) writeMapSave(next);
+    let next = useRation(rec, hero);
+    if (next === rec) return;
+    // A ration can clear the whole party's streak the moment it does, same as a completed
+    // overworld step would next time it ran — otherwise "Fome Xd" and its stat penalty sit
+    // stale on-screen until the party's next move recomputes them.
+    if (next.hungerStreak > 0 && partyIsFed(next, testMode)) next = { ...next, hungerStreak: 0 };
+    writeMapSave(next);
   };
   /** Mochila's "Alimentar todos" — one ration per hero in the given roster, off the shared
    * party stock. Inn/overworld only (mirrors consumeRation's plain, non-battle branch;
@@ -1213,7 +1222,9 @@ export function GameApp() {
       if (after !== next) fed++;
       next = after;
     }
-    if (fed > 0) writeMapSave(next);
+    if (fed === 0) return 0;
+    if (next.hungerStreak > 0 && partyIsFed(next, testMode)) next = { ...next, hungerStreak: 0 };
+    writeMapSave(next);
     return fed;
   };
   // Modo teste only: a non-adjacent pin jumps straight there, free of charge — see
@@ -1691,6 +1702,7 @@ export function GameApp() {
           muted={muted}
           save={save}
           playtest={!!customMission}
+          fleeable={!customMission && !!missionId && isRandomEncounter(missionId)}
           outroDialogOpen={outroDialogOpen}
           onCloseOutroDialog={closeOutroDialog}
           // Gear swapped during a fight is permanent, so it lands in the save the moment it
@@ -1767,6 +1779,27 @@ export function GameApp() {
           onQuit={() => {
             setPaused(false);
             setSlotMode(null);
+            // A random road encounter is not a campaign chapter: fleeing it must clear
+            // the resumable battle snapshot before returning to the overworld. Otherwise
+            // the campaign save keeps reopening the encounter instead of letting travel
+            // continue (test mode did not persist that snapshot, which hid this bug).
+            if (!customMission && missionId && isRandomEncounter(missionId)) {
+              const rec = activeSave(bank);
+              if (!testMode) {
+                persistCurrent({
+                  ...rec,
+                  bags: { ...rec.bags, ...engine.remainingBags() },
+                  unitHp: { ...rec.unitHp, ...engine.battlePlayerHp() },
+                  heroHunger: { ...rec.heroHunger, ...engine.battlePlayerHunger() },
+                  pendingMission: null,
+                  battle: null,
+                });
+              }
+              setMissionId(null);
+              setEngine(null);
+              goToMap();
+              return;
+            }
             setEngine(null);
             // A playtest belongs to the editor: end it and you are back where you were,
             // with the map still loaded. Quitting a real mission still exits to the map.
@@ -2828,6 +2861,7 @@ const TERRAIN_SWATCH: Record<TerrainId, string> = {
   door: "#4a3524",
   deadtree: "#4a3f2a",
   void: "#050505",
+  snow: "#d8dee2",
 };
 
 const BUILDER_TERRAIN: TerrainId[] = [
@@ -2843,20 +2877,20 @@ const BUILDER_TERRAIN: TerrainId[] = [
   // "barricade" is deliberately not here: it is a decoration now, placed with the Decoração
   // brush, which lays its terrain with it. Painting the bare tile still works — a map that
   // already had one keeps it, and the prop is derived on load — but authoring goes one way.
-  "highwood",
-  "deadtree",
-  "highruin",
-  "chest",
+  // "highwood"/"deadtree"/"highruin"/"chest" are the same story: dead-tree-large and the
+  // two chest decorations lay their own terrain, so the bare tiles are dropped from manual
+  // painting here. Existing maps keep whichever of these they already have.
   "door",
   "void",
+  "snow",
 ];
 
 const VARIANT_LABEL: Partial<Record<TerrainId, string[]>> = {
   plains: [
     "Planície sombria", "Planície florida", "Planície original", "Antiga", "Terra", "Pedra", "Cinza", "Pedras",
-    "Clareira", "Rochas", "Lajedo", "Pedregulho", "Prado", "Flores silvestres", "Relva",
+    "Clareira", "Rochas", "Lajedo", "Pedregulho", "Prado", "Flores silvestres", "Relva", "Lama", "Trilha de Terra",
   ],
-  woods: ["Solo de bosque", "Bosque sombrio", "Bosque", "Sebes", "Pinhal", "Bosque 04", "Terra"],
+  woods: ["Solo de bosque", "Bosque sombrio", "Bosque", "Sebes", "Pinhal", "Bosque 04", "Terra", "Bosque 12", "Bosque 13"],
   ruins: ["Ruínas sombrias", "Ruínas originais", "Pedra 02", "Pedra 03", "Pedra 04", "Pátio mosaico", "Lajes partidas"],
   water: ["Água costeira", "Antiga", "Praia", "Pântano", "Costa baixo", "Costa esq.", "Costa dir.", "Mar fundo", "Mar fundo 2", "Costa 01", "Costa 02", "Ponta baixo 01", "Ponta baixo 02", "Água rasa", "Água rasa 2", "Água costa", "Água costa 2", "Pântano escuro", "Praia", "Rio", "Mar", "Mar profundo"],
   ember: ["Brasa", "Brasa 2", "Antiga", "Cinzas", "Brasa viva"],
@@ -2864,6 +2898,7 @@ const VARIANT_LABEL: Partial<Record<TerrainId, string[]>> = {
   flame: ["Chama", "Antiga", "Fogo"],
   nave: ["Laje", "Laje Negra"],
   column: ["Coluna", "Antiga"],
+  snow: ["Neve Rasa 4", "Neve Rasa 5", "Neve Funda 2"],
 };
 
 /** Hover text for a terrain type: its combat stats plus terrainNote()'s callout, so the
@@ -5390,6 +5425,7 @@ function BattleScreen({
   outroDialogOpen,
   onCloseOutroDialog,
   playtest = false,
+  fleeable = false,
 }: {
   engine: BattleEngine;
   onUseRation: (hero: string) => void;
@@ -5415,6 +5451,8 @@ function BattleScreen({
   onAdjustStatPoint?: (hero: string, unitId: string, stat: StatPointAttribute, delta: 1 | -1) => boolean;
   /** True while running a map from the editor, which exits back to it rather than quitting. */
   playtest?: boolean;
+  /** Random encounters offer an edge-only, 60% flee action; authored campaign missions remain resumable. */
+  fleeable?: boolean;
 }) {
   const [showStatus, setShowStatus] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -5988,6 +6026,20 @@ function BattleScreen({
               </button>
             </ItemTip>
           )}
+          {fleeable && engine.canAttemptFlee() && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={hud.busy}
+              title="Apenas na borda do mapa. 60% de chance; se falhar, o turno acaba e os inimigos continuam atacando."
+              onClick={() => {
+                if (engine.attemptFlee()) onQuit();
+                else onHud(engine.getHud());
+              }}
+            >
+              Fugir combate · 60%
+            </Button>
+          )}
           <Button size="sm" variant="quiet" disabled={!showAct || hud.busy} onClick={() => engine.wait()}>
             Esperar
           </Button>
@@ -6058,9 +6110,31 @@ function BattleScreen({
       </footer>
 
       {paused && (
-        <div className="absolute inset-0 z-30 bg-bg/80 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm max-h-[85dvh] overflow-y-auto ember-window rounded-xl p-6">
-            <h2 className="font-display text-2xl mb-4">Opções</h2>
+        <div
+          className="absolute inset-0 z-30 bg-bg/80 flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) onResume();
+          }}
+        >
+          <div className="status-panel w-full max-w-sm max-h-[85dvh] overflow-y-auto ember-window rounded-xl p-6">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h2 className="font-display text-2xl">Opções</h2>
+              <button
+                type="button"
+                onClick={onResume}
+                aria-label="Fechar opções"
+                className="size-8 shrink-0 grid place-items-center rounded-md border border-border bg-bg/70"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            {fleeable && (
+              <p className="text-xs text-muted border border-border rounded-md bg-bg/50 px-3 py-2 mb-4">
+                Emboscada — não dá pra desistir daqui. A única saída é levar alguém até a
+                borda do mapa e tentar fugir (60% de chance) pelo botão "Fugir combate" na
+                barra de ações.
+              </p>
+            )}
             <p className="text-xs uppercase tracking-[0.18em] text-muted mb-2">Zoom</p>
             <div className="grid grid-cols-4 gap-1 mb-4">
               {(["Distante", "Longe", "Médio", "Perto"] as const).map((label, i) => (
@@ -6165,9 +6239,11 @@ function BattleScreen({
               <Button variant="quiet" onClick={onLoad}>
                 Load
               </Button>
-              <Button variant="ghost" onClick={onQuit}>
-                {playtest ? "Encerrar teste" : "Desistir"}
-              </Button>
+              {!fleeable && (
+                <Button variant="ghost" onClick={onQuit}>
+                  {playtest ? "Encerrar teste" : "Desistir"}
+                </Button>
+              )}
             </div>
           </div>
         </div>

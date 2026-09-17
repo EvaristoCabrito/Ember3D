@@ -1,4 +1,4 @@
-import { CAUSTIC_VENOM, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, missionGearLevel, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, weightedWeaponPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize } from "./data";
+import { CAUSTIC_VENOM, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, weightedWeaponPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize } from "./data";
 import type { SpellTier } from "./data";
 import { canCounter, makeForecast, mulberry32, powerOf, protOf, rollDamage, rollDamageCustom } from "./combat";
 import {
@@ -513,8 +513,10 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
   const st = statsFor(classId, level);
   const statPointAllocation = side === "player" ? { ...(roster?.statPointAllocations?.[spawn.name] ?? {}) } : {};
   const point = (attribute: StatPointAttribute) => statPointAllocation[attribute] ?? 0;
-  // The overworld hunger penalty is party-wide and player-only — see Roster.hungerPenaltyPct.
-  const hungerPenaltyPct = side === "player" ? Math.min(0.9, Math.max(0, roster?.hungerPenaltyPct ?? 0)) : 0;
+  // The starvation streak determines the severity, but a ration restores an individual
+  // hero immediately. A full hero must not keep the group's hunger condition or penalty.
+  const heroIsStarving = fullness(roster?.heroHunger?.[spawn.name]) <= 0;
+  const hungerPenaltyPct = side === "player" && heroIsStarving ? Math.min(0.9, Math.max(0, roster?.hungerPenaltyPct ?? 0)) : 0;
   const hungerKeep = 1 - hungerPenaltyPct;
   const weapon = side === "player" ? (roster?.weapons?.[spawn.name] ?? { id: starterWeaponFor(classId), enh: 0 }) : null;
   // Range is a weapon property (D&D-weapon-style), not a class stat — falls back to the
@@ -2169,7 +2171,7 @@ export class BattleEngine {
       // Named unique bosses (Spawn.guaranteedDrop) skip the roll entirely and always drop
       // something — from the same weapon-or-gear pool a chest rolls from, not the plain
       // weapon-only kill-drop pool below.
-      const drop = weightedLootPick(this.rng, missionGearLevel(this.mission.index), this.ownedWeapons);
+      const drop = weightedLootPick(this.rng, this.highestEnemyLevel(), this.ownedWeapons);
       if (drop.kind === "weapon") {
         if (this.ownedWeapons.has(drop.id)) {
           this.lootEmber += 15;
@@ -2184,9 +2186,9 @@ export class BattleEngine {
       }
     } else if (u.side === "enemy" && this.rng() < KILL_DROP_CHANCE) {
       // 1% per kill, capped to what this mission's own enemies are geared for (see
-      // missionGearLevel), and never a weapon already owned — an early mission never hands
+      // highestEnemyLevel), and never a weapon already owned — an early mission never hands
       // out the campaign's best gear.
-      const id = weightedWeaponPick(this.rng, Object.keys(WEAPONS), missionGearLevel(this.mission.index));
+      const id = weightedWeaponPick(this.rng, Object.keys(WEAPONS), this.highestEnemyLevel());
       if (this.ownedWeapons.has(id)) {
         this.lootEmber += 15;
       } else {
@@ -4740,9 +4742,22 @@ export class BattleEngine {
       if (!inBounds(p.x, p.y, this.cols, this.rows)) continue;
       const t = tileAt(this.tiles, this.cols, p.x, p.y);
       if (t === "chest" || t === "door") return p;
-      if (this.decorations.some((d) => d.id === "locked-chest" && d.x === p.x && d.y === p.y)) return p;
+      if (this.decorations.some((d) => CHEST_DECOR_IDS.has(d.id) && d.x === p.x && d.y === p.y)) return p;
     }
     return null;
+  }
+
+  /** The strongest level among this battle's own enemy spawns — a per-spawn value (see
+   * Mission.enemySpawns[].level, falling back to enemyLevelFor(mission.index) at spawn
+   * time), already on the same 1..MAX_LEVEL scale gearPowerLevel runs on. Loot rolls cap
+   * to this directly instead of stretching the coarse mission-index curve, so a mission
+   * whose enemies are actually weak can't hand out gear built for a much harder one. */
+  private highestEnemyLevel(): number {
+    let max = 1;
+    for (const u of this.units) {
+      if (u.side === "enemy" && u.level > max) max = u.level;
+    }
+    return max;
   }
 
   /** Removes one found-but-unclaimed weapon/item from this battle's loot list, because it
@@ -4773,6 +4788,17 @@ export class BattleEngine {
     this.tip = `${u.name}: ${stat.toUpperCase()} ${delta > 0 ? "+1" : "−1"}.`;
     this.pushLog(this.tip);
     sfxPlay.ui();
+    return true;
+  }
+
+  /** Feeding is an immediate individual recovery: remove hunger's derived penalty and
+   * recompute the live stats so the status panel switches back to Saudável at once. */
+  feedUnit(unitId: string): boolean {
+    const u = this.units.find((candidate) => candidate.id === unitId);
+    if (!u || u.side !== "player" || !u.alive) return false;
+    u.fullness = 100;
+    u.hungerPenaltyPct = 0;
+    this.reapplyGear(u);
     return true;
   }
 
@@ -4894,16 +4920,15 @@ export class BattleEngine {
     const target = this.adjacentLock(u);
     if (!target) return;
     const i = target.y * this.cols + target.x;
-    const wasChest =
-      this.tiles[i] === "chest" ||
-      this.decorations.some((dec) => dec.id === "locked-chest" && dec.x === target.x && dec.y === target.y);
+    const chestDecorId = this.decorations.find((dec) => CHEST_DECOR_IDS.has(dec.id) && dec.x === target.x && dec.y === target.y)?.id;
+    const wasChest = this.tiles[i] === "chest" || !!chestDecorId;
     this.tiles[i] = this.visualFloorAt(target.x, target.y);
     this.terrainVersion++;
     // decorations is readonly (the renderer holds the same array), so drop the chest's
     // decoration in place rather than rebinding the field.
     for (let d = this.decorations.length - 1; d >= 0; d--) {
       const dec = this.decorations[d];
-      if (dec.id === "locked-chest" && dec.x === target.x && dec.y === target.y) {
+      if (CHEST_DECOR_IDS.has(dec.id) && dec.x === target.x && dec.y === target.y) {
         this.decorations.splice(d, 1);
         this.refreshDecorOverlay();
       }
@@ -4928,11 +4953,18 @@ export class BattleEngine {
       // Every chest gives Ember, a guaranteed potion (weighted so the weak tier is the
       // common case, rarer as potency climbs), and — a separate, independent roll — a
       // chance at a piece of gear, weighted so the strongest is the rarest and capped to
-      // what this mission's own enemies are geared for (see missionGearLevel). A chest
-      // listed in Mission.betterChests (gated behind a locked area, say) tips both those
-      // numbers up — same pool and range, not a different one.
-      const better = this.mission.betterChests?.some((c) => c.x === target.x && c.y === target.y) ?? false;
-      const gain = (better ? CHEST_LOOT.betterEmberBase : CHEST_LOOT.emberBase) + Math.floor(this.rng() * (better ? CHEST_LOOT.betterEmberDice : CHEST_LOOT.emberDice));
+      // what this mission's own enemies are geared for (see highestEnemyLevel). Tier is
+      // Baú Pequeno/Médio/Grande, or "better" for a plain "chest" tile listed in
+      // Mission.betterChests (gated behind a locked area, say) — same pool and range
+      // throughout, just climbing odds and gear-tier headroom.
+      const betterSpot = this.mission.betterChests?.some((c) => c.x === target.x && c.y === target.y) ?? false;
+      const tier: "base" | "better" | "best" =
+        chestDecorId === "chest-large" ? "best" : chestDecorId === "chest-medium" || betterSpot ? "better" : "base";
+      const emberBase = tier === "best" ? CHEST_LOOT.bestEmberBase : tier === "better" ? CHEST_LOOT.betterEmberBase : CHEST_LOOT.emberBase;
+      const emberDice = tier === "best" ? CHEST_LOOT.bestEmberDice : tier === "better" ? CHEST_LOOT.betterEmberDice : CHEST_LOOT.emberDice;
+      const gearChance = tier === "best" ? CHEST_LOOT.bestGearChance : tier === "better" ? CHEST_LOOT.betterGearChance : CHEST_LOOT.gearChance;
+      const gearTierMul = tier === "best" ? CHEST_LOOT.bestGearTierMul : tier === "better" ? CHEST_LOOT.betterGearTierMul : CHEST_LOOT.gearTierMul;
+      const gain = emberBase + Math.floor(this.rng() * emberDice);
       this.lootEmber += gain;
       const potionKind = weightedPotionPick(this.rng);
       const who = this.givePotion(u, potionKind);
@@ -4950,8 +4982,9 @@ export class BattleEngine {
           tip: potionTooltip(potionKind),
         });
       }
-      if (this.rng() < (better ? CHEST_LOOT.betterGearChance : CHEST_LOOT.gearChance)) {
-        const drop = weightedLootPick(this.rng, missionGearLevel(this.mission.index), this.ownedWeapons);
+      if (this.rng() < gearChance) {
+        const gearLevel = Math.max(1, Math.min(MAX_LEVEL, Math.round(this.highestEnemyLevel() * gearTierMul)));
+        const drop = weightedLootPick(this.rng, gearLevel, this.ownedWeapons);
         if (drop.kind === "weapon") {
           this.ownedWeapons.add(drop.id);
           this.lootWeapons.push(drop.id);
@@ -4996,6 +5029,50 @@ export class BattleEngine {
     active.drawY = active.y;
     this.deselect(true);
     sfxPlay.ui();
+  }
+
+  /** A random encounter can only be escaped by the hero whose turn it is, once that hero
+   * reaches any outer hex of the battlefield. This engine owns the 60% roll; the campaign
+   * screen handles a successful transition back to the world map. A miss spends this hero's
+   * turn, so enemies continue their normal turns and are the only source of ensuing damage. */
+  canAttemptFlee(): boolean {
+    const u = this.activeTurnUnit();
+    return !!u &&
+      u.side === "player" &&
+      u.alive &&
+      !u.moved &&
+      !u.summoned &&
+      !this.result &&
+      !this.active &&
+      this.queue.length === 0 &&
+      this.phase === "player" &&
+      this.mode === "selected" &&
+      footprint(u).some((cell) => cell.x <= 0 || cell.y <= 0 || cell.x >= this.cols - 1 || cell.y >= this.rows - 1);
+  }
+
+  /** Rolls a 60% escape for the active edge-bound hero. Failed attempts deliberately do
+   * not inflict scripted damage: they end the hero's turn, letting the encounter's enemies
+   * carry on attacking normally before the party can try again. */
+  attemptFlee(): boolean {
+    if (!this.canAttemptFlee()) return false;
+    const u = this.activeTurnUnit()!;
+    if (this.rng() < 0.6) {
+      this.tip = `${u.name} encontrou uma saída! O grupo foge do combate.`;
+      this.pushLog(this.tip);
+      sfxPlay.ui();
+      return true;
+    }
+    u.moved = true;
+    u.x = Math.round(u.drawX);
+    u.y = Math.round(u.drawY);
+    u.drawX = u.x;
+    u.drawY = u.y;
+    this.deselect(true);
+    this.tip = `${u.name} não conseguiu fugir — o combate continua.`;
+    this.pushLog(this.tip);
+    sfxPlay.ui();
+    this.emit();
+    return false;
   }
 
   /** Dispatches control for whoever is next in this round's initiative order. */
@@ -6014,7 +6091,7 @@ export class BattleEngine {
       const cx = sumCx / n;
       const cy = sumCy / n;
       const one = def.footprint.length === 1;
-      const item = p.id === "locked-chest";
+      const item = CHEST_DECOR_IDS.has(p.id);
       const tree = p.id === "dead-tree";
       const log = p.id === "fallen-log";
       const wall = p.id === "barricade" || p.id === "barricade-2";
