@@ -1,5 +1,6 @@
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { BattleEngine } from "./engine";
+import { EffectsRenderer } from "./gfx/EffectsRenderer";
 import type { GameArt, Mission } from "./types";
 
 export type PreviewUnitSelection = {
@@ -17,17 +18,17 @@ const PREVIEW_SCROLL_PAN_RATE = 0.45;
  * render(), never tick(): no animation loop, no AI, no turns — just a live snapshot that
  * redraws whenever the mission prop changes (the caller debounces that) or the panel resizes.
  * A left click can use the current editor brush directly; gameplay state remains untouched. */
-export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecorationId, selectedPlacedDecoration, selectedUnit, onUnitSelect, onUnitPlace }: {
+export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecorationId, selectedPlacedDecoration, onUnitSelect, onUnitPlace }: {
   mission: Mission;
   art: GameArt;
   onCellClick?: (x: number, y: number) => void;
   selectedDecorationId?: string;
   selectedPlacedDecoration?: { id: string; x: number; y: number; rot?: number } | null;
-  selectedUnit?: PreviewUnitSelection | null;
   onUnitSelect?: (unit: PreviewUnitSelection) => void;
   onUnitPlace?: (unit: PreviewUnitSelection, x: number, y: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fxCanvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<BattleEngine | null>(null);
   const redrawRef = useRef<(() => void) | null>(null);
@@ -77,6 +78,21 @@ export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecoration
     }
     let needsCameraRestore = cameraRef.current !== null;
 
+    // Live preview of any elemental FX placed on this map (see the editor's "FX" mode) —
+    // same pipeline BattleCanvas uses, spawned once here as persistent instances so the
+    // author can see exactly what will play once the mission loads for real.
+    let fx: EffectsRenderer | null = null;
+    const fxCanvas = fxCanvasRef.current;
+    if (fxCanvas) {
+      try {
+        fx = new EffectsRenderer(fxCanvas);
+        for (const p of engine.elementalFxPlacements) fx.spawnEffect(p.kind, p.x, p.y, { radiusTiles: p.radiusTiles, rotation: p.rotation });
+      } catch {
+        fx = null;
+      }
+    }
+    let lastFrame = performance.now();
+
     const draw = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const w = Math.max(1, Math.floor(viewport.clientWidth));
@@ -97,10 +113,34 @@ export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecoration
       }
       if (selectedPlacedDecoration) engine.drawDecorationHighlight(ctx, selectedPlacedDecoration.id, selectedPlacedDecoration);
       else if (selectedDecorationId) engine.drawDecorationHighlight(ctx, selectedDecorationId);
+      if (fx && fxCanvas) {
+        const now = performance.now();
+        const dt = Math.min(0.05, (now - lastFrame) / 1000);
+        lastFrame = now;
+        if (fx.hasEffects()) {
+          fxCanvas.style.width = `${w}px`;
+          fxCanvas.style.height = `${h}px`;
+          fx.resize(w, h, dpr);
+          fxCanvas.style.display = "block";
+          fx.render(canvas, dt, (col, row) => engine.effectAnchor(col, row));
+        } else {
+          fxCanvas.style.display = "none";
+        }
+      }
     };
 
     redrawRef.current = draw;
     draw();
+    // Placements are static in this editor preview (no camera-independent trigger redraws
+    // them), so a small self-sustaining loop keeps their animation running; it's a no-op
+    // draw() call once fx.hasEffects() goes false, and stops itself right after.
+    let fxRaf = 0;
+    const animateFx = () => {
+      if (!fx?.hasEffects()) return;
+      draw();
+      fxRaf = requestAnimationFrame(animateFx);
+    };
+    if (fx?.hasEffects()) fxRaf = requestAnimationFrame(animateFx);
     if (!verticalScrollInitializedRef.current) {
       requestAnimationFrame(() => {
         const centeredTop = Math.round(Math.max(0, viewport.scrollHeight - viewport.clientHeight) / 2);
@@ -116,6 +156,8 @@ export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecoration
     ro.observe(viewport);
     return () => {
       ro.disconnect();
+      if (fxRaf) cancelAnimationFrame(fxRaf);
+      fx?.dispose();
       cameraRef.current = engine.cameraPosition();
       if (engineRef.current === engine) engineRef.current = null;
       if (redrawRef.current === draw) redrawRef.current = null;
@@ -268,9 +310,6 @@ export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecoration
           +
         </button>
       </div>
-      <div className="pointer-events-none absolute bottom-2 right-2 z-10 rounded border border-border/70 bg-surface/90 px-2 py-1 text-[10px] text-muted shadow-sm">
-        {isUnitDragging ? "Arrastando unidade… solte no hex de destino" : selectedUnit ? `${selectedUnit.name} selecionado · arraste com botão direito para mover` : "Botão direito arrasta unidades · esquerdo pinta · segure e arraste para mover"}
-      </div>
       <div
         ref={viewportRef}
         className={`h-full w-full bg-black ember-scrollbar overflow-x-auto overflow-y-scroll ${isUnitDragging || isPanning ? "cursor-grabbing" : "cursor-default"}`}
@@ -284,7 +323,10 @@ export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecoration
         onScroll={onViewportScroll}
       >
         <div className="min-h-[300%]" style={{ width: `max(100%, ${previewBoardWidth}px)` }}>
-          <canvas ref={canvasRef} className="sticky left-0 top-0 block" />
+          <div className="sticky left-0 top-0 relative">
+            <canvas ref={canvasRef} className="block" />
+            <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block" style={{ display: "none" }} />
+          </div>
         </div>
       </div>
     </div>

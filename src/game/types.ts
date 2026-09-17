@@ -278,6 +278,21 @@ export interface DecorationPlacement {
   yieldsHighGround?: boolean;
 }
 
+/** A permanent WebGL elemental FX (src/game/gfx) anchored at (x,y) on a mission's map —
+ * a lava pit's fire, a frozen pond's ice glint, a rune circle's holy glow, and so on. Placed
+ * in the map editor's "FX" mode; spawned once when the battle loads and left running for the
+ * whole fight (see BattleEngine.elementalFxPlacements / BattleCanvas). */
+export interface ElementalFxPlacement {
+  id: string;
+  kind: "fire" | "ice" | "water" | "lightning" | "acid" | "holy" | "darkness" | "shore" | "shore2" | "water2";
+  x: number;
+  y: number;
+  /** Footprint as a multiple of one hex's tile size. Omitted = the renderer's default. */
+  radiusTiles?: number;
+  /** Radians; mainly useful for lightning's tall/narrow bolt shape. */
+  rotation?: number;
+}
+
 export interface Mission {
   id: string;
   index: number;
@@ -325,6 +340,9 @@ export interface Mission {
   /** Multi-hex terrain props (mountains, ruins, bridges, ...) placed on this map.
    * Omitted/empty on every existing mission — purely additive. */
   decorations?: DecorationPlacement[];
+  /** Permanent elemental GPU FX (lava fire, icy glints, ...) placed on this map. Omitted on
+   * every existing mission — purely additive. */
+  elementalFx?: ElementalFxPlacement[];
   /** Coordinates of chests on this map that should roll noticeably better loot when opened
    * — same pool and range as a normal chest (see useLockpick), just tipped toward the
    * better end: more Ember, better gear odds. For a chest worth gating behind a locked

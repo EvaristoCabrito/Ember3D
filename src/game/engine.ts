@@ -42,6 +42,7 @@ import type {
   ClassId,
   DecorationPlacement,
   DialogTree,
+  ElementalFxPlacement,
   Forecast,
   GameArt,
   HealId,
@@ -777,6 +778,9 @@ export class BattleEngine {
   /** How far each tile's art is turned, in sixths of a circle. */
   readonly tileRots: number[];
   readonly decorations: DecorationPlacement[];
+  /** Permanent elemental GPU FX placed on this map in the editor — spawned once at battle
+   * start and left running for the whole fight. See BattleCanvas/gfx.EffectsRenderer. */
+  readonly elementalFxPlacements: ElementalFxPlacement[];
   readonly cols: number;
   readonly rows: number;
   units: Unit[] = [];
@@ -936,6 +940,12 @@ export class BattleEngine {
   private viewW = 1;
   private viewH = 1;
   private camReady = false;
+  /** This frame's screen-shake offset, rolled once in renderGround and reused (not
+   * re-rolled) by renderUnitsAndOverlays, so the two layers shake together instead of
+   * jittering apart when they're drawn onto separate canvases (see BattleCanvas's FX
+   * overlay) — two independent `Math.random()` calls would desync them. */
+  private frameShakeDx = 0;
+  private frameShakeDy = 0;
   private queue: Seq[] = [];
   private active: Active | null = null;
   private particles: Particle[] = Array.from({ length: PARTICLE_CAP }, blankParticle);
@@ -975,6 +985,7 @@ export class BattleEngine {
     this.tileVariants = mission.tileVariants ?? [];
     this.tileRots = mission.tileRots ?? [];
     this.decorations = (mission.decorations ?? []).map((d) => ({ ...d }));
+    this.elementalFxPlacements = (mission.elementalFx ?? []).map((p) => ({ ...p }));
     // Art is loaded once at boot — a decoration added later (or after HMR) is in
     // DECORATIONS and in the editor <img>, but missing from art.decorations, so combat
     // used to skip it. Fill any hole so Testar paints the same props the editor lists.
@@ -5914,6 +5925,14 @@ export class BattleEngine {
     });
   }
 
+  /** CSS-pixel screen position (matching the coordinate space `render()` just drew into) of a
+   * hex's center, plus the current tile size — what the WebGL FX overlay needs to keep a spawned
+   * effect glued to its hex while the camera pans/zooms. */
+  effectAnchor(col: number, row: number): { x: number; y: number; tile: number } {
+    const { cx, cy } = this.hexCenter(col, row);
+    return { x: cx, y: cy, tile: this.layout.tile };
+  }
+
   panBy(dx: number, dy: number): void {
     this.camX += dx;
     this.camY += dy;
@@ -6564,12 +6583,24 @@ export class BattleEngine {
     ctx.restore();
   }
 
+  /** Draws a complete frame: ground then units/overlays, on one canvas — everything below
+   * still works exactly as before. A caller that needs units/HP-bars on a visually separate
+   * layer from the ground (see BattleCanvas's WebGL elemental-FX overlay, which needs to
+   * insert itself between the two) calls renderGround and renderUnitsAndOverlays directly
+   * instead of this. */
   render(ctx: CanvasRenderingContext2D, cssW: number, cssH: number, dpr: number): void {
+    this.renderGround(ctx, cssW, cssH, dpr);
+    this.renderUnitsAndOverlays(ctx, cssW, cssH);
+  }
+
+  /** Tiles, decorations, terrain-rule overlays (walk/attack/spell range highlights, the
+   * active-turn glow, the hover cursor) — everything at or below "ground level". Opens this
+   * frame's screen-shake transform but does not close it here (see renderUnitsAndOverlays). */
+  renderGround(ctx: CanvasRenderingContext2D, cssW: number, cssH: number, dpr: number): void {
     // Cheap no-op unless the party moved since the last frame — see refreshVisibility.
     // Sitting here means anything drawn, and anything the HUD reads off this engine,
     // is deciding against current sight rather than last turn's.
     this.refreshVisibility();
-    const sqrt3 = Math.sqrt(3);
     const tile = ZOOM_RADII[this.zoom]!;
     const { w: boardW, h: boardH } = this.boardSize(tile);
     this.viewW = cssW;
@@ -6611,8 +6642,13 @@ export class BattleEngine {
 
     const shake = this.reducedMotion ? 0 : this.trauma * this.trauma;
     if (shake) {
+      this.frameShakeDx = (Math.random() - 0.5) * 10 * shake;
+      this.frameShakeDy = (Math.random() - 0.5) * 10 * shake;
       ctx.save();
-      ctx.translate((Math.random() - 0.5) * 10 * shake, (Math.random() - 0.5) * 10 * shake);
+      ctx.translate(this.frameShakeDx, this.frameShakeDy);
+    } else {
+      this.frameShakeDx = 0;
+      this.frameShakeDy = 0;
     }
 
     for (let y = 0; y < this.rows; y++) {
@@ -6880,6 +6916,21 @@ export class BattleEngine {
     // A rear parapet must remain visible over the ground and tactical highlights, while
     // character sprites still pass in front of it.
     this.drawDecorations(ctx, tile, cssW, cssH, "behind");
+    if (shake) ctx.restore();
+  }
+
+  /** Units, HP bars, particles, projectiles, banners, and the foreground decoration layer —
+   * drawn on top of renderGround's output. Re-applies this frame's screen-shake offset (see
+   * frameShakeDx/Dy) independently rather than sharing one still-open ctx.save() with
+   * renderGround, since the two may be drawing onto two different canvases. */
+  renderUnitsAndOverlays(ctx: CanvasRenderingContext2D, cssW: number, cssH: number): void {
+    const tile = ZOOM_RADII[this.zoom]!;
+    const sqrt3 = Math.sqrt(3);
+    const shake = this.reducedMotion ? 0 : this.trauma * this.trauma;
+    if (shake) {
+      ctx.save();
+      ctx.translate(this.frameShakeDx, this.frameShakeDy);
+    }
 
     const cell = tile * sqrt3;
     const sorted = [...this.units].sort((a, b) => a.drawY - b.drawY || a.drawX - b.drawX);

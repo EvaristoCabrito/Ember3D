@@ -19,7 +19,7 @@ import SLOT_CONFIG from "./map-slots.json";
 import ORDER_CONFIG from "./map-order.json";
 import LOCATION_ORDER_CONFIG from "./location-order.json";
 import RANDOM_ENCOUNTER_CONFIG from "./random-encounters.json";
-import type { ClassId, DecorationPlacement, DialogTree, Mission, Spawn, TerrainId, WinCondition, WorldLocation } from "./types";
+import type { ClassId, DecorationPlacement, DialogTree, ElementalFxPlacement, Mission, Spawn, TerrainId, WinCondition, WorldLocation } from "./types";
 
 /** A spawn as edited in the Map Editor — the real Spawn shape plus a per-spawn test
  * level, which only exists for "Testar" (balance testing). It never leaves the editor:
@@ -70,6 +70,9 @@ export interface MapDraft {
    * a map saved before hex rotation existed has no such key, read as "none turned". */
   tileRots?: number[];
   decorations: DecorationPlacement[];
+  /** Permanent elemental GPU FX (lava fire, icy glints, ...) placed on this map — see
+   * types.ts ElementalFxPlacement. Optional: a draft saved before this existed has none. */
+  elementalFx?: ElementalFxPlacement[];
   playerSpawns: DraftSpawn[];
   enemySpawns: DraftSpawn[];
   /** Wild things on no side. Optional: map files saved before neutrals existed have no such
@@ -169,6 +172,7 @@ export function draftToMission(d: MapDraft): Mission {
     baseVariant: d.baseVariant,
     tileRots: d.tileRots?.some((r) => r) ? d.tileRots : undefined,
     decorations: d.decorations.length > 0 ? d.decorations : undefined,
+    elementalFx: d.elementalFx && d.elementalFx.length > 0 ? d.elementalFx : undefined,
     playerSpawns: d.playerSpawns.map(({ level: _level, ...s }) => ({ ...s, classId: legacyClassId(s.classId) })),
     enemySpawns: d.enemySpawns.map(({ level: _level, ...s }) => ({ ...s, classId: legacyClassId(s.classId) })),
     neutralSpawns: d.neutralSpawns?.length ? d.neutralSpawns.map(({ level: _level, ...s }) => ({ ...s, classId: legacyClassId(s.classId) })) : undefined,

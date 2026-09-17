@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { BattleEngine } from "./engine";
+import { EffectsRenderer } from "./gfx/EffectsRenderer";
 import type { HudSnapshot } from "./types";
 
 export function BattleCanvas({
@@ -18,6 +19,7 @@ export function BattleCanvas({
   onTileReadout?: (showing: boolean) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fxCanvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hudKey = useRef("");
 
@@ -28,6 +30,23 @@ export function BattleCanvas({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     (window as Window & { __emberEngine?: BattleEngine }).__emberEngine = engine;
+
+    // Permanent map-authored elemental FX (lava fire, icy glints, ...) placed in the editor's
+    // "FX" mode — a WebGL2 overlay that uploads this same 2D frame as its "scene" texture and
+    // draws the placements on top. Nothing to do with spell casting: it only ever plays what
+    // the map author placed. Degrades to plain 2D (this canvas stays visible, overlay hidden)
+    // if WebGL2 isn't available.
+    let fx: EffectsRenderer | null = null;
+    const fxCanvas = fxCanvasRef.current;
+    if (fxCanvas) {
+      try {
+        fx = new EffectsRenderer(fxCanvas);
+        for (const p of engine.elementalFxPlacements) fx.spawnEffect(p.kind, p.x, p.y, { radiusTiles: p.radiusTiles, rotation: p.rotation });
+      } catch {
+        fx = null;
+        fxCanvas.style.display = "none";
+      }
+    }
 
     let raf = 0;
     let last = performance.now();
@@ -85,6 +104,11 @@ export function BattleCanvas({
       canvas.height = Math.max(1, Math.floor(h * dpr));
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
+      if (fxCanvas) {
+        fx?.resize(w, h, dpr);
+        fxCanvas.style.width = `${w}px`;
+        fxCanvas.style.height = `${h}px`;
+      }
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -110,6 +134,16 @@ export function BattleCanvas({
       }
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       engine.render(ctx, wrap.clientWidth, wrap.clientHeight, dpr);
+      // Skip the whole FX pipeline (scene upload, light/effects/bloom FBO passes) whenever
+      // the map has no elemental placements, so an ordinary fight never pays for it.
+      if (fx) {
+        if (fx.hasEffects()) {
+          if (fxCanvas) fxCanvas.style.display = "block";
+          fx.render(canvas, dt, (col, row) => engine.effectAnchor(col, row));
+        } else if (fxCanvas) {
+          fxCanvas.style.display = "none";
+        }
+      }
       const hud = engine.getHud();
       const k = [
         hud.mode,
@@ -371,12 +405,14 @@ export function BattleCanvas({
       window.removeEventListener("keyup", onKeyUp);
       const w = window as Window & { __emberEngine?: BattleEngine };
       if (w.__emberEngine === engine) delete w.__emberEngine;
+      fx?.dispose();
     };
   }, [engine, onHud, paused]);
 
   return (
     <div ref={wrapRef} className="relative h-full w-full min-h-0 touch-none">
       <canvas ref={canvasRef} className="block h-full w-full touch-none" />
+      <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ display: "none" }} />
     </div>
   );
 }

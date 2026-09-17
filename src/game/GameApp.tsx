@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { loadGameArt, portraitFor, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
 import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { BattleCanvas } from "./BattleCanvas";
+import { ELEMENT_KINDS, ELEMENT_LABELS, type ElementKind } from "./gfx/params";
 import { InnScreen } from "./InnScreen";
 import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
@@ -65,7 +66,7 @@ import {
   writeSlot,
   selectSlot,
 } from "./save";
-import type { Bag, BattleSnapshot, ClassId, DecorationPlacement, DialogTree, EquipSlot, GameArt, GrowthLine, HudSnapshot, Mission, PotionId, SaveBank, SaveData, ScreenId, SpellKind, Spawn, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, UnitPublic, WinCondition, WorldLocation } from "./types";
+import type { Bag, BattleSnapshot, ClassId, DecorationPlacement, DialogTree, ElementalFxPlacement, EquipSlot, GameArt, GrowthLine, HudSnapshot, Mission, PotionId, SaveBank, SaveData, ScreenId, SpellKind, Spawn, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, UnitPublic, WinCondition, WorldLocation } from "./types";
 
 /** A map JSON write updates Vite's module list and can reload the app. This one-shot
  * snapshot restores the editor instead of sending the author to the title screen. */
@@ -2708,6 +2709,7 @@ function blankDraft(): MapDraft {
     tileRots: Array.from({ length: EDITOR_COLS_DEFAULT * EDITOR_ROWS_DEFAULT }, () => 0),
     music: "",
     decorations: [],
+    elementalFx: [],
     playerSpawns: [],
     enemySpawns: [],
     neutralSpawns: [],
@@ -2751,6 +2753,7 @@ function missionToDraft(m: Mission): MapDraft {
     tileRots: Array.from({ length: n }, (_, i) => m.tileRots?.[i] ?? 0),
     music: m.music ?? "",
     decorations: m.decorations ?? [],
+    elementalFx: m.elementalFx ?? [],
     playerSpawns: m.playerSpawns.map((s) => ({ ...s, level: DEFAULT_TEST_LEVEL })),
     enemySpawns: m.enemySpawns.map((s) => ({ ...s, level: enemyLevelFor(m.index) })),
     neutralSpawns: (m.neutralSpawns ?? []).map((s) => ({ ...s, level: enemyLevelFor(m.index) })),
@@ -3028,7 +3031,6 @@ function MapEditorScreen({
   // spawn's level) would be wasted work it can't even show — debounce to the pause after a
   // real edit instead.
   const [previewMission, setPreviewMission] = useState<Mission | null>(null);
-  const [selectedPreviewUnit, setSelectedPreviewUnit] = useState<PreviewUnitSelection | null>(null);
   /** Which DialogTree the DialogEditor modal is currently open for, if any — the mission's
    * own intro/outro, or one neutral spawn's own conversation. */
   const [dialogEditorTarget, setDialogEditorTarget] = useState<{ kind: "intro" } | { kind: "outro" } | { kind: "spawn"; index: number } | null>(null);
@@ -3054,7 +3056,8 @@ function MapEditorScreen({
   // A placed prop is selected by clicking any hex of its footprint; Delete removes this exact placement.
   const [selectedPlacedDecoration, setSelectedPlacedDecoration] = useState<{ id: string; x: number; y: number; rot?: number } | null>(null);
   const [decoSection, setDecoSection] = useState("Todas");
-  const [mode, setMode] = useState<"paint" | "player" | "enemy" | "summon" | "decoration">("paint");
+  const [fxBrush, setFxBrush] = useState<ElementKind>("fire");
+  const [mode, setMode] = useState<"paint" | "player" | "enemy" | "summon" | "decoration" | "elementalFx">("paint");
   // Which summon class the "Invocação" brush drops. Summons live in playerSpawns alongside
   // the heroes — the class itself says which of the two a spawn is (isSummonClass), so
   // there is no third list to keep in sync and no saved map to migrate.
@@ -3603,6 +3606,20 @@ function MapEditorScreen({
       return { ...d, tiles, decorations: [...d.decorations, placed] };
     });
   };
+  const toggleElementalFx = (x: number, y: number) => {
+    setDraft((d) => {
+      const list = d.elementalFx ?? [];
+      const hit = list.find((p) => p.x === x && p.y === y);
+      if (hit) {
+        setNote(`${ELEMENT_LABELS[hit.kind]} FX removido de ${x},${y}.`);
+        return { ...d, elementalFx: list.filter((p) => p !== hit) };
+      }
+      const placed: ElementalFxPlacement = { id: `fx-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`, kind: fxBrush, x, y };
+      setNote(`${ELEMENT_LABELS[fxBrush]} FX colocado em ${x},${y}. Clique de novo pra remover.`);
+      return { ...d, elementalFx: [...list, placed] };
+    });
+  };
+
   const onCellClick = (x: number, y: number) => {
     const i = y * draft.cols + x;
     if (mode === "paint") {
@@ -3624,6 +3641,7 @@ function MapEditorScreen({
       }
       toggleDecoration(x, y);
     }
+    else if (mode === "elementalFx") toggleElementalFx(x, y);
     else toggleSpawn(x, y);
   };
 
@@ -3669,6 +3687,7 @@ function MapEditorScreen({
         tileVariants,
         tileRots,
         decorations,
+        elementalFx: (d.elementalFx ?? []).filter((p) => p.x >= 0 && p.y >= 0 && p.x < cols && p.y < rows),
         playerSpawns: d.playerSpawns.filter(inBounds),
         enemySpawns: d.enemySpawns.filter(inBounds),
         neutralSpawns: (d.neutralSpawns ?? []).filter(inBounds),
@@ -3689,12 +3708,10 @@ function MapEditorScreen({
   };
 
   const selectPreviewUnit = (unit: PreviewUnitSelection) => {
-    setSelectedPreviewUnit(unit);
     setNote(`${unit.name} selecionado. Clique direito em um hex vazio da prévia para definir sua posição inicial.`);
   };
 
   const placePreviewUnit = (selected: PreviewUnitSelection, x: number, y: number) => {
-    setSelectedPreviewUnit(selected);
     const occupied = SPAWN_KEYS.some((side) => (draft[side] ?? []).some((spawn, index) =>
       !(side === selected.side && index === selected.index) && spawn.x === x && spawn.y === y,
     ));
@@ -3704,7 +3721,6 @@ function MapEditorScreen({
     }
     const current = (draft[selected.side] ?? [])[selected.index];
     if (!current) {
-      setSelectedPreviewUnit(null);
       setNote("Essa unidade não existe mais. Arraste outra na prévia.");
       return;
     }
@@ -4586,6 +4602,14 @@ function MapEditorScreen({
               <img src={tileVariantSrc(brush, variant)} alt="" className="size-5 rounded-sm object-cover" />
               Substituir base
             </Button>
+            <Button
+              size="sm"
+              variant={mode === "elementalFx" ? "primary" : "quiet"}
+              title="Coloca efeitos elementais (WebGL) permanentes no mapa — fogo, gelo, água, raio, ácido, sagrado, trevas"
+              onClick={() => setMode((m) => (m === "elementalFx" ? "paint" : "elementalFx"))}
+            >
+              FX
+            </Button>
             <label className="flex items-center gap-1 rounded-md border border-border bg-bg px-2 py-1 text-xs" title="Categoria atualmente exibida na paleta de decorações">
               <span className="text-muted">Decorações</span>
               <select className="max-w-36 bg-transparent text-fg outline-none" value={decoSection} onChange={(e) => setDecoSection(e.target.value)}>
@@ -4606,6 +4630,30 @@ function MapEditorScreen({
             </Button>
           </div>
         </div>
+        {mode === "elementalFx" && (
+          <div className="flex flex-col gap-2 border border-border rounded-md p-2 bg-bg/40">
+            <p className="text-xs text-muted flex-1 min-w-[12rem]">
+              Efeito permanente do mapa (WebGL) — fogo de lava, brilho de gelo, runa sagrada... Clique numa casa na
+              prévia abaixo pra colocar o elemento escolhido; clique de novo na mesma casa pra remover. Toca sozinho
+              assim que a batalha carrega, e continua a batalha inteira.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {ELEMENT_KINDS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setFxBrush(k)}
+                  className={`text-xs px-2 py-1 rounded-md border ${fxBrush === k ? "border-accent bg-accent/15" : "border-border"}`}
+                >
+                  {ELEMENT_LABELS[k]}
+                </button>
+              ))}
+            </div>
+            {(draft.elementalFx?.length ?? 0) > 0 && (
+              <p className="text-xs text-muted">{draft.elementalFx?.length} colocado(s) — lista pra remover fica lá embaixo, com decorações e unidades.</p>
+            )}
+          </div>
+        )}
         {showPreview && (
           <ResizableEditorPanel
             className="overflow-hidden border border-border rounded-md bg-black h-[40vh] min-h-[220px] min-w-[280px]"
@@ -4619,7 +4667,6 @@ function MapEditorScreen({
                 onCellClick={onCellClick}
                 selectedDecorationId={mode === "decoration" ? decoBrush : undefined}
                 selectedPlacedDecoration={selectedPlacedDecoration}
-                selectedUnit={selectedPreviewUnit}
                 onUnitSelect={selectPreviewUnit}
                 onUnitPlace={placePreviewUnit}
               />
@@ -4758,6 +4805,26 @@ function MapEditorScreen({
                 <button
                   type="button"
                   onClick={() => setDraft((d) => ({ ...d, decorations: d.decorations.filter((_, idx) => idx !== i) }))}
+                  className="text-danger px-1"
+                  aria-label="Remover"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(draft.elementalFx?.length ?? 0) > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs uppercase tracking-wide text-muted">Efeitos elementais ({draft.elementalFx?.length})</p>
+            {(draft.elementalFx ?? []).map((p) => (
+              <div key={p.id} className="flex items-center gap-1.5 text-xs bg-bg border border-border rounded-md px-2 py-1">
+                <span className="flex-1 min-w-0 truncate">{ELEMENT_LABELS[p.kind]}</span>
+                <span className="text-muted tabular-nums">{p.x},{p.y}</span>
+                <button
+                  type="button"
+                  onClick={() => setDraft((d) => ({ ...d, elementalFx: (d.elementalFx ?? []).filter((q) => q.id !== p.id) }))}
                   className="text-danger px-1"
                   aria-label="Remover"
                 >
@@ -4991,7 +5058,7 @@ function MapEditorScreen({
         <div className="flex gap-2">
           <Button
             variant="quiet"
-            className="flex-1"
+            className="flex-1 h-[22px] px-2.5 text-xs min-w-0"
             onClick={() => {
               const playerLevels = Object.fromEntries(draft.playerSpawns.map((s) => [s.name, s.level]));
               // Neutrals level off the same table as enemies — one of them may well end up
@@ -5006,10 +5073,10 @@ function MapEditorScreen({
             Testar
           </Button>
 
-          <Button variant="quiet" className="flex-1" onClick={() => void doSave()}>
+          <Button variant="quiet" className="flex-1 h-[22px] px-2.5 text-xs min-w-0" onClick={() => void doSave()}>
             Salvar mapa
           </Button>
-          <Button variant="quiet" className="flex-1" onClick={doExport}>
+          <Button variant="quiet" className="flex-1 h-[22px] px-2.5 text-xs min-w-0" onClick={doExport}>
             Exportar
           </Button>
           {exportText && (
