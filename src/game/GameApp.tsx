@@ -8,7 +8,7 @@ import { InnScreen } from "./InnScreen";
 import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
 import { DialogEditor } from "./DialogEditor";
-import { BARRICADE_LIKE_DECOR, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FIREBALL, formatSpellUseGains, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, type SpellTier } from "./data";
+import { BARRICADE_LIKE_DECOR, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FIREBALL, formatSpellUseGains, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, type SpellTier } from "./data";
 import { BattleEngine } from "./engine";
 import { MapPreviewCanvas, type PreviewUnitSelection } from "./MapPreviewCanvas";
 import { WorldMapScreen } from "./WorldMapScreen";
@@ -3919,6 +3919,7 @@ function MapEditorScreen({
   })();
   const decorOptions = Object.values(DECORATIONS).sort((a, b) => byName(a.name, b.name));
   const decorationSectionFor = (id: string) => {
+    if (DEADWOODS_DECOR_IDS.has(id)) return "Madeira Morta";
     if (
       id === "barricade" ||
       id === "barricade-2" ||
@@ -3942,7 +3943,7 @@ function MapEditorScreen({
     if (id.includes("ruined") || id.includes("tower") || id.includes("mansion") || id.includes("wall") || id.includes("gate") || id.includes("shrine") || id.includes("house") || id.includes("hut") || id.includes("hamlet")) return "Ruínas e construções";
     return "Objetos";
   };
-  const decorationSections = ["Todas", "Barricada", "Pontes", "Wilds", "Torture", "City", "Pedras e relevo", "Ruínas e construções", "Natureza", "Objetos"];
+  const decorationSections = ["Todas", "Barricada", "Pontes", "Wilds", "Madeira Morta", "Torture", "City", "Pedras e relevo", "Ruínas e construções", "Natureza", "Objetos"];
   const visibleDecorOptions = decoSection === "Todas" ? decorOptions : decorOptions.filter((dec) => decorationSectionFor(dec.id) === decoSection);
 
   /** Whatever unit stands on a cell, across all three spawn lists. */

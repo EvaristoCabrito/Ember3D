@@ -264,7 +264,46 @@ const NEW_DECOR_2026: Record<string, DecorationDef> = {
   "ice-tools-pile": { id: "ice-tools-pile", name: "Ferramentas Congeladas", footprint: DECO_ONE },
   "ice-satchel": { id: "ice-satchel", name: "Alforje Congelado", footprint: DECO_ONE },
   "ice-weapon-pile": { id: "ice-weapon-pile", name: "Armas Congeladas", footprint: DECO_ONE },
+
+  // 2026-09-17 art drop: 15 "deadwoods" items — loose in attachments/decor (no themed
+  // subfolder this time), so grouped as wilds- by content rather than by folder.
+  "wilds-dead-fern-pile": { id: "wilds-dead-fern-pile", name: "Pilha de Samambaia Seca", footprint: DECO_PAIR },
+  "wilds-bark-pile": { id: "wilds-bark-pile", name: "Pilha de Casca de Árvore", footprint: DECO_PAIR },
+  "wilds-dead-sapling": { id: "wilds-dead-sapling", name: "Muda Morta com Raízes", footprint: DECO_PAIR },
+  "wilds-mossy-charred-log": { id: "wilds-mossy-charred-log", name: "Tronco Carbonizado Musgoso", footprint: DECO_PAIR },
+  "wilds-hollow-stump": { id: "wilds-hollow-stump", name: "Toco Oco", footprint: DECO_ONE },
+  "wilds-burnt-branch-pile": { id: "wilds-burnt-branch-pile", name: "Pilha de Galhos Queimados", footprint: DECO_ONE },
+  "wilds-dry-twig-pile": { id: "wilds-dry-twig-pile", name: "Pilha de Gravetos Secos", footprint: DECO_ONE },
+  "wilds-thorn-bramble": { id: "wilds-thorn-bramble", name: "Moita de Espinhos", footprint: DECO_PAIR },
+  "wilds-hollow-log": { id: "wilds-hollow-log", name: "Tronco Oco", footprint: DECO_ONE },
+  "wilds-bare-branch": { id: "wilds-bare-branch", name: "Galho Seco Solto", footprint: DECO_ONE },
+  "wilds-root-tangle": { id: "wilds-root-tangle", name: "Emaranhado de Raízes", footprint: DECO_ONE },
+  "wilds-shelf-mushrooms": { id: "wilds-shelf-mushrooms", name: "Cogumelos em Prateleira", footprint: DECO_ONE },
+  "wilds-charred-stump": { id: "wilds-charred-stump", name: "Toco Carbonizado", footprint: DECO_ONE },
+  "wilds-mossy-stones": { id: "wilds-mossy-stones", name: "Pedras Musgosas Empilhadas", footprint: DECO_ONE },
+  "wilds-birds-nest": { id: "wilds-birds-nest", name: "Ninho de Pássaro", footprint: DECO_ONE },
 };
+
+/** The 15 "deadwoods" ids above — wilds-prefixed for the shared id namespace, but the Map
+ * Editor's decoration picker gives them their own "Madeira Morta" section (see
+ * decorationSectionFor in GameApp.tsx) ahead of the generic "Wilds" bucket. */
+export const DEADWOODS_DECOR_IDS = new Set([
+  "wilds-dead-fern-pile",
+  "wilds-bark-pile",
+  "wilds-dead-sapling",
+  "wilds-mossy-charred-log",
+  "wilds-hollow-stump",
+  "wilds-burnt-branch-pile",
+  "wilds-dry-twig-pile",
+  "wilds-thorn-bramble",
+  "wilds-hollow-log",
+  "wilds-bare-branch",
+  "wilds-root-tangle",
+  "wilds-shelf-mushrooms",
+  "wilds-charred-stump",
+  "wilds-mossy-stones",
+  "wilds-birds-nest",
+]);
 
 // Multi-hex terrain props: rendered as one image over their whole footprint instead of
 // clipped per hex (see DecorationDef). Cropped from LargeHexes1-3.jpg.
