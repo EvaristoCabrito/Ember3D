@@ -13,6 +13,7 @@ import { BattleEngine } from "./engine";
 import { MapPreviewCanvas, type PreviewUnitSelection } from "./MapPreviewCanvas";
 import { WorldMapScreen } from "./WorldMapScreen";
 import { OverworldMapScreen } from "./OverworldMapScreen";
+import { LoadingCurtain, useLoadingCurtain } from "./MapLoadingOverlay";
 import { HungerBar } from "./HungerBar";
 import { buyInnMeal, fullness, useRation } from "./hunger";
 import { hungerPenaltyFor, partyIsFed, stepOverworld, teleportOverworld, type OverworldEvent } from "./overworld";
@@ -190,8 +191,7 @@ function heroMaxHp(save: SaveData, hero: string): number {
 
 /** "Usar" a potion outside of battle — there is no live Unit to apply it to, so this
  * mirrors BattleEngine.applyPotion's heal/mana branches directly against SaveData. Disease
- * potions are skipped: diseased/poisoned is battle-only state (see Unit.diseased), nothing
- * persists to cure between fights, so that branch is left for battle's own action bar. */
+ * potions clear the persistent illness that can be contracted during overworld travel. */
 function useHeroPotion(save: SaveData, hero: string, kind: PotionId): SaveData {
   const bag = save.bags[hero];
   if (!bag || (bag[kind] ?? 0) <= 0) return save;
@@ -213,7 +213,12 @@ function useHeroPotion(save: SaveData, hero: string, kind: PotionId): SaveData {
     if (!restoredAny) return save;
     return { ...save, bags: { ...save.bags, [hero]: { ...bag, [kind]: bag[kind] - 1 } }, spellUses: { ...save.spellUses, [hero]: spent } };
   }
-  if (def.effect === "disease") return save;
+  if (def.effect === "disease") {
+    if (!save.heroDiseases[hero]) return save;
+    const heroDiseases = { ...save.heroDiseases };
+    delete heroDiseases[hero];
+    return { ...save, bags: { ...save.bags, [hero]: { ...bag, [kind]: bag[kind] - 1 } }, heroDiseases };
+  }
   const maxHp = heroMaxHp(save, hero);
   const current = save.unitHp[hero] ?? maxHp;
   if (current >= maxHp) return save;
@@ -569,26 +574,40 @@ function mapStatusUnit(save: SaveData, hero: string): UnitPublic {
   // still read at full value here, unlike the live battle roster (see spawnUnit's
   // hungerKeep), so the sheet warned about a penalty its own numbers never showed.
   const hungerKeep = 1 - hungerPenaltyPct;
+  const diseaseKeep = save.heroDiseases[hero] ? 0.9 : 1;
   const maxHp = Math.round((stats.hp + gearBonus.hp) * hungerKeep);
   return {
     id: `map:${hero}`, name: hero, classId, className: cls.name, role: cls.role, side: "player", sprite: hero === "Kael" ? CLASSES.kaelFinal.sprite : cls.sprite,
     hp: Math.min(maxHp, save.unitHp[hero] ?? maxHp), maxHp,
-    atk: Math.round((stats.atk + gearBonus.atk) * hungerKeep),
-    mag: Math.round((stats.mag + gearBonus.mag) * hungerKeep),
-    def: Math.round((stats.def + gearBonus.def) * hungerKeep),
-    res: Math.round((stats.res + gearBonus.res) * hungerKeep),
-    initiative: cls.init ?? 0, initiativeRoll: cls.init ?? 0, mov: stats.mov + gearBonus.mov, movLeft: stats.mov + gearBonus.mov, minRange: cls.minRange, maxRange: cls.maxRange,
+    atk: Math.round((stats.atk + gearBonus.atk) * hungerKeep * diseaseKeep),
+    mag: Math.round((stats.mag + gearBonus.mag) * hungerKeep * diseaseKeep),
+    def: Math.round((stats.def + gearBonus.def) * hungerKeep * diseaseKeep),
+    res: Math.round((stats.res + gearBonus.res) * hungerKeep * diseaseKeep),
+    initiative: cls.init ?? 0, initiativeRoll: cls.init ?? 0, mov: Math.max(1, Math.round((stats.mov + gearBonus.mov) * diseaseKeep)), movLeft: Math.max(1, Math.round((stats.mov + gearBonus.mov) * diseaseKeep)), minRange: cls.minRange, maxRange: cls.maxRange,
     moved: false, acted: false, x: save.overworldPos.col, y: save.overworldPos.row, level, xp: save.xp[hero] ?? 0,
     bag: save.bags[hero] ?? { mid: 0, weak: 0, potent: 0, disease: 0, manaSmall: 0, manaMid: 0, manaLarge: 0, lockpick: 0 },
-    spells: emptySpells, weaponId: save.equipped[hero] ?? null, weaponEnh: 0, size: cls.size, diseased: false, poisoned: false,
+    spells: emptySpells, weaponId: save.equipped[hero] ?? null, weaponEnh: 0, size: cls.size, diseased: save.heroDiseases[hero] === true, poisoned: false,
     hungry: hungerPenaltyPct > 0, hungerPct: Math.round(hungerPenaltyPct * 100), fullness: save.heroHunger[hero], stunned: false, crippled: false, offHandId: null, summoned: false, asleep: false, restrained: false,
     gear,
   };
 }
 
+/** Fold the live battle condition back into the campaign without dropping an illness on a
+ * recruited hero who was not deployed in this particular mission. */
+function mergeBattleDiseases(existing: Record<string, boolean>, engine: BattleEngine): Record<string, boolean> {
+  const heroDiseases = { ...existing };
+  for (const unit of engine.units) {
+    if (unit.side !== "player" || unit.summoned) continue;
+    if (unit.diseased) heroDiseases[unit.name] = true;
+    else delete heroDiseases[unit.name];
+  }
+  return heroDiseases;
+}
+
 export function GameApp() {
   const [resumeEditorDraft] = useState<MapDraft | null>(() => (typeof window === "undefined" ? null : readEditorResume()));
   const [screen, setScreen] = useState<ScreenId>(() => (resumeEditorDraft ? "mapEditor" : "title"));
+  const loadingCurtain = useLoadingCurtain(screen);
   // Which map the player picked this session — classic (click any unlocked pin) or the RPG
   // hex-crawl. Deliberately not persisted: resets on every reload, so a new session asks
   // again instead of silently remembering last time's choice.
@@ -829,7 +848,8 @@ export function GameApp() {
       // leaving no player units and an instant defeat the moment the battle evaluates.
       const hungerPenaltyPct = testMode ? 0 : hungerPenaltyFor(save.hungerStreak);
       const heroHunger = testMode ? undefined : save.heroHunger;
-      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger }, Date.now() % 100000);
+      const heroDiseases = testMode ? undefined : save.heroDiseases;
+      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases }, Date.now() % 100000);
       if (resume && resume.missionId === m.id) battle.applySnapshot(resume);
       if (typeof window !== "undefined" && window.innerWidth < 720) battle.zoom = 0;
       awardedRef.current = null;
@@ -948,6 +968,7 @@ export function GameApp() {
         .reduce((n, u) => n + emberForKill(u.classId), 0);
       const weapons = { ...save.weapons };
       const looseEquipment = { ...save.looseEquipment };
+      const heroDiseases = mergeBattleDiseases(save.heroDiseases, engine);
       const found: string[] = [];
       // Weapon drops are already resolved and logged live, in-battle, by the engine
       // (kill drops in markDead, chest loot in useLockpick — both ownership- and
@@ -983,6 +1004,7 @@ export function GameApp() {
         unitHp: hp,
         bags,
         heroHunger: { ...save.heroHunger, ...engine.battlePlayerHunger() },
+        heroDiseases,
         levels,
         xp,
         weapons,
@@ -1147,6 +1169,7 @@ export function GameApp() {
       gameClock: fresh.gameClock,
       overworldMoveBudgetUsed: fresh.overworldMoveBudgetUsed,
       heroHunger: fresh.heroHunger,
+      heroDiseases: fresh.heroDiseases,
       rations: fresh.rations,
       hungerStreak: fresh.hungerStreak,
       exploredHexes: fresh.exploredHexes,
@@ -1294,6 +1317,7 @@ export function GameApp() {
 
   return (
     <main className="relative h-dvh min-h-0 bg-bg text-fg overflow-hidden">
+      <LoadingCurtain visible={loadingCurtain} />
       {screen === "boot" && (
         <CutsceneScreen src="/game/title-open.mp4" onSkip={leaveBoot} />
       )}
@@ -1791,6 +1815,7 @@ export function GameApp() {
                   bags: { ...rec.bags, ...engine.remainingBags() },
                   unitHp: { ...rec.unitHp, ...engine.battlePlayerHp() },
                   heroHunger: { ...rec.heroHunger, ...engine.battlePlayerHunger() },
+                  heroDiseases: mergeBattleDiseases(rec.heroDiseases, engine),
                   pendingMission: null,
                   battle: null,
                 });
@@ -2080,6 +2105,17 @@ function TitleScreen({
           {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
         </button>
       </header>
+      {/* Deliberately tiny and tucked in a corner away from the main menu column — a dev/QA
+          entry point, not something a player should ever tap by accident reaching for
+          "Nova campanha" or "Continuar". */}
+      <button
+        type="button"
+        disabled={!ready}
+        onClick={onTest}
+        className="absolute z-10 bottom-2 left-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted/60 hover:text-muted disabled:opacity-40"
+      >
+        Modo teste
+      </button>
       <div className="relative z-10 flex flex-1 flex-col justify-end px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] max-w-xl mx-auto w-full">
         <p className="text-sm tracking-[0.28em] uppercase text-muted mb-3">Táticas em cinzas</p>
         <h1 className="font-display text-5xl sm:text-7xl font-medium tracking-tight leading-none mb-4">Ember</h1>
@@ -2098,9 +2134,6 @@ function TitleScreen({
           )}
           <Button size="lg" variant="quiet" onClick={onHelp}>
             Como jogar
-          </Button>
-          <Button size="lg" variant="ghost" disabled={!ready} onClick={onTest}>
-            Modo teste
           </Button>
         </div>
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}
@@ -5361,7 +5394,10 @@ function BriefingScreen({
   muted: boolean;
   onMute: () => void;
 }) {
-  const art = briefArt(mission.id);
+  // One shared backdrop for the currently shipped random encounters. Keep this routing
+  // isolated here so future encounter-specific art can replace it by id without touching
+  // authored campaign briefings.
+  const art = isRandomEncounter(mission.id) ? "/game/ui/random-encounter-briefing.jpg" : briefArt(mission.id);
   return (
     <section className="relative h-dvh min-h-0 flex flex-col overflow-hidden bg-surface">
       {art && (

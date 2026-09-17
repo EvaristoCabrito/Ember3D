@@ -540,7 +540,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     res: 4,
     mov: 6,
     minRange: 2,
-    maxRange: 3,
+    maxRange: 4,
     sprite: "nira",
     size: 1,
     init: 3,
@@ -1013,7 +1013,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     res: 4,
     mov: 6,
     minRange: 2,
-    maxRange: 3,
+    maxRange: 4,
     sprite: "nira",
     size: 1,
     init: 3,
@@ -1231,7 +1231,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     res: 4,
     mov: 6,
     minRange: 2,
-    maxRange: 3,
+    maxRange: 4,
     sprite: "nira",
     size: 1,
     init: 3,
@@ -1621,7 +1621,10 @@ type RangeSpec = { minRange: number; maxRange: number; ranged?: boolean; twoHand
 const MELEE: RangeSpec = { minRange: 1, maxRange: 1 };
 const REACH: RangeSpec = { minRange: 1, maxRange: 2 };
 const SPEAR: RangeSpec = { minRange: 1, maxRange: 2, twoHanded: true };
-const RANGED: RangeSpec = { minRange: 2, maxRange: 3, ranged: true };
+const RANGED: RangeSpec = { minRange: 2, maxRange: 4, ranged: true };
+// The handful of masterwork-tier bows (rung 8-9, any rarity lap) reach one hex further
+// than the rest of the family on top of that baseline.
+const RANGED_MASTERWORK: RangeSpec = { minRange: 2, maxRange: 5, ranged: true };
 
 // extraBonus: once a class pool has more weapons than the 9-rung table has distinct dice
 // values, a second (or third) lap through the rungs needs a flat damage bump so it isn't
@@ -1724,7 +1727,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "arco-longo": wpn("arco-longo", "Arco Longo", ARCHER_TRIO, 2, RANGED),
   "arco-elfico": wpn("arco-elfico", "Arco Élfico", ARCHER_TRIO, 3, RANGED),
   "arco-do-cacador": wpn("arco-do-cacador", "Arco do Caçador", ARCHER_TRIO, 4, RANGED),
-  "besta-leve": wpn("besta-leve", "Besta Leve", ARCHER_TRIO, 5, { minRange: 1, maxRange: 3, ranged: true }),
+  "besta-leve": wpn("besta-leve", "Besta Leve", ARCHER_TRIO, 5, { minRange: 1, maxRange: 4, ranged: true }),
   "punhal-curvo": wpn("punhal-curvo", "Punhal Curvo", ARCHER_TRIO, 1),
   "katar": wpn("katar", "Katar", ARCHER_TRIO, 2),
   "adaga-sombria": wpn("adaga-sombria", "Adaga Sombria", ARCHER_TRIO, 3),
@@ -1759,7 +1762,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "arco-composto-de-chifre": wpn("arco-composto-de-chifre", "Arco Composto de Chifre", ARCHER_TRIO, 5, RANGED),
   "arco-do-cacador-sombrio": wpn("arco-do-cacador-sombrio", "Arco do Caçador Sombrio", ARCHER_TRIO, 6, RANGED),
   "arco-elfico-de-cinzas": wpn("arco-elfico-de-cinzas", "Arco Élfico de Cinzas", ARCHER_TRIO, 7, RANGED),
-  "arco-longo-de-teixo": wpn("arco-longo-de-teixo", "Arco Longo de Teixo", ARCHER_TRIO, 8, RANGED),
+  "arco-longo-de-teixo": wpn("arco-longo-de-teixo", "Arco Longo de Teixo", ARCHER_TRIO, 8, RANGED_MASTERWORK),
   "adaga-viperina": wpn("adaga-viperina", "Adaga Viperina", ARCHER_TRIO, 5),
   "misericordia-sombria": wpn("misericordia-sombria", "Misericórdia Sombria", ARCHER_TRIO, 6),
   "punhal-do-salteador": wpn("punhal-do-salteador", "Punhal do Salteador", ARCHER_TRIO, 7),
@@ -1768,9 +1771,8 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "malho-do-juizo": wpn("malho-do-juizo", "Malho do Juízo", [...WARRIOR_TRIO, "cleric"], 4),
   "lamina-consagrada": wpn("lamina-consagrada", "Lâmina Consagrada", WARRIOR_TRIO, 3, MELEE, undefined, 1),
 
-  // Bows1 (base line) and StrongBows (higher-tier line for higher-level characters) —
-  // same RANGED profile as the rest of the bow family.
-  "arco-rustico": wpn("arco-rustico", "Arco Rústico", ARCHER_TRIO, 9, RANGED),
+  // Bows1 (base line) and StrongBows (higher-tier line for higher-level characters).
+  "arco-rustico": wpn("arco-rustico", "Arco Rústico", ARCHER_TRIO, 9, RANGED_MASTERWORK),
   "arco-prateado": wpn("arco-prateado", "Arco Prateado", ARCHER_TRIO, 1, RANGED, undefined, 1),
   "arco-de-peles": wpn("arco-de-peles", "Arco de Peles", ARCHER_TRIO, 2, RANGED, undefined, 1),
   "arco-de-aco": wpn("arco-de-aco", "Arco de Aço", ARCHER_TRIO, 3, RANGED, undefined, 1),
@@ -1778,8 +1780,8 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "arco-presas-douradas": wpn("arco-presas-douradas", "Arco de Presas Douradas", ARCHER_TRIO, 5, RANGED, undefined, 1),
   "arco-caveira-sombria": wpn("arco-caveira-sombria", "Arco da Caveira Sombria", ARCHER_TRIO, 6, RANGED, undefined, 1),
   "arco-guardiao-dos-galhos": wpn("arco-guardiao-dos-galhos", "Arco do Guardião dos Galhos", ARCHER_TRIO, 7, RANGED, undefined, 1),
-  "arco-do-leao-dourado": wpn("arco-do-leao-dourado", "Arco do Leão Dourado", ARCHER_TRIO, 8, RANGED, undefined, 1),
-  "arco-espinhoso-negro": wpn("arco-espinhoso-negro", "Arco Espinhoso Negro", ARCHER_TRIO, 9, RANGED, undefined, 1),
+  "arco-do-leao-dourado": wpn("arco-do-leao-dourado", "Arco do Leão Dourado", ARCHER_TRIO, 8, RANGED_MASTERWORK, undefined, 1),
+  "arco-espinhoso-negro": wpn("arco-espinhoso-negro", "Arco Espinhoso Negro", ARCHER_TRIO, 9, RANGED_MASTERWORK, undefined, 1),
   "arco-outonal": wpn("arco-outonal", "Arco Outonal", ARCHER_TRIO, 1, RANGED, undefined, 2),
   "arco-penas-sombrias": wpn("arco-penas-sombrias", "Arco das Penas Sombrias", ARCHER_TRIO, 2, RANGED, undefined, 2),
 

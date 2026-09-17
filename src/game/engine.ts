@@ -480,6 +480,8 @@ interface Roster {
    * while the rest of the party is still starving. */
   hungerPenaltyPct?: number;
   heroHunger?: Record<string, number>;
+  /** Persistent illnesses contracted while travelling. */
+  heroDiseases?: Record<string, boolean>;
 }
 
 /** True once a hero is starving badly enough to be benched outright rather than merely
@@ -501,6 +503,12 @@ function remainingTier(classId: ClassId, tier: SpellTier, key: TierKey, level: n
   return Math.max(0, cap - spent);
 }
 
+// The mage line's own staves are pooled with the conjurer line's (ARCANE_ALL — any arcane
+// caster can wield any arcane staff), so this bonus can't live on the weapon without also
+// handing it to conjurer/sorcerer/necromancer. It's a trait of the mage class itself:
+// applied after weapon-or-class range is resolved below, on top of either source.
+const MAGE_RANGE_BONUS_CLASSES: ReadonlySet<ClassId> = new Set(["mage", "voss", "elementalist", "warlock"]);
+
 function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i: number, roster?: Roster, enemyLevel = 1): Unit {
   const requestedClassId = (side === "player" ? roster?.promotions?.[spawn.name] : undefined) ?? spawn.classId;
   // Kael's early/final entries are visual variants, never gameplay jobs. Every unit named
@@ -518,12 +526,14 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
   const heroIsStarving = fullness(roster?.heroHunger?.[spawn.name]) <= 0;
   const hungerPenaltyPct = side === "player" && heroIsStarving ? Math.min(0.9, Math.max(0, roster?.hungerPenaltyPct ?? 0)) : 0;
   const hungerKeep = 1 - hungerPenaltyPct;
+  const diseased = side === "player" && roster?.heroDiseases?.[spawn.name] === true;
+  const diseaseKeep = diseased ? 1 - DISEASE.statPenalty : 1;
   const weapon = side === "player" ? (roster?.weapons?.[spawn.name] ?? { id: starterWeaponFor(classId), enh: 0 }) : null;
   // Range is a weapon property (D&D-weapon-style), not a class stat — falls back to the
   // class baseline only when there's no equipped weapon to read it from (e.g. enemies).
   const weaponDef = weapon?.id ? WEAPONS[weapon.id] : null;
   const minRange = weaponDef?.minRange ?? st.minRange;
-  const maxRange = weaponDef?.maxRange ?? st.maxRange;
+  const maxRange = (weaponDef?.maxRange ?? st.maxRange) + (MAGE_RANGE_BONUS_CLASSES.has(classId) ? 1 : 0);
   // A two-handed main-hand weapon leaves no free hand for an off-hand item, regardless of
   // what's saved in equipment — enforced here too, not just at the equip screen.
   const offHandId = side === "player" && !weaponDef?.twoHanded ? (roster?.offHand?.[spawn.name] ?? null) : null;
@@ -546,14 +556,14 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
     y: spawn.y,
     hp,
     maxHp,
-    atk: Math.round((st.atk + point("atk") + gearBonus.atk) * hungerKeep),
-    mag: Math.round((st.mag + point("mag") + gearBonus.mag) * hungerKeep),
-    def: Math.round((st.def + point("def") + gearBonus.def) * hungerKeep),
-    res: Math.round((st.res + point("res") + gearBonus.res) * hungerKeep),
+    atk: Math.round((st.atk + point("atk") + gearBonus.atk) * hungerKeep * diseaseKeep),
+    mag: Math.round((st.mag + point("mag") + gearBonus.mag) * hungerKeep * diseaseKeep),
+    def: Math.round((st.def + point("def") + gearBonus.def) * hungerKeep * diseaseKeep),
+    res: Math.round((st.res + point("res") + gearBonus.res) * hungerKeep * diseaseKeep),
     initiative: initiativeBonus(cls.id),
     initiativeRoll: 0,
     statPointAllocation,
-    mov: st.mov + gearBonus.mov,
+    mov: diseased ? Math.max(1, Math.round((st.mov + gearBonus.mov) * diseaseKeep)) : st.mov + gearBonus.mov,
     gear,
     minRange,
     maxRange,
@@ -613,8 +623,16 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
     footprintOffsets: cls.footprintOffsets,
     shock: null,
     shockCharges: side === "enemy" ? shockChargesFor(cls.id) : 0,
-    diseased: false,
-    diseaseBase: null,
+    diseased,
+    diseaseBase: diseased
+      ? {
+          atk: Math.round((st.atk + point("atk") + gearBonus.atk) * hungerKeep),
+          mag: Math.round((st.mag + point("mag") + gearBonus.mag) * hungerKeep),
+          def: Math.round((st.def + point("def") + gearBonus.def) * hungerKeep),
+          res: Math.round((st.res + point("res") + gearBonus.res) * hungerKeep),
+          mov: st.mov + gearBonus.mov,
+        }
+      : null,
     poisoned: false,
     stunned: false,
     stunTurns: 0,
@@ -4812,12 +4830,21 @@ export class BattleEngine {
     // Re-applied fresh every time rather than mutated once (unlike crippled) — see
     // Unit.hungerPenaltyPct's own doc comment.
     const hungerKeep = 1 - u.hungerPenaltyPct;
+    const diseaseKeep = u.diseased ? 1 - DISEASE.statPenalty : 1;
     u.maxHp = Math.round((base.hp + (u.statPointAllocation.hp ?? 0) + bonus.hp) * hungerKeep);
-    u.atk = Math.round((base.atk + (u.statPointAllocation.atk ?? 0) + bonus.atk) * hungerKeep);
-    u.mag = Math.round((base.mag + (u.statPointAllocation.mag ?? 0) + bonus.mag) * hungerKeep);
-    u.def = Math.round((base.def + (u.statPointAllocation.def ?? 0) + bonus.def) * hungerKeep);
-    u.res = Math.round((base.res + (u.statPointAllocation.res ?? 0) + bonus.res) * hungerKeep);
-    u.mov = base.mov + bonus.mov;
+    const diseaseBase = {
+      atk: Math.round((base.atk + (u.statPointAllocation.atk ?? 0) + bonus.atk) * hungerKeep),
+      mag: Math.round((base.mag + (u.statPointAllocation.mag ?? 0) + bonus.mag) * hungerKeep),
+      def: Math.round((base.def + (u.statPointAllocation.def ?? 0) + bonus.def) * hungerKeep),
+      res: Math.round((base.res + (u.statPointAllocation.res ?? 0) + bonus.res) * hungerKeep),
+      mov: base.mov + bonus.mov,
+    };
+    u.atk = Math.round(diseaseBase.atk * diseaseKeep);
+    u.mag = Math.round(diseaseBase.mag * diseaseKeep);
+    u.def = Math.round(diseaseBase.def * diseaseKeep);
+    u.res = Math.round(diseaseBase.res * diseaseKeep);
+    u.mov = u.diseased ? Math.max(1, Math.round(diseaseBase.mov * diseaseKeep)) : diseaseBase.mov;
+    u.diseaseBase = u.diseased ? diseaseBase : null;
     u.hp = Math.min(u.maxHp, u.hp);
   }
 

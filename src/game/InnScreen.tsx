@@ -131,6 +131,8 @@ export function InnScreen({
   const [cart, setCart] = useState<Record<PotionId, number>>({ ...EMPTY_CART });
   const [lockpickQty, setLockpickQty] = useState(0);
   const [rationsQty, setRationsQty] = useState(0);
+  const [editingRationsQty, setEditingRationsQty] = useState(false);
+  const [rationsQtyDraft, setRationsQtyDraft] = useState("0");
   const [rationsNote, setRationsNote] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [invView, setInvView] = useState<"doll" | "pack" | null>(null);
@@ -456,7 +458,43 @@ export function InnScreen({
                 <button type="button" className="size-8 grid place-items-center rounded-md border border-border bg-surface-2" onClick={() => setRationsQty((q) => Math.max(0, q - 1))} disabled={rationsQty <= 0}>
                   −
                 </button>
-                <span className="w-6 text-center text-sm tabular-nums">{rationsQty}</span>
+                {editingRationsQty ? (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={RATION_STACK_MAX * 20}
+                    autoFocus
+                    value={rationsQtyDraft}
+                    onFocus={(e) => e.currentTarget.select()}
+                    onChange={(e) => setRationsQtyDraft(e.target.value)}
+                    onBlur={() => {
+                      const parsed = Math.max(0, Math.min(RATION_STACK_MAX * 20, Math.floor(Number(rationsQtyDraft) || 0)));
+                      setRationsQty(parsed);
+                      setEditingRationsQty(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                      if (e.key === "Escape") {
+                        setRationsQtyDraft(String(rationsQty));
+                        setEditingRationsQty(false);
+                      }
+                    }}
+                    className="w-12 text-center text-sm tabular-nums bg-bg border border-border rounded-md"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="w-6 text-center text-sm tabular-nums"
+                    onClick={() => {
+                      setRationsQtyDraft(String(rationsQty));
+                      setEditingRationsQty(true);
+                    }}
+                    aria-label="Digitar quantidade de rações"
+                  >
+                    {rationsQty}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="size-8 grid place-items-center rounded-md border border-border bg-surface-2"

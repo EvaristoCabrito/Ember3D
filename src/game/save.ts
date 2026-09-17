@@ -9,7 +9,7 @@ import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogLine, DialogTr
 const START_HEX = OVERWORLD_START_HEX;
 
 export const SLOT_COUNT = 5;
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 const BANK_KEY = "ember-save-bank";
 const SAVE_KEY = "ember-save";
 const SAVE_BAK_KEY = "ember-save.bak";
@@ -473,6 +473,15 @@ function cleanHp(raw: unknown): Record<string, number> {
   return out;
 }
 
+function cleanHeroDiseases(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, boolean> = {};
+  for (const hero of [...HEROES, ...Object.keys(LATE_HERO_BASE_CLASS)]) {
+    if ((raw as Record<string, unknown>)[hero] === true) out[hero] = true;
+  }
+  return out;
+}
+
 /** Every hero starts equipped with their class's cheapest weapon — free, already owned. */
 function starterEquipment(): { weapons: Record<string, number>; equipped: Record<string, string> } {
   const weapons: Record<string, number> = {};
@@ -518,6 +527,7 @@ export function emptySave(muted = false): SaveData {
     gameClock: 0,
     overworldMoveBudgetUsed: 0,
     heroHunger: {},
+    heroDiseases: {},
     rations: STARTING_RATIONS,
     hungerStreak: 0,
     exploredHexes: [`${START_HEX.x},${START_HEX.y}`],
@@ -615,6 +625,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     gameClock: clampInt(raw.gameClock, 0, 999999),
     overworldMoveBudgetUsed: clampInt(raw.overworldMoveBudgetUsed ?? raw.gameClock, 0, 999999),
     heroHunger: cleanHunger(raw.heroHunger),
+    heroDiseases: cleanHeroDiseases(raw.heroDiseases),
     rations: typeof raw.rations === "number" ? clampInt(raw.rations, 0, 999999) : STARTING_RATIONS,
     hungerStreak: clampInt(raw.hungerStreak, 0, 999999),
     exploredHexes: cleanExploredHexes(raw.exploredHexes, completed, overworldPos),

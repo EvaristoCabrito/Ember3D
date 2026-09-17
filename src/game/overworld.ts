@@ -208,6 +208,8 @@ const BATTLE_ENCOUNTER_CHANCE = 0.15;
 /** Chance a step onto open wild ground (no location, and no battle rolled above) triggers
  * a text-only flavor encounter. */
 const TEXT_ENCOUNTER_CHANCE = 0.25;
+/** Every actual day on the road carries a small illness risk for one healthy travelling hero. */
+const TRAVEL_DISEASE_CHANCE = 0.02;
 /** Consecutive unfed days before Hungry actually kicks in — the grace period named in
  * the spec ("após 3 dias sem comida"). */
 const HUNGER_GRACE_DAYS = 3;
@@ -267,15 +269,23 @@ function roadEncounterIds(): string[] {
   return RANDOM_ENCOUNTER_REGIONS.find((region) => region.id === "road")?.encounterIds ?? [];
 }
 
-const ENCOUNTERS: { text: string; rationsDice?: number; ember?: number; lootBag?: boolean }[] = [
+const ENCOUNTERS: { text: string; rationsDice?: number; ember?: number; goldLossDice?: number; lootBag?: boolean; losePotion?: boolean; loseLockpick?: boolean; diseaseChance?: number }[] = [
   // Rations lost are rolled (1d8), not fixed, and folded into the text shown to the
   // player — see the rationsLost formatting in stepOverworld.
   { text: "Um bando de corvos assusta a coluna e parte das rações se perde na correria.", rationsDice: 8 },
   // Rolled like a regular small chest (see CHEST_LOOT) rather than a flat Ember number —
   // see the lootBag branch in stepOverworld.
   { text: "Vestígios de um acampamento abandonado — e uma bolsa esquecida.", lootBag: true },
-  { text: "Chuva forte atrasa a marcha, mas ninguém se machuca." },
+  // Independent of the generic per-day travel disease roll (see TRAVEL_DISEASE_CHANCE
+  // above) — getting drenched is its own, separate chance to fall sick, not a bigger
+  // multiplier on the everyday one.
+  { text: "Chuva forte atrasa a marcha, mas ninguém se machuca.", diseaseChance: 0.05 },
   { text: "Pegadas grandes demais cruzam o caminho. O grupo segue mais alerta, sem parar." },
+  { text: "Cobradores mascarados surgem entre as árvores e levam uma parte da bolsa comum.", goldLossDice: 12 },
+  { text: "Uma carroça atolada cede de vez; comida e mantimentos caem no barro.", rationsDice: 4 },
+  { text: "Um frasco se solta durante a descida e se quebra nas pedras.", losePotion: true },
+  { text: "Ladrões passam pelo acampamento durante a noite e levam uma gazua.", loseLockpick: true },
+  { text: "A ponte podre arrebenta sob a carga: parte do ouro e das rações vai para o rio.", rationsDice: 3, goldLossDice: 8 },
 ];
 
 /** Modo teste only: jumps straight to any hex, no adjacency check, no day/ration/HP cost.
@@ -339,6 +349,16 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   let weapons = save.weapons;
   let looseEquipment = save.looseEquipment;
   let bags = save.bags;
+  const heroDiseases = { ...save.heroDiseases };
+  const healthyTravellers = Object.keys(HERO_BASE_CLASS).filter((hero) => ages(hero) && !heroDiseases[hero]);
+  let diseaseText = "";
+  // This roll happens for every completed travel day, independent of whether the day also
+  // produces a battle or text encounter. Once sick, a hero is skipped until cured.
+  if (healthyTravellers.length > 0 && Math.random() < TRAVEL_DISEASE_CHANCE) {
+    const hero = healthyTravellers[Math.floor(Math.random() * healthyTravellers.length)]!;
+    heroDiseases[hero] = true;
+    diseaseText = `${hero} contraiu uma doença na estrada (−10% nos atributos até ser curado).`;
+  }
   const landedLocation = locationAt(locations, toCol, toRow);
   const roadIds = roadEncounterIds();
   if (!event && !landedLocation && roadIds.length > 0 && Math.random() < BATTLE_ENCOUNTER_CHANCE) {
@@ -346,6 +366,15 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   }
   if (!event && !landedLocation && Math.random() < TEXT_ENCOUNTER_CHANCE) {
     const pick = ENCOUNTERS[Math.floor(Math.random() * ENCOUNTERS.length)]!;
+    if (pick.diseaseChance && Math.random() < pick.diseaseChance) {
+      const stillHealthy = Object.keys(HERO_BASE_CLASS).filter((hero) => ages(hero) && !heroDiseases[hero]);
+      if (stillHealthy.length > 0) {
+        const hero = stillHealthy[Math.floor(Math.random() * stillHealthy.length)]!;
+        heroDiseases[hero] = true;
+        const text = `${hero} pegou um resfriado na chuva (−10% nos atributos até ser curado).`;
+        diseaseText = diseaseText ? `${diseaseText} ${text}` : text;
+      }
+    }
     if (pick.lootBag) {
       // Same odds/shape as a regular small chest (see BattleEngine.useLockpick and
       // CHEST_LOOT): guaranteed Ember, a guaranteed weighted potion, and two independent
@@ -390,12 +419,44 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
       // line.
       const rationsLost = pick.rationsDice ? 1 + Math.floor(Math.random() * pick.rationsDice) : 0;
       rationsDelta = -rationsLost;
-      emberDelta = pick.ember ?? 0;
+      const goldLost = pick.goldLossDice ? Math.min(save.ember, 1 + Math.floor(Math.random() * pick.goldLossDice)) : 0;
+      emberDelta = (pick.ember ?? 0) - goldLost;
+      let lostItem = "";
+      if (pick.losePotion) {
+        const carriedPotions = Object.entries(bags).flatMap(([hero, bag]) =>
+          Object.keys(POTIONS)
+            .filter((kind) => (bag?.[kind as keyof typeof POTIONS] ?? 0) > 0)
+            .map((kind) => ({ hero, kind: kind as keyof typeof POTIONS })),
+        );
+        const lost = carriedPotions[Math.floor(Math.random() * carriedPotions.length)];
+        if (lost) {
+          bags = { ...bags, [lost.hero]: { ...bags[lost.hero]!, [lost.kind]: Math.max(0, bags[lost.hero]![lost.kind] - 1) } };
+          lostItem = `−1 ${POTIONS[lost.kind].name}`;
+        }
+      }
+      if (pick.loseLockpick) {
+        const holders = Object.entries(bags).filter(([, bag]) => (bag?.lockpick ?? 0) > 0);
+        const holder = holders[Math.floor(Math.random() * holders.length)];
+        if (holder) {
+          const [hero, bag] = holder;
+          bags = { ...bags, [hero]: { ...bag, lockpick: Math.max(0, bag.lockpick - 1) } };
+          lostItem = "−1 Gazua";
+        }
+      }
       event = {
         kind: "encounter",
-        text: rationsLost > 0 ? `${pick.text} (−${rationsLost} ${rationsLost === 1 ? "ração" : "rações"})` : pick.text,
+        text: [
+          pick.text,
+          rationsLost > 0 ? `−${rationsLost} ${rationsLost === 1 ? "ração" : "rações"}` : "",
+          goldLost > 0 ? `−${goldLost} Gold` : "",
+          lostItem,
+        ].filter(Boolean).join(" · "),
       };
     }
+  }
+
+  if (diseaseText && event?.kind !== "battle") {
+    event = event ? { ...event, text: `${event.text} · ${diseaseText}` } : { kind: "encounter", text: diseaseText };
   }
 
   const exploredKey = key(toCol, toRow);
@@ -409,6 +470,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
       gameClock: save.gameClock + 1,
       overworldMoveBudgetUsed: (save.overworldMoveBudgetUsed ?? 0) + 1,
       heroHunger,
+      heroDiseases,
       rations: Math.max(0, rations + rationsDelta),
       ember: Math.max(0, save.ember + emberDelta),
       hungerStreak,
