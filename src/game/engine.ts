@@ -519,6 +519,24 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
   const cls = CLASSES[classId];
   const level = side === "enemy" ? (roster?.enemyLevels?.[spawn.name] ?? enemyLevel) : (roster?.levels[spawn.name] ?? 1);
   const st = statsFor(classId, level);
+  // PROJECT RULE — do not remove, weaken, or special-case around this for any class,
+  // existing or new. Player heroes get to choose where their level-up points go
+  // (statPointAllocations); enemies never do, so raw per-level growth alone leaves every
+  // enemy class falling behind an optimized build over time. Every enemy unit, of every
+  // class, gets a flat +10% to hp/atk/mag/def/res for every 5 full levels it has,
+  // cumulative and stacking (level 12 is +20%, level 27 is +50%), on top of whatever
+  // normal growth statsFor already gave it. This lives here — the one choke point every
+  // enemy/neutral spawn passes through (see the BattleEngine constructor) — precisely so
+  // adding a new enemy class can never forget it or need its own copy of this logic.
+  // Never apply this multiplier to the player side.
+  if (side === "enemy") {
+    const boost = 1 + Math.floor(level / 5) * 0.1;
+    st.hp = Math.round(st.hp * boost);
+    st.atk = Math.round(st.atk * boost);
+    st.mag = Math.round(st.mag * boost);
+    st.def = Math.round(st.def * boost);
+    st.res = Math.round(st.res * boost);
+  }
   const statPointAllocation = side === "player" ? { ...(roster?.statPointAllocations?.[spawn.name] ?? {}) } : {};
   const point = (attribute: StatPointAttribute) => statPointAllocation[attribute] ?? 0;
   // The starvation streak determines the severity, but a ration restores an individual

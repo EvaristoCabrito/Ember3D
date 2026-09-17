@@ -512,6 +512,10 @@ export function decorationCells(placements: { id: string; x: number; y: number; 
   return out;
 }
 
+// Adding a new class for an enemy/neutral unit needs nothing extra here for the every-5-
+// levels +10% stat boost — that's applied automatically to every enemy spawn, of every
+// class, in BattleEngine's spawnUnit (engine.ts). Do not add per-class scaling logic in
+// this table to replicate it; the one copy in spawnUnit is the whole point.
 export const CLASSES: Record<ClassId, ClassDef> = {
   swordsman: {
     id: "swordsman",
