@@ -571,6 +571,16 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     weapons[id] = weapons[id] ?? 0;
     equipped[hero] = id;
   }
+  // Aldric and Malrec were added after the original roster. Backfill their starter
+  // weapons too, so existing saves place the weapon in the character's equipped slot
+  // when they join instead of leaving it as an unassigned Mochila item.
+  for (const [hero, classId] of Object.entries(LATE_HERO_BASE_CLASS)) {
+    if (equipped[hero]) continue;
+    const id = starterWeaponFor(classId);
+    if (!id) continue;
+    weapons[id] = weapons[id] ?? 0;
+    equipped[hero] = id;
+  }
   let ember = clampInt(raw.ember, 0, 9999);
   let emberSeeded = raw.emberSeeded === true;
   if (!emberSeeded) {

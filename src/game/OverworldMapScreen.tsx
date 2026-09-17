@@ -10,6 +10,7 @@ import { canStepOverworld, hexToWorld, isOverworldCell, locationExpired, neighbo
 import { HungerBar } from "./HungerBar";
 import { portraitFor } from "./assets";
 import { key } from "./pathfinding";
+import { MapLoadingOverlay, useMapLoading } from "./MapLoadingOverlay";
 
 export type LocationStatus = "locked" | "available" | "done";
 
@@ -137,6 +138,7 @@ export function OverworldMapScreen({
     return () => window.removeEventListener("keydown", cancel);
   }, []);
   const [artOk, setArtOk] = useState(true);
+  const mapLoading = useMapLoading();
   const [flashId, setFlashId] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [zoomIdx, setZoomIdx] = useState(ZOOM_STOPS.length - 1);
@@ -445,8 +447,11 @@ export function OverworldMapScreen({
               alt=""
               className="block w-full h-auto rounded-lg select-none"
               draggable={false}
-              onError={() => setArtOk(false)}
-              onLoad={() => recenterOn(centerFracRef.current.x, centerFracRef.current.y)}
+              onError={() => { setArtOk(false); mapLoading.finish(); }}
+              onLoad={() => {
+                recenterOn(centerFracRef.current.x, centerFracRef.current.y);
+                window.requestAnimationFrame(() => window.requestAnimationFrame(mapLoading.finish));
+              }}
             />
           ) : (
             <div className="w-[70dvw] h-[70dvh] max-w-md" />
@@ -670,6 +675,8 @@ export function OverworldMapScreen({
           </button>
         </div>
       )}
+
+      <MapLoadingOverlay progress={mapLoading.progress} visible={mapLoading.visible} />
 
       {open && (
         <LocationPanel

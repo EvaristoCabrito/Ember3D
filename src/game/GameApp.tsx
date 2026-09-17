@@ -5182,7 +5182,9 @@ function MapEditorScreen({
                           const fresh = blankDraft();
                           const id = normalizeScenarioId(`random-${region.id}-${Date.now().toString(36)}`);
                           updateRegion([...region.encounterIds, id]);
-                          setDraft({ ...fresh, id, index: 0, title: "Novo Random Encounter", place: region.name, locationId: "" });
+                          // Include the generated scenario id so two encounters in the same
+                          // region never begin with the same editor-visible name.
+                          setDraft({ ...fresh, id, index: 0, title: `Encontro em ${region.name} · ${id.replace(/^random-[^-]+-/, "")}`, place: region.name, locationId: "" });
                           setShowRandomEncounters(false);
                           setNote(`Novo encontro criado em ${region.name}. Salve o mapa para gravar o conteúdo.`);
                         }}

@@ -4,6 +4,7 @@ import { missionsForLocation } from "./mapstore";
 import type { Mission, WorldLocation } from "./types";
 import { GoldAmount } from "./GoldAmount";
 import { getAudioVolumes, setCutsceneVolume, setMusicVolume, setSfxVolume, sfxPlay, unlockAudio } from "./audio";
+import { MapLoadingOverlay, useMapLoading } from "./MapLoadingOverlay";
 
 export type LocationStatus = "locked" | "available" | "done";
 
@@ -56,6 +57,7 @@ export function WorldMapScreen({
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
   const [artOk, setArtOk] = useState(true);
+  const mapLoading = useMapLoading();
   const [flashId, setFlashId] = useState<string | null>(null);
   const [zoomIdx, setZoomIdx] = useState(ZOOM_STOPS.length - 1);
   const [audioSettingsOpen, setAudioSettingsOpen] = useState(false);
@@ -312,7 +314,7 @@ export function WorldMapScreen({
               alt=""
               className="block w-full h-auto rounded-lg select-none"
               draggable={false}
-              onError={() => setArtOk(false)}
+              onError={() => { setArtOk(false); mapLoading.finish(); }}
               // The mount-time centering effect below fires before this image has actually
               // finished loading — with no intrinsic size yet, the viewport's scrollHeight
               // is still near zero at that moment, so recenterOn's own clamp forces the
@@ -322,7 +324,10 @@ export function WorldMapScreen({
               // reads as "opens somewhere random" rather than "opens on your location."
               // Re-centering here, once real dimensions exist, fixes that; it's a no-op if
               // the mount effect already landed correctly (same target fraction either way).
-              onLoad={() => recenterOn(centerFracRef.current.x, centerFracRef.current.y)}
+              onLoad={() => {
+                recenterOn(centerFracRef.current.x, centerFracRef.current.y);
+                window.requestAnimationFrame(() => window.requestAnimationFrame(mapLoading.finish));
+              }}
             />
           ) : (
             <div className="w-[70dvw] h-[70dvh] max-w-md" />
@@ -417,6 +422,8 @@ export function WorldMapScreen({
           </button>
         </div>
       )}
+
+      <MapLoadingOverlay progress={mapLoading.progress} visible={mapLoading.visible} />
 
       {open && (
         <LocationPanel

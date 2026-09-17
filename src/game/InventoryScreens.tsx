@@ -115,28 +115,28 @@ function ItemActionSheet({
 const HERO_BASE_CLASS: Record<string, ClassId> = { Kael: "kaelFinal", Neera: "neera", Voss: "voss", Salazar: "salazar", Aldric: "aldric", Malrec: "conjurer" };
 
 type DollSlot = "mainHand" | EquipSlot;
-/** Inner arch niches of equipment-male/female.jpg (1168×784), measured from the
- * labeled frames: 5 left, 5 right, 2 rings under the statue. Icons sit in the
- * opening above each plaque, not over the label. */
+/** Inner openings of the paper-doll frames (1712×1152). The socket-size reference
+ * marks these usable bounds in white: every item fills its socket above the plaque,
+ * never the plaque itself. */
 type DollSlotPosition = { id: DollSlot; label: string; left: string; top: string; width: string; height: string };
 
 const MALE_DOLL_SLOT_POSITIONS: DollSlotPosition[] = [
-  { id: "head", label: "Cabeça", left: "16.44%", top: "14.54%", width: "6.59%", height: "5.74%" },
-  { id: "neck", label: "Pescoço", left: "16.44%", top: "31.38%", width: "6.59%", height: "5.74%" },
-  { id: "shoulders", label: "Ombros", left: "16.44%", top: "48.21%", width: "6.59%", height: "5.74%" },
-  { id: "chest", label: "Peito", left: "16.44%", top: "65.05%", width: "6.59%", height: "5.74%" },
-  { id: "hands", label: "Mãos", left: "16.44%", top: "81.89%", width: "6.59%", height: "5.74%" },
-  { id: "legs", label: "Pernas", left: "77.05%", top: "14.54%", width: "6.59%", height: "5.99%" },
-  { id: "feet", label: "Pés", left: "76.88%", top: "31.38%", width: "6.76%", height: "5.74%" },
-  { id: "waist", label: "Cintura", left: "76.97%", top: "48.21%", width: "6.59%", height: "5.74%" },
-  { id: "mainHand", label: "Mão Principal", left: "76.97%", top: "65.05%", width: "6.59%", height: "5.74%" },
-  { id: "offHand", label: "Mão Secundária", left: "76.97%", top: "81.89%", width: "6.59%", height: "5.74%" },
-  { id: "ring1", label: "Anel 1", left: "37.33%", top: "82.91%", width: "7.96%", height: "6.12%" },
-  { id: "ring2", label: "Anel 2", left: "54.97%", top: "83.16%", width: "7.71%", height: "5.74%" },
+  { id: "head", label: "Cabeça", left: "14.953%", top: "10.764%", width: "9.638%", height: "9.722%" },
+  { id: "neck", label: "Pescoço", left: "14.720%", top: "27.778%", width: "10.164%", height: "9.809%" },
+  { id: "shoulders", label: "Ombros", left: "14.311%", top: "44.184%", width: "10.280%", height: "9.896%" },
+  { id: "chest", label: "Peito", left: "14.194%", top: "61.111%", width: "10.631%", height: "9.809%" },
+  { id: "hands", label: "Mãos", left: "14.369%", top: "77.604%", width: "10.514%", height: "9.462%" },
+  { id: "legs", label: "Pernas", left: "75.643%", top: "10.156%", width: "9.696%", height: "10.503%" },
+  { id: "feet", label: "Pés", left: "75.409%", top: "27.170%", width: "10.222%", height: "10.851%" },
+  { id: "waist", label: "Cintura", left: "75.467%", top: "44.184%", width: "10.339%", height: "10.330%" },
+  { id: "mainHand", label: "Mão Principal", left: "75.526%", top: "61.024%", width: "9.813%", height: "10.069%" },
+  { id: "offHand", label: "Mão Secundária", left: "76.051%", top: "78.038%", width: "9.229%", height: "9.115%" },
+  { id: "ring1", label: "Anel 1", left: "37.033%", top: "78.993%", width: "8.762%", height: "10.677%" },
+  { id: "ring2", label: "Anel 2", left: "54.731%", top: "79.601%", width: "8.645%", height: "10.069%" },
 ];
 
-const ART_ASPECT_W = 1168;
-const ART_ASPECT_H = 784;
+const ART_ASPECT_W = 1712;
+const ART_ASPECT_H = 1152;
 
 /** Positions children in % of the *drawn* art rectangle. Size is measured off the
  * host with ResizeObserver so letterboxing never shifts the slots. */
@@ -275,7 +275,9 @@ export function PaperDollScreen({
   const enh = weaponId ? (save.weapons[weaponId] ?? 0) : 0;
   const equip = save.equipment[heroName] ?? {};
   const femaleDoll = heroName === "Neera";
-  const dollImage = femaleDoll ? "/game/ui/equipment-female.jpg" : "/game/ui/equipment-male.jpg";
+  // Cache-bust the supplied paper-doll art so saved browser sessions immediately pick up
+  // the replacement male/female files rather than retaining an older cached illustration.
+  const dollImage = femaleDoll ? "/game/ui/equipment-female.jpg?v=3" : "/game/ui/equipment-male.jpg?v=3";
   const dollSlotPositions = MALE_DOLL_SLOT_POSITIONS;
   const wearerOf = (itemId: string) => Object.entries(save.equipment).find(([, slots]) => Object.values(slots).includes(itemId))?.[0];
   const ownedWeapons = [...weaponsForClass(classId)].filter((w) => save.weapons[w.id] != null).sort((a, b) => weaponPower(a) - weaponPower(b));
@@ -352,8 +354,8 @@ export function PaperDollScreen({
         <FittedArt
           src={dollImage}
           alt={`Equipamento de ${heroName}`}
-          artW={femaleDoll ? 1712 : ART_ASPECT_W}
-          artH={femaleDoll ? 1152 : ART_ASPECT_H}
+          artW={ART_ASPECT_W}
+          artH={ART_ASPECT_H}
         >
           {dollSlotPositions.map((slot) => {
             const isWeapon = slot.id === "mainHand";
@@ -369,7 +371,7 @@ export function PaperDollScreen({
                   <button
                     type="button"
                     onClick={() => setPicker(slot.id)}
-                    className={`flex size-full items-center justify-center overflow-hidden rounded-sm border border-transparent transition-colors hover:border-accent/80 focus-visible:border-accent ${isWeapon ? "bg-black" : "hover:bg-bg/35"} ${glowSlot === slot.id ? "inn-open" : ""}`}
+                    className={`flex size-full items-center justify-center overflow-hidden rounded-sm border border-transparent bg-transparent transition-colors hover:border-accent/80 focus-visible:border-accent hover:bg-bg/35 ${glowSlot === slot.id ? "inn-open" : ""}`}
                     aria-label={`${slot.label}: ${isWeapon ? weapon?.name ?? "vazia" : item?.name ?? "vazio"}`}
                   >
                     {icon ? (
