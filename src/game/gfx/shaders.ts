@@ -23,6 +23,9 @@ export const ELEMENT_INDEX: Record<string, number> = {
   shore: 7,
   shore2: 8,
   water2: 9,
+  water3: 10,
+  water4: 11,
+  water5: 12,
 };
 
 const VERSION = "#version 300 es\n";
@@ -33,15 +36,22 @@ const PRECISION = "precision highp float;\n";
 // ---------------------------------------------------------------------------
 
 /** Positions a billboard quad at a pixel-space center with a (possibly non-uniform) pixel
- * radius. v_local is the -1..1 shape space; v_uv is screen-space 0..1 for sampling the scene. */
+ * radius. v_local is the -1..1 shape space; v_uv is screen-space 0..1 for sampling the scene;
+ * v_world is the same local offset applied to u_worldCenter instead of u_center — u_worldCenter
+ * carries no camera-pan offset (see BattleEngine.effectAnchor), so v_world stays put under
+ * panning the way v_uv/pixelPos deliberately do not. Not every fragment shader that pairs with
+ * this vertex shader reads v_world (only FRAG_ELEMENTAL's water/river noise sampling does);
+ * an unused `out` varying costs nothing. */
 export const VERT_QUAD = `${VERSION}
 layout(location = 0) in vec2 a_pos;
 uniform vec2 u_resolution;
 uniform vec2 u_center;
 uniform vec2 u_radius;
 uniform float u_rotation;
+uniform vec2 u_worldCenter;
 out vec2 v_local;
 out vec2 v_uv;
+out vec2 v_world;
 void main() {
   v_local = a_pos;
   float c = cos(u_rotation);
@@ -53,6 +63,7 @@ void main() {
   clip.y = -clip.y;
   gl_Position = vec4(clip, 0.0, 1.0);
   v_uv = vec2(zeroOne.x, 1.0 - zeroOne.y);
+  v_world = u_worldCenter + rotated * u_radius;
 }
 `;
 
@@ -139,6 +150,92 @@ vec3 relief(float h, float steepness, vec3 baseColor, float shininess, float spe
 }
 `;
 
+// Standard seamless-tiling fix applied to water: sample the shared noise field from a
+// camera-independent world position (v_world, see VERT_QUAD) instead of this quad's own local
+// uv — the "world-position UV mapping" technique, one level up from a texture's own UVs. Every
+// Water/Shore/Water2 placement reads the SAME underlying wave value at its actual world
+// position, so two adjacent hexes' colors agree exactly at their shared edge instead of
+// drifting apart the way two independently-stamped tile photos always do (see engine.ts
+// renderGround, which stops drawing those photos under a Water/Water2 placement so this is the
+// only thing being drawn there at all). v_world specifically (not v_uv * u_resolution, which
+// this used before) is what keeps the pattern from visibly sliding every time the camera pans —
+// v_uv is screen space, so it changes on every pan/zoom even for a hex that hasn't moved on the
+// map, which read as the whole water surface swimming in lockstep with the camera instead of
+// just animating. Deliberately NOT using relief()'s specular highlight here — that read as a
+// glaring hot spot, far punchier than every other tile around it. This is a gentle, mostly-flat
+// tint with just enough noise-driven brightness ripple to not go dead-static, blended with a
+// light touch of the refracted scene for a hint of nearby shore/decorations reflecting.
+const WATER_SURFACE = `
+vec3 waterSurface(vec2 vUv, out float h) {
+  vec2 worldPos = v_world * 0.008 * u_noiseScale;
+  h = sampleFbm(worldPos + vec2(u_time * u_scrollSpeed * 0.4, 0.0));
+  vec3 tint = u_color * (0.88 + 0.24 * h);
+  vec2 disp = vec2(dFdx(h), dFdy(h)) * 0.35;
+  vec3 sceneCol = texture(u_scene, vUv + disp).rgb;
+  vec3 col = mix(tint, sceneCol * u_color * 1.15, 0.35);
+  return col * u_intensity;
+}
+`;
+
+// Shared river-band shape for Water3/4/5 — one function, three tunings (see the three call
+// sites below), instead of three near-duplicate branches. Per the standard natural-river
+// design points: asymmetric width/curvature (meander + widthNoise, both low-frequency so a
+// bend spans many hexes rather than wobbling within one — same world-space-noise trick as
+// WATER_SURFACE, so a chain of placements reads one continuous river, not independent per-
+// tile wiggles), an inner-bank/shallow/deep cross-section (crossPos/depth drive a lighter,
+// more translucent "shallow silt" tone at the rim fading to the full water tone and full
+// opacity at the channel's center), and flow-aligned whitewater (the streak/foam term biases
+// on the river's own local tangent via dFdy(meander) — bends and narrows, where real current
+// accelerates — rather than a static top-down speckle). The hex-edge cutoff (hexMask) stays a
+// separate, hard, un-gradiented term from the bank cutoff (bankMask): the hex boundary must
+// stay seam-free the way WATER's own edge does, while the bank itself is deliberately soft.
+const RIVER_SURFACE = `
+vec3 riverSurface(float alongScale, float meanderAmp, float widthMin, float widthMax, float bankJitterAmp, float foamStrength, out float alpha) {
+  float d = hexDist(v_local);
+  if (d > 1.0) { alpha = 0.0; return vec3(0.0); }
+  // v_world, not v_uv * u_resolution — see WATER_SURFACE's comment above. A screen-space
+  // basis here was worse than for plain water: it meant the whole river's centerline and
+  // width visibly shifted with every camera pan, not just its ripples.
+  vec2 worldUv = v_world * 0.008;
+  // A slow along-flow coordinate — orders of magnitude lower frequency than the ripple noise
+  // waterSurface() samples — so the river bends over many hexes, not within one.
+  float along = worldUv.y * alongScale;
+  float meander = (sampleFbm(vec2(along, u_seed * 0.013 + 4.0)) - 0.5) * meanderAmp;
+  float widthNoise = sampleFbm(vec2(along * 1.8 + 8.0, u_seed * 0.013));
+  float halfWidth = mix(widthMin, widthMax, widthNoise);
+  // A further, finer, higher-frequency perturbation on top of the smooth width falloff — a
+  // perfectly smooth curve reads as a drawn arc no matter how it wanders; real riverbanks are
+  // ragged at the pixel-to-pixel level.
+  float rippleAcrossBank = sampleFbm(vec2(worldUv.x * 2.6, along * 5.0 + 1.7)) - 0.5;
+  float distFromBank = abs(v_local.x - meander) - halfWidth + rippleAcrossBank * bankJitterAmp;
+  float aaBank = fwidth(distFromBank);
+  float bankMask = smoothstep(aaBank, -aaBank, distFromBank);
+  // -1 at the left bank, 0 at the channel center, +1 at the right bank — the smooth (pre-
+  // jitter) cross-section, so the shading gradient itself stays clean even though the final
+  // cutoff (bankMask, above) is jagged.
+  float crossPos = (v_local.x - meander) / max(halfWidth, 0.001);
+  float depth = clamp(1.0 - abs(crossPos), 0.0, 1.0);
+  float h;
+  vec3 base = waterSurface(v_uv, h);
+  vec3 shallow = mix(base, vec3(0.55, 0.48, 0.35), 0.55);
+  vec3 riverCol = mix(shallow, base, smoothstep(0.15, 0.6, depth));
+  float shallowAlpha = mix(0.55, 1.0, smoothstep(0.0, 0.5, depth));
+  // dFdy(meander) is a cheap proxy for how sharply the channel is turning right here (a
+  // straight run has ~0 screen-space slope; a bend doesn't) — real current visibly speeds up
+  // exactly there, and in a pinch point (halfWidth near its narrow end), so whitewater gets
+  // biased toward bends and narrows instead of scattered uniformly across the whole channel.
+  float bendiness = abs(dFdy(meander));
+  float narrowness = 1.0 - smoothstep(widthMin, widthMax, halfWidth);
+  float streak = sampleFbm(vec2((v_local.x - meander) * 6.0 - along * 2.0, along * 9.0));
+  float foam = smoothstep(0.62, 0.85, streak) * clamp(bendiness * 3.0 + narrowness * 0.6, 0.0, 1.0) * foamStrength;
+  riverCol = mix(riverCol, vec3(1.0), foam * 0.4);
+  float aaHex = fwidth(d);
+  float hexMask = smoothstep(1.0 + aaHex, 1.0 - aaHex, d);
+  alpha = bankMask * hexMask * shallowAlpha;
+  return riverCol;
+}
+`;
+
 // ---------------------------------------------------------------------------
 // Master elemental "visual quad" shader — handles all 7 elements.
 // ---------------------------------------------------------------------------
@@ -146,6 +243,7 @@ vec3 relief(float h, float steepness, vec3 baseColor, float shininess, float spe
 export const FRAG_ELEMENTAL = `${VERSION}${PRECISION}
 in vec2 v_local;
 in vec2 v_uv;
+in vec2 v_world;
 out vec4 fragColor;
 
 uniform int u_element;
@@ -161,6 +259,8 @@ uniform vec2 u_resolution;
 ${NOISE_SAMPLE}
 ${SHADING}
 ${HEX_SHAPE}
+${WATER_SURFACE}
+${RIVER_SURFACE}
 ${ICE_CELLS}
 
 const int FIRE = 0;
@@ -173,6 +273,9 @@ const int DARKNESS = 6;
 const int SHORE = 7;
 const int SHORE2 = 8;
 const int WATER2 = 9;
+const int WATER3 = 10;
+const int WATER4 = 11;
+const int WATER5 = 12;
 
 void main() {
   vec2 uv = v_local * 0.5 + 0.5;
@@ -243,28 +346,20 @@ void main() {
   }
 
   if (u_element == WATER) {
-    // Same plain refraction as Shore's water half (see SHORE below) — no separate tuning,
-    // no glint, no foam ring. Shore's water is the reference; this matches it exactly.
-    //
-    // The noise is sampled in absolute screen space (v_uv * u_resolution) instead of this
-    // quad's own local uv, and carries no per-instance u_seed offset — every Water placement
-    // reads the SAME underlying wave field at its actual position, so two adjacent hexes'
-    // patterns line up continuously across the shared edge instead of each one restarting
-    // its own pattern at its own tile boundary. Only the hex mask (d) stays per-instance;
-    // the water itself reads as one continuous body wherever tiles touch.
+    // Same waterSurface() as Shore's water half and Water2 (see WATER_SURFACE above) — no
+    // separate tuning, no glint, no foam ring. Only the hex mask (d) stays per-instance; the
+    // water itself reads as one continuous body wherever tiles touch.
     if (d > 1.0) discard;
-    vec2 worldUv = v_uv * u_resolution * 0.008 * u_noiseScale;
-    float h = sampleFbm(worldUv + vec2(u_time * u_scrollSpeed * 0.4, 0.0));
-    vec2 disp = vec2(dFdx(h), dFdy(h)) * 0.35;
-    vec3 scene = texture(u_scene, v_uv + disp).rgb;
-    vec3 col = scene * u_color * 1.15;
+    float h;
+    vec3 col = waterSurface(v_uv, h);
     // A fixed-percentage fade band leaves BOTH of two touching hexes fading toward
     // transparent right at their shared edge — neither one opaque there — which shows as a
     // hairline of bare terrain between them no matter how well the pattern lines up. A
-    // fwidth-sized (~1px, adapts to zoom) edge stays alias-free without leaving a gap.
-    float aa = fwidth(d) * 1.5;
-    float atten = smoothstep(1.0 + aa, 1.0 - aa, d);
-    float alpha = clamp(atten * u_intensity, 0.0, 1.0);
+    // fwidth-sized (~1px, adapts to zoom) hard edge stays alias-free without leaving a gap:
+    // whichever hex rasterizes a boundary pixel covers it fully, and since both sides read
+    // the exact same world-space color there, it doesn't matter which one wins it.
+    float aa = fwidth(d);
+    float alpha = smoothstep(1.0 + aa, 1.0 - aa, d);
     fragColor = vec4(col, alpha);
     return;
   }
@@ -343,30 +438,26 @@ void main() {
     // above, verbatim, so the two halves of the tile are the same water.
     if (d > 1.0) discard;
     if (v_local.y < 0.0) {
-      float h = sampleFbm(v_uv * u_resolution * 0.008 * u_noiseScale + vec2(u_time * u_scrollSpeed * 0.4, 0.0));
-      vec2 disp = vec2(dFdx(h), dFdy(h)) * 0.35;
-      vec3 scene = texture(u_scene, v_uv + disp).rgb;
-      vec3 col = scene * u_color * 1.15;
-      float aa = fwidth(d) * 1.5;
-      float atten = smoothstep(1.0 + aa, 1.0 - aa, d);
-      float alpha = clamp(atten * u_intensity, 0.0, 1.0);
+      float h;
+      vec3 col = waterSurface(v_uv, h);
+      float aa = fwidth(d);
+      float alpha = smoothstep(1.0 + aa, 1.0 - aa, d);
       fragColor = vec4(col, alpha);
       return;
     }
     float tide = 0.5 + 0.28 * sin(u_time * u_scrollSpeed * 0.6 + u_seed * 5.0);
     float front = v_local.y - tide;
-    float h = sampleFbm(v_uv * u_resolution * 0.008 * u_noiseScale + vec2(u_time * u_scrollSpeed * 0.4, 0.0));
-    vec2 disp = vec2(dFdx(h), dFdy(h)) * 0.35;
-    vec3 scene = texture(u_scene, v_uv + disp).rgb;
+    float hTide;
+    vec3 waterCol = waterSurface(v_uv, hTide);
     float foamNoise = sampleFbm(uv * u_noiseScale * 4.0 - vec2(0.0, u_time * u_scrollSpeed * 1.5));
     float foamBand = smoothstep(0.1, 0.0, abs(front)) * smoothstep(0.35, 0.55, foamNoise + 0.3);
     float wetSand = smoothstep(0.3, -0.05, front) * 0.4;
     float waterMask = smoothstep(0.05, -0.35, front);
     vec3 sand = vec3(0.78, 0.68, 0.5);
-    vec3 col = mix(sand, scene * u_color * 1.15, clamp(waterMask + wetSand, 0.0, 1.0));
+    vec3 col = mix(sand, waterCol, clamp(waterMask + wetSand, 0.0, 1.0));
     col = mix(col, vec3(1.0), foamBand);
     float atten = smoothstep(1.0, 0.4, d);
-    float alpha = clamp((waterMask * 0.85 + wetSand + foamBand) * atten * u_intensity, 0.0, 1.0);
+    float alpha = clamp((waterMask * 0.85 + wetSand + foamBand) * atten, 0.0, 1.0);
     fragColor = vec4(col, alpha);
     return;
   }
@@ -377,46 +468,67 @@ void main() {
     // river is one click away instead of needing an orientation UI.
     if (d > 1.0) discard;
     if (v_local.y > 0.0) {
-      float h = sampleFbm(v_uv * u_resolution * 0.008 * u_noiseScale + vec2(u_time * u_scrollSpeed * 0.4, 0.0));
-      vec2 disp = vec2(dFdx(h), dFdy(h)) * 0.35;
-      vec3 scene = texture(u_scene, v_uv + disp).rgb;
-      vec3 col = scene * u_color * 1.15;
-      float aa = fwidth(d) * 1.5;
-      float atten = smoothstep(1.0 + aa, 1.0 - aa, d);
-      float alpha = clamp(atten * u_intensity, 0.0, 1.0);
+      float h;
+      vec3 col = waterSurface(v_uv, h);
+      float aa = fwidth(d);
+      float alpha = smoothstep(1.0 + aa, 1.0 - aa, d);
       fragColor = vec4(col, alpha);
       return;
     }
     float tide2 = 0.5 + 0.28 * sin(u_time * u_scrollSpeed * 0.6 + u_seed * 5.0);
     float front2 = -v_local.y - tide2;
-    float h2 = sampleFbm(v_uv * u_resolution * 0.008 * u_noiseScale + vec2(u_time * u_scrollSpeed * 0.4, 0.0));
-    vec2 disp2 = vec2(dFdx(h2), dFdy(h2)) * 0.35;
-    vec3 scene2 = texture(u_scene, v_uv + disp2).rgb;
+    float h2;
+    vec3 waterCol2 = waterSurface(v_uv, h2);
     float foamNoise2 = sampleFbm(uv * u_noiseScale * 4.0 - vec2(0.0, u_time * u_scrollSpeed * 1.5));
     float foamBand2 = smoothstep(0.1, 0.0, abs(front2)) * smoothstep(0.35, 0.55, foamNoise2 + 0.3);
     float wetSand2 = smoothstep(0.3, -0.05, front2) * 0.4;
     float waterMask2 = smoothstep(0.05, -0.35, front2);
     vec3 sand2 = vec3(0.78, 0.68, 0.5);
-    vec3 col2 = mix(sand2, scene2 * u_color * 1.15, clamp(waterMask2 + wetSand2, 0.0, 1.0));
+    vec3 col2 = mix(sand2, waterCol2, clamp(waterMask2 + wetSand2, 0.0, 1.0));
     col2 = mix(col2, vec3(1.0), foamBand2);
     float atten2 = smoothstep(1.0, 0.4, d);
-    float alpha2 = clamp((waterMask2 * 0.85 + wetSand2 + foamBand2) * atten2 * u_intensity, 0.0, 1.0);
+    float alpha2 = clamp((waterMask2 * 0.85 + wetSand2 + foamBand2) * atten2, 0.0, 1.0);
     fragColor = vec4(col2, alpha2);
     return;
   }
 
-  // WATER2 — the exact same water as WATER, but square instead of hex-shaped and meant to be
-  // placed larger (see DEFAULT_RADIUS_TILES). The quad itself is already a square in
-  // v_local space, so there's no hex mask at all here, just a soft fade right at its own
-  // edge — dropped over a cluster of Water hexes it papers over any seam between them.
-  float h = sampleFbm(v_uv * u_resolution * 0.008 * u_noiseScale + vec2(u_time * u_scrollSpeed * 0.4, 0.0));
-  vec2 disp = vec2(dFdx(h), dFdy(h)) * 0.35;
-  vec3 scene = texture(u_scene, v_uv + disp).rgb;
-  vec3 col = scene * u_color * 1.15;
-  float sq = max(abs(v_local.x), abs(v_local.y));
-  float aaSq = fwidth(sq) * 1.5;
-  float atten = smoothstep(1.0 + aaSq, 1.0 - aaSq, sq);
-  float alpha = clamp(atten * u_intensity, 0.0, 1.0);
+  if (u_element == WATER2) {
+    // The exact same water as WATER, but square instead of hex-shaped and meant to be
+    // placed larger (see DEFAULT_RADIUS_TILES). The quad itself is already a square in
+    // v_local space, so there's no hex mask at all here, just a hard fade right at its own
+    // edge — dropped over a cluster of Water hexes it papers over any seam between them.
+    float h;
+    vec3 col = waterSurface(v_uv, h);
+    float sq = max(abs(v_local.x), abs(v_local.y));
+    float aaSq = fwidth(sq);
+    float alpha = smoothstep(1.0 + aaSq, 1.0 - aaSq, sq);
+    fragColor = vec4(col, alpha);
+    return;
+  }
+
+  // WATER3/4/5 — three river typologies, not ponds: a winding band carved out of the same
+  // hex footprint Water uses, instead of filling it or splitting it exactly in half along a
+  // straight line the way Shore does. All three call the shared riverSurface() above with
+  // different tunings; see that function's own comment for what each parameter does.
+  if (u_element == WATER3) {
+    // River: a moderate, regularly-winding channel — the baseline typology.
+    float alpha;
+    vec3 col = riverSurface(0.12, 2.4, 0.22, 0.5, 0.1, 0.35, alpha);
+    fragColor = vec4(col, alpha);
+    return;
+  }
+  if (u_element == WATER4) {
+    // Creek: narrower and shallower banks, tighter/more frequent bends (higher alongScale),
+    // and noticeably more whitewater — a fast, rocky little stream.
+    float alpha;
+    vec3 col = riverSurface(0.22, 1.6, 0.12, 0.28, 0.14, 0.65, alpha);
+    fragColor = vec4(col, alpha);
+    return;
+  }
+  // WATER5 — Wide River: broad, slow, oxbow-scale bends (low alongScale, high meanderAmp)
+  // and a wide channel that mostly stays calm, with whitewater only at its rare tight points.
+  float alpha;
+  vec3 col = riverSurface(0.07, 3.0, 0.4, 0.75, 0.06, 0.12, alpha);
   fragColor = vec4(col, alpha);
 }
 `;

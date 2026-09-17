@@ -2,9 +2,23 @@
  * the renderer reads them fresh every draw call, so changes apply on the next frame with no
  * extra plumbing. */
 
-export type ElementKind = "fire" | "ice" | "water" | "lightning" | "acid" | "holy" | "darkness" | "shore" | "shore2" | "water2";
+export type ElementKind = "fire" | "ice" | "water" | "lightning" | "acid" | "holy" | "darkness" | "shore" | "shore2" | "water2" | "water3" | "water4" | "water5";
 
-export const ELEMENT_KINDS: readonly ElementKind[] = ["fire", "ice", "water", "lightning", "acid", "holy", "darkness", "shore", "shore2", "water2"];
+export const ELEMENT_KINDS: readonly ElementKind[] = [
+  "fire",
+  "ice",
+  "water",
+  "lightning",
+  "acid",
+  "holy",
+  "darkness",
+  "shore",
+  "shore2",
+  "water2",
+  "water3",
+  "water4",
+  "water5",
+];
 
 export const ELEMENT_LABELS: Record<ElementKind, string> = {
   fire: "Fire",
@@ -17,6 +31,9 @@ export const ELEMENT_LABELS: Record<ElementKind, string> = {
   shore: "Shore 1",
   shore2: "Shore 2",
   water2: "Water 2",
+  water3: "Water 3 (River)",
+  water4: "Water 4 (Creek)",
+  water5: "Water 5 (Wide River)",
 };
 
 export interface ElementParams {
@@ -38,9 +55,19 @@ export const DEFAULT_ELEMENT_PARAMS: Record<ElementKind, ElementParams> = {
   acid: { noiseScale: 2.6, scrollSpeed: 0.25, intensity: 1.0, color: [0.45, 1.0, 0.2] },
   holy: { noiseScale: 1.6, scrollSpeed: 0.2, intensity: 1.2, color: [1.0, 0.96, 0.75] },
   darkness: { noiseScale: 1.8, scrollSpeed: 0.1, intensity: 1.0, color: [0.15, 0.07, 0.18] },
-  shore: { noiseScale: 2.2, scrollSpeed: 0.5, intensity: 1.0, color: [0.4, 0.68, 0.8] },
-  shore2: { noiseScale: 2.2, scrollSpeed: 0.5, intensity: 1.0, color: [0.4, 0.68, 0.8] },
+  // Same values as water, verbatim — shore's wet half is drawn by the exact same
+  // waterSurface() call (see shaders.ts), so a Shore hex sitting next to a Water hex has to
+  // read as the same body of water, not a different-colored, differently-paced one.
+  shore: { noiseScale: 2.0, scrollSpeed: 0.35, intensity: 0.9, color: [0.35, 0.65, 0.85] },
+  shore2: { noiseScale: 2.0, scrollSpeed: 0.35, intensity: 0.9, color: [0.35, 0.65, 0.85] },
   water2: { noiseScale: 2.0, scrollSpeed: 0.35, intensity: 0.9, color: [0.35, 0.65, 0.85] },
+  // Same color as water across all three river variants, deliberately — a river running
+  // into a lake or a Water hex has to read as the same body of water at the confluence, not
+  // a differently-tinted one. Only scrollSpeed (how lively the current reads) and the
+  // river-specific shape params (see RIVER_SURFACE in shaders.ts) tell the three apart.
+  water3: { noiseScale: 2.0, scrollSpeed: 0.35, intensity: 0.9, color: [0.35, 0.65, 0.85] },
+  water4: { noiseScale: 2.0, scrollSpeed: 0.55, intensity: 0.9, color: [0.35, 0.65, 0.85] },
+  water5: { noiseScale: 2.0, scrollSpeed: 0.22, intensity: 0.9, color: [0.35, 0.65, 0.85] },
 };
 
 /** Mutable live copy — clone so resetting one element never touches the shipped defaults. */
@@ -65,6 +92,11 @@ export const DEFAULT_RADIUS_TILES: Partial<Record<ElementKind, number>> = {
   // Water 2: same water, square instead of hex-shaped and bigger — meant to be dropped over
   // a cluster of Water hexes to paper over any seam between them, not to match one tile.
   water2: 1.7,
+  // Water 3/4/5 (river variants): like Water, matches its own hex exactly — the winding band
+  // is carved out of that footprint, not sized differently from it.
+  water3: 1.0,
+  water4: 1.0,
+  water5: 1.0,
 };
 
 /** Non-uniform (width, height) footprint multiplier for a placement that doesn't specify its

@@ -32,6 +32,10 @@ export interface EffectAnchor {
   x: number;
   y: number;
   tile: number;
+  /** Camera-independent counterpart to x/y — see BattleEngine.effectAnchor. Only the
+   * elemental visual pass (progElemental) samples its noise field from this. */
+  worldX: number;
+  worldY: number;
 }
 
 export type AnchorProvider = (col: number, row: number) => EffectAnchor;
@@ -129,6 +133,7 @@ export class EffectsRenderer {
       "u_center",
       "u_radius",
       "u_rotation",
+      "u_worldCenter",
       "u_element",
       "u_time",
       "u_frameSeed",
@@ -234,7 +239,13 @@ export class EffectsRenderer {
 
   private drawQuad(
     program: WebGLProgram,
-    uniforms: { u_resolution: WebGLUniformLocation | null; u_center: WebGLUniformLocation | null; u_radius: WebGLUniformLocation | null; u_rotation: WebGLUniformLocation | null },
+    uniforms: {
+      u_resolution: WebGLUniformLocation | null;
+      u_center: WebGLUniformLocation | null;
+      u_radius: WebGLUniformLocation | null;
+      u_rotation: WebGLUniformLocation | null;
+      u_worldCenter?: WebGLUniformLocation | null;
+    },
     resW: number,
     resH: number,
     centerXCss: number,
@@ -242,6 +253,8 @@ export class EffectsRenderer {
     radiusXCss: number,
     radiusYCss: number,
     rotation: number,
+    worldXCss?: number,
+    worldYCss?: number,
   ): void {
     const gl = this.gl;
     gl.useProgram(program);
@@ -250,6 +263,12 @@ export class EffectsRenderer {
     gl.uniform2f(uniforms.u_center, centerXCss * this.dpr * (resW / this.fullW), centerYCss * this.dpr * (resH / this.fullH));
     gl.uniform2f(uniforms.u_radius, radiusXCss * this.dpr * (resW / this.fullW), radiusYCss * this.dpr * (resH / this.fullH));
     gl.uniform1f(uniforms.u_rotation, rotation);
+    // Only the elemental visual pass declares/uses this — see waterSurface()/riverSurface()
+    // in shaders.ts. Kept in the same dpr/resolution-scaled unit system as u_center so a
+    // hex's world position and its screen position agree on scale, just not on origin.
+    if (uniforms.u_worldCenter && worldXCss !== undefined && worldYCss !== undefined) {
+      gl.uniform2f(uniforms.u_worldCenter, worldXCss * this.dpr * (resW / this.fullW), worldYCss * this.dpr * (resH / this.fullH));
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
@@ -349,6 +368,8 @@ export class EffectsRenderer {
         radius * fx.aspect[0],
         radius * fx.aspect[1],
         fx.rotation,
+        anchor.worldX,
+        anchor.worldY,
       );
     };
 

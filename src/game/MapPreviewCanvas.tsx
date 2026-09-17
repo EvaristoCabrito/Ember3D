@@ -29,6 +29,7 @@ export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecoration
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const unitsCanvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<BattleEngine | null>(null);
   const redrawRef = useRef<(() => void) | null>(null);
@@ -65,6 +66,11 @@ export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecoration
     if (!canvas || !viewport) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    // See BattleCanvas for why: units/foreground decorations get their own transparent
+    // canvas above the FX layer, so a Water/Fire/etc placement can't paint over them
+    // regardless of draw order.
+    const unitsCanvas = unitsCanvasRef.current;
+    const unitsCtx = unitsCanvas?.getContext("2d") ?? null;
 
     let engine: BattleEngine;
     try {
@@ -102,17 +108,34 @@ export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecoration
       canvas.height = Math.max(1, Math.floor(h * dpr));
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
-      engine.render(ctx, w, h, dpr);
+      if (unitsCanvas) {
+        unitsCanvas.width = Math.max(1, Math.floor(w * dpr));
+        unitsCanvas.height = Math.max(1, Math.floor(h * dpr));
+        unitsCanvas.style.width = `${w}px`;
+        unitsCanvas.style.height = `${h}px`;
+      }
+      const drawGroundAndUnits = () => {
+        engine.renderGround(ctx, w, h, dpr);
+        if (unitsCtx && unitsCanvas) {
+          unitsCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          unitsCtx.clearRect(0, 0, w, h);
+          engine.renderUnitsAndOverlays(unitsCtx, w, h);
+        }
+      };
+      drawGroundAndUnits();
       if (needsCameraRestore) {
         const savedCamera = cameraRef.current;
         if (savedCamera) {
           engine.restoreCamera(savedCamera);
-          engine.render(ctx, w, h, dpr);
+          drawGroundAndUnits();
         }
         needsCameraRestore = false;
       }
-      if (selectedPlacedDecoration) engine.drawDecorationHighlight(ctx, selectedPlacedDecoration.id, selectedPlacedDecoration);
-      else if (selectedDecorationId) engine.drawDecorationHighlight(ctx, selectedDecorationId);
+      // Drawn on the units canvas (top layer) so the highlight stays visible over units too,
+      // matching where it used to land back when everything shared one canvas.
+      const highlightCtx = unitsCtx ?? ctx;
+      if (selectedPlacedDecoration) engine.drawDecorationHighlight(highlightCtx, selectedPlacedDecoration.id, selectedPlacedDecoration);
+      else if (selectedDecorationId) engine.drawDecorationHighlight(highlightCtx, selectedDecorationId);
       if (fx && fxCanvas) {
         const now = performance.now();
         const dt = Math.min(0.05, (now - lastFrame) / 1000);
@@ -326,6 +349,7 @@ export function MapPreviewCanvas({ mission, art, onCellClick, selectedDecoration
           <div className="sticky left-0 top-0 relative">
             <canvas ref={canvasRef} className="block" />
             <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block" style={{ display: "none" }} />
+            <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block" />
           </div>
         </div>
       </div>

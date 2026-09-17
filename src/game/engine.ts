@@ -781,6 +781,9 @@ export class BattleEngine {
   /** Permanent elemental GPU FX placed on this map in the editor — spawned once at battle
    * start and left running for the whole fight. See BattleCanvas/gfx.EffectsRenderer. */
   readonly elementalFxPlacements: ElementalFxPlacement[];
+  /** `row * cols + col` keys of tiles whose photo art is suppressed in favor of a full-cover
+   * WebGL water FX (water/water2 only — see the constructor and renderGround). */
+  private readonly waterFxTileKeys: Set<number>;
   readonly cols: number;
   readonly rows: number;
   units: Unit[] = [];
@@ -986,6 +989,19 @@ export class BattleEngine {
     this.tileRots = mission.tileRots ?? [];
     this.decorations = (mission.decorations ?? []).map((d) => ({ ...d }));
     this.elementalFxPlacements = (mission.elementalFx ?? []).map((p) => ({ ...p }));
+    // A tile under a full-coverage water FX placement (water/water2) skips its own photo
+    // tile art entirely — see renderGround. That art is one of 22 independently-centered
+    // variants (assets.ts TILE_VARIANT_COUNT.water), so two neighboring water hexes almost
+    // always draw two different, unaligned photos and the grid seam is baked into the art
+    // itself; a shader overlay tinting/refracting that art can never hide the mismatch. The
+    // WebGL FX is the entire visual for those hexes instead of a glaze on top of one.
+    // Shore/Shore2 are deliberately excluded: they only cover HALF their hex (the shader
+    // draws its own flat sand color on the dry half, fading fully transparent past the tide
+    // line), so they still need the real land art showing through underneath.
+    const WATER_FAMILY = new Set(["water", "water2"]);
+    this.waterFxTileKeys = new Set(
+      this.elementalFxPlacements.filter((p) => WATER_FAMILY.has(p.kind)).map((p) => p.y * this.cols + p.x),
+    );
     // Art is loaded once at boot — a decoration added later (or after HMR) is in
     // DECORATIONS and in the editor <img>, but missing from art.decorations, so combat
     // used to skip it. Fill any hole so Testar paints the same props the editor lists.
@@ -5927,10 +5943,22 @@ export class BattleEngine {
 
   /** CSS-pixel screen position (matching the coordinate space `render()` just drew into) of a
    * hex's center, plus the current tile size — what the WebGL FX overlay needs to keep a spawned
-   * effect glued to its hex while the camera pans/zooms. */
-  effectAnchor(col: number, row: number): { x: number; y: number; tile: number } {
+   * effect glued to its hex while the camera pans/zooms. Also carries a second, camera-INDEPENDENT
+   * position (worldX/worldY) for the same hex — the exact same hexCenter formula, just without
+   * this frame's pan offset (this.layout.ox/oy) folded in. The water/river shaders sample their
+   * noise field from that instead of screen position: sampling from the live screen position
+   * meant every camera pan (which happens constantly — dragging, zoom, the camera following a
+   * moving unit) shifted the whole noise field by the pan delta, on top of its real u_time-driven
+   * animation, so the water visibly slid/warped in lockstep with the camera instead of just
+   * flowing. worldX/worldY still scale with the current tile size (so zooming rescales the
+   * pattern, which reads as expected), only the pan-induced translation is removed. */
+  effectAnchor(col: number, row: number): { x: number; y: number; tile: number; worldX: number; worldY: number } {
     const { cx, cy } = this.hexCenter(col, row);
-    return { x: cx, y: cy, tile: this.layout.tile };
+    const { tile } = this.layout;
+    const sqrt3 = Math.sqrt(3);
+    const worldX = tile * sqrt3 * (col + 0.5 * (row & 1) + 0.5);
+    const worldY = this.boardPad(tile) + tile * (1.5 * row + 1);
+    return { x: cx, y: cy, tile, worldX, worldY };
   }
 
   panBy(dx: number, dy: number): void {
@@ -6660,28 +6688,37 @@ export class BattleEngine {
         if (!this.explored(x, y)) continue;
         const id = tileAt(this.tiles, this.cols, x, y);
         const drawId = id === "chest" ? this.visualFloorAt(x, y) : id;
-        const variants = this.art.tiles[drawId];
-        const variant = this.tileVariants[y * this.cols + x] ?? 0;
-        const img = variants[variant] ?? variants[0];
+        const isWaterFx = this.waterFxTileKeys.has(y * this.cols + x);
         ctx.save();
         this.hexPath(ctx, cx, cy, tile * 1.0);
         ctx.clip();
         // Remembered but not in sight: the ground the party walked past, dimmed so it
         // reads as recall rather than as somewhere they can currently see into.
         if (!this.visible(x, y)) ctx.globalAlpha = 0.38;
-        // A turned hex spins about its own centre, inside the clip. Sixty degrees maps a
-        // hexagon onto itself, so only the picture moves — the shape stays put and the
-        // neighbours still line up.
-        const rot = this.tileRots[y * this.cols + x] ?? 0;
-        if (rot) {
-          ctx.translate(cx, cy);
-          ctx.rotate((rot * Math.PI) / 3);
-          ctx.translate(-cx, -cy);
-        }
-        if (img) ctx.drawImage(img, cx - tile, cy - tile, tile * 2, tile * 2);
-        else {
-          ctx.fillStyle = "#1e1b18";
+        if (isWaterFx) {
+          // Flat lakebed fill instead of the photo tile art — the WebGL water FX (see
+          // BattleCanvas/gfx.EffectsRenderer) is drawn fully opaque over this hex and owns
+          // the entire look, so nothing needs to show through here at all.
+          ctx.fillStyle = "#0c2230";
           ctx.fill();
+        } else {
+          const variants = this.art.tiles[drawId];
+          const variant = this.tileVariants[y * this.cols + x] ?? 0;
+          const img = variants[variant] ?? variants[0];
+          // A turned hex spins about its own centre, inside the clip. Sixty degrees maps a
+          // hexagon onto itself, so only the picture moves — the shape stays put and the
+          // neighbours still line up.
+          const rot = this.tileRots[y * this.cols + x] ?? 0;
+          if (rot) {
+            ctx.translate(cx, cy);
+            ctx.rotate((rot * Math.PI) / 3);
+            ctx.translate(-cx, -cy);
+          }
+          if (img) ctx.drawImage(img, cx - tile, cy - tile, tile * 2, tile * 2);
+          else {
+            ctx.fillStyle = "#1e1b18";
+            ctx.fill();
+          }
         }
         ctx.restore();
       }

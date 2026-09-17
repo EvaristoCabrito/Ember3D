@@ -284,7 +284,7 @@ export interface DecorationPlacement {
  * whole fight (see BattleEngine.elementalFxPlacements / BattleCanvas). */
 export interface ElementalFxPlacement {
   id: string;
-  kind: "fire" | "ice" | "water" | "lightning" | "acid" | "holy" | "darkness" | "shore" | "shore2" | "water2";
+  kind: "fire" | "ice" | "water" | "lightning" | "acid" | "holy" | "darkness" | "shore" | "shore2" | "water2" | "water3" | "water4" | "water5";
   x: number;
   y: number;
   /** Footprint as a multiple of one hex's tile size. Omitted = the renderer's default. */

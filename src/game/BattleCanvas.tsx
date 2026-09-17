@@ -20,6 +20,7 @@ export function BattleCanvas({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const unitsCanvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hudKey = useRef("");
 
@@ -29,13 +30,23 @@ export function BattleCanvas({
     if (!canvas || !wrap) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    // Units, HP bars, particles and foreground decorations get their own transparent canvas
+    // stacked ABOVE the FX canvas (see below), instead of being part of the ground canvas the
+    // FX layer reads as its "scene" — otherwise a unit or decoration standing on/near a Water
+    // placement would already be baked into that snapshot, and the FX canvas (a separate DOM
+    // layer stacked on top of everything) would paint straight over it every frame regardless
+    // of draw order. Splitting the ground and unit passes onto their own canvases (see
+    // BattleEngine.renderGround/renderUnitsAndOverlays) puts a real layer boundary between them.
+    const unitsCanvas = unitsCanvasRef.current;
+    const unitsCtx = unitsCanvas?.getContext("2d") ?? null;
     (window as Window & { __emberEngine?: BattleEngine }).__emberEngine = engine;
 
     // Permanent map-authored elemental FX (lava fire, icy glints, ...) placed in the editor's
-    // "FX" mode — a WebGL2 overlay that uploads this same 2D frame as its "scene" texture and
-    // draws the placements on top. Nothing to do with spell casting: it only ever plays what
-    // the map author placed. Degrades to plain 2D (this canvas stays visible, overlay hidden)
-    // if WebGL2 isn't available.
+    // "FX" mode — a WebGL2 overlay that uploads the ground canvas as its "scene" texture and
+    // draws the placements on top of the ground only; units/overlays are drawn afterward on
+    // their own canvas above this one. Nothing to do with spell casting: it only ever plays
+    // what the map author placed. Degrades to plain 2D (this canvas stays visible, overlay
+    // hidden) if WebGL2 isn't available.
     let fx: EffectsRenderer | null = null;
     const fxCanvas = fxCanvasRef.current;
     if (fxCanvas) {
@@ -109,6 +120,12 @@ export function BattleCanvas({
         fxCanvas.style.width = `${w}px`;
         fxCanvas.style.height = `${h}px`;
       }
+      if (unitsCanvas) {
+        unitsCanvas.width = Math.max(1, Math.floor(w * dpr));
+        unitsCanvas.height = Math.max(1, Math.floor(h * dpr));
+        unitsCanvas.style.width = `${w}px`;
+        unitsCanvas.style.height = `${h}px`;
+      }
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -133,7 +150,7 @@ export function BattleCanvas({
         engine.tick(dt);
       }
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      engine.render(ctx, wrap.clientWidth, wrap.clientHeight, dpr);
+      engine.renderGround(ctx, wrap.clientWidth, wrap.clientHeight, dpr);
       // Skip the whole FX pipeline (scene upload, light/effects/bloom FBO passes) whenever
       // the map has no elemental placements, so an ordinary fight never pays for it.
       if (fx) {
@@ -143,6 +160,14 @@ export function BattleCanvas({
         } else if (fxCanvas) {
           fxCanvas.style.display = "none";
         }
+      }
+      // Drawn on its own transparent canvas above the FX layer, so units/HP-bars/foreground
+      // decorations always read in front of a Water/Fire/etc placement instead of being
+      // whatever the FX's snapshot happened to catch underneath it.
+      if (unitsCtx && unitsCanvas) {
+        unitsCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        unitsCtx.clearRect(0, 0, wrap.clientWidth, wrap.clientHeight);
+        engine.renderUnitsAndOverlays(unitsCtx, wrap.clientWidth, wrap.clientHeight);
       }
       const hud = engine.getHud();
       const k = [
@@ -413,6 +438,7 @@ export function BattleCanvas({
     <div ref={wrapRef} className="relative h-full w-full min-h-0 touch-none">
       <canvas ref={canvasRef} className="block h-full w-full touch-none" />
       <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ display: "none" }} />
+      <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
     </div>
   );
 }
