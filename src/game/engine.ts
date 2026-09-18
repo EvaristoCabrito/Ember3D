@@ -7425,7 +7425,7 @@ export class BattleEngine {
           ctx.translate(head.x, head.y);
           // The supplied source points northeast (-45°); rotate from that intrinsic direction to the flight angle.
           ctx.rotate(flightAngle + Math.PI / 4);
-          ctx.globalCompositeOperation = "screen";
+          ctx.globalCompositeOperation = "source-over";
           ctx.globalAlpha = 1 - afterglow;
           ctx.drawImage(this.art.arrowCore, -tile * 0.54, -tile * 0.54, tile * 1.08, tile * 1.08);
           ctx.restore();
@@ -7578,7 +7578,7 @@ export class BattleEngine {
             ctx.save();
             ctx.translate(head.x, head.y);
             ctx.rotate(angle);
-            ctx.globalCompositeOperation = "screen";
+            ctx.globalCompositeOperation = "source-over";
             ctx.globalAlpha = auraFade;
             ctx.drawImage(this.art.arrowCore, -tile * 0.56, -tile * 0.22, tile * 1.12, tile * 0.44);
             ctx.restore();

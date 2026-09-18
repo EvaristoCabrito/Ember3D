@@ -148,6 +148,26 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 // together.
 const HERO_IDLE = new Set<SpriteId>(["kael", "nira", "voss", "salazar", "malrec", "aldric", "defaultLancer", "horror", "Asherah", "familiar", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer"]);
 
+/** arrow-002.png is a moody product photo shot on black with no alpha channel; it was
+ * originally drawn with a screen/lighter blend to fake-hide that background, which only
+ * works when composited straight onto opaque battlefield pixels. renderUnitsAndOverlays
+ * draws projectiles onto their own transparent per-frame canvas (see BattleCanvas), so
+ * blending against nothing just paints a solid near-black square. Bake real alpha from
+ * the image's own luminance once at load time so it composites correctly on any layer. */
+function deriveAlphaFromBlack(img: HTMLImageElement): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const c = canvas.getContext("2d")!;
+  c.drawImage(img, 0, 0);
+  const data = c.getImageData(0, 0, canvas.width, canvas.height);
+  const px = data.data;
+  for (let i = 0; i < px.length; i += 4) {
+    px[i + 3] = Math.max(px[i], px[i + 1], px[i + 2]);
+  }
+  c.putImageData(data, 0, 0);
+  return canvas;
+}
 export async function loadGameArt(): Promise<GameArt> {
   const tiles = {} as Record<TerrainId, HTMLImageElement[]>;
   await Promise.all(
@@ -306,7 +326,7 @@ export async function loadGameArt(): Promise<GameArt> {
   const impact = await Promise.all([1, 2, 3, 4].map((n) => loadImage(`/game/fx/impact-${n}.png`)));
   const fireballCore = await loadImage("/game/fx/fireball-core-v1.png?v=1");
   const causticVenomCore = await loadImage("/game/fx/caustic-venom-core-v1.png?v=1");
-  const arrowCore = await loadImage("/game/fx/arrow-002.png?v=1");
+  const arrowCore = deriveAlphaFromBlack(await loadImage("/game/fx/arrow-002.png?v=1"));
   const lightningCores = await Promise.all([
     loadImage("/game/fx/lightning-core-v1.png?v=1"),
     loadImage("/game/fx/lightning-core-v2.png?v=1"),

@@ -756,7 +756,7 @@ export interface GameArt {
   /** Ultra-realistic Caustic Venom core. */
   causticVenomCore: HTMLImageElement;
   /** Ultra-realistic travelling arrow. */
-  arrowCore: HTMLImageElement;
+  arrowCore: HTMLCanvasElement;
   /** Photoreal Relâmpago cores (flicker set). Additive-blend on black. */
   lightningCores: HTMLImageElement[];
   /** Optional full-canvas backdrop, keyed by mission id. */
