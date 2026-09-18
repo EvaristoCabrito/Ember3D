@@ -177,62 +177,43 @@ vec3 waterSurface(vec2 vUv, out float h) {
 }
 `;
 
-// Shared river-band shape for Water3/4/5 — one function, three tunings (see the three call
-// sites below), instead of three near-duplicate branches. Per the standard natural-river
-// design points: asymmetric width/curvature (meander + widthNoise, both low-frequency so a
-// bend spans many hexes rather than wobbling within one — same world-space-noise trick as
-// WATER_SURFACE, so a chain of placements reads one continuous river, not independent per-
-// tile wiggles), an inner-bank/shallow/deep cross-section (crossPos/depth drive a lighter,
-// more translucent "shallow silt" tone at the rim fading to the full water tone and full
-// opacity at the channel's center), and flow-aligned whitewater (the streak/foam term biases
-// on the river's own local tangent via dFdy(meander) — bends and narrows, where real current
-// accelerates — rather than a static top-down speckle). The hex-edge cutoff (hexMask) stays a
-// separate, hard, un-gradiented term from the bank cutoff (bankMask): the hex boundary must
-// stay seam-free the way WATER's own edge does, while the bank itself is deliberately soft.
-const RIVER_SURFACE = `
-vec3 riverSurface(float alongScale, float meanderAmp, float widthMin, float widthMax, float bankJitterAmp, float foamStrength, out float alpha) {
+// Shared natural-shoreline shape for Water3/4/5 — one function, three tunings (see the three
+// call sites below), instead of three near-duplicate branches. This is Shore's own structure
+// (one side open water, the rest a sand/wet-sand/foam fringe that fades to fully transparent,
+// revealing the real land art underneath — same "half water, half transparency" contract as
+// Shore, NOT a channel running through the tile), with one change: Shore's water/land boundary
+// is a single horizontal line whose Y position only breathes over time (the tide sine), the
+// same straight cut at every X. Here the boundary's Y position is ALSO a function of X, built
+// from low-frequency noise (the smooth curve of the coastline) plus a finer, higher-frequency
+// layer on top (the ragged, pixel-to-pixel roughness a perfectly smooth curve never has) — both
+// sampled from v_world so the coastline is a real, continuous, camera-stable shape that keeps
+// going from hex to hex instead of restarting at every tile. The three variants differ only in
+// waveFreq/waveAmp/roughFreq/roughAmp (how broad the curve is, how rough its edge is), not in
+// structure — see the three call sites for what each stands for.
+const NATURAL_SHORE_SURFACE = `
+vec3 naturalShoreSurface(float waveFreq, float waveAmp, float roughFreq, float roughAmp, float baseline, out float alpha) {
   float d = hexDist(v_local);
   if (d > 1.0) { alpha = 0.0; return vec3(0.0); }
-  // v_world, not v_uv * u_resolution — see WATER_SURFACE's comment above. A screen-space
-  // basis here was worse than for plain water: it meant the whole river's centerline and
-  // width visibly shifted with every camera pan, not just its ripples.
-  vec2 worldUv = v_world * 0.008;
-  // A slow along-flow coordinate — orders of magnitude lower frequency than the ripple noise
-  // waterSurface() samples — so the river bends over many hexes, not within one.
-  float along = worldUv.y * alongScale;
-  float meander = (sampleFbm(vec2(along, u_seed * 0.013 + 4.0)) - 0.5) * meanderAmp;
-  float widthNoise = sampleFbm(vec2(along * 1.8 + 8.0, u_seed * 0.013));
-  float halfWidth = mix(widthMin, widthMax, widthNoise);
-  // A further, finer, higher-frequency perturbation on top of the smooth width falloff — a
-  // perfectly smooth curve reads as a drawn arc no matter how it wanders; real riverbanks are
-  // ragged at the pixel-to-pixel level.
-  float rippleAcrossBank = sampleFbm(vec2(worldUv.x * 2.6, along * 5.0 + 1.7)) - 0.5;
-  float distFromBank = abs(v_local.x - meander) - halfWidth + rippleAcrossBank * bankJitterAmp;
-  float aaBank = fwidth(distFromBank);
-  float bankMask = smoothstep(aaBank, -aaBank, distFromBank);
-  // -1 at the left bank, 0 at the channel center, +1 at the right bank — the smooth (pre-
-  // jitter) cross-section, so the shading gradient itself stays clean even though the final
-  // cutoff (bankMask, above) is jagged.
-  float crossPos = (v_local.x - meander) / max(halfWidth, 0.001);
-  float depth = clamp(1.0 - abs(crossPos), 0.0, 1.0);
+  vec2 worldPos = v_world * 0.008;
+  float wave = (sampleFbm(vec2(worldPos.x * waveFreq, u_seed * 0.013 + 2.0)) - 0.5) * waveAmp;
+  float rough = (sampleFbm(vec2(worldPos.x * roughFreq, u_seed * 0.013 + 7.0)) - 0.5) * roughAmp;
+  // A gentle breathing tide on top of the coastline's own fixed shape, same idea as Shore's.
+  float tideBreath = 0.06 * sin(u_time * u_scrollSpeed * 0.5 + u_seed * 5.0);
+  float boundary = baseline + wave + rough + tideBreath;
+  float front = v_local.y - boundary;
   float h;
-  vec3 base = waterSurface(v_uv, h);
-  vec3 shallow = mix(base, vec3(0.55, 0.48, 0.35), 0.55);
-  vec3 riverCol = mix(shallow, base, smoothstep(0.15, 0.6, depth));
-  float shallowAlpha = mix(0.55, 1.0, smoothstep(0.0, 0.5, depth));
-  // dFdy(meander) is a cheap proxy for how sharply the channel is turning right here (a
-  // straight run has ~0 screen-space slope; a bend doesn't) — real current visibly speeds up
-  // exactly there, and in a pinch point (halfWidth near its narrow end), so whitewater gets
-  // biased toward bends and narrows instead of scattered uniformly across the whole channel.
-  float bendiness = abs(dFdy(meander));
-  float narrowness = 1.0 - smoothstep(widthMin, widthMax, halfWidth);
-  float streak = sampleFbm(vec2((v_local.x - meander) * 6.0 - along * 2.0, along * 9.0));
-  float foam = smoothstep(0.62, 0.85, streak) * clamp(bendiness * 3.0 + narrowness * 0.6, 0.0, 1.0) * foamStrength;
-  riverCol = mix(riverCol, vec3(1.0), foam * 0.4);
+  vec3 waterCol = waterSurface(v_uv, h);
+  float foamNoise = sampleFbm(v_local * 3.0 - vec2(0.0, u_time * u_scrollSpeed * 1.5));
+  float foamBand = smoothstep(0.08, 0.0, abs(front)) * smoothstep(0.35, 0.55, foamNoise + 0.3);
+  float wetSand = smoothstep(0.25, -0.05, front) * 0.4;
+  float waterMask = smoothstep(0.05, -0.3, front);
+  vec3 sand = vec3(0.78, 0.68, 0.5);
+  vec3 col = mix(sand, waterCol, clamp(waterMask + wetSand, 0.0, 1.0));
+  col = mix(col, vec3(1.0), foamBand);
   float aaHex = fwidth(d);
   float hexMask = smoothstep(1.0 + aaHex, 1.0 - aaHex, d);
-  alpha = bankMask * hexMask * shallowAlpha;
-  return riverCol;
+  alpha = clamp(waterMask * 0.85 + wetSand + foamBand, 0.0, 1.0) * hexMask;
+  return col;
 }
 `;
 
@@ -260,7 +241,7 @@ ${NOISE_SAMPLE}
 ${SHADING}
 ${HEX_SHAPE}
 ${WATER_SURFACE}
-${RIVER_SURFACE}
+${NATURAL_SHORE_SURFACE}
 ${ICE_CELLS}
 
 const int FIRE = 0;
@@ -346,18 +327,15 @@ void main() {
   }
 
   if (u_element == WATER) {
-    // Same waterSurface() as Shore's water half and Water2 (see WATER_SURFACE above) — no
-    // separate tuning, no glint, no foam ring. Only the hex mask (d) stays per-instance; the
-    // water itself reads as one continuous body wherever tiles touch.
+    // Unconditional — the same waterSurface() + hard edge every water-family kind's water
+    // side already uses (Shore/Shore2/Water2/Water3/4/5, see their own branches), so any two
+    // adjacent water-FX tiles blend into one continuous body no matter which kinds they are.
+    // No neighbor detection, no fringe: a hard, fixed ~1px edge instead of a wide fade is what
+    // keeps two touching hexes from both fading toward transparent at their shared line and
+    // leaving a hairline gap — see WATER_SURFACE's own comment for the fuller explanation.
     if (d > 1.0) discard;
     float h;
     vec3 col = waterSurface(v_uv, h);
-    // A fixed-percentage fade band leaves BOTH of two touching hexes fading toward
-    // transparent right at their shared edge — neither one opaque there — which shows as a
-    // hairline of bare terrain between them no matter how well the pattern lines up. A
-    // fwidth-sized (~1px, adapts to zoom) hard edge stays alias-free without leaving a gap:
-    // whichever hex rasterizes a boundary pixel covers it fully, and since both sides read
-    // the exact same world-space color there, it doesn't matter which one wins it.
     float aa = fwidth(d);
     float alpha = smoothstep(1.0 + aa, 1.0 - aa, d);
     fragColor = vec4(col, alpha);
@@ -506,29 +484,29 @@ void main() {
     return;
   }
 
-  // WATER3/4/5 — three river typologies, not ponds: a winding band carved out of the same
-  // hex footprint Water uses, instead of filling it or splitting it exactly in half along a
-  // straight line the way Shore does. All three call the shared riverSurface() above with
-  // different tunings; see that function's own comment for what each parameter does.
+  // WATER3/4/5 — three natural-shoreline typologies: like Shore, half water and half a
+  // transparent fringe that reveals the real land art underneath, NOT a channel through the
+  // tile's middle. All three call the shared naturalShoreSurface() above with different
+  // tunings; see that function's own comment for what each parameter does.
   if (u_element == WATER3) {
-    // River: a moderate, regularly-winding channel — the baseline typology.
+    // Natural Shore: a moderate, gently wandering coastline — the baseline typology.
     float alpha;
-    vec3 col = riverSurface(0.12, 2.4, 0.22, 0.5, 0.1, 0.35, alpha);
+    vec3 col = naturalShoreSurface(0.10, 0.55, 0.6, 0.1, 0.05, alpha);
     fragColor = vec4(col, alpha);
     return;
   }
   if (u_element == WATER4) {
-    // Creek: narrower and shallower banks, tighter/more frequent bends (higher alongScale),
-    // and noticeably more whitewater — a fast, rocky little stream.
+    // Rocky Shore: less of the broad smooth curve, much more of the ragged high-frequency
+    // roughness layer — an irregular, jagged little coastline instead of a graceful one.
     float alpha;
-    vec3 col = riverSurface(0.22, 1.6, 0.12, 0.28, 0.14, 0.65, alpha);
+    vec3 col = naturalShoreSurface(0.16, 0.35, 1.0, 0.22, 0.0, alpha);
     fragColor = vec4(col, alpha);
     return;
   }
-  // WATER5 — Wide River: broad, slow, oxbow-scale bends (low alongScale, high meanderAmp)
-  // and a wide channel that mostly stays calm, with whitewater only at its rare tight points.
+  // WATER5 — Bay Shore: low frequency, large amplitude — big, slow, sweeping bay-scale
+  // curves, almost no fine roughness.
   float alpha;
-  vec3 col = riverSurface(0.07, 3.0, 0.4, 0.75, 0.06, 0.12, alpha);
+  vec3 col = naturalShoreSurface(0.05, 0.85, 0.3, 0.06, 0.08, alpha);
   fragColor = vec4(col, alpha);
 }
 `;

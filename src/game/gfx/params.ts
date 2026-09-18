@@ -31,9 +31,9 @@ export const ELEMENT_LABELS: Record<ElementKind, string> = {
   shore: "Shore 1",
   shore2: "Shore 2",
   water2: "Water 2",
-  water3: "Water 3 (River)",
-  water4: "Water 4 (Creek)",
-  water5: "Water 5 (Wide River)",
+  water3: "Water 3 (Natural Shore)",
+  water4: "Water 4 (Rocky Shore)",
+  water5: "Water 5 (Bay Shore)",
 };
 
 export interface ElementParams {
@@ -61,10 +61,10 @@ export const DEFAULT_ELEMENT_PARAMS: Record<ElementKind, ElementParams> = {
   shore: { noiseScale: 2.0, scrollSpeed: 0.35, intensity: 0.9, color: [0.35, 0.65, 0.85] },
   shore2: { noiseScale: 2.0, scrollSpeed: 0.35, intensity: 0.9, color: [0.35, 0.65, 0.85] },
   water2: { noiseScale: 2.0, scrollSpeed: 0.35, intensity: 0.9, color: [0.35, 0.65, 0.85] },
-  // Same color as water across all three river variants, deliberately — a river running
-  // into a lake or a Water hex has to read as the same body of water at the confluence, not
-  // a differently-tinted one. Only scrollSpeed (how lively the current reads) and the
-  // river-specific shape params (see RIVER_SURFACE in shaders.ts) tell the three apart.
+  // Same color as water across all three natural-shore variants, deliberately — a Water3/4/5
+  // hex sitting next to plain Water or a Shore hex has to read as the same body of water, not
+  // a differently-tinted one. Only scrollSpeed (how lively/choppy the water reads) and the
+  // shoreline shape params (see NATURAL_SHORE_SURFACE in shaders.ts) tell the three apart.
   water3: { noiseScale: 2.0, scrollSpeed: 0.35, intensity: 0.9, color: [0.35, 0.65, 0.85] },
   water4: { noiseScale: 2.0, scrollSpeed: 0.55, intensity: 0.9, color: [0.35, 0.65, 0.85] },
   water5: { noiseScale: 2.0, scrollSpeed: 0.22, intensity: 0.9, color: [0.35, 0.65, 0.85] },
@@ -92,8 +92,8 @@ export const DEFAULT_RADIUS_TILES: Partial<Record<ElementKind, number>> = {
   // Water 2: same water, square instead of hex-shaped and bigger — meant to be dropped over
   // a cluster of Water hexes to paper over any seam between them, not to match one tile.
   water2: 1.7,
-  // Water 3/4/5 (river variants): like Water, matches its own hex exactly — the winding band
-  // is carved out of that footprint, not sized differently from it.
+  // Water 3/4/5 (natural-shore variants): same footprint as Shore — matches its own hex
+  // exactly, half water and half a transparent fringe carved out of that same footprint.
   water3: 1.0,
   water4: 1.0,
   water5: 1.0,
