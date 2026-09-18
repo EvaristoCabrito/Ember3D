@@ -1002,27 +1002,6 @@ export class BattleEngine {
     this.waterFxTileKeys = new Set(
       this.elementalFxPlacements.filter((p) => WATER_FAMILY.has(p.kind)).map((p) => p.y * this.cols + p.x),
     );
-    // Debug-only, off by default: most 2D "water" TERRAIN tiles on the actual maps have no
-    // water/water2 FX object placed on top at all, so only the ~25 hexes a designer happened
-    // to hand-place one on get the animated WebGL surface — every other water tile just shows
-    // its flat, static photo art. This block only ever PUSHES a brand-new placement for a water
-    // tile that has none — it never reads back or mutates an existing placement (of any kind),
-    // so with the flag off, or on any hex a designer already gave an FX to, behavior is
-    // unchanged. Toggle via devtools: localStorage.setItem("emberash:landShoreFx", "1") then
-    // reload, "0" (or removed) to undo.
-    if (this.landShoreFxDebugEnabled()) {
-      const covered = new Set(this.elementalFxPlacements.map((p) => p.y * this.cols + p.x));
-      for (let wy = 0; wy < this.rows; wy++) {
-        for (let wx = 0; wx < this.cols; wx++) {
-          const key = wy * this.cols + wx;
-          if (this.tiles[key] !== "water" || covered.has(key)) continue;
-          this.elementalFxPlacements.push({ id: `fx-synth-water-${key}`, kind: "water", x: wx, y: wy });
-        }
-      }
-      this.waterFxTileKeys = new Set(
-        this.elementalFxPlacements.filter((p) => WATER_FAMILY.has(p.kind)).map((p) => p.y * this.cols + p.x),
-      );
-    }
     // Art is loaded once at boot — a decoration added later (or after HMR) is in
     // DECORATIONS and in the editor <img>, but missing from art.decorations, so combat
     // used to skip it. Fill any hole so Testar paints the same props the editor lists.
@@ -1056,6 +1035,37 @@ export class BattleEngine {
         const y = p.y + dy;
         if (x >= 0 && x < this.cols && y >= 0 && y < this.rows) this.tiles[y * this.cols + x] = def.tile;
       }
+    }
+    // Debug-only, off by default: most 2D "water" TERRAIN tiles on the actual maps have no
+    // water/water2 FX object placed on top at all, so only the ~25 hexes a designer happened
+    // to hand-place one on get the animated WebGL surface — every other water tile just shows
+    // its flat, static photo art. Runs after the decoration tile-stamping above (not before —
+    // an earlier version of this ran before that stamping and so could read a hex's pre-stamp
+    // tile, e.g. a decoration whose def.tile turns its hex into/out of "water" after this would
+    // have already decided). This block only ever PUSHES a brand-new placement for a water tile
+    // that has none of its own AND has no decoration on it (a "water" FX is a fully opaque
+    // full-hex quad composited over the already-rendered 2D scene — see gfx/shaders.ts WATER
+    // branch and EffectsRenderer's u_scene upload — so adding one under an existing decoration
+    // would bury it, leaving only a faint trace via the shader's own scene-reflection term); it
+    // never reads back or mutates an existing FX placement (of any kind), so with the flag off,
+    // on any hex a designer already gave an FX to, or on any decorated hex, behavior is
+    // unchanged. Toggle via devtools: localStorage.setItem("emberash:landShoreFx", "1") then
+    // reload, "0" (or removed) to undo.
+    if (this.landShoreFxDebugEnabled()) {
+      const occupied = new Set(this.elementalFxPlacements.map((p) => p.y * this.cols + p.x));
+      for (const p of this.decorations) {
+        for (const { dx, dy } of placedFootprint(p)) occupied.add((p.y + dy) * this.cols + (p.x + dx));
+      }
+      for (let wy = 0; wy < this.rows; wy++) {
+        for (let wx = 0; wx < this.cols; wx++) {
+          const key = wy * this.cols + wx;
+          if (this.tiles[key] !== "water" || occupied.has(key)) continue;
+          this.elementalFxPlacements.push({ id: `fx-synth-water-${key}`, kind: "water", x: wx, y: wy });
+        }
+      }
+      this.waterFxTileKeys = new Set(
+        this.elementalFxPlacements.filter((p) => WATER_FAMILY.has(p.kind)).map((p) => p.y * this.cols + p.x),
+      );
     }
     this.decorations.push(...barricadeDecor(this.tiles, this.cols, this.rows, this.decorations));
     this.refreshDecorOverlay();
