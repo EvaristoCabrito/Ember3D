@@ -189,6 +189,27 @@ function blankFireballBurstFx(): FireballBurstFx {
   return { live: false, x: 0, y: 0, t: 0, max: 0.58, seed: 0, kind: "fireball" };
 }
 
+type GpuFxEvent =
+  | { kind: "lightning"; x: number; y: number; duration: number; power: "shock" | "raio" | "t3" }
+  | { kind: "fireball"; x: number; y: number; duration: number; role: "blast" | "ember"; center: boolean }
+  | { kind: "magicMissile"; role: "bolt"; fromX: number; fromY: number; toX: number; toY: number; duration: number }
+  | { kind: "magicMissile"; role: "burst"; x: number; y: number; duration: number }
+  | { kind: "webOfDreams"; role: "bolt"; fromX: number; fromY: number; toX: number; toY: number; duration: number }
+  | { kind: "webOfDreams"; role: "bloom"; x: number; y: number; duration: number; center: boolean }
+  | {
+      kind: "melee";
+      style: "arc" | "slash" | "smash" | "trip";
+      x: number;
+      y: number;
+      fromX: number;
+      fromY: number;
+      duration: number;
+      rotOffset?: number;
+    }
+  | { kind: "melee"; style: "thrust"; fromX: number; fromY: number; toX: number; toY: number; duration: number }
+  | { kind: "melee"; style: "ring"; x: number; y: number; duration: number };
+
+
 function blankMissileFx(): MissileFx {
   return { live: false, fromX: 0, fromY: 0, toX: 0, toY: 0, t: 0, max: MISSILE_TRAVEL + MISSILE_AFTERGLOW, travel: MISSILE_TRAVEL, hue: 268, kind: "magicMissile", seed: 0 };
 }
@@ -961,6 +982,10 @@ export class BattleEngine {
   private fireballBurstFxLive = 0;
   private lightningFx: LightningFx[] = Array.from({ length: LIGHTNING_FX_CAP }, blankLightningFx);
   private lightningFxLive = 0;
+  /** Combat GPU strikes waiting for BattleCanvas to spawn on the overlay WebGL layer. */
+  private gpuFxQueue: GpuFxEvent[] = [];
+  /** When true, Relâmpago/Choque and Fireball skip the old Canvas2D FX and go through WebGL2. */
+  preferGpuLightning = false;
   private holyFx: HolyFx[] = Array.from({ length: HOLY_FX_CAP }, blankHolyFx);
   private holyFxLive = 0;
   private onNextIdle: (() => void) | null = null;
@@ -1593,7 +1618,39 @@ export class BattleEngine {
       let live = 0;
       for (const m of this.missileFx) {
         if (!m.live) continue;
+        const prev = m.t;
         m.t += cap;
+        if (
+          m.kind === "magicMissile" &&
+          this.preferGpuLightning &&
+          prev < m.travel &&
+          m.t >= m.travel
+        ) {
+          this.gpuFxQueue.push({ kind: "magicMissile", role: "burst", x: m.toX, y: m.toY, duration: 0.42 });
+        }
+        if (
+          m.kind === "webOfDreams" &&
+          this.preferGpuLightning &&
+          prev < m.travel &&
+          m.t >= m.travel
+        ) {
+          const zone = this.webZones.find((z) => z.cells.has(`${m.toX},${m.toY}`));
+          const cells = zone ? [...zone.cells] : [`${m.toX},${m.toY}`];
+          for (const packed of cells) {
+            const comma = packed.indexOf(",");
+            const x = Number(packed.slice(0, comma));
+            const y = Number(packed.slice(comma + 1));
+            if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+            this.gpuFxQueue.push({
+              kind: "webOfDreams",
+              role: "bloom",
+              x,
+              y,
+              duration: x === m.toX && y === m.toY ? 2.35 : 1.85,
+              center: x === m.toX && y === m.toY,
+            });
+          }
+        }
         if (m.t >= m.max) {
           m.live = false;
           continue;
@@ -1755,6 +1812,10 @@ export class BattleEngine {
       if (step.spellKind === "lightning" || step.spellKind === "lightningTier3" || step.spellKind === "shock") {
         const power = step.spellKind === "lightningTier3" ? "t3" : step.spellKind === "lightning" ? "raio" : "shock";
         for (const t of step.tiles) this.emitLightningFx(t.x, t.y, power);
+      }
+      {
+        const caster = this.units.find((u) => u.id === step.att);
+        if (caster && step.spellKind) this.emitWarriorGpu(step.spellKind, caster, step.tiles);
       }
     } else if (step.type === "heal") {
       this.active = { type: "heal", att: step.att, def: step.def, kind: step.kind, t: 0, applied: false };
@@ -2151,7 +2212,7 @@ export class BattleEngine {
           }
         }
       }
-      if (a.spellKind === "fireball" || a.spellKind === "causticVenom") this.emitFireballBurstFx(a.tiles, a.spellKind);
+      if (a.spellKind === "fireball" || a.spellKind === "causticVenom") this.emitFireballBurstFx(a.tiles, a.spellKind, a.projectileTo);
       if (!this.reducedMotion) this.trauma = Math.min(1, this.trauma + (a.spellKind === "lightningTier3" ? 0.95 : a.spellKind === "lightning" ? 0.72 : 0.45));
 
     }
@@ -2786,8 +2847,16 @@ export class BattleEngine {
   }
 
   /** One burning patch per Fireball area cell, all procedural so it conforms to every map. */
-  private emitFireballBurstFx(tiles: Point[], kind: "fireball" | "causticVenom"): void {
+  private emitFireballBurstFx(tiles: Point[], kind: "fireball" | "causticVenom", origin?: Point): void {
     if (this.reducedMotion) return;
+    if (kind === "fireball") {
+      for (const cell of tiles) {
+        const center = !!origin && origin.x === cell.x && origin.y === cell.y;
+        this.gpuFxQueue.push({ kind: "fireball", x: cell.x, y: cell.y, duration: center ? 0.48 : 0.36, role: "blast", center });
+        this.gpuFxQueue.push({ kind: "fireball", x: cell.x, y: cell.y, duration: center ? 2.15 : 1.55, role: "ember", center });
+      }
+      if (this.preferGpuLightning) return;
+    }
     for (const cell of tiles) {
       let burst = this.fireballBurstFx.find((x) => !x.live);
       if (!burst) burst = this.fireballBurstFx[0]!;
@@ -2842,6 +2911,28 @@ export class BattleEngine {
     slot.hue = kind === "fireball" ? 22 : kind === "causticVenom" ? 104 : kind === "longShot" ? 205 : kind === "arcaneBolt" ? 2 : kind === "webOfDreams" ? 276 : 268;
     slot.kind = kind;
     slot.seed = this.rng() * Math.PI * 2;
+    if (kind === "magicMissile") {
+      this.gpuFxQueue.push({
+        kind: "magicMissile",
+        role: "bolt",
+        fromX,
+        fromY,
+        toX,
+        toY,
+        duration: MISSILE_TRAVEL,
+      });
+    }
+    if (kind === "webOfDreams") {
+      this.gpuFxQueue.push({
+        kind: "webOfDreams",
+        role: "bolt",
+        fromX,
+        fromY,
+        toX,
+        toY,
+        duration: MISSILE_TRAVEL,
+      });
+    }
   }
 
   /** A bolt struck down onto one hex — see LightningFx. The jagged shape (main bolt plus
@@ -2849,6 +2940,9 @@ export class BattleEngine {
    * `power: "shock"` is Choque; `"raio"` is Relâmpago; `"t3"` is Lighting Tier 3. */
   private emitLightningFx(x: number, y: number, power: "shock" | "raio" | "t3" = "shock"): void {
     if (this.reducedMotion) return;
+    const duration = power === "t3" ? LIGHTNING_T3_DUR : power === "raio" ? LIGHTNING_RAIO_DUR : LIGHTNING_STRIKE_DUR;
+    this.gpuFxQueue.push({ kind: "lightning", x, y, duration, power });
+    if (this.preferGpuLightning) return;
     const emitOne = (spread: number, segs: number, branchMin: number, branchExtra: number, hue: number) => {
       let slot = this.lightningFx.find((l) => !l.live);
       if (!slot) {
@@ -3438,6 +3532,7 @@ export class BattleEngine {
     this.tip = `${INTIMIDATING_PRESENCE.name}: inimigos a até ${p.radius} hexes tomam ${Math.round(p.pct * 100)}% mais dano por ${p.duration} rodadas.`;
     this.mode = "locked";
     this.queue.push({ type: "banner", text: INTIMIDATING_PRESENCE.name, dur: 1.1 });
+    if (!this.reducedMotion && this.preferGpuLightning) this.gpuFxQueue.push({ kind: "melee", style: "ring", x: u.x, y: u.y, duration: 0.5 });
     sfxPlay.ui();
   }
 
@@ -5992,6 +6087,43 @@ export class BattleEngine {
     return { x: cx, y: cy, tile, worldX, worldY };
   }
 
+  private emitWarriorGpu(kind: SpellKind, caster: { x: number; y: number }, tiles: Point[]): void {
+    if (this.reducedMotion || !this.preferGpuLightning) return;
+    const mid = tiles[Math.floor(tiles.length / 2)] ?? tiles[0];
+    if (!mid && kind !== "sweep") return;
+    if (kind === "cleave" && mid) {
+      this.gpuFxQueue.push({ kind: "melee", style: "arc", x: mid.x, y: mid.y, fromX: caster.x, fromY: caster.y, duration: 0.3 });
+      return;
+    }
+    if (kind === "shoulderSmash" && mid) {
+      this.gpuFxQueue.push({ kind: "melee", style: "smash", x: mid.x, y: mid.y, fromX: caster.x, fromY: caster.y, duration: 0.28 });
+      return;
+    }
+    if (kind === "doubleStrike" && mid) {
+      this.gpuFxQueue.push({ kind: "melee", style: "slash", x: mid.x, y: mid.y, fromX: caster.x, fromY: caster.y, duration: 0.2, rotOffset: -0.42 });
+      this.gpuFxQueue.push({ kind: "melee", style: "slash", x: mid.x, y: mid.y, fromX: caster.x, fromY: caster.y, duration: 0.2, rotOffset: 0.5 });
+      return;
+    }
+    if (kind === "trip" && mid) {
+      this.gpuFxQueue.push({ kind: "melee", style: "trip", x: mid.x, y: mid.y, fromX: caster.x, fromY: caster.y, duration: 0.22 });
+      return;
+    }
+    if (kind === "sweep") {
+      this.gpuFxQueue.push({ kind: "melee", style: "ring", x: caster.x, y: caster.y, duration: 0.36 });
+      return;
+    }
+    if ((kind === "piercingThrust" || kind === "stampede") && tiles.length) {
+      const last = tiles[tiles.length - 1]!;
+      this.gpuFxQueue.push({ kind: "melee", style: "thrust", fromX: caster.x, fromY: caster.y, toX: last.x, toY: last.y, duration: 0.2 });
+    }
+  }
+
+  drainGpuFx(): GpuFxEvent[] {
+    const q = this.gpuFxQueue;
+    this.gpuFxQueue = [];
+    return q;
+  }
+
   panBy(dx: number, dy: number): void {
     this.camX += dx;
     this.camY += dy;
@@ -7329,6 +7461,7 @@ export class BattleEngine {
     if (this.fireballBurstFxLive) {
       for (const burst of this.fireballBurstFx) {
         if (!burst.live) continue;
+        if (burst.kind === "fireball" && this.preferGpuLightning) continue;
         const { cx, cy } = this.hexCenter(burst.x, burst.y);
         const k = burst.t / burst.max;
         const fade = Math.max(0, 1 - k);
@@ -7388,6 +7521,7 @@ export class BattleEngine {
     if (this.missileFxLive) {
       for (const m of this.missileFx) {
         if (!m.live) continue;
+        if ((m.kind === "magicMissile" || m.kind === "webOfDreams") && this.preferGpuLightning) continue;
         const from = this.hexCenter(m.fromX, m.fromY);
         const to = this.hexCenter(m.toX, m.toY);
         const dxT = to.cx - from.cx;
@@ -7608,6 +7742,7 @@ export class BattleEngine {
     }
 
     if (this.lightningFxLive) {
+      if (!this.preferGpuLightning) {
       for (const l of this.lightningFx) {
         if (!l.live) continue;
         const t3 = l.power === "t3";
@@ -7731,6 +7866,7 @@ export class BattleEngine {
           ctx.fill();
         }
         ctx.restore();
+      }
       }
       ctx.globalAlpha = 1;
     }

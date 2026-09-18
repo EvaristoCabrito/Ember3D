@@ -25,8 +25,8 @@ import {
 } from "./shaders";
 
 const ADDITIVE_ELEMENTS: ReadonlySet<ElementKind> = new Set(["fire", "lightning", "acid", "holy"]);
-const LIGHT_ELEMENTS: ReadonlySet<ElementKind> = new Set(["fire", "acid", "holy", "darkness"]);
-const PARTICLE_ELEMENTS: ReadonlySet<ElementKind> = new Set(["fire", "holy"]);
+const LIGHT_ELEMENTS: ReadonlySet<ElementKind> = new Set(["fire", "acid", "holy", "darkness", "lightning"]);
+const PARTICLE_ELEMENTS: ReadonlySet<ElementKind> = new Set(["fire", "holy", "lightning"]);
 
 export interface EffectAnchor {
   x: number;
@@ -49,6 +49,14 @@ export interface SpawnOptions {
   rotation?: number;
   /** Non-uniform aspect (width, height) as a multiple of radiusTiles. Default (1,1). */
   aspect?: [number, number];
+  /** Combat projectile: start hex. Destination is the spawn col/row. */
+  fromCol?: number;
+  fromRow?: number;
+  /** Seconds to lerp from fromCol/fromRow to the spawn hex. */
+  travel?: number;
+  /** Shader look: 0 default, 1 missile comet, 2 missile burst. */
+  variant?: number;
+  color?: [number, number, number];
 }
 
 interface EffectInstance {
@@ -62,6 +70,11 @@ interface EffectInstance {
   duration: number | null;
   age: number;
   seed: number;
+  fromCol: number | null;
+  fromRow: number | null;
+  travel: number | null;
+  variant: number;
+  color: [number, number, number] | null;
 }
 
 function uniformLocations<T extends readonly string[]>(
@@ -110,9 +123,15 @@ export class EffectsRenderer {
   private particleEmitters = new Map<number, ParticleEmitter>();
   private nextId = 1;
   private time = 0;
+  private overlay: boolean;
 
-  constructor(private canvas: HTMLCanvasElement) {
-    const gl = canvas.getContext("webgl2", { alpha: false, antialias: false, premultipliedAlpha: false });
+  constructor(private canvas: HTMLCanvasElement, opts?: { overlay?: boolean }) {
+    this.overlay = !!opts?.overlay;
+    const gl = canvas.getContext("webgl2", {
+      alpha: this.overlay,
+      antialias: false,
+      premultipliedAlpha: this.overlay,
+    });
     if (!gl) throw new Error("WebGL2 unavailable");
     this.gl = gl;
 
@@ -141,6 +160,9 @@ export class EffectsRenderer {
       "u_noiseScale",
       "u_scrollSpeed",
       "u_intensity",
+      "u_age",
+      "u_duration",
+      "u_variant",
       "u_color",
       "u_scene",
       "u_noiseTex",
@@ -213,8 +235,13 @@ export class EffectsRenderer {
       duration: opts.duration ?? null,
       age: 0,
       seed: Math.random() * 1000,
+      fromCol: opts.fromCol ?? null,
+      fromRow: opts.fromRow ?? null,
+      travel: opts.travel ?? null,
+      variant: opts.variant ?? 0,
+      color: opts.color ?? null,
     });
-    if (PARTICLE_ELEMENTS.has(kind)) this.particleEmitters.set(id, new ParticleEmitter(kind as "fire" | "holy"));
+    if (PARTICLE_ELEMENTS.has(kind)) this.particleEmitters.set(id, new ParticleEmitter(kind as "fire" | "holy" | "lightning"));
     return id;
   }
 
@@ -230,6 +257,40 @@ export class EffectsRenderer {
 
   hasEffects(): boolean {
     return this.effects.size > 0;
+  }
+
+  private pose(fx: EffectInstance, getAnchor: AnchorProvider): {
+    cx: number;
+    cy: number;
+    wx: number;
+    wy: number;
+    rot: number;
+    radius: number;
+  } {
+    const dest = getAnchor(fx.col, fx.row);
+    let cx = dest.x;
+    let cy = dest.y;
+    let wx = dest.worldX;
+    let wy = dest.worldY;
+    let rot = fx.rotation;
+    if (fx.travel != null && fx.fromCol != null && fx.fromRow != null) {
+      const src = getAnchor(fx.fromCol, fx.fromRow);
+      const t = Math.min(1, fx.age / Math.max(0.001, fx.travel));
+      const ease = t * t * (3 - 2 * t);
+      cx = src.x + (dest.x - src.x) * ease;
+      cy = src.y + (dest.y - src.y) * ease;
+      wx = src.worldX + (dest.worldX - src.worldX) * ease;
+      wy = src.worldY + (dest.worldY - src.worldY) * ease;
+      rot = Math.atan2(dest.y - src.y, dest.x - src.x);
+      const dx = dest.x - src.x;
+      const dy = dest.y - src.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const side = fx.seed % 2 < 1 ? 1 : -1;
+      const amp = dest.tile * 0.2 * Math.sin(Math.PI * ease) * side;
+      cx += (-dy / len) * amp;
+      cy += (dx / len) * amp;
+    }
+    return { cx, cy, wx, wy, rot, radius: dest.tile * fx.radiusTiles };
   }
 
   private hasLightElements(): boolean {
@@ -273,6 +334,10 @@ export class EffectsRenderer {
   }
 
   render(sceneCanvas: HTMLCanvasElement, dt: number, getAnchor: AnchorProvider): void {
+    if (this.overlay) {
+      this.renderOverlay(dt, getAnchor);
+      return;
+    }
     const gl = this.gl;
     this.time += dt;
 
@@ -321,9 +386,14 @@ export class EffectsRenderer {
       // source (fire/acid/holy) throws its glow noticeably further than its own flame/shape.
       const radius = anchor.tile * fx.radiusTiles * (fx.kind === "darkness" ? 1 : GLOBAL_FX_PARAMS.lightRadiusMul);
       const params = EFFECT_PARAMS[fx.kind];
+      let intensity = params.intensity;
+      if (fx.kind === "lightning" && fx.duration != null) {
+        const k = fx.age / Math.max(0.001, fx.duration);
+        intensity *= k < 0.18 ? 1.8 : Math.max(0, 1 - (k - 0.18) / 0.82);
+      }
       gl.uniform1i(this.uLight.u_element, ELEMENT_INDEX[fx.kind]);
       gl.uniform1f(this.uLight.u_seed, fx.seed);
-      gl.uniform1f(this.uLight.u_intensity, params.intensity);
+      gl.uniform1f(this.uLight.u_intensity, intensity);
       gl.uniform3f(this.uLight.u_color, params.color[0], params.color[1], params.color[2]);
       if (fx.kind === "darkness") {
         gl.blendEquation(gl.FUNC_REVERSE_SUBTRACT);
@@ -349,27 +419,41 @@ export class EffectsRenderer {
     gl.uniform1i(this.uElemental.u_noiseTex, 1);
 
     const drawElemental = (fx: EffectInstance) => {
-      const anchor = getAnchor(fx.col, fx.row);
-      const radius = anchor.tile * fx.radiusTiles;
+      const p = this.pose(fx, getAnchor);
       const params = EFFECT_PARAMS[fx.kind];
+      let intensity = params.intensity;
+      if (fx.kind === "lightning" && fx.duration != null) {
+        const k = fx.age / Math.max(0.001, fx.duration);
+        const hold = k < 0.22 ? 1 : Math.max(0, 1 - (k - 0.22) / 0.78);
+        intensity *= hold * (k < 0.08 ? 1.35 : 1);
+      }
+      if (fx.kind === "fire" && fx.duration != null) {
+        const k = fx.age / Math.max(0.001, fx.duration);
+        if (fx.duration < 0.6) intensity *= 1.55 * (1 - k * 0.35);
+        else intensity *= k < 0.5 ? 1 : Math.max(0, 1 - (k - 0.5) / 0.5);
+      }
+      const color = fx.color ?? params.color;
       gl.uniform1i(this.uElemental.u_element, ELEMENT_INDEX[fx.kind]);
       gl.uniform1f(this.uElemental.u_seed, fx.seed);
       gl.uniform1f(this.uElemental.u_noiseScale, params.noiseScale);
       gl.uniform1f(this.uElemental.u_scrollSpeed, params.scrollSpeed);
-      gl.uniform1f(this.uElemental.u_intensity, params.intensity);
-      gl.uniform3f(this.uElemental.u_color, params.color[0], params.color[1], params.color[2]);
+      gl.uniform1f(this.uElemental.u_intensity, intensity);
+      gl.uniform1f(this.uElemental.u_age, fx.age);
+      gl.uniform1f(this.uElemental.u_duration, fx.duration ?? 0);
+      gl.uniform1f(this.uElemental.u_variant, fx.variant);
+      gl.uniform3f(this.uElemental.u_color, color[0], color[1], color[2]);
       this.drawQuad(
         this.progElemental,
         this.uElemental,
         this.effectsFbo.w,
         this.effectsFbo.h,
-        anchor.x,
-        anchor.y,
-        radius * fx.aspect[0],
-        radius * fx.aspect[1],
-        fx.rotation,
-        anchor.worldX,
-        anchor.worldY,
+        p.cx,
+        p.cy,
+        p.radius * fx.aspect[0],
+        p.radius * fx.aspect[1],
+        p.rot,
+        p.wx,
+        p.wy,
       );
     };
 
@@ -386,10 +470,36 @@ export class EffectsRenderer {
       if (!PARTICLE_ELEMENTS.has(fx.kind)) continue;
       const emitter = this.particleEmitters.get(id);
       if (!emitter) continue;
-      const anchor = getAnchor(fx.col, fx.row);
-      const radius = anchor.tile * fx.radiusTiles;
+      const posed = this.pose(fx, getAnchor);
       const params = EFFECT_PARAMS[fx.kind];
-      emitter.update(dt, anchor.x, anchor.y, radius, params.color, fx.kind === "fire" ? 14 : 6);
+      const color = fx.color ?? params.color;
+      const sparkRate =
+        fx.kind === "lightning"
+          ? fx.age < 0.14
+            ? 90
+            : 0
+          : fx.kind === "fire"
+            ? fx.duration != null && fx.duration < 0.6
+              ? 70
+              : fx.duration != null
+                ? fx.age < fx.duration * 0.7
+                  ? 16
+                  : 5
+                : 14
+            : fx.variant === 1
+              ? 26
+              : fx.variant === 2
+                ? fx.age < 0.16
+                  ? 48
+                  : 8
+                : fx.variant === 3
+                  ? 18
+                  : fx.variant === 4
+                    ? fx.age < 0.3
+                      ? 22
+                      : 4
+                    : 6;
+      emitter.update(dt, posed.cx, posed.cy, posed.radius, color, sparkRate);
       for (const p of emitter.particles) {
         const life = p.age / p.life;
         const speed = Math.hypot(p.vx, p.vy) || 1;
@@ -458,6 +568,126 @@ export class EffectsRenderer {
     gl.uniform1i(this.uComposite.u_bloom, 3);
     gl.uniform1f(this.uComposite.u_bloomStrength, GLOBAL_FX_PARAMS.bloomStrength);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Transparent additive pass for combat strikes — sits above units so the bolt is not
+   * buried under sprites. No scene composite: the canvas is CSS-blended on top. */
+  private renderOverlay(dt: number, getAnchor: AnchorProvider): void {
+    const gl = this.gl;
+    this.time += dt;
+    for (const fx of this.effects.values()) {
+      fx.age += dt;
+      if (fx.duration != null && fx.age >= fx.duration) this.effects.delete(fx.id);
+    }
+    for (const [id, emitter] of this.particleEmitters) {
+      if (!this.effects.has(id) && emitter.particles.length === 0) this.particleEmitters.delete(id);
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.fullW, this.fullH);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.noiseTex);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.noiseTex);
+
+    gl.useProgram(this.progElemental);
+    gl.uniform1f(this.uElemental.u_time, this.time);
+    gl.uniform1f(this.uElemental.u_frameSeed, Math.random());
+    gl.uniform1i(this.uElemental.u_scene, 0);
+    gl.uniform1i(this.uElemental.u_noiseTex, 1);
+
+    for (const fx of this.effects.values()) {
+      if (!ADDITIVE_ELEMENTS.has(fx.kind)) continue;
+      const posed = this.pose(fx, getAnchor);
+      const params = EFFECT_PARAMS[fx.kind];
+      let intensity = params.intensity;
+      if (fx.kind === "lightning" && fx.duration != null) {
+        const k = fx.age / Math.max(0.001, fx.duration);
+        const hold = k < 0.22 ? 1 : Math.max(0, 1 - (k - 0.22) / 0.78);
+        intensity *= hold * (k < 0.08 ? 1.35 : 1);
+      }
+      if (fx.kind === "fire" && fx.duration != null) {
+        const k = fx.age / Math.max(0.001, fx.duration);
+        if (fx.duration < 0.6) intensity *= 1.55 * (1 - k * 0.35);
+        else intensity *= k < 0.5 ? 1 : Math.max(0, 1 - (k - 0.5) / 0.5);
+      }
+      const color = fx.color ?? params.color;
+      gl.uniform1i(this.uElemental.u_element, ELEMENT_INDEX[fx.kind]);
+      gl.uniform1f(this.uElemental.u_seed, fx.seed);
+      gl.uniform1f(this.uElemental.u_noiseScale, params.noiseScale);
+      gl.uniform1f(this.uElemental.u_scrollSpeed, params.scrollSpeed);
+      gl.uniform1f(this.uElemental.u_intensity, intensity);
+      gl.uniform1f(this.uElemental.u_age, fx.age);
+      gl.uniform1f(this.uElemental.u_duration, fx.duration ?? 0);
+      gl.uniform1f(this.uElemental.u_variant, fx.variant);
+      gl.uniform3f(this.uElemental.u_color, color[0], color[1], color[2]);
+      this.drawQuad(
+        this.progElemental,
+        this.uElemental,
+        this.fullW,
+        this.fullH,
+        posed.cx,
+        posed.cy,
+        posed.radius * fx.aspect[0],
+        posed.radius * fx.aspect[1],
+        posed.rot,
+        posed.wx,
+        posed.wy,
+      );
+    }
+
+    gl.useProgram(this.progParticle);
+    for (const [id, fx] of this.effects) {
+      if (!PARTICLE_ELEMENTS.has(fx.kind)) continue;
+      const emitter = this.particleEmitters.get(id);
+      if (!emitter) continue;
+      const posed = this.pose(fx, getAnchor);
+      const params = EFFECT_PARAMS[fx.kind];
+      const color = fx.color ?? params.color;
+      const sparkRate =
+        fx.kind === "lightning"
+          ? fx.age < 0.14
+            ? 90
+            : 0
+          : fx.kind === "fire"
+            ? fx.duration != null && fx.duration < 0.6
+              ? 70
+              : fx.duration != null
+                ? fx.age < fx.duration * 0.7
+                  ? 16
+                  : 5
+                : 14
+            : fx.variant === 1
+              ? 26
+              : fx.variant === 2
+                ? fx.age < 0.16
+                  ? 48
+                  : 8
+                : fx.variant === 3
+                  ? 18
+                  : fx.variant === 4
+                    ? fx.age < 0.3
+                      ? 22
+                      : 4
+                    : 6;
+      emitter.update(dt, posed.cx, posed.cy, posed.radius, color, sparkRate);
+      for (const p of emitter.particles) {
+        const life = p.age / p.life;
+        const speed = Math.hypot(p.vx, p.vy) || 1;
+        const rot = Math.atan2(-p.vy, p.vx);
+        gl.uniform3f(this.uParticle.u_color, p.color[0], p.color[1], p.color[2]);
+        gl.uniform1f(this.uParticle.u_alpha, (1 - life) * params.intensity);
+        const stretch = 1 + Math.min(2, speed / 40);
+        this.drawQuad(this.progParticle, this.uParticle, this.fullW, this.fullH, p.x, p.y, p.size * stretch, p.size, rot);
+      }
+    }
+    gl.disable(gl.BLEND);
   }
 
   dispose(): void {

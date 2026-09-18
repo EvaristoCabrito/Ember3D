@@ -23,7 +23,7 @@ export class ParticleEmitter {
   particles: FxParticle[] = [];
   private spawnAccum = 0;
 
-  constructor(private kind: Extract<ElementKind, "fire" | "holy">) {}
+  constructor(private kind: Extract<ElementKind, "fire" | "holy" | "lightning">) {}
 
   update(dt: number, anchorX: number, anchorY: number, radiusPx: number, color: [number, number, number], rate = 10): void {
     this.spawnAccum += dt * rate;
@@ -35,7 +35,11 @@ export class ParticleEmitter {
       p.age += dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      if (this.kind === "fire") p.vy -= 6 * dt; // embers accelerate upward slightly
+      if (this.kind === "fire") p.vy -= 6 * dt;
+      if (this.kind === "lightning") {
+        p.vx *= Math.max(0, 1 - 3.5 * dt);
+        p.vy += 80 * dt;
+      }
     }
     this.particles = this.particles.filter((p) => p.age < p.life);
   }
@@ -56,6 +60,19 @@ export class ParticleEmitter {
         life: 0.6 + Math.random() * 0.5,
         size: radiusPx * (0.08 + Math.random() * 0.08),
         color,
+      });
+    } else if (this.kind === "lightning") {
+      const a = -Math.PI * 0.15 + Math.random() * Math.PI * 1.3;
+      const spd = 90 + Math.random() * 160;
+      this.particles.push({
+        x: anchorX + (Math.random() - 0.5) * radiusPx * 0.15,
+        y: anchorY + (Math.random() - 0.5) * radiusPx * 0.08,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd * 0.35 - 40,
+        age: 0,
+        life: 0.12 + Math.random() * 0.22,
+        size: radiusPx * (0.03 + Math.random() * 0.05),
+        color: [0.85, 0.93, 1],
       });
     } else {
       this.particles.push({

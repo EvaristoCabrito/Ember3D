@@ -20,6 +20,7 @@ export function BattleCanvas({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const strikeCanvasRef = useRef<HTMLCanvasElement>(null);
   const unitsCanvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hudKey = useRef("");
@@ -48,14 +49,28 @@ export function BattleCanvas({
     // what the map author placed. Degrades to plain 2D (this canvas stays visible, overlay
     // hidden) if WebGL2 isn't available.
     let fx: EffectsRenderer | null = null;
+    let strikeFx: EffectsRenderer | null = null;
     const fxCanvas = fxCanvasRef.current;
+    const strikeCanvas = strikeCanvasRef.current;
     if (fxCanvas) {
       try {
         fx = new EffectsRenderer(fxCanvas);
         for (const p of engine.elementalFxPlacements) fx.spawnEffect(p.kind, p.x, p.y, { radiusTiles: p.radiusTiles, rotation: p.rotation });
-      } catch {
+      } catch (err) {
+        console.error("[ember] WebGL2 map FX failed", err);
         fx = null;
         fxCanvas.style.display = "none";
+      }
+    }
+    if (strikeCanvas) {
+      try {
+        strikeFx = new EffectsRenderer(strikeCanvas, { overlay: true });
+        engine.preferGpuLightning = true;
+      } catch (err) {
+        console.error("[ember] WebGL2 lightning overlay failed", err);
+        strikeFx = null;
+        strikeCanvas.style.display = "none";
+        engine.preferGpuLightning = false;
       }
     }
 
@@ -120,6 +135,11 @@ export function BattleCanvas({
         fxCanvas.style.width = `${w}px`;
         fxCanvas.style.height = `${h}px`;
       }
+      if (strikeCanvas) {
+        strikeFx?.resize(w, h, dpr);
+        strikeCanvas.style.width = `${w}px`;
+        strikeCanvas.style.height = `${h}px`;
+      }
       if (unitsCanvas) {
         unitsCanvas.width = Math.max(1, Math.floor(w * dpr));
         unitsCanvas.height = Math.max(1, Math.floor(h * dpr));
@@ -159,6 +179,116 @@ export function BattleCanvas({
           fx.render(canvas, dt, (col, row) => engine.effectAnchor(col, row));
         } else if (fxCanvas) {
           fxCanvas.style.display = "none";
+        }
+      }
+      if (strikeFx) {
+        for (const s of engine.drainGpuFx()) {
+          if (s.kind === "lightning") {
+            const tall = s.power === "t3" ? 4.1 : s.power === "raio" ? 3.35 : 2.4;
+            const wide = s.power === "t3" ? 0.95 : s.power === "raio" ? 0.72 : 0.55;
+            strikeFx.spawnEffect("lightning", s.x, s.y, {
+              duration: s.duration,
+              radiusTiles: s.power === "t3" ? 2.35 : s.power === "raio" ? 1.85 : 1.4,
+              aspect: [wide, tall],
+            });
+          } else if (s.kind === "fireball") {
+            if (s.role === "blast") {
+              strikeFx.spawnEffect("fire", s.x, s.y, {
+                duration: s.duration,
+                radiusTiles: s.center ? 2.45 : 1.7,
+                aspect: [1.2, 1.2],
+              });
+            } else {
+              strikeFx.spawnEffect("fire", s.x, s.y, {
+                duration: s.duration,
+                radiusTiles: s.center ? 1.28 : 1.05,
+                aspect: [1, 0.92],
+              });
+            }
+          } else if (s.kind === "magicMissile") {
+            if (s.role === "bolt") {
+              strikeFx.spawnEffect("holy", s.toX, s.toY, {
+                duration: s.duration + 0.05,
+                radiusTiles: 0.9,
+                aspect: [1.9, 0.4],
+                fromCol: s.fromX,
+                fromRow: s.fromY,
+                travel: s.duration,
+                variant: 1,
+                color: [0.78, 0.4, 1.0],
+              });
+            } else {
+              strikeFx.spawnEffect("holy", s.x, s.y, {
+                duration: s.duration,
+                radiusTiles: 1.4,
+                aspect: [1.15, 1.15],
+                variant: 2,
+                color: [0.92, 0.55, 1.0],
+              });
+            }
+          } else if (s.kind === "webOfDreams") {
+            if (s.role === "bolt") {
+              strikeFx.spawnEffect("holy", s.toX, s.toY, {
+                duration: s.duration + 0.06,
+                radiusTiles: 0.95,
+                aspect: [2.05, 0.48],
+                fromCol: s.fromX,
+                fromRow: s.fromY,
+                travel: s.duration,
+                variant: 3,
+                color: [0.62, 0.32, 0.95],
+              });
+            } else {
+              strikeFx.spawnEffect("holy", s.x, s.y, {
+                duration: s.duration,
+                radiusTiles: s.center ? 1.35 : 1.08,
+                aspect: [1.15, 0.72],
+                variant: 4,
+                color: [0.7, 0.38, 0.98],
+              });
+            }
+          } else if (s.kind === "melee") {
+            const steel: [number, number, number] = [0.82, 0.9, 1.0];
+            if (s.style === "thrust") {
+              strikeFx.spawnEffect("holy", s.toX, s.toY, {
+                duration: s.duration + 0.04,
+                radiusTiles: 0.85,
+                aspect: [2.1, 0.32],
+                fromCol: s.fromX,
+                fromRow: s.fromY,
+                travel: s.duration,
+                variant: 1,
+                color: steel,
+              });
+            } else if (s.style === "ring") {
+              strikeFx.spawnEffect("holy", s.x, s.y, {
+                duration: s.duration,
+                radiusTiles: 2.15,
+                aspect: [1.15, 0.7],
+                variant: 6,
+                color: steel,
+              });
+            } else {
+              const from = engine.effectAnchor(s.fromX, s.fromY);
+              const to = engine.effectAnchor(s.x, s.y);
+              const rot = Math.atan2(to.y - from.y, to.x - from.x) + (s.rotOffset ?? 0);
+              const arc = s.style === "arc" || s.style === "smash";
+              strikeFx.spawnEffect("holy", s.x, s.y, {
+                duration: s.duration,
+                radiusTiles: arc ? 2.05 : s.style === "trip" ? 1.15 : 1.35,
+                aspect: s.style === "trip" ? [1.6, 0.32] : arc ? [2.2, 0.78] : [1.7, 0.42],
+                rotation: rot,
+                variant: 5,
+                color: s.style === "smash" ? [0.95, 0.88, 0.72] : steel,
+              });
+            }
+          }
+        }
+        if (strikeFx.hasEffects()) {
+          if (strikeCanvas) strikeCanvas.style.display = "block";
+          strikeFx.render(canvas, dt, (col, row) => engine.effectAnchor(col, row));
+        } else if (strikeCanvas) {
+          strikeCanvas.style.display = "none";
         }
       }
       // Drawn on its own transparent canvas above the FX layer, so units/HP-bars/foreground
@@ -431,6 +561,8 @@ export function BattleCanvas({
       const w = window as Window & { __emberEngine?: BattleEngine };
       if (w.__emberEngine === engine) delete w.__emberEngine;
       fx?.dispose();
+      strikeFx?.dispose();
+      engine.preferGpuLightning = false;
     };
   }, [engine, onHud, paused]);
 
@@ -439,6 +571,7 @@ export function BattleCanvas({
       <canvas ref={canvasRef} className="block h-full w-full touch-none" />
       <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ display: "none" }} />
       <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
+      <canvas ref={strikeCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ display: "none", mixBlendMode: "plus-lighter" }} />
     </div>
   );
 }

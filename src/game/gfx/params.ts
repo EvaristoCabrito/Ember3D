@@ -51,7 +51,7 @@ export const DEFAULT_ELEMENT_PARAMS: Record<ElementKind, ElementParams> = {
   fire: { noiseScale: 3.2, scrollSpeed: 0.9, intensity: 1.1, color: [1.0, 0.55, 0.12] },
   ice: { noiseScale: 2.4, scrollSpeed: 0.08, intensity: 1.0, color: [0.65, 0.9, 1.0] },
   water: { noiseScale: 2.0, scrollSpeed: 0.35, intensity: 0.9, color: [0.35, 0.65, 0.85] },
-  lightning: { noiseScale: 5.0, scrollSpeed: 6.0, intensity: 1.3, color: [0.75, 0.85, 1.0] },
+  lightning: { noiseScale: 5.0, scrollSpeed: 6.0, intensity: 1.45, color: [0.55, 0.78, 1.0] },
   acid: { noiseScale: 2.6, scrollSpeed: 0.25, intensity: 1.0, color: [0.45, 1.0, 0.2] },
   holy: { noiseScale: 1.6, scrollSpeed: 0.2, intensity: 1.2, color: [1.0, 0.96, 0.75] },
   darkness: { noiseScale: 1.8, scrollSpeed: 0.1, intensity: 1.0, color: [0.15, 0.07, 0.18] },
@@ -89,14 +89,11 @@ export const DEFAULT_RADIUS_TILES: Partial<Record<ElementKind, number>> = {
   water: 1.0,
   shore: 1.0,
   shore2: 1.0,
-  // Water 2: same water, square instead of hex-shaped and bigger — meant to be dropped over
-  // a cluster of Water hexes to paper over any seam between them, not to match one tile.
   water2: 1.7,
-  // Water 3/4/5 (natural-shore variants): same footprint as Shore — matches its own hex
-  // exactly, half water and half a transparent fringe carved out of that same footprint.
   water3: 1.0,
   water4: 1.0,
   water5: 1.0,
+  lightning: 1.85,
 };
 
 /** Non-uniform (width, height) footprint multiplier for a placement that doesn't specify its
@@ -104,6 +101,7 @@ export const DEFAULT_RADIUS_TILES: Partial<Record<ElementKind, number>> = {
  * square default it comes out noticeably taller than the hex it's standing on. */
 export const DEFAULT_ASPECT: Partial<Record<ElementKind, [number, number]>> = {
   fire: [1, 0.6],
+  lightning: [0.72, 3.35],
 };
 
 /** Default rotation (radians) for a placement that doesn't specify its own. */

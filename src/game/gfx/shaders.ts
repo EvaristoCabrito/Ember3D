@@ -122,6 +122,15 @@ vec2 iceCell(vec2 p, out float edge) {
 }
 `;
 
+const LIGHTNING_TRACE = `
+float boltX(float y, float seed, float retrig, float amp) {
+  float n1 = sampleFbm(vec2(y * 6.4 + seed, retrig * 0.19));
+  float n2 = sampleFbm(vec2(y * 17.0 + seed * 2.7, retrig * 0.37 + 3.1));
+  float n3 = sampleFbm(vec2(y * 39.0 + seed * 5.2, retrig * 0.11 + 8.4));
+  return (n1 - 0.5) * amp + (n2 - 0.5) * amp * 0.42 + (n3 - 0.5) * 0.07;
+}
+`;
+
 const NOISE_SAMPLE = `
 uniform sampler2D u_noiseTex;
 // Combine the three baked octaves into one fbm-ish scalar from a single fetch.
@@ -234,6 +243,9 @@ uniform float u_seed;
 uniform float u_noiseScale;
 uniform float u_scrollSpeed;
 uniform float u_intensity;
+uniform float u_age;
+uniform float u_duration;
+uniform float u_variant;
 uniform vec3 u_color;
 uniform sampler2D u_scene;
 uniform vec2 u_resolution;
@@ -243,6 +255,7 @@ ${HEX_SHAPE}
 ${WATER_SURFACE}
 ${NATURAL_SHORE_SURFACE}
 ${ICE_CELLS}
+${LIGHTNING_TRACE}
 
 const int FIRE = 0;
 const int ICE = 1;
@@ -268,24 +281,33 @@ void main() {
   float rad = length(v_local);
 
   if (u_element == FIRE) {
-    // Domain-warped turbulence (warp the sample point with a second noise fetch) instead of
-    // a single flat lookup — this is what makes it read as roiling gas instead of a static
-    // gradient. The result doubles as a height field for relief() below.
+    // Combat blast: short-lived expanding fireball. Map-placed fire and leftover embers
+    // fall through to the flame body below (u_duration == 0 or a longer linger).
+    if (u_duration > 0.001 && u_duration < 0.6) {
+      float t = clamp(u_age / max(u_duration, 0.001), 0.0, 1.0);
+      float r = length(v_local);
+      float expand = mix(0.04, 1.18, pow(t, 0.42));
+      float ring = smoothstep(0.14, 0.0, abs(r - expand));
+      float ball = smoothstep(expand, expand * 0.12, r) * (1.0 - smoothstep(0.15, 0.85, t));
+      float flash = exp(-r * 2.8) * (1.0 - smoothstep(0.0, 0.28, t));
+      float n = sampleFbm(uv * 5.2 + vec2(u_seed, u_time * 4.5));
+      float tongues = smoothstep(0.32, 0.9, n) * smoothstep(expand + 0.2, 0.0, r) * (1.0 - t);
+      vec3 hot = vec3(1.0, 0.97, 0.82);
+      vec3 mid = u_color * vec3(1.15, 0.7, 0.18);
+      vec3 dark = u_color * vec3(0.45, 0.12, 0.02);
+      vec3 col = hot * (flash * 2.6 + ball * 1.8) + mix(mid, dark, t) * (ring * 1.7 + tongues * 1.1);
+      float alpha = clamp((flash * 1.2 + ball + ring + tongues * 0.7) * u_intensity * (1.0 - t * 0.55), 0.0, 1.0);
+      fragColor = vec4(col * alpha, alpha);
+      return;
+    }
+
     vec2 warp = vec2(sampleFbm(uv * u_noiseScale * 0.6 + vec2(0.0, -u_time * u_scrollSpeed * 0.5)),
                       sampleFbm(uv * u_noiseScale * 0.6 + 19.3 - u_time * u_scrollSpeed * 0.3));
     float h = sampleFbm(uv * u_noiseScale + (warp - 0.5) * 0.9 + vec2(0.0, -u_time * u_scrollSpeed));
-    // uv.y runs 0 (top of the quad, the flame's tip) to 1 (bottom, anchored at the hex) — the
-    // taper has to be narrow at 0 and wide at 1, not the other way, or it draws an ice-cream
-    // cone standing on its point instead of a flame sitting on the ground. A perfectly smooth
-    // taper curve reads as a geometric cone no matter which way it points, though — real flame
-    // edges are jagged and lean, so the centerline sways and the width itself is perturbed by
-    // noise per height band instead of following one clean deterministic curve.
     float sway = (sampleFbm(vec2(uv.y * 2.2 + u_seed, u_time * u_scrollSpeed * 1.1)) - 0.5) * 0.4 * (1.0 - uv.y * 0.5);
     float edgeNoise = sampleFbm(vec2(uv.y * 7.0 + u_seed * 3.1, u_time * u_scrollSpeed * 2.2 + 4.0));
     float widthTaper = mix(0.04, 0.6, pow(clamp(uv.y, 0.0, 1.0), 0.8)) * (0.55 + 0.7 * edgeNoise);
     float xOff = v_local.x - sway;
-    // Only fades at the tip (uv.y near 0) — the base (uv.y near 1) is the anchor itself and
-    // stays fully wide, it never needs to taper back down.
     float body = smoothstep(1.1, 0.15, abs(xOff) / max(0.03, widthTaper)) * smoothstep(0.0, 0.08, uv.y);
     float flicker = smoothstep(0.3, 0.85, h + uv.y * 0.22);
     float mask = body * flicker;
@@ -297,7 +319,12 @@ void main() {
     vec3 lit = relief(h * 3.2, 5.0, base, 18.0, 0.5, 0.55);
     float pool = smoothstep(0.85, 0.0, d) * smoothstep(0.0, 0.3, uv.y) * 0.55;
     vec3 col = lit + u_color * pool;
-    float alpha = clamp(mask * u_intensity + pool * 0.4 * u_intensity, 0.0, 1.0);
+    float fade = 1.0;
+    if (u_duration > 0.001) {
+      float k = clamp(u_age / u_duration, 0.0, 1.0);
+      fade = k < 0.55 ? 1.0 : 1.0 - (k - 0.55) / 0.45;
+    }
+    float alpha = clamp((mask * u_intensity + pool * 0.4 * u_intensity) * fade, 0.0, 1.0);
     fragColor = vec4(col * alpha, alpha);
     return;
   }
@@ -343,17 +370,67 @@ void main() {
   }
 
   if (u_element == LIGHTNING) {
-    float t = uv.y;
-    float flick = fract(sin((u_frameSeed + u_seed) * 91.71) * 43758.5453);
-    if (flick < 0.08) { fragColor = vec4(0.0); return; }
-    float n = sampleFbm(vec2(t * u_noiseScale + u_seed, u_frameSeed));
-    float boltX = (n - 0.5) * 1.5;
-    float dist = abs(v_local.x - boltX);
-    float core = smoothstep(0.1, 0.0, dist);
-    float glow = smoothstep(0.4, 0.0, dist) * 0.45;
-    float fade = smoothstep(1.05, 0.85, abs(v_local.y));
-    float alpha = clamp((core + glow) * u_intensity * fade, 0.0, 1.0);
-    vec3 col = u_color + vec3(core * 0.6);
+    // Quad is centered on the targeted hex. v_local.y = -1 is sky, 0 is the hex, +y is below.
+    // The filament runs sky → hex and dies there — it must not keep going down the screen.
+    vec2 p = v_local;
+    if (p.y > 0.22) { fragColor = vec4(0.0); return; }
+
+    float y = clamp(p.y + 1.0, 0.0, 1.0);
+    float front = clamp(u_age / 0.06, 0.0, 1.0);
+    float head = smoothstep(front + 0.08, front - 0.02, y);
+    if (head <= 0.001) { fragColor = vec4(0.0); return; }
+    // Soft stop on the hex so the core doesn't punch through the tile into the floor.
+    float groundStop = 1.0 - smoothstep(0.92, 1.02, y);
+
+    float retrig = floor(u_time * 26.0 + u_seed * 3.0);
+    float flick = fract(sin(retrig * 91.71 + u_seed) * 43758.5453);
+    float live = mix(0.12, 1.0, step(0.14, flick));
+
+    float amp = 0.42 * (0.75 + 0.25 * u_intensity);
+    float xMain = boltX(y, u_seed, retrig, amp);
+    float dMain = abs(p.x - xMain);
+
+    float thick = mix(0.012, 0.034, y * y);
+    float core = smoothstep(thick, 0.0, dMain);
+    float filament = smoothstep(thick * 2.8, 0.0, dMain);
+    float glow = smoothstep(0.22, 0.0, dMain) * 0.55;
+
+    float xGhost = boltX(y, u_seed + 9.1, retrig - 1.0, amp * 0.85);
+    float ghost = smoothstep(0.045, 0.0, abs(p.x - xGhost)) * 0.35;
+
+    float fork = 0.0;
+    for (int i = 0; i < 3; i++) {
+      float y0 = 0.22 + float(i) * 0.23 + fract(u_seed * (0.13 + float(i) * 0.07)) * 0.08;
+      if (y < y0 || y > 0.97) continue;
+      float t = (y - y0) / max(0.08, 1.0 - y0);
+      if (t > 0.72) continue;
+      float side = (i == 1) ? -1.0 : 1.0;
+      if (i == 2) side = (fract(u_seed * 4.7) > 0.5) ? 1.0 : -1.0;
+      float xb = boltX(y, u_seed + 4.0 + float(i) * 5.3, retrig, 0.22);
+      float xF = mix(xMain, xMain + side * (0.18 + t * 0.7) + xb, smoothstep(0.0, 0.12, t));
+      float dF = abs(p.x - xF);
+      float th = mix(0.02, 0.008, t);
+      fork += smoothstep(th * 2.2, 0.0, dF) * (1.0 - t) * 0.85;
+      fork += smoothstep(0.12, 0.0, dF) * (1.0 - t) * 0.2;
+    }
+
+    float hazeN = sampleFbm(vec2(p.x * 3.0 + u_seed, y * 4.0 + retrig * 0.05));
+    float column = (1.0 - smoothstep(0.0, 0.55, abs(p.x))) * (0.12 + 0.2 * hazeN) * (0.25 + 0.75 * y);
+
+    // Impact sits on the hex (p.y ≈ 0), not at the bottom of the quad.
+    vec2 hit = vec2(p.x, p.y * 2.8);
+    float impact = pow(max(0.0, 1.0 - length(hit)), 2.2);
+    float shock = pow(max(0.0, 1.0 - length(vec2(p.x * 0.65, p.y * 3.2))), 1.4) * 0.65;
+
+    float plasma = (core * 1.8 + filament * 0.9 + fork + ghost) * live * head * groundStop;
+    float wash = (glow * groundStop + column * groundStop + impact * 1.4 + shock) * live * head;
+
+    vec3 hot = vec3(0.92, 0.97, 1.0);
+    vec3 ion = u_color * vec3(0.55, 0.75, 1.35);
+    vec3 col = hot * plasma * 2.4 + ion * wash * 1.6;
+    col += vec3(0.15, 0.0, 0.35) * filament * (1.0 - core) * 0.5 * live * groundStop;
+
+    float alpha = clamp((plasma + wash * 0.7) * u_intensity, 0.0, 1.0);
     fragColor = vec4(col * alpha, alpha);
     return;
   }
@@ -373,8 +450,112 @@ void main() {
   }
 
   if (u_element == HOLY) {
-    // A bright core column plus two angled streaks (cheap fixed "god rays") instead of one
-    // flat vertical gradient, with a hot white center fading into the tint at the edges.
+    // Combat Magic Missile: a darting arcane comet (variant 1) or a hit burst (variant 2).
+    // Map-placed holy keeps the original column.
+    if (u_variant > 0.5 && u_variant < 1.5) {
+      float head = exp(-length(v_local - vec2(0.55, 0.0)) * 9.0);
+      float core = exp(-length(v_local - vec2(0.35, 0.0)) * 5.5);
+      float trail = smoothstep(0.28, 0.0, abs(v_local.y)) * smoothstep(-1.05, 0.55, v_local.x) * smoothstep(1.0, 0.15, v_local.x);
+      float n = sampleFbm(vec2(v_local.x * 3.0 + u_seed, u_time * 8.0 + u_seed));
+      trail *= 0.65 + 0.55 * n;
+      vec3 hot = vec3(0.95, 0.82, 1.0);
+      vec3 ion = u_color;
+      vec3 col = hot * head * 2.8 + ion * (core * 1.4 + trail * 1.1);
+      float alpha = clamp((head * 1.3 + core + trail * 0.75) * u_intensity, 0.0, 1.0);
+      fragColor = vec4(col * alpha, alpha);
+      return;
+    }
+    if (u_variant > 1.5 && u_variant < 2.5) {
+      float t = clamp(u_age / max(u_duration, 0.001), 0.0, 1.0);
+      float r = length(v_local);
+      float expand = mix(0.05, 1.12, pow(t, 0.4));
+      float ring = smoothstep(0.12, 0.0, abs(r - expand));
+      float ball = smoothstep(expand, expand * 0.1, r) * (1.0 - smoothstep(0.12, 0.8, t));
+      float flash = exp(-r * 3.0) * (1.0 - smoothstep(0.0, 0.25, t));
+      float rays = 0.0;
+      for (int i = 0; i < 6; i++) {
+        float a = float(i) * 1.047 + u_seed;
+        vec2 dir = vec2(cos(a), sin(a) * 0.72);
+        float dRay = abs(dot(v_local, vec2(-dir.y, dir.x)));
+        rays += smoothstep(0.08, 0.0, dRay) * smoothstep(expand + 0.15, 0.0, r) * (1.0 - t);
+      }
+      vec3 hot = vec3(1.0, 0.9, 1.0);
+      vec3 ion = u_color;
+      vec3 col = hot * (flash * 2.4 + ball * 1.6) + ion * (ring * 1.5 + rays * 0.7);
+      float alpha = clamp((flash + ball + ring + rays * 0.5) * u_intensity * (1.0 - t * 0.5), 0.0, 1.0);
+      fragColor = vec4(col * alpha, alpha);
+      return;
+    }
+    if (u_variant > 2.5 && u_variant < 3.5) {
+      // Dream-web dart: three silk threads with a violet head.
+      float silk = 0.0;
+      for (int i = 0; i < 3; i++) {
+        float yoff = (float(i) - 1.0) * 0.13;
+        yoff += (sampleFbm(vec2(v_local.x * 2.4 + u_seed + float(i), u_time * 3.0)) - 0.5) * 0.1;
+        silk += smoothstep(0.07, 0.0, abs(v_local.y - yoff)) * smoothstep(-1.05, 0.55, v_local.x) * smoothstep(1.05, 0.2, v_local.x);
+      }
+      float head = exp(-length(v_local - vec2(0.52, 0.0)) * 8.0);
+      vec3 hot = vec3(0.95, 0.78, 1.0);
+      vec3 ion = u_color;
+      vec3 col = hot * head * 2.4 + ion * silk * 1.35;
+      float alpha = clamp((head * 1.2 + silk * 0.85) * u_intensity, 0.0, 1.0);
+      fragColor = vec4(col * alpha, alpha);
+      return;
+    }
+    if (u_variant > 3.5 && u_variant < 4.5) {
+      // Dream web on a hex: expanding silk mesh that settles and breathes.
+      float t = u_duration > 0.001 ? clamp(u_age / u_duration, 0.0, 1.0) : 0.0;
+      float grow = mix(0.12, 1.05, clamp(u_age / 0.28, 0.0, 1.0));
+      float hd = hexDist(v_local);
+      if (hd > grow) { fragColor = vec4(0.0); return; }
+      float r = length(v_local);
+      float spokes = 0.0;
+      for (int i = 0; i < 8; i++) {
+        float a = float(i) * 0.785398 + u_seed * 0.15;
+        vec2 dir = vec2(cos(a), sin(a) * 0.55);
+        float dRay = abs(v_local.x * dir.y - v_local.y * dir.x);
+        spokes += smoothstep(0.045, 0.0, dRay) * smoothstep(grow, 0.05, r);
+      }
+      float rings = abs(sin(r * 10.0 - min(u_age * 6.0, 2.2)));
+      rings = smoothstep(0.4, 0.0, rings) * smoothstep(grow, 0.12, r);
+      float silkN = sampleFbm(v_local * 3.6 + vec2(u_seed, u_time * 0.18));
+      float mesh = spokes * 1.1 + rings * 0.75 + silkN * 0.28 * (1.0 - hd);
+      float fade = t < 0.35 ? 1.0 : 1.0 - (t - 0.35) / 0.65;
+      vec3 hot = vec3(0.92, 0.72, 1.0);
+      vec3 ion = u_color;
+      vec3 col = mix(ion, hot, clamp(spokes, 0.0, 1.0)) * mesh;
+      float alpha = clamp(mesh * 0.95 * fade * u_intensity, 0.0, 1.0);
+      fragColor = vec4(col * alpha, alpha);
+      return;
+    }
+    if (u_variant > 4.5 && u_variant < 5.5) {
+      // Steel blade swoosh — a curved ribbon that wipes across the quad.
+      float t = clamp(u_age / max(u_duration, 0.001), 0.0, 1.0);
+      float curve = v_local.y - 0.2 * sin((v_local.x * 0.5 + 0.5) * 3.14159265);
+      float dRibbon = abs(curve);
+      float ribbon = smoothstep(0.2, 0.0, dRibbon);
+      float coreS = smoothstep(0.055, 0.0, dRibbon);
+      float along = v_local.x * 0.5 + 0.5;
+      float reveal = smoothstep(along - 0.18, along + 0.02, t * 1.35);
+      float fade = 1.0 - smoothstep(0.42, 1.0, t);
+      vec3 hot = vec3(0.95, 0.97, 1.0);
+      vec3 col = mix(u_color, hot, coreS);
+      float alpha = clamp((ribbon * 0.65 + coreS) * reveal * fade * u_intensity, 0.0, 1.0);
+      fragColor = vec4(col * alpha, alpha);
+      return;
+    }
+    if (u_variant > 5.5) {
+      float t = clamp(u_age / max(u_duration, 0.001), 0.0, 1.0);
+      float r = length(vec2(v_local.x, v_local.y / 0.62));
+      float rad = mix(0.12, 1.08, pow(t, 0.5));
+      float ring = smoothstep(0.11, 0.0, abs(r - rad));
+      float flash = exp(-r * 2.4) * (1.0 - smoothstep(0.0, 0.32, t));
+      vec3 hot = vec3(0.93, 0.95, 1.0);
+      vec3 col = hot * flash * 1.6 + u_color * ring * 1.3;
+      float alpha = clamp((flash + ring) * (1.0 - t * 0.45) * u_intensity, 0.0, 1.0);
+      fragColor = vec4(col * alpha, alpha);
+      return;
+    }
     float core = smoothstep(0.14, 0.0, abs(v_local.x));
     float wide = smoothstep(0.55, 0.05, abs(v_local.x)) * 0.45;
     float ray1 = smoothstep(0.32, 0.0, abs(v_local.x - v_local.y * 0.4)) * 0.22;
@@ -540,6 +721,15 @@ void main() {
     float pulse = 0.8 + 0.2 * sin(u_time * 6.0 + u_seed * 10.0);
     float alpha = atten * u_intensity * pulse;
     fragColor = vec4(hotCore * alpha, alpha);
+    return;
+  }
+  if (u_element == 3) { // lightning: hard white-blue flash, staccato
+    float retrig = floor(u_time * 26.0 + u_seed);
+    float flick = fract(sin(retrig * 12.9898) * 43758.5453);
+    float pulse = mix(0.25, 1.35, step(0.18, flick));
+    float alpha = pow(atten, 0.7) * u_intensity * pulse;
+    vec3 bolt = mix(u_color, vec3(0.85, 0.93, 1.0), 0.7);
+    fragColor = vec4(bolt * alpha * 1.8, alpha);
     return;
   }
   if (u_element == 4) { // acid: steady neon emissive
