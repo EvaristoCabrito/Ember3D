@@ -436,15 +436,51 @@ void main() {
   }
 
   if (u_element == ACID) {
+    // Combat glob (variant 1): a lumpy flying droplet. Splash (short duration): impact burst.
+    // Map-placed acid and leftover pools use the bubbling hex below.
+    if (u_variant > 0.5 && u_variant < 1.5) {
+      float lump = sampleFbm(vec2(v_local.x * 4.0 + u_seed, u_time * 6.0));
+      float yWob = (lump - 0.5) * 0.18;
+      float head = exp(-length(v_local - vec2(0.5, yWob)) * 7.5);
+      float body = exp(-length(v_local - vec2(0.1, yWob * 0.6)) * 4.2);
+      float drip = smoothstep(0.22, 0.0, abs(v_local.y - yWob)) * smoothstep(-1.0, 0.4, v_local.x) * smoothstep(1.05, 0.2, v_local.x);
+      vec3 hot = vec3(0.82, 1.0, 0.35);
+      vec3 ion = u_color;
+      vec3 col = hot * head * 2.2 + ion * (body * 1.3 + drip * 0.9);
+      float alpha = clamp((head * 1.15 + body + drip * 0.7) * u_intensity, 0.0, 1.0);
+      fragColor = vec4(col * alpha, alpha);
+      return;
+    }
+    if (u_duration > 0.001 && u_duration < 0.6) {
+      float t = clamp(u_age / max(u_duration, 0.001), 0.0, 1.0);
+      float r = length(v_local);
+      float expand = mix(0.05, 1.2, pow(t, 0.42));
+      float ring = smoothstep(0.14, 0.0, abs(r - expand));
+      float ball = smoothstep(expand, expand * 0.12, r) * (1.0 - smoothstep(0.12, 0.82, t));
+      float flash = exp(-r * 2.6) * (1.0 - smoothstep(0.0, 0.28, t));
+      float n = sampleFbm(uv * 5.4 + vec2(u_seed, u_time * 3.5));
+      float spat = smoothstep(0.4, 0.9, n) * smoothstep(expand + 0.18, 0.0, r) * (1.0 - t);
+      vec3 hot = vec3(0.85, 1.0, 0.4);
+      vec3 mid = u_color;
+      vec3 dark = u_color * vec3(0.15, 0.35, 0.08);
+      vec3 col = hot * (flash * 2.2 + ball * 1.5) + mix(mid, dark, t) * (ring * 1.5 + spat * 1.1);
+      float alpha = clamp((flash * 1.1 + ball + ring + spat * 0.7) * u_intensity * (1.0 - t * 0.5), 0.0, 1.0);
+      fragColor = vec4(col * alpha, alpha);
+      return;
+    }
     if (d > 1.0) discard;
     vec2 warped = uv + vec2(0.0, sin(u_time * 1.4 + uv.x * 9.0) * 0.015 * u_intensity - u_time * 0.02);
     float h = sampleFbm(warped * u_noiseScale - vec2(0.0, u_time * u_scrollSpeed)) + 0.1 * sin(u_time * 3.1 + uv.x * 21.0 + uv.y * 15.0);
     float bubble = smoothstep(0.5, 0.95, h);
     vec3 base = mix(u_color * 0.4, u_color * 1.4, bubble);
-    // Glossy bubble-skin relief: same trick as fire/water, higher shininess for a wet look.
     vec3 lit = relief(h * 4.0, 6.0, base, 34.0, 0.9, 0.45);
     float atten = smoothstep(1.0, 0.12, d);
-    float alpha = clamp((0.35 + 0.65 * bubble) * atten * u_intensity, 0.0, 1.0);
+    float fade = 1.0;
+    if (u_duration > 0.001) {
+      float k = clamp(u_age / u_duration, 0.0, 1.0);
+      fade = k < 0.5 ? 1.0 : 1.0 - (k - 0.5) / 0.5;
+    }
+    float alpha = clamp((0.35 + 0.65 * bubble) * atten * u_intensity * fade, 0.0, 1.0);
     fragColor = vec4(lit * alpha, alpha);
     return;
   }

@@ -247,6 +247,34 @@ export function BattleCanvas({
                 color: [0.7, 0.38, 0.98],
               });
             }
+          } else if (s.kind === "causticVenom") {
+            const acid: [number, number, number] = [0.45, 1.0, 0.18];
+            if (s.role === "bolt") {
+              strikeFx.spawnEffect("acid", s.toX, s.toY, {
+                duration: s.duration + 0.05,
+                radiusTiles: 0.95,
+                aspect: [1.7, 0.55],
+                fromCol: s.fromX,
+                fromRow: s.fromY,
+                travel: s.duration,
+                variant: 1,
+                color: acid,
+              });
+            } else if (s.role === "splash") {
+              strikeFx.spawnEffect("acid", s.x, s.y, {
+                duration: s.duration,
+                radiusTiles: s.center ? 2.35 : 1.65,
+                aspect: [1.2, 1.15],
+                color: acid,
+              });
+            } else {
+              strikeFx.spawnEffect("acid", s.x, s.y, {
+                duration: s.duration,
+                radiusTiles: s.center ? 1.22 : 1.02,
+                aspect: [1.05, 0.72],
+                color: acid,
+              });
+            }
           } else if (s.kind === "melee") {
             const steel: [number, number, number] = [0.82, 0.9, 1.0];
             if (s.style === "thrust") {
@@ -269,14 +297,17 @@ export function BattleCanvas({
                 color: steel,
               });
             } else {
-              const from = engine.effectAnchor(s.fromX, s.fromY);
-              const to = engine.effectAnchor(s.x, s.y);
-              const rot = Math.atan2(to.y - from.y, to.x - from.x) + (s.rotOffset ?? 0);
               const arc = s.style === "arc" || s.style === "smash";
+              const a = engine.effectAnchor(s.fromX, s.fromY);
+              const b =
+                arc && s.toX != null && s.toY != null
+                  ? engine.effectAnchor(s.toX, s.toY)
+                  : engine.effectAnchor(s.x, s.y);
+              const rot = Math.atan2(b.y - a.y, b.x - a.x) + (s.rotOffset ?? 0);
               strikeFx.spawnEffect("holy", s.x, s.y, {
                 duration: s.duration,
-                radiusTiles: arc ? 2.05 : s.style === "trip" ? 1.15 : 1.35,
-                aspect: s.style === "trip" ? [1.6, 0.32] : arc ? [2.2, 0.78] : [1.7, 0.42],
+                radiusTiles: arc ? 2.35 : s.style === "trip" ? 1.15 : 1.35,
+                aspect: s.style === "trip" ? [1.6, 0.32] : arc ? [2.55, 0.7] : [1.7, 0.42],
                 rotation: rot,
                 variant: 5,
                 color: s.style === "smash" ? [0.95, 0.88, 0.72] : steel,

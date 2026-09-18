@@ -26,7 +26,7 @@ import {
 
 const ADDITIVE_ELEMENTS: ReadonlySet<ElementKind> = new Set(["fire", "lightning", "acid", "holy"]);
 const LIGHT_ELEMENTS: ReadonlySet<ElementKind> = new Set(["fire", "acid", "holy", "darkness", "lightning"]);
-const PARTICLE_ELEMENTS: ReadonlySet<ElementKind> = new Set(["fire", "holy", "lightning"]);
+const PARTICLE_ELEMENTS: ReadonlySet<ElementKind> = new Set(["fire", "holy", "lightning", "acid"]);
 
 export interface EffectAnchor {
   x: number;
@@ -241,7 +241,7 @@ export class EffectsRenderer {
       variant: opts.variant ?? 0,
       color: opts.color ?? null,
     });
-    if (PARTICLE_ELEMENTS.has(kind)) this.particleEmitters.set(id, new ParticleEmitter(kind as "fire" | "holy" | "lightning"));
+    if (PARTICLE_ELEMENTS.has(kind)) this.particleEmitters.set(id, new ParticleEmitter(kind as "fire" | "holy" | "lightning" | "acid"));
     return id;
   }
 
@@ -432,6 +432,11 @@ export class EffectsRenderer {
         if (fx.duration < 0.6) intensity *= 1.55 * (1 - k * 0.35);
         else intensity *= k < 0.5 ? 1 : Math.max(0, 1 - (k - 0.5) / 0.5);
       }
+      if (fx.kind === "acid" && fx.duration != null) {
+        const k = fx.age / Math.max(0.001, fx.duration);
+        if (fx.duration < 0.6) intensity *= 1.45 * (1 - k * 0.3);
+        else intensity *= k < 0.5 ? 1 : Math.max(0, 1 - (k - 0.5) / 0.5);
+      }
       const color = fx.color ?? params.color;
       gl.uniform1i(this.uElemental.u_element, ELEMENT_INDEX[fx.kind]);
       gl.uniform1f(this.uElemental.u_seed, fx.seed);
@@ -486,6 +491,14 @@ export class EffectsRenderer {
                   ? 16
                   : 5
                 : 14
+            : fx.kind === "acid"
+              ? fx.duration != null && fx.duration < 0.6
+                ? 55
+                : fx.duration != null
+                  ? fx.age < fx.duration * 0.7
+                    ? 14
+                    : 4
+                  : 8
             : fx.variant === 1
               ? 26
               : fx.variant === 2
@@ -617,6 +630,11 @@ export class EffectsRenderer {
         if (fx.duration < 0.6) intensity *= 1.55 * (1 - k * 0.35);
         else intensity *= k < 0.5 ? 1 : Math.max(0, 1 - (k - 0.5) / 0.5);
       }
+      if (fx.kind === "acid" && fx.duration != null) {
+        const k = fx.age / Math.max(0.001, fx.duration);
+        if (fx.duration < 0.6) intensity *= 1.45 * (1 - k * 0.3);
+        else intensity *= k < 0.5 ? 1 : Math.max(0, 1 - (k - 0.5) / 0.5);
+      }
       const color = fx.color ?? params.color;
       gl.uniform1i(this.uElemental.u_element, ELEMENT_INDEX[fx.kind]);
       gl.uniform1f(this.uElemental.u_seed, fx.seed);
@@ -663,6 +681,14 @@ export class EffectsRenderer {
                   ? 16
                   : 5
                 : 14
+            : fx.kind === "acid"
+              ? fx.duration != null && fx.duration < 0.6
+                ? 55
+                : fx.duration != null
+                  ? fx.age < fx.duration * 0.7
+                    ? 14
+                    : 4
+                  : 8
             : fx.variant === 1
               ? 26
               : fx.variant === 2

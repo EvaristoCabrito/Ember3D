@@ -755,6 +755,10 @@ export interface GameArt {
   fireballCore: HTMLImageElement;
   /** Ultra-realistic Caustic Venom core. */
   causticVenomCore: HTMLImageElement;
+  /** Photoreal Web of Dreams projectile (silk wad + trailing threads). */
+  webShot: HTMLCanvasElement;
+  /** Photoreal Web of Dreams floor web; stays until the zone expires. */
+  webOpen: HTMLImageElement;
   /** Ultra-realistic travelling arrow. */
   arrowCore: HTMLCanvasElement;
   /** Photoreal Relâmpago cores (flicker set). Additive-blend on black. */

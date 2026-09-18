@@ -205,9 +205,13 @@ type GpuFxEvent =
       fromY: number;
       duration: number;
       rotOffset?: number;
+      toX?: number;
+      toY?: number;
     }
   | { kind: "melee"; style: "thrust"; fromX: number; fromY: number; toX: number; toY: number; duration: number }
-  | { kind: "melee"; style: "ring"; x: number; y: number; duration: number };
+  | { kind: "melee"; style: "ring"; x: number; y: number; duration: number }
+  | { kind: "causticVenom"; role: "bolt"; fromX: number; fromY: number; toX: number; toY: number; duration: number }
+  | { kind: "causticVenom"; role: "splash" | "pool"; x: number; y: number; duration: number; center: boolean };
 
 
 function blankMissileFx(): MissileFx {
@@ -1628,29 +1632,6 @@ export class BattleEngine {
         ) {
           this.gpuFxQueue.push({ kind: "magicMissile", role: "burst", x: m.toX, y: m.toY, duration: 0.42 });
         }
-        if (
-          m.kind === "webOfDreams" &&
-          this.preferGpuLightning &&
-          prev < m.travel &&
-          m.t >= m.travel
-        ) {
-          const zone = this.webZones.find((z) => z.cells.has(`${m.toX},${m.toY}`));
-          const cells = zone ? [...zone.cells] : [`${m.toX},${m.toY}`];
-          for (const packed of cells) {
-            const comma = packed.indexOf(",");
-            const x = Number(packed.slice(0, comma));
-            const y = Number(packed.slice(comma + 1));
-            if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-            this.gpuFxQueue.push({
-              kind: "webOfDreams",
-              role: "bloom",
-              x,
-              y,
-              duration: x === m.toX && y === m.toY ? 2.35 : 1.85,
-              center: x === m.toX && y === m.toY,
-            });
-          }
-        }
         if (m.t >= m.max) {
           m.live = false;
           continue;
@@ -2857,6 +2838,14 @@ export class BattleEngine {
       }
       if (this.preferGpuLightning) return;
     }
+    if (kind === "causticVenom") {
+      for (const cell of tiles) {
+        const center = !!origin && origin.x === cell.x && origin.y === cell.y;
+        this.gpuFxQueue.push({ kind: "causticVenom", x: cell.x, y: cell.y, duration: center ? 0.5 : 0.38, role: "splash", center });
+        this.gpuFxQueue.push({ kind: "causticVenom", x: cell.x, y: cell.y, duration: center ? 2.4 : 1.7, role: "pool", center });
+      }
+      if (this.preferGpuLightning) return;
+    }
     for (const cell of tiles) {
       let burst = this.fireballBurstFx.find((x) => !x.live);
       if (!burst) burst = this.fireballBurstFx[0]!;
@@ -2922,9 +2911,9 @@ export class BattleEngine {
         duration: MISSILE_TRAVEL,
       });
     }
-    if (kind === "webOfDreams") {
+    if (kind === "causticVenom") {
       this.gpuFxQueue.push({
-        kind: "webOfDreams",
+        kind: "causticVenom",
         role: "bolt",
         fromX,
         fromY,
@@ -6092,11 +6081,15 @@ export class BattleEngine {
     const mid = tiles[Math.floor(tiles.length / 2)] ?? tiles[0];
     if (!mid && kind !== "sweep") return;
     if (kind === "cleave" && mid) {
-      this.gpuFxQueue.push({ kind: "melee", style: "arc", x: mid.x, y: mid.y, fromX: caster.x, fromY: caster.y, duration: 0.3 });
+      const first = tiles[0] ?? mid;
+      const last = tiles[tiles.length - 1] ?? mid;
+      this.gpuFxQueue.push({ kind: "melee", style: "arc", x: mid.x, y: mid.y, fromX: first.x, fromY: first.y, toX: last.x, toY: last.y, duration: 0.3 });
       return;
     }
     if (kind === "shoulderSmash" && mid) {
-      this.gpuFxQueue.push({ kind: "melee", style: "smash", x: mid.x, y: mid.y, fromX: caster.x, fromY: caster.y, duration: 0.28 });
+      const first = tiles[0] ?? mid;
+      const last = tiles[tiles.length - 1] ?? mid;
+      this.gpuFxQueue.push({ kind: "melee", style: "smash", x: mid.x, y: mid.y, fromX: first.x, fromY: first.y, toX: last.x, toY: last.y, duration: 0.28 });
       return;
     }
     if (kind === "doubleStrike" && mid) {
@@ -6707,81 +6700,42 @@ export class BattleEngine {
   }
 
   /**
-   * Web of Dreams is a painted floor state, not a sprite/status effect. Keep this pass
-   * immediately after terrain so every later battlefield layer (props, targeting,
-   * shadows, units and combat FX) naturally covers it. The geometry is deliberately
-   * static and opaque: no pulse, additive blend, blur, mask, alpha fade or impact ring.
+   * Web of Dreams is a painted floor state. The photoreal open web sits on each hex
+   * for the zone's full lifetime (until roundsLeft hits 0), flattened onto the board.
    */
   private drawWebFloorMarks(ctx: CanvasRenderingContext2D, tile: number, cssW: number, cssH: number): void {
+    const web = this.art.webOpen;
+    const nw = web?.naturalWidth || web?.width || 0;
+    const nh = web?.naturalHeight || web?.height || 0;
+    if (!web || nw < 4) return;
     ctx.save();
     ctx.globalCompositeOperation = "source-over";
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = "rgb(126, 52, 177)";
-    ctx.lineWidth = Math.max(1.5, tile * 0.027);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
 
     for (const zone of this.webZones) {
-      // The projectile remains the cast tell. Once it reaches the target, the complete
-      // mark appears on the terrain without an expanding/floating transition.
       if (zone.createdAt != null && this.time < zone.createdAt + MISSILE_TRAVEL) continue;
+      const life = Math.max(0.5, Math.min(1, zone.roundsLeft / Math.max(1, WEB_OF_DREAMS.durationRounds)));
+      const pts: { x: number; y: number; cx: number; cy: number }[] = [];
       for (const packed of zone.cells) {
         const comma = packed.indexOf(",");
         const x = Number(packed.slice(0, comma));
         const y = Number(packed.slice(comma + 1));
         if (!Number.isFinite(x) || !Number.isFinite(y) || !this.explored(x, y)) continue;
         const { cx, cy } = this.hexCenter(x, y);
-        if (cx < -tile || cy < -tile || cx > cssW + tile || cy > cssH + tile) continue;
-
-        // A regular, symmetric orb web flattened to the board's perspective. Its outer
-        // anchors remain inside one hex, so no clipping/mask is needed.
-        const anchorCount = 8;
-        const radius = tile * 0.76;
-        const floorY = 0.5;
-        const rotation = -Math.PI / 2;
-        const anchors: { x: number; y: number }[] = [];
-        for (let i = 0; i < anchorCount; i += 1) {
-          const angle = rotation + (i / anchorCount) * Math.PI * 2;
-          anchors.push({ x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius * floorY });
-        }
-
-        ctx.beginPath();
-        for (const anchor of anchors) {
-          ctx.moveTo(cx, cy);
-          ctx.lineTo(anchor.x, anchor.y);
-        }
-        for (let band = 1; band <= 5; band += 1) {
-          const fraction = 0.16 + band * 0.16;
-          for (let i = 0; i < anchorCount; i += 1) {
-            const fromAnchor = anchors[i]!;
-            const toAnchor = anchors[(i + 1) % anchorCount]!;
-            const fromX = cx + (fromAnchor.x - cx) * fraction;
-            const fromY = cy + (fromAnchor.y - cy) * fraction;
-            const toX = cx + (toAnchor.x - cx) * fraction;
-            const toY = cy + (toAnchor.y - cy) * fraction;
-            const inward = 0.82;
-            const controlX = cx + (((fromX + toX) * 0.5) - cx) * inward;
-            const controlY = cy + (((fromY + toY) * 0.5) - cy) * inward;
-            ctx.moveTo(fromX, fromY);
-            ctx.quadraticCurveTo(controlX, controlY, toX, toY);
-          }
-        }
-        // Two strokes on the same ground path: a restrained violet light spill followed
-        // by the opaque thread. This entire pass precedes props and actors, so the glow
-        // cannot wrap around feet or appear over a sprite.
-        ctx.save();
-        ctx.strokeStyle = "rgba(151, 45, 255, 0.42)";
-        ctx.lineWidth = Math.max(2.4, tile * 0.055);
-        ctx.shadowColor = "rgba(151, 45, 255, 0.58)";
-        ctx.shadowBlur = tile * 0.075;
-        ctx.stroke();
-        ctx.restore();
-        ctx.strokeStyle = "rgb(151, 58, 214)";
-        ctx.lineWidth = Math.max(1.5, tile * 0.027);
-        ctx.stroke();
+        pts.push({ x, y, cx, cy });
       }
+      if (pts.length === 0) continue;
+      const ox = pts.reduce((a, p) => a + p.cx, 0) / pts.length;
+      const oy = pts.reduce((a, p) => a + p.cy, 0) / pts.length;
+      if (ox < -tile * 3 || oy < -tile * 3 || ox > cssW + tile * 3 || oy > cssH + tile * 3) continue;
+      let span = tile * 1.6;
+      for (const p of pts) span = Math.max(span, Math.hypot(p.cx - ox, p.cy - oy) + tile * 0.95);
+      const w = span * 2.05;
+      const h = w * (nh / Math.max(1, nw)) * 0.92;
+      ctx.save();
+      ctx.globalAlpha = 0.92 * life;
+      ctx.translate(ox, oy + tile * 0.06);
+      ctx.drawImage(web, -w / 2, -h / 2, w, h);
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -7461,7 +7415,7 @@ export class BattleEngine {
     if (this.fireballBurstFxLive) {
       for (const burst of this.fireballBurstFx) {
         if (!burst.live) continue;
-        if (burst.kind === "fireball" && this.preferGpuLightning) continue;
+        if ((burst.kind === "fireball" || burst.kind === "causticVenom") && this.preferGpuLightning) continue;
         const { cx, cy } = this.hexCenter(burst.x, burst.y);
         const k = burst.t / burst.max;
         const fade = Math.max(0, 1 - k);
@@ -7521,7 +7475,7 @@ export class BattleEngine {
     if (this.missileFxLive) {
       for (const m of this.missileFx) {
         if (!m.live) continue;
-        if ((m.kind === "magicMissile" || m.kind === "webOfDreams") && this.preferGpuLightning) continue;
+        if ((m.kind === "magicMissile" || m.kind === "causticVenom") && this.preferGpuLightning) continue;
         const from = this.hexCenter(m.fromX, m.fromY);
         const to = this.hexCenter(m.toX, m.toY);
         const dxT = to.cx - from.cx;
@@ -7569,29 +7523,18 @@ export class BattleEngine {
         if (m.kind === "webOfDreams") {
           const head = along(kHead);
           const fade = 1 - afterglow;
+          const img = this.art.webShot;
+          const angle = Math.atan2(dyT, dxT);
           ctx.save();
-          ctx.globalCompositeOperation = "source-over";
+          ctx.translate(head.x, head.y);
+          ctx.rotate(angle);
+          ctx.globalCompositeOperation = "lighter";
           ctx.globalAlpha = fade;
-          ctx.lineCap = "round";
-          ctx.shadowColor = "transparent";
-          ctx.shadowBlur = 0;
-          // Keep the approved purple cast trail, but do not let the projectile create a
-          // second glowing web above the battlefield. The actual web appears only in the
-          // terrain pass when the projectile arrives.
-          for (let strand = -1; strand <= 1; strand += 1) {
-            const backK = Math.max(0, kHead - 0.12 - Math.abs(strand) * 0.018);
-            const back = along(backK);
-            ctx.strokeStyle = strand === 0 ? "rgb(126, 52, 177)" : "rgb(91, 35, 137)";
-            ctx.lineWidth = Math.max(1, tile * (strand === 0 ? 0.026 : 0.014));
-            ctx.beginPath();
-            ctx.moveTo(back.x, back.y + strand * tile * 0.025);
-            ctx.lineTo(head.x, head.y);
-            ctx.stroke();
+          if (img && img.width > 4) {
+            const w = tile * 2.35;
+            const h = w * (img.height / Math.max(1, img.width));
+            ctx.drawImage(img, -w * 0.75, -h / 2, w, h);
           }
-          ctx.fillStyle = "rgb(126, 52, 177)";
-          ctx.beginPath();
-          ctx.arc(head.x, head.y, Math.max(1.5, tile * 0.045), 0, Math.PI * 2);
-          ctx.fill();
           ctx.restore();
           continue;
         }

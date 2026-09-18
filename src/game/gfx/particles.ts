@@ -23,7 +23,7 @@ export class ParticleEmitter {
   particles: FxParticle[] = [];
   private spawnAccum = 0;
 
-  constructor(private kind: Extract<ElementKind, "fire" | "holy" | "lightning">) {}
+  constructor(private kind: Extract<ElementKind, "fire" | "holy" | "lightning" | "acid">) {}
 
   update(dt: number, anchorX: number, anchorY: number, radiusPx: number, color: [number, number, number], rate = 10): void {
     this.spawnAccum += dt * rate;
@@ -35,7 +35,7 @@ export class ParticleEmitter {
       p.age += dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      if (this.kind === "fire") p.vy -= 6 * dt;
+      if (this.kind === "fire" || this.kind === "acid") p.vy -= 6 * dt;
       if (this.kind === "lightning") {
         p.vx *= Math.max(0, 1 - 3.5 * dt);
         p.vy += 80 * dt;
@@ -60,6 +60,17 @@ export class ParticleEmitter {
         life: 0.6 + Math.random() * 0.5,
         size: radiusPx * (0.08 + Math.random() * 0.08),
         color,
+      });
+    } else if (this.kind === "acid") {
+      this.particles.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * 18,
+        vy: -22 - Math.random() * 28,
+        age: 0,
+        life: 0.45 + Math.random() * 0.4,
+        size: radiusPx * (0.05 + Math.random() * 0.07),
+        color: Math.random() > 0.45 ? [0.75, 1, 0.3] : color,
       });
     } else if (this.kind === "lightning") {
       const a = -Math.PI * 0.15 + Math.random() * Math.PI * 1.3;

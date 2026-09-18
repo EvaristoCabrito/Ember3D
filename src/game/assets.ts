@@ -326,6 +326,8 @@ export async function loadGameArt(): Promise<GameArt> {
   const impact = await Promise.all([1, 2, 3, 4].map((n) => loadImage(`/game/fx/impact-${n}.png`)));
   const fireballCore = await loadImage("/game/fx/fireball-core-v1.png?v=1");
   const causticVenomCore = await loadImage("/game/fx/caustic-venom-core-v1.png?v=1");
+  const webShot = deriveAlphaFromBlack(await loadImage("/game/fx/web-shot-v1.png?v=1"));
+  const webOpen = await loadImage("/game/fx/web-open-v1.png?v=2");
   const arrowCore = deriveAlphaFromBlack(await loadImage("/game/fx/arrow-002.png?v=1"));
   const lightningCores = await Promise.all([
     loadImage("/game/fx/lightning-core-v1.png?v=1"),
@@ -372,5 +374,5 @@ export async function loadGameArt(): Promise<GameArt> {
     // priority over them while moving (see the render loop's img lookup), leaving that
     // animation dead code.
   };
-  return { tiles, decorations, sprites, attacks, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, walkDirs, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, backdrops };
+  return { tiles, decorations, sprites, attacks, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, walkDirs, impact, fireballCore, causticVenomCore, webShot, webOpen, arrowCore, lightningCores, backdrops };
 }
