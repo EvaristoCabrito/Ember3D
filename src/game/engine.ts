@@ -1002,36 +1002,26 @@ export class BattleEngine {
     this.waterFxTileKeys = new Set(
       this.elementalFxPlacements.filter((p) => WATER_FAMILY.has(p.kind)).map((p) => p.y * this.cols + p.x),
     );
-    // Debug-only, off by default: every Shore/Water3/4/5 hex today is one a designer placed
-    // by hand, so the water-to-water shore edges already on the map are the ground truth and
-    // this block must never rewrite them. It only ever PUSHES brand-new placements onto the
-    // array below — it never reads back or mutates an existing entry — so with the flag off
-    // (or on a map with no water/water2 placements) this is a no-op and behavior is identical
-    // to before this block existed. Toggle via devtools:
-    // localStorage.setItem("emberash:landShoreFx", "1") then reload, "0" (or removed) to undo.
+    // Debug-only, off by default: most 2D "water" TERRAIN tiles on the actual maps have no
+    // water/water2 FX object placed on top at all, so only the ~25 hexes a designer happened
+    // to hand-place one on get the animated WebGL surface — every other water tile just shows
+    // its flat, static photo art. This block only ever PUSHES a brand-new placement for a water
+    // tile that has none — it never reads back or mutates an existing placement (of any kind),
+    // so with the flag off, or on any hex a designer already gave an FX to, behavior is
+    // unchanged. Toggle via devtools: localStorage.setItem("emberash:landShoreFx", "1") then
+    // reload, "0" (or removed) to undo.
     if (this.landShoreFxDebugEnabled()) {
       const covered = new Set(this.elementalFxPlacements.map((p) => p.y * this.cols + p.x));
-      const landHexKeys = new Set<number>();
-      for (const p of this.elementalFxPlacements) {
-        if (!WATER_FAMILY.has(p.kind)) continue;
-        for (const n of this.hexNeighbors(p.x, p.y)) {
-          const key = n.y * this.cols + n.x;
-          if (covered.has(key) || landHexKeys.has(key)) continue;
-          if (this.tiles[key] === "water") continue;
-          landHexKeys.add(key);
+      for (let wy = 0; wy < this.rows; wy++) {
+        for (let wx = 0; wx < this.cols; wx++) {
+          const key = wy * this.cols + wx;
+          if (this.tiles[key] !== "water" || covered.has(key)) continue;
+          this.elementalFxPlacements.push({ id: `fx-synth-water-${key}`, kind: "water", x: wx, y: wy });
         }
       }
-      for (const key of landHexKeys) {
-        const x = key % this.cols;
-        const y = Math.floor(key / this.cols);
-        this.elementalFxPlacements.push({
-          id: `fx-synth-land-shore-${key}`,
-          kind: "shore",
-          x,
-          y,
-          rotation: this.shoreFacingRotation(x, y, true),
-        });
-      }
+      this.waterFxTileKeys = new Set(
+        this.elementalFxPlacements.filter((p) => WATER_FAMILY.has(p.kind)).map((p) => p.y * this.cols + p.x),
+      );
     }
     // Art is loaded once at boot — a decoration added later (or after HMR) is in
     // DECORATIONS and in the editor <img>, but missing from art.decorations, so combat
@@ -6151,65 +6141,6 @@ export class BattleEngine {
     } catch {
       return false;
     }
-  }
-
-  /** The up-to-6 real hex neighbors of (x, y), found the same way shoreFacingRotation below
-   * does: a 3x3 block always has two corner cells that are diagonal, not actually adjacent
-   * hexes, so hexCenter's own screen-space distances (not a hardcoded 60°-step table) are what
-   * pick out the six true ones — this stays correct no matter the board's odd-row offset. */
-  private hexNeighbors(x: number, y: number): { x: number; y: number }[] {
-    const { cx: cx0, cy: cy0 } = this.hexCenter(x, y);
-    const candidates: { x: number; y: number; dist: number }[] = [];
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
-        const { cx, cy } = this.hexCenter(nx, ny);
-        candidates.push({ x: nx, y: ny, dist: Math.hypot(cx - cx0, cy - cy0) });
-      }
-    }
-    candidates.sort((a, b) => a.dist - b.dist);
-    return candidates.slice(0, 6);
-  }
-
-  /** u_rotation (radians) for a synthesized Shore-family elemental FX placement (see the FX
-   * shader's SHORE/SHORE2/WATER3/4/5 branches in shaders.ts) that points its water-colored
-   * half at whichever real hex neighbor is actually a water tile. `waterSideIsNegativeY` is
-   * true for the kinds whose water half is v_local.y < 0 at rotation 0 (Shore, Water3/4/5) and
-   * false for Shore2, their exact mirror — only `true` is used by the synthesis block above
-   * today, but the split is kept so a future Shore2/Water3/4/5 synthesis path can reuse this
-   * unchanged. Rotating by anything other than one of the six real neighbor directions would
-   * spin the hex-shaped mask itself off the real tile's edges (see VERT_QUAD's v_local
-   * derivation), so the search only ever considers rotations aimed at an actual neighbor.
-   * This only ever runs against a freshly synthesized placement that had no prior rotation of
-   * its own to preserve — it is never applied to an existing designer-placed hex. */
-  private shoreFacingRotation(x: number, y: number, waterSideIsNegativeY: boolean): number {
-    const { cx: cx0, cy: cy0 } = this.hexCenter(x, y);
-    const neighbors = this.hexNeighbors(x, y).map((n) => {
-      const { cx, cy } = this.hexCenter(n.x, n.y);
-      return { vx: cx - cx0, vy: cy - cy0, water: this.tiles[n.y * this.cols + n.x] === "water" };
-    });
-    if (neighbors.length === 0) return 0;
-    let bestRot = 0;
-    let bestScore = -Infinity;
-    for (const target of neighbors) {
-      const rot = waterSideIsNegativeY ? Math.atan2(target.vx, -target.vy) : Math.atan2(-target.vx, target.vy);
-      const sin = Math.sin(rot);
-      const cos = Math.cos(rot);
-      let score = 0;
-      for (const n of neighbors) {
-        const ly = -n.vx * sin + n.vy * cos;
-        const wantsNegative = waterSideIsNegativeY ? n.water : !n.water;
-        score += wantsNegative ? -ly : ly;
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        bestRot = rot;
-      }
-    }
-    return bestRot;
   }
 
   private hexPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
