@@ -165,6 +165,13 @@ vec3 relief(float h, float steepness, vec3 baseColor, float shininess, float spe
 // glaring hot spot, far punchier than every other tile around it. This is a gentle, mostly-flat
 // tint with just enough noise-driven brightness ripple to not go dead-static, blended with a
 // light touch of the refracted scene for a hint of nearby shore/decorations reflecting.
+// That reflection mix used to be weighted 0.35 — with water now placed over far more of the
+// map (not just a few curated hexes), that meant a water tile sitting next to something dark
+// (a shadowy plains variant, night-lit terrain) visibly dimmed by up to ~35%, reading as
+// "random"ly weaker/stronger depending purely on whatever happened to be nearby, next to
+// fire/etc FX which are self-lit and don't dim with their surroundings at all. Dropped to 0.15
+// so water reads as consistently vivid as the other elements regardless of what's next to it,
+// while still keeping a faint trace of the reflection this was originally meant to add.
 const WATER_SURFACE = `
 vec3 waterSurface(vec2 vUv, out float h) {
   vec2 worldPos = v_world * 0.008 * u_noiseScale;
@@ -172,7 +179,7 @@ vec3 waterSurface(vec2 vUv, out float h) {
   vec3 tint = u_color * (0.88 + 0.24 * h);
   vec2 disp = vec2(dFdx(h), dFdy(h)) * 0.35;
   vec3 sceneCol = texture(u_scene, vUv + disp).rgb;
-  vec3 col = mix(tint, sceneCol * u_color * 1.15, 0.35);
+  vec3 col = mix(tint, sceneCol * u_color * 1.15, 0.15);
   return col * u_intensity;
 }
 `;
