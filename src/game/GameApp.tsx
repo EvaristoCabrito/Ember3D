@@ -3967,11 +3967,16 @@ function MapEditorScreen({
       const turned = { ...hit, rot: (((hit.rot ?? 0) + 1) % 6) };
       const before = placedFootprint(hit);
       const after = placedFootprint(turned);
-      const others = decorationCells(d.decorations.filter((p) => p !== hit));
-      for (const f of after) {
-        if (others.has(`${hit.x + f.dx},${hit.y + f.dy}`)) {
-          setNote(`${def.name} nao cabe girada aqui — bateria em outra decoracao.`);
-          return d;
+      // A Waypoint is a flat ground marking, not a physical object — turning it can't "bump
+      // into" another prop the way turning a real object could (see toggleDecoration's own
+      // identical exemption).
+      if (!def.exitKind) {
+        const others = decorationCells(d.decorations.filter((p) => p !== hit));
+        for (const f of after) {
+          if (others.has(`${hit.x + f.dx},${hit.y + f.dy}`)) {
+            setNote(`${def.name} nao cabe girada aqui — bateria em outra decoracao.`);
+            return d;
+          }
         }
       }
       const tiles = [...d.tiles];
@@ -4110,7 +4115,12 @@ function MapEditorScreen({
   }, [removeSelectedDecoration]);
   const toggleDecoration = (x: number, y: number) => {
     const clicked = draft.decorations.find((p) => placedFootprint(p).some((f) => p.x + f.dx === x && p.y + f.dy === y));
-    if (clicked) {
+    // A Waypoint (Escape/Dungeon Exit, floor connector) is a flat ground marking, not a
+    // physical object — it can share a hex with an ordinary prop already there instead of
+    // being blocked by it or redirecting the click to it, unless what's already on that hex
+    // is itself another Waypoint, which the click still selects for editing/removal as normal.
+    const brushIsWaypoint = !!DECORATIONS[decoBrush]?.exitKind;
+    if (clicked && (!brushIsWaypoint || DECORATIONS[clicked.id]?.exitKind)) {
       const clickedDef = DECORATIONS[clicked.id];
       setSelectedPlacedDecoration({ id: clicked.id, x: clicked.x, y: clicked.y, rot: clicked.rot });
       setNote(`${clickedDef?.name ?? clicked.id} selecionada. Pressione Delete para remover.`);
@@ -4123,7 +4133,7 @@ function MapEditorScreen({
       // A new prop always stays where it was clicked. Parapets do not choose a new
       // position by themselves; only their ordinary horizontal footprint is occupied.
       for (const f of def.footprint) {
-        if (covered.has(`${x + f.dx},${y + f.dy}`)) return d;
+        if (!brushIsWaypoint && covered.has(`${x + f.dx},${y + f.dy}`)) return d;
       }
       const tiles = [...d.tiles];
       if (def.tile) {
@@ -4137,7 +4147,9 @@ function MapEditorScreen({
       // author having to remember to check "Bloquear caminho" every time. Houses too.
       const blocksByDefault = BARRICADE_LIKE_DECOR.has(decoBrush) || HOUSE_DECOR_IDS.has(decoBrush) || BIG_HOUSE_DECOR_IDS.has(decoBrush) || SOLID_HOUSE_DECOR_IDS.has(decoBrush);
       const placed = blocksByDefault ? { id: decoBrush, x, y, blocksPath: true } : { id: decoBrush, x, y };
-      setSelectedPlacedDecoration(placed);
+      // No auto-selection of any sort, per direct instruction: placing stays on the current
+      // brush so the author can keep placing more of the same thing; they select something
+      // else (to inspect/delete/edit rules) only by clicking it themselves.
       return { ...d, tiles, decorations: [...d.decorations, placed] };
     });
   };
@@ -4562,6 +4574,7 @@ function MapEditorScreen({
   })();
   const decorOptions = Object.values(DECORATIONS).sort((a, b) => byName(a.name, b.name));
   const decorationSectionFor = (id: string) => {
+    if (DECORATIONS[id]?.exitKind) return "Waypoints";
     if (HOUSE_DECOR_IDS.has(id) || BIG_HOUSE_DECOR_IDS.has(id)) return "Houses";
     if (DEADWOODS_DECOR_IDS.has(id)) return "Madeira Morta";
     if (
@@ -4591,7 +4604,7 @@ function MapEditorScreen({
   };
   // "Todas" stays pinned first (it's the "show everything" reset, not a real category);
   // every actual category below it is kept in alphabetical order.
-  const decorationSections = ["Todas", "Barricada", "City", "Houses", "Madeira Morta", "Natureza", "Objetos", "Pedras e relevo", "Pontes", "Ruínas e construções", "Torture", "Wilds"];
+  const decorationSections = ["Todas", "Barricada", "City", "Houses", "Madeira Morta", "Natureza", "Objetos", "Pedras e relevo", "Pontes", "Ruínas e construções", "Torture", "Waypoints", "Wilds"];
   const visibleDecorOptions = decoSection === "Todas" ? decorOptions : decorOptions.filter((dec) => decorationSectionFor(dec.id) === decoSection);
 
   // Clicking a placed prop is also a lookup action: open its palette section and arm the
