@@ -4116,11 +4116,14 @@ function MapEditorScreen({
   const toggleDecoration = (x: number, y: number) => {
     const clicked = draft.decorations.find((p) => placedFootprint(p).some((f) => p.x + f.dx === x && p.y + f.dy === y));
     // A Waypoint (Escape/Dungeon Exit, floor connector) is a flat ground marking, not a
-    // physical object — it can share a hex with an ordinary prop already there instead of
-    // being blocked by it or redirecting the click to it, unless what's already on that hex
-    // is itself another Waypoint, which the click still selects for editing/removal as normal.
+    // physical object — it can share a hex with anything already there, including another
+    // Waypoint, instead of being blocked by it or redirecting the click to it. Placing two
+    // exits near each other is common (e.g. both ends of a small room), and since exits are
+    // 2 hexes wide, clicking near one used to land on its own second hex and silently select
+    // it instead of placing the new one. Selecting an existing Waypoint to edit/delete it now
+    // only happens by clicking it with a non-Waypoint brush active.
     const brushIsWaypoint = !!DECORATIONS[decoBrush]?.exitKind;
-    if (clicked && (!brushIsWaypoint || DECORATIONS[clicked.id]?.exitKind)) {
+    if (clicked && !brushIsWaypoint) {
       const clickedDef = DECORATIONS[clicked.id];
       setSelectedPlacedDecoration({ id: clicked.id, x: clicked.x, y: clicked.y, rot: clicked.rot });
       setNote(`${clickedDef?.name ?? clicked.id} selecionada. Pressione Delete para remover.`);

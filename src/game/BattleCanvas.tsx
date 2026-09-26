@@ -119,7 +119,7 @@ export function BattleCanvas({
     // incidental jitter. mouseStartX/Y anchor the "moved far enough since the press" check;
     // lastX/Y (above) are updated every move so the pan itself only ever applies one frame's
     // delta, never a jump built up while waiting to arm.
-    const MOUSE_PAN_HOLD_MS = 650;
+    const MOUSE_PAN_HOLD_MS = 500;
     let mouseArmed = false;
     let mouseStartX = 0;
     let mouseStartY = 0;
