@@ -43,9 +43,9 @@ export const LIGHT_DEFS: Record<string, LightDef> = {
   lamppost: NORMAL_LANTERN,
   // New light props: candle small and soft, torch and bowl normal, fireplace the largest.
   "light-candle": { color: [1.0, 0.66, 0.34], intensity: 8, radius: 4, flicker: 0.6 },
-  "light-wall-torch": NORMAL_FIRE,
+  "light-wall-torch": { color: FIRE, intensity: 6, radius: 4.4, flicker: 1 },
   "light-brazier-bowl": NORMAL_FIRE,
-  "light-fireplace": { color: FIRE, intensity: 4.5, radius: 4.4, flicker: 0.8 },
+  "light-fireplace": { color: FIRE, intensity: 9, radius: 4.4, flicker: 0.8 },
 };
 
 /** Units that carry their own light and walk with it, keyed by classId — same LightDef as the

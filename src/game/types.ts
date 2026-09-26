@@ -235,7 +235,12 @@ export interface ClassDef {
 export interface DialogReply {
   text: string;
   next?: string | null;
+  /** Opens one of the Inn's menus after the popup closes — see DialogAction. */
+  action?: DialogAction;
 }
+
+/** A screen a dialog reply can hand off to: Brue's tavern menu or Vargan's smith. */
+export type DialogAction = "tavern" | "smith";
 
 /** One screen of the dialog popup: a speaker, an optional portrait, and the line itself.
  * Either it links straight to the next line (`next`, plain "OK" to continue) or it branches
@@ -416,6 +421,9 @@ export interface Mission {
    * instead of the theme its id would otherwise fall into. Absent means the usual theme. */
   music?: string;
   hub?: boolean;
+  /** Free-roam map (the walkable Inn): no turns, no win/defeat check, the party leader walks
+   * anywhere reachable in one click and talks to NPCs. */
+  explore?: boolean;
   /** Whether stampTactics dresses this map — the pass that scatters barricades, hills and
    * the high-terrain variants over it after the layout is doubled. On unless a map says
    * otherwise, so nothing already shipped changes; turn it off on a map placed by hand,

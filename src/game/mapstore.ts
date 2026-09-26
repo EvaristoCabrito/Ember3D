@@ -46,6 +46,8 @@ export interface MapDraft {
   /** Track file name for this map, or absent for its usual theme. */
   music?: string;
   hub: boolean;
+  /** See Mission.explore. Absent on every map saved before it existed, which reads as off. */
+  explore?: boolean;
   /** False to load this map exactly as painted, with no procedural scatter over it — see
    * Mission.autoTactics. Carried through Exportar so a map pasted into data.ts keeps it. */
   autoTactics: boolean;
@@ -200,6 +202,7 @@ export function draftToMission(d: MapDraft): Mission {
     neutralSpawns: d.neutralSpawns?.length ? d.neutralSpawns.map(({ level: _level, ...s }) => ({ ...s, classId: legacyClassId(s.classId) })) : undefined,
     music: d.music || undefined,
     hub: d.hub || undefined,
+    explore: d.explore ? true : undefined,
     autoTactics: d.autoTactics ? undefined : false,
     fog: d.fog ? true : undefined,
     environment: d.environment === "indoor" ? "indoor" : undefined,

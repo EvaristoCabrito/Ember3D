@@ -240,7 +240,7 @@ const NEW_DECOR_2026: Record<string, DecorationDef> = {
   "light-candle": { id: "light-candle", name: "Vela", footprint: DECO_ONE, artScale: 0.5 },
   "light-wall-torch": { id: "light-wall-torch", name: "Tocha de Parede", footprint: DECO_ONE },
   "light-brazier-bowl": { id: "light-brazier-bowl", name: "Braseiro II", footprint: DECO_ONE },
-  "light-fireplace": { id: "light-fireplace", name: "Lareira", footprint: DECO_ONE },
+  "light-fireplace": { id: "light-fireplace", name: "Lareira", footprint: DECO_ONE, artScale: 2, unitLayer: "behind" },
   "city-root-shrine": { id: "city-root-shrine", name: "Santuário Coberto de Raízes", footprint: DECO_PAIR },
   "city-market-stall-2": { id: "city-market-stall-2", name: "Barraca de Mercado II", footprint: DECO_PAIR },
   "city-bear-trap": { id: "city-bear-trap", name: "Armadilha de Urso", footprint: DECO_ONE },

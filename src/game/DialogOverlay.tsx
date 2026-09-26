@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { portraitFor } from "./assets";
-import type { DialogTree } from "./types";
+import type { DialogAction, DialogTree } from "./types";
 
 /** The Battle Dialog System's runtime popup — shared by the mission intro/outro and every
  * NPC conversation. Always starts at `tree.startId`; a plain line advances via its own
@@ -9,7 +9,7 @@ import type { DialogTree } from "./types";
  * `next`. Either ends the tree (closes the popup) when the line/reply it followed has no
  * `next`. No click-outside-to-dismiss — same as the chest-loot/promotion popups, a
  * conversation only advances when the player deliberately presses a button. */
-export function DialogOverlay({ tree, onClose }: { tree: DialogTree; onClose: () => void }) {
+export function DialogOverlay({ tree, onClose, onAction }: { tree: DialogTree; onClose: () => void; onAction?: (action: DialogAction) => void }) {
   const [lineId, setLineId] = useState(tree.startId);
   const line = tree.lines.find((l) => l.id === lineId);
   // Missing line id (a hand-edited/corrupt tree) closes rather than soft-locking the battle.
@@ -42,7 +42,19 @@ export function DialogOverlay({ tree, onClose }: { tree: DialogTree; onClose: ()
           <div className="mt-4 flex flex-col gap-2">
             {line.replies && line.replies.length > 0 ? (
               line.replies.map((reply, i) => (
-                <Button key={i} variant="quiet" className="w-full text-left justify-start" onClick={() => advance(reply.next)}>
+                <Button
+                  key={i}
+                  variant="quiet"
+                  className="w-full text-left justify-start"
+                  onClick={() => {
+                    if (reply.action && onAction) {
+                      onClose();
+                      onAction(reply.action);
+                      return;
+                    }
+                    advance(reply.next);
+                  }}
+                >
                   {reply.text}
                 </Button>
               ))

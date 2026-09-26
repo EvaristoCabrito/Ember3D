@@ -3762,6 +3762,12 @@ export class BattleEngine {
 
   private evaluateEnd(): void {
     if (this.result) return;
+    // A free-roam map has nothing to win or lose; the player leaves it through the HUD.
+    if (this.mission.explore) {
+      this.winAvailable = false;
+      this.activeExit = null;
+      return;
+    }
     const p = this.units.some((u) => u.side === "player" && u.alive && !u.summoned);
     const bossAlive = this.units.some((u) => u.side === "enemy" && u.alive && isBossClass(u.classId));
     const anyEnemy = this.units.some((u) => u.side === "enemy" && u.alive);
@@ -4947,6 +4953,8 @@ export class BattleEngine {
   }
 
   private effectiveUnitForReach(u: Unit): Unit {
+    // Free roam: any reachable hex is one click away, however far.
+    if (this.mission.explore) return { ...u, mov: this.cols * this.rows };
     const remaining = Math.max(0, u.mov - u.moveBudgetUsed);
     const cap = this.turnRestrained ? Math.min(1, remaining) : remaining;
     return cap === u.mov ? u : { ...u, mov: cap };
@@ -7195,6 +7203,24 @@ export class BattleEngine {
       return;
     }
     if (here?.dialog && here.alive) {
+      // Free roam: walk up to the NPC first, then talk. Already beside them (or nowhere
+      // free to stand) just talks from where the leader is.
+      if (this.mission.explore && selected && this.mode === "selected" && !hexNeighbors(here.x, here.y).some((n) => n.x === selected.x && n.y === selected.y)) {
+        let best: Point | null = null;
+        let bestCost = Infinity;
+        for (const n of hexNeighbors(here.x, here.y)) {
+          const cost = this.reach.get(key(n.x, n.y))?.cost;
+          if (cost !== undefined && cost < bestCost && !this.units.some((u) => u.alive && u.x === n.x && u.y === n.y)) {
+            best = n;
+            bestCost = cost;
+          }
+        }
+        if (best) {
+          const tree = here.dialog;
+          this.commitMove(selected, best, () => this.openDialog(tree));
+          return;
+        }
+      }
       this.openDialog(here.dialog);
       return;
     }
@@ -8953,7 +8979,8 @@ export class BattleEngine {
     }
 
     if (this.mode === "selected" || this.mode === "awaitAttack" || this.mode === "awaitAction") {
-      if (this.mode === "selected") {
+      // Free roam reaches the whole floor; tinting all of it would just wash the map blue.
+      if (this.mode === "selected" && !this.mission.explore) {
         const reachable = [...this.reach.values()];
         const inWeb = reachable.filter((c) => this.isWebCell(c.x, c.y));
         const clear = inWeb.length ? reachable.filter((c) => !this.isWebCell(c.x, c.y)) : reachable;
@@ -8964,6 +8991,8 @@ export class BattleEngine {
       const atkTiles: Point[] = [];
       for (const foe of this.units) {
         if (!foe.alive || foe.side === "player") continue;
+        // Hub maps: NPCs are people to talk to, never marked as targets.
+        if ((this.mission.hub || this.mission.explore) && foe.side === "neutral") continue;
         if (this.mode === "selected" && this.attackFrom.has(foe.id)) atkTiles.push(...footprint(foe));
         if ((this.mode === "awaitAttack" || this.mode === "awaitAction") && selected && canHitFrom(selected, selected, foe, this.tiles, this.cols, this.decorOverlay)) {
           atkTiles.push(...footprint(foe));

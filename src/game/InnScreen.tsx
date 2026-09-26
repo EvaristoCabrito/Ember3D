@@ -87,7 +87,11 @@ export function InnScreen({
   onUpgradeWeapon,
   onSellWeapon,
   onSeenSmithIntro,
+  startInSmith = false,
 }: {
+  /** Opened by talking to Vargan in the walkable Inn: goes straight to the smith (intro
+   * video first, if not seen yet), and leaving the smith leaves this screen entirely. */
+  startInSmith?: boolean;
   bags: Record<string, Bag>;
   onUseRation: (hero: string) => void;
   onUseRationAll?: (heroes: string[]) => number;
@@ -124,8 +128,8 @@ export function InnScreen({
   onSellWeapon: (weaponId: string) => number | false;
   onSeenSmithIntro: () => void;
 }) {
-  const [view, setView] = useState<"npc" | "smith">("npc");
-  const [smithIntro, setSmithIntro] = useState(false);
+  const [view, setView] = useState<"npc" | "smith">(startInSmith && save.seenSmithIntro ? "smith" : "npc");
+  const [smithIntro, setSmithIntro] = useState(startInSmith && !save.seenSmithIntro);
   const [npc, setNpc] = useState<(typeof NPCS)[number]>(NPCS[0]);
   const [hero, setHero] = useState<string>("Kael");
   const [cart, setCart] = useState<Record<PotionId, number>>({ ...EMPTY_CART });
@@ -249,7 +253,7 @@ export function InnScreen({
         save={save}
         test={test}
         onMute={onMute}
-        onBack={() => setView("npc")}
+        onBack={startInSmith ? onLeave : () => setView("npc")}
         onBuyWeapon={onBuyWeapon}
         onBuyEquipment={onBuyEquipment}
         onEquipWeapon={onEquipWeapon}

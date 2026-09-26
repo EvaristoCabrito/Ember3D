@@ -282,12 +282,53 @@ const CONTACT_SHADOW_MAX_H = 0.5;
  * 0.4 peak, no shift) measured as a ~2px line at normal battle zoom — invisible in real play. */
 const CONTACT_SHADOW_FORWARD = 0.2;
 
-/** Real THREE.PointLights for map light sources (see syncLights). A fixed pool (Three compiles
- * the light count into every lit shader, so the pool never changes size); unused ones sit at
- * intensity 0. No castShadow yet — shadows are a separate, later decision. */
+/** Real THREE.PointLights for map light sources (see syncLights). The minimum pool size — the
+ * pool grows at load to cover every light the map carries, then never changes (Three compiles
+ * the light count into every lit shader); unused ones sit at intensity 0. No castShadow yet —
+ * shadows are a separate, later decision. */
 const POINT_LIGHT_POOL = 8;
 /** Rim-glow canvas size relative to the sprite (room for the blur to spread). */
 const GLOW_PAD = 1.7;
+/** How much brighter than its own art a sprite (character or decoration, light props included)
+ * may get from map lights. Without a cap anything beside a candle/fire — the candle itself
+ * too — blew out to white and read as translucent. */
+const SPRITE_LIGHT_CAP = 1.35;
+/** Shared cap for every decoration material; units each carry their own (hit flash lifts it). */
+const DECOR_LIGHT_CAP = { value: SPRITE_LIGHT_CAP };
+
+/** 2.5D perspective between characters and props: whoever stands on the nearer row (lower on
+ * screen) covers whoever stands further back, whatever layer either is drawn in. Each sprite
+ * sits at a depth from its ground line, and an invisible alpha-tested copy of its art (an
+ * "occluder", opaque pass, so it lands before every sprite's color) writes that depth; a sprite
+ * further back then fails the depth test wherever something nearer stands over it. */
+const DEPTH_Z_BASE = 1;
+/** Depth per tile-radius of ground Y — one hex row (1.5 radii) is 0.006, far above precision. */
+const DEPTH_Z_PER_TILE = 0.004;
+/** On the same row, the character stands in front of the prop. */
+const UNIT_DEPTH_TIE = 0.001;
+/** Explicit unitLayer "behind" props and flat Waypoints: always under every character. */
+const DEPTH_Z_BEHIND = 0.95;
+/** Explicit unitLayer "front"/foreground props: always over every character. */
+const DEPTH_Z_FRONT = 1.9;
+/** Only the solid body of an art occludes — soft glows and fringes baked into it do not. */
+const OCCLUDER_ALPHA = 0.7;
+function spriteDepthZ(groundWy: number, tile: number): number {
+  return DEPTH_Z_BASE + (groundWy / tile) * DEPTH_Z_PER_TILE;
+}
+function occluderMaterial(map: THREE.Texture | null): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({ map, alphaTest: OCCLUDER_ALPHA, colorWrite: false, depthWrite: true });
+}
+
+/** Clamps a lit sprite's final color to `cap` times its own art — see SPRITE_LIGHT_CAP. */
+function capSpriteLight(material: THREE.MeshLambertMaterial, cap: { value: number }): void {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.spriteLightCap = cap;
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float spriteLightCap;")
+      .replace("#include <envmap_fragment>", "outgoingLight = min(outgoingLight, sampledDiffuseColor.rgb * spriteLightCap);\n#include <envmap_fragment>");
+  };
+  material.customProgramCacheKey = () => "spriteLightCap";
+}
 /** How many of the pool (always the lights nearest the view) cast real cube-map shadows.
  * 0 per the user's pick: the fire's clean round light pool, without its own cube shadow. */
 const POINT_SHADOW_LIGHTS = 0;
@@ -477,6 +518,10 @@ interface UnitMeshEntry {
   glowMaterial: THREE.MeshBasicMaterial;
   /** Owned (not shared) per unit — see unitTexCache's comment on why opacity needs this. */
   material: THREE.MeshLambertMaterial;
+  /** See SPRITE_LIGHT_CAP — per unit, so a hit flash can lift its own cap. */
+  lightCap: { value: number };
+  /** Depth-only cutout of the current frame, a child of `mesh` — see DEPTH_Z_BASE. */
+  occluder: THREE.Mesh;
   img: HTMLImageElement | null;
   /** Same quadGeo + alpha-tested copy of the unit's own sprite (colorWrite off) that casts this
    * unit's real shadow as its own silhouette, not a box — see shadowMaterial's own comment. */
@@ -743,7 +788,11 @@ export class ThreeBattleRenderer {
     this.scene.add(this.decorGroup);
     this.scene.add(this.unitGroup);
     this.scene.add(this.fogMask.mesh);
-    for (let i = 0; i < POINT_LIGHT_POOL; i++) {
+    // Sized to cover every light the map carries, so no torch goes dark just because the
+    // camera is looking elsewhere; POINT_LIGHT_POOL stays the floor.
+    const mapLights = engine.decorations.filter((p) => LIGHT_DEFS[p.id]).length + engine.units.filter((u) => UNIT_LIGHT_DEFS[u.classId]).length;
+    const poolSize = Math.max(POINT_LIGHT_POOL, mapLights);
+    for (let i = 0; i < poolSize; i++) {
       const pl = new THREE.PointLight(0xffffff, 0, 1, LIGHT_DECAY);
       if (i < POINT_SHADOW_LIGHTS) {
         pl.castShadow = true;
@@ -1031,6 +1080,7 @@ export class ThreeBattleRenderer {
     // Lit (MeshLambertMaterial), so real scene lights — map PointLights included — illuminate
     // the prop; see syncSpriteExposure for how its look under the existing sun/sky is kept.
     const mat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, depthWrite: false });
+    capSpriteLight(mat, DECOR_LIGHT_CAP);
     this.litSpriteMats.add(mat);
     this.decorMatCache.set(fileId, mat);
     return mat;
@@ -1101,10 +1151,12 @@ export class ThreeBattleRenderer {
 
       let sumWx = 0;
       let sumWy = 0;
+      let frontWy = -Infinity;
       for (const { dx, dy } of placedFootprint(p)) {
         const { wx, wy } = hexWorld(p.x + dx, p.y + dy, tile);
         sumWx += wx;
         sumWy += wy;
+        frontWy = Math.max(frontWy, wy);
       }
       const n = def.footprint.length;
       const { w, h, dy: liftY } = decorSize(p.id, def, tile);
@@ -1119,12 +1171,17 @@ export class ThreeBattleRenderer {
       const mesh = new THREE.Mesh(this.quadGeo, mat);
       // Front-layer props render after character billboards (order 2), matching the Canvas
       // renderer; their per-decoration priority resolves overlaps with other foreground props.
-      const mistOrder = def.aboveGroundMist || lightDef ? ABOVE_GROUND_MIST_ORDER : 0;
+      // A light prop explicitly placed behind the characters (the fireplace) stays in the base
+      // decoration layer like any other background prop, instead of lifting above them.
+      const mistOrder = def.aboveGroundMist || (lightDef && decorLayer !== "behind") ? ABOVE_GROUND_MIST_ORDER : 0;
       mesh.renderOrder = mistOrder + (decorLayer === "front" ? 3 : 0) + (def.decorRenderOrder ?? 0) * 0.01;
-      // Y negated to match the tile/camera convention (see module comment); z=1 keeps decor
-      // reliably in front of the flat ground plane at z=0 for any depth-sorting Three does
-      // between transparent objects.
-      mesh.position.set(wx, -wy, 1);
+      // Y negated to match the tile/camera convention (see module comment). Z is the prop's
+      // 2.5D depth (see DEPTH_Z_BASE): from its front-most row, so a character on a nearer row
+      // covers it and one further back is covered — except explicit layers and flat Waypoints.
+      const pinnedBehind = decorLayer === "behind" || !!def.exitKind;
+      const depthZ = pinnedBehind ? DEPTH_Z_BEHIND : decorLayer === "front" ? DEPTH_Z_FRONT : spriteDepthZ(frontWy, tile);
+      mesh.position.set(wx, -wy, depthZ);
+      if (!pinnedBehind && decorLayer !== "front") mesh.add(new THREE.Mesh(this.quadGeo, this.decorOccluderMaterialFor(fileId, mat)));
       if (facing.step === 0) {
         mesh.scale.set(w, h, 1);
       } else if (facing.own) {
@@ -1302,6 +1359,8 @@ export class ThreeBattleRenderer {
         // Lit, like decorations — real scene lights illuminate the character (see
         // syncSpriteExposure).
         const material = new THREE.MeshLambertMaterial({ map: this.unitTextureFor(img), transparent: true, depthWrite: false });
+        const lightCap = { value: SPRITE_LIGHT_CAP };
+        capSpriteLight(material, lightCap);
         this.litSpriteMats.add(material);
         const mesh = new THREE.Mesh(this.quadGeo, material);
         // Atmosphere's Fog 2 sheets use renderOrder 1: units must remain the final visible
@@ -1331,7 +1390,9 @@ export class ThreeBattleRenderer {
         glowMesh.renderOrder = 2;
         glowMesh.visible = false;
         this.unitGroup.add(glowMesh);
-        entry = { mesh, glowMesh, glowMaterial, material, img: null, shadowMesh, shadowMaterial, contactMesh, contactMaterial, contactFit: null, proxy };
+        const occluder = new THREE.Mesh(this.quadGeo, this.unitOccluderMaterialFor(this.unitTextureFor(img)));
+        mesh.add(occluder);
+        entry = { mesh, glowMesh, glowMaterial, material, lightCap, occluder, img: null, shadowMesh, shadowMaterial, contactMesh, contactMaterial, contactFit: null, proxy };
         this.unitEntries.set(u.id, entry);
       }
       entry.mesh.visible = true;
@@ -1340,6 +1401,7 @@ export class ThreeBattleRenderer {
         entry.material.needsUpdate = true;
         entry.shadowMaterial.map = this.unitTextureFor(img);
         entry.shadowMaterial.needsUpdate = true;
+        entry.occluder.material = this.unitOccluderMaterialFor(this.unitTextureFor(img));
         entry.img = img;
       }
       // Same fade-in/out and post-action player-unit dimming as
@@ -1360,14 +1422,19 @@ export class ThreeBattleRenderer {
       const wy = anchor.worldY + v.footY + v.bob - v.lift + centerYLocal;
       // Y negated and Z derived from row — see module comment on the Y-flip and
       // ensureDecorBuilt's own comment on z ordering vs decorations (z=1) and tiles (z=0).
-      entry.mesh.position.set(wx, -wy, 2 + u.drawY * 0.001);
+      // 2.5D depth from the ground line (see DEPTH_Z_BASE) — bob/lift are visual only.
+      entry.mesh.position.set(wx, -wy, spriteDepthZ(anchor.worldY + v.footY, tile) + UNIT_DEPTH_TIE);
+      // A unit fading in/out is see-through, so it must not blot out what stands behind it.
+      entry.occluder.visible = u.fade >= 0.999;
       entry.mesh.scale.set(v.scaleX * v.w, v.scaleY * v.h, 1);
 
       // Hit flash: Canvas2D's ctx.filter brightness(1.8 + flash) on the sprite, as a multiplier
       // on this unit's lit material (on top of syncSpriteExposure's base color, set earlier this
       // frame). brightness() works on gamma-encoded color; the material color is linear, hence
       // the 2.2 power.
-      if (u.flash > 0) entry.material.color.multiplyScalar(Math.pow(1.8 + u.flash, 2.2));
+      const flashMul = u.flash > 0 ? Math.pow(1.8 + u.flash, 2.2) : 1;
+      if (u.flash > 0) entry.material.color.multiplyScalar(flashMul);
+      entry.lightCap.value = SPRITE_LIGHT_CAP * flashMul;
       // Level-up / heal rim glow (Canvas2D: a shadowBlur pass of the sprite in the glow color).
       let glowRgb: string | null = null;
       let glowK = 0;
@@ -1711,12 +1778,35 @@ export class ThreeBattleRenderer {
       entry.mesh.visible = false;
       hidden.push(entry.mesh);
     }
+    // Map lights never feed bloom: the bloom buffer is rendered unlit by them, so a candle's
+    // bright pool on the floor can't swell into a white disc over everyone standing near it.
+    const intensities = this.pointLights.map((pl) => pl.intensity);
+    for (const pl of this.pointLights) pl.intensity = 0;
     try {
       this.bloomComposer.render();
     } finally {
       for (const mesh of hidden) mesh.visible = true;
       for (const b of blacked) b.mesh.material = b.material;
+      this.pointLights.forEach((pl, i) => (pl.intensity = intensities[i]!));
     }
+  }
+
+  private decorOccluderMatCache = new Map<string, THREE.MeshBasicMaterial>();
+  /** Depth-only cutout of a prop's art — see DEPTH_Z_BASE. */
+  private decorOccluderMaterialFor(fileId: string, colorMat: THREE.MeshLambertMaterial): THREE.MeshBasicMaterial {
+    const hit = this.decorOccluderMatCache.get(fileId);
+    if (hit) return hit;
+    const mat = occluderMaterial(colorMat.map);
+    this.decorOccluderMatCache.set(fileId, mat);
+    return mat;
+  }
+  private unitOccluderMatCache = new Map<THREE.Texture, THREE.MeshBasicMaterial>();
+  private unitOccluderMaterialFor(tex: THREE.Texture): THREE.MeshBasicMaterial {
+    const hit = this.unitOccluderMatCache.get(tex);
+    if (hit) return hit;
+    const mat = occluderMaterial(tex);
+    this.unitOccluderMatCache.set(tex, mat);
+    return mat;
   }
 
   /** Black silhouette of a decoration's art (same texture alpha) for the bloom-only pass. */

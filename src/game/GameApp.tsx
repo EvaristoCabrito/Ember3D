@@ -12,8 +12,9 @@ import { Hd2dTestScreen } from "./gfx/three/Hd2dTestScene";
 import { InnScreen } from "./InnScreen";
 import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
+import { LIGHT_DEFS } from "./lighting";
 import { DialogEditor } from "./DialogEditor";
-import { BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
+import { BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
 import { BattleEngine, heroSpriteFor } from "./engine";
 import { MapPreviewCanvas, type PreviewDecorationSelection, type PreviewUnitSelection } from "./MapPreviewCanvas";
 import { WorldMapScreen } from "./WorldMapScreen";
@@ -92,7 +93,7 @@ import {
   writeSlot,
   selectSlot,
 } from "./save";
-import type { Bag, BattleSnapshot, ClassId, DecorationPlacement, DialogTree, ElementalFxPlacement, EquipSlot, GameArt, GrowthLine, HudSnapshot, MapTimeOfDay, Mission, PotionId, SaveBank, SaveData, ScreenId, SpellKind, Spawn, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, UnitPublic, WinCondition, WorldLocation } from "./types";
+import type { Bag, BattleSnapshot, ClassId, DecorationPlacement, DialogAction, DialogTree, ElementalFxPlacement, EquipSlot, GameArt, GrowthLine, HudSnapshot, MapTimeOfDay, Mission, PotionId, SaveBank, SaveData, ScreenId, SpellKind, Spawn, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, UnitPublic, WinCondition, WorldLocation } from "./types";
 import { hexNeighbors, key as hexKey } from "./pathfinding";
 
 /** A map JSON write updates Vite's module list and can reload the app. This one-shot
@@ -724,6 +725,9 @@ export function GameApp() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [missionId, setMissionId] = useState<string | null>(null);
   const [engine, setEngine] = useState<BattleEngine | null>(null);
+  /** Which Inn menu an NPC in the walkable Inn opened, while it's showing — leaving it goes
+   * back to the walkable Inn (same engine, same spot) instead of out to the map. */
+  const [innEntry, setInnEntry] = useState<DialogAction | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(hudBlank);
   const [paused, setPaused] = useState(false);
   // The mission's outro dialog (see hud.result effect below) — opens once, right when
@@ -954,7 +958,13 @@ export function GameApp() {
       }
       const resolved = override ?? missionById(id);
       if (!resolved) return;
-      const m = testMode ? addMissingTestHeroes(resolved) : resolved;
+      // Companions sit in the walkable Inn as NPCs, but only once they've actually joined.
+      const seated =
+        resolved.explore && !testMode && resolved.neutralSpawns
+          ? { ...resolved, neutralSpawns: resolved.neutralSpawns.filter((s) => !(s.name in TEST_PARTY_CLASS) || heroRecruited(s.name, save.completed)) }
+          : resolved;
+      // A free-roam map is walked by the party leader alone.
+      const m = testMode && !resolved.explore ? addMissingTestHeroes(seated) : seated;
       // !!! DO NOT change this back to `m.index + 1` (mission-position level) !!!
       // Test mode exists so the party can be tested at full strength on ANY mission without
       // grinding first — that means DEFAULT_TEST_LEVEL (see its own definition below, also
@@ -1227,6 +1237,13 @@ export function GameApp() {
     // Only the actual inn opens the InnScreen. A user-authored map may retain an old hub flag.
     // It must still launch its own battle when selected from the campaign.
     if (missionId === "estalagem") {
+      // The walkable Inn; Brue's tavern and Vargan's smith open from talking to them. Its
+      // visit is recorded on the way out (see onQuit): startBattle saves its own copy of the
+      // record right here, which would drop a completion written just before it.
+      if (missionById(missionId)?.explore) {
+        startBattle(missionId);
+        return;
+      }
       const completed = save.completed.includes(missionId) ? save.completed : [...save.completed, missionId];
       if (!testMode) persistCurrent({ ...save, completed, pendingMission: null, battle: null });
       setScreen("inn");
@@ -1271,6 +1288,18 @@ export function GameApp() {
       return;
     }
     if (screen === "inn") {
+      // Vargan's first-visit intro video carries its own sound; the smith starts the inn
+      // theme itself once the video ends (see InnScreen's finishSmithIntro).
+      if (innEntry === "smith" && !save.seenSmithIntro) {
+        stopMusic();
+        return;
+      }
+      playTheme("inn");
+      return;
+    }
+    // The walkable Inn keeps the same theme as its menus, so walking in and out of Brue's
+    // and Vargan's screens never switches tracks.
+    if (inMission && missionId === "estalagem") {
       playTheme("inn");
       return;
     }
@@ -1295,7 +1324,7 @@ export function GameApp() {
       return;
     }
     playMenuMusic();
-  }, [screen, muted, missionId]);
+  }, [screen, muted, missionId, innEntry, save.seenSmithIntro]);
 
   // Normal campaigns keep the one travel style selected when the campaign began. Test mode
   // deliberately has no persistent save, so it returns to the choice screen every time.
@@ -1770,7 +1799,26 @@ export function GameApp() {
             unlockAudio();
             setMutedUi((v) => !v);
           }}
-          onLeave={goToMap}
+          startInSmith={innEntry === "smith"}
+          onLeave={
+            innEntry
+              ? () => {
+                  // Rebuilt from the save rather than resuming the old engine: purchases made
+                  // in Brue's/Vargan's menu must reach the party, and the old engine's stale
+                  // bags/hunger would otherwise be written back over them on the next equip.
+                  // The leader is put back exactly where they stood to talk.
+                  const leader = engine?.units.find((u) => u.side === "player" && u.alive && !u.summoned);
+                  const base = engine?.mission ?? missionById("estalagem");
+                  setInnEntry(null);
+                  if (!base || !missionId) {
+                    goToMap();
+                    return;
+                  }
+                  const spawns = base.playerSpawns.map((s, i) => (i === 0 && leader ? { ...s, x: leader.x, y: leader.y } : s));
+                  startBattle(missionId, undefined, { ...base, playerSpawns: spawns });
+                }
+              : goToMap
+          }
           onBuyWeapon={(hero: string, weaponId: string) => {
             const rec = readMapSave();
             const w = WEAPONS[weaponId];
@@ -1935,6 +1983,10 @@ export function GameApp() {
           save={save}
           playtest={!!customMission}
           fleeable={!customMission && !!missionId && isRandomEncounter(missionId)}
+          onDialogAction={(action) => {
+            setInnEntry(action);
+            setScreen("inn");
+          }}
           outroDialogOpen={outroDialogOpen}
           onCloseOutroDialog={closeOutroDialog}
           // Gear swapped during a fight is permanent, so it lands in the save the moment it
@@ -2033,6 +2085,19 @@ export function GameApp() {
               goToMap();
               return;
             }
+            // Leaving the walkable Inn: record the visit and drop the resumable snapshot, so
+            // the save doesn't keep reopening the Inn on "Continuar".
+            if (!customMission && engine.mission.explore) {
+              const rec = activeSave(bank);
+              if (!testMode) {
+                const id = engine.mission.id;
+                persistCurrent({ ...rec, completed: rec.completed.includes(id) ? rec.completed : [...rec.completed, id], pendingMission: null, battle: null });
+              }
+              setMissionId(null);
+              setEngine(null);
+              goToMap();
+              return;
+            }
             setEngine(null);
             // A playtest belongs to the editor: end it and you are back where you were,
             // with the map still loaded. Quitting a real mission still exits to the map.
@@ -2076,6 +2141,10 @@ export function GameApp() {
           art={briefArt(mission.id)}
           innOpen={!customMission && innUnlocked(save.completed) && mission.index <= 11}
           onInn={() => {
+            if (missionById("estalagem")?.explore) {
+              startBattle("estalagem");
+              return;
+            }
             setMissionId("estalagem");
             setScreen("inn");
           }}
@@ -3080,6 +3149,7 @@ function missionToDraft(m: Mission): MapDraft {
     objective: m.objective,
     win: m.win,
     hub: !!m.hub,
+    explore: m.explore === true,
     autoTactics: m.autoTactics !== false,
     fog: m.fog === true,
     environment: m.environment === "indoor" ? "indoor" : "outdoor",
@@ -3697,6 +3767,39 @@ function MapEditorScreen({
     return [...known.values()].sort((a, b) => a.index - b.index || byName(a.title, b.title));
   }, [campaignIds]);
   const campaignLoadOptions = campaignMapReferences;
+  /** Hub maps (the Inn, future towns) — their own "CityHubs" picker, kept apart from the
+   * campaign list so they're easy to find. */
+  const cityHubOptions = useMemo(
+    () => ALL_MISSIONS.filter((m) => m.hub).map((m) => ({ id: m.id, title: m.title, index: m.index })).sort((a, b) => a.index - b.index || byName(a.title, b.title)),
+    [],
+  );
+  /** Loads a campaign (or CityHubs) map into the editor — the latest file on disk first. */
+  const loadCampaignMap = async (id: string) => {
+    // Same staleness as the "Abrir mapa salvo" picker below (see its own comment) —
+    // latestSavedDraft reads mapstore.ts's eager import.meta.glob snapshot, frozen
+    // at page load and never refreshed by map-save-plugin.mjs's saves on purpose.
+    // Ask the dev server for the real latest file first; fall back to the stale
+    // snapshot only when there's none to ask (a built release).
+    try {
+      const response = await fetch(`/__map-list?id=${encodeURIComponent(id)}`);
+      const body = (await response.json()) as { ok?: boolean; files?: MapFile[] };
+      if (!response.ok || !body.ok || !Array.isArray(body.files) || body.files.length === 0) throw new Error("lista indisponível");
+      const latestFile = body.files.reduce((best: MapFile, f) => (f.serial > best.serial ? f : best));
+      const m = draftToMission(latestFile.draft);
+      setDraft(missionToDraft(m));
+      setNote(`Carregado "${m.title}" (${m.id}) no editor — ${m.cols}x${m.rows}.`);
+      return;
+    } catch {
+      // No dev server (built release) — fall back to the static snapshot.
+    }
+    const saved = latestSavedDraft(id);
+    // Saved drafts carry editor-only metadata such as the chosen replacement base.
+    // Prefer that exact source when reopening a map, before its playable Mission view.
+    const m = saved ? draftToMission(saved) : missionById(id);
+    if (!m) return;
+    setDraft(missionToDraft(m));
+    setNote(`Carregado "${m.title}" (${m.id}) no editor — ${m.cols}x${m.rows}.`);
+  };
   // Every saved map, campaign or reserve — a floor connector's target is picked from this
   // full pool rather than either list alone, since a Transversal Dungeon submap is typically
   // a reserve map (not assigned to any Local's missionIds — see WorldLocation.submaps) but
@@ -4578,6 +4681,8 @@ function MapEditorScreen({
   const decorOptions = Object.values(DECORATIONS).sort((a, b) => byName(a.name, b.name));
   const decorationSectionFor = (id: string) => {
     if (DECORATIONS[id]?.exitKind) return "Waypoints";
+    // Everything that emits light (see LIGHT_DEFS), burning houses included, in one place.
+    if (LIGHT_DEFS[id]) return "Lights";
     if (HOUSE_DECOR_IDS.has(id) || BIG_HOUSE_DECOR_IDS.has(id)) return "Houses";
     if (DEADWOODS_DECOR_IDS.has(id)) return "Madeira Morta";
     if (
@@ -4607,7 +4712,7 @@ function MapEditorScreen({
   };
   // "Todas" stays pinned first (it's the "show everything" reset, not a real category);
   // every actual category below it is kept in alphabetical order.
-  const decorationSections = ["Todas", "Barricada", "City", "Houses", "Madeira Morta", "Natureza", "Objetos", "Pedras e relevo", "Pontes", "Ruínas e construções", "Torture", "Waypoints", "Wilds"];
+  const decorationSections = ["Todas", "Barricada", "City", "Houses", "Lights", "Madeira Morta", "Natureza", "Objetos", "Pedras e relevo", "Pontes", "Ruínas e construções", "Torture", "Waypoints", "Wilds"];
   const visibleDecorOptions = decoSection === "Todas" ? decorOptions : decorOptions.filter((dec) => decorationSectionFor(dec.id) === decoSection);
 
   // Clicking a placed prop is also a lookup action: open its palette section and arm the
@@ -4710,33 +4815,7 @@ function MapEditorScreen({
           <select
             className="bg-bg border border-border rounded-md px-2 py-1.5"
             value=""
-            onChange={async (e) => {
-              const id = e.target.value;
-              // Same staleness as the "Abrir mapa salvo" picker below (see its own comment) —
-              // latestSavedDraft reads mapstore.ts's eager import.meta.glob snapshot, frozen
-              // at page load and never refreshed by map-save-plugin.mjs's saves on purpose.
-              // Ask the dev server for the real latest file first; fall back to the stale
-              // snapshot only when there's none to ask (a built release).
-              try {
-                const response = await fetch(`/__map-list?id=${encodeURIComponent(id)}`);
-                const body = (await response.json()) as { ok?: boolean; files?: MapFile[] };
-                if (!response.ok || !body.ok || !Array.isArray(body.files) || body.files.length === 0) throw new Error("lista indisponível");
-                const latestFile = body.files.reduce((best: MapFile, f) => (f.serial > best.serial ? f : best));
-                const m = draftToMission(latestFile.draft);
-                setDraft(missionToDraft(m));
-                setNote(`Carregado "${m.title}" (${m.id}) no editor — ${m.cols}x${m.rows}.`);
-                return;
-              } catch {
-                // No dev server (built release) — fall back to the static snapshot.
-              }
-              const saved = latestSavedDraft(id);
-              // Saved drafts carry editor-only metadata such as the chosen replacement base.
-              // Prefer that exact source when reopening a map, before its playable Mission view.
-              const m = saved ? draftToMission(saved) : missionById(id);
-              if (!m) return;
-              setDraft(missionToDraft(m));
-              setNote(`Carregado "${m.title}" (${m.id}) no editor — ${m.cols}x${m.rows}.`);
-            }}
+            onChange={(e) => void loadCampaignMap(e.target.value)}
           >
             <option value="">Carregar mapa da campanha…</option>
             {campaignLoadOptions.map((map) => (
@@ -4795,6 +4874,23 @@ function MapEditorScreen({
                 <option key={row.id} value={row.id}>
                   {row.id} ({row.files > 0 ? `${row.files} arquivo${row.files === 1 ? "" : "s"}` : `${row.local} só no navegador`}
                   {activeVersions[row.id] ? `, v${serialLabel(activeVersions[row.id])} ativa` : ""})
+                </option>
+              ))}
+            </select>
+          )}
+          {cityHubOptions.length > 0 && (
+            <select
+              className="bg-bg border border-border rounded-md px-2 py-1.5"
+              value=""
+              title="Mapas de hub (a Estalagem, cidades) — sem combate"
+              onChange={(e) => {
+                if (e.target.value) void loadCampaignMap(e.target.value);
+              }}
+            >
+              <option value="">CityHubs…</option>
+              {cityHubOptions.map((map) => (
+                <option key={map.id} value={map.id}>
+                  {map.title}
                 </option>
               ))}
             </select>
@@ -4970,6 +5066,10 @@ function MapEditorScreen({
           <label className="flex items-center gap-2 mt-5">
             <input type="checkbox" checked={draft.hub} onChange={(e) => setDraft((d) => ({ ...d, hub: e.target.checked }))} />
             <span className="text-muted">É um hub (sem combate)</span>
+          </label>
+          <label className="flex items-center gap-2" title="Sem turnos nem vitória: o líder anda livre com um clique e conversa com os NPCs (a Estalagem)">
+            <input type="checkbox" checked={!!draft.explore} onChange={(e) => setDraft((d) => ({ ...d, explore: e.target.checked }))} />
+            <span className="text-muted">Exploração livre (sem turnos)</span>
           </label>
           <label className="flex items-center gap-2" title="Barricadas, barrancos e variantes de terreno alto espalhados por cima do mapa depois que ele carrega">
             <input
@@ -6558,6 +6658,7 @@ function BattleScreen({
   onCloseOutroDialog,
   playtest = false,
   fleeable = false,
+  onDialogAction,
 }: {
   engine: BattleEngine;
   onUseRation: (hero: string) => void;
@@ -6585,6 +6686,8 @@ function BattleScreen({
   playtest?: boolean;
   /** Random encounters offer an edge-only, 60% flee action; authored campaign missions remain resumable. */
   fleeable?: boolean;
+  /** An NPC reply that opens one of the Inn's menus (Brue's tavern, Vargan's smith). */
+  onDialogAction?: (action: DialogAction) => void;
 }) {
   const [showStatus, setShowStatus] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -6992,9 +7095,11 @@ function BattleScreen({
           </div>
         )}
         <div className="pointer-events-none absolute inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-20 flex items-start justify-end gap-1">
-          <p className="bg-surface/90 border border-border rounded-md px-1.5 py-0.5 text-[10px] tabular-nums text-muted pointer-events-none">
-            T{hud.turn} · {hud.playerAlive}/{hud.enemyAlive}
-          </p>
+          {!engine.mission.explore && (
+            <p className="bg-surface/90 border border-border rounded-md px-1.5 py-0.5 text-[10px] tabular-nums text-muted pointer-events-none">
+              T{hud.turn} · {hud.playerAlive}/{hud.enemyAlive}
+            </p>
+          )}
           {hud.terrain && (hud.terrain.note || hud.terrain.id === "barricade" || hud.terrain.id === "hill") && (
             <p className="bg-surface/90 border border-border rounded-md px-1.5 py-0.5 text-[10px] text-accent pointer-events-none max-w-[14rem] truncate">
               {hud.terrain.name}
@@ -7090,7 +7195,7 @@ function BattleScreen({
         {introDialogOpen && engine.mission.introDialog && (
           <DialogOverlay tree={engine.mission.introDialog} onClose={() => setIntroDialogOpen(false)} />
         )}
-        {hud.pendingDialog && <DialogOverlay tree={hud.pendingDialog} onClose={() => engine.acknowledgeDialog()} />}
+        {hud.pendingDialog && <DialogOverlay tree={hud.pendingDialog} onClose={() => engine.acknowledgeDialog()} onAction={onDialogAction} />}
         {outroDialogOpen && engine.mission.outroDialog && <DialogOverlay tree={engine.mission.outroDialog} onClose={onCloseOutroDialog} />}
       </div>
 
@@ -7184,6 +7289,14 @@ function BattleScreen({
             <p className="text-xs text-muted">{hud.phase === "enemy" ? "O inimigo age…" : "Toque numa aliada ou num inimigo."}</p>
           )}
         </div>
+        {engine.mission.explore ? (
+          <div className="flex gap-1 min-h-10 items-center mt-1">
+            <p className="text-xs text-muted">Clique no chão para andar · clique em alguém para conversar.</p>
+            <Button size="sm" className="ml-auto" onClick={onQuit}>
+              Sair
+            </Button>
+          </div>
+        ) : (
         <div className="flex flex-wrap gap-1 min-h-10 items-center mt-1">
           {hud.offHandKind && (
             <Button
@@ -7303,6 +7416,7 @@ function BattleScreen({
             Fim do turno
           </Button>
         </div>
+        )}
       </footer>
 
       {paused && (
