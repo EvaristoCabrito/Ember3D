@@ -1,5 +1,17 @@
 # Working agreements
 
+## RULES OF THE PROJECT
+
+- **NEVER do anything the user did not ask for.**
+- **NEVER take action on your own.**
+- **NEVER rename any files.**
+- **EXISTING UNIT SIZES ARE LOCKED. NEVER CHANGE THEM.** The user has hand-fixed every unit's
+  size thousands of times. Don't touch any existing size multiplier, scale, or draw-box value in
+  `computeUnitVisual` (engine.ts), and don't add global or automatic resizing of any kind.
+- **ALL HUMAN SPRITES MUST HAVE THE SAME SIZE, by default.** Every new human character added
+  must come out the same on-screen size as the existing humans, with no fix requested. The
+  user will not fix humans one by one.
+
 ## User preference — top of the list
 
 Never jump from one extreme to another. Every tuning change (brightness, intensity, size,

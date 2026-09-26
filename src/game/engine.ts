@@ -7682,6 +7682,16 @@ export class BattleEngine {
     this.centerOn((this.cols - 1) / 2, (this.rows - 1) / 2);
   }
 
+  /** Same purpose as centerOnBoard (an editor-preview-only initial framing, independent of any
+   * unit's position), but opens on the board's LEFT edge instead of its geometric middle — per
+   * direct request: every map's own content starts at its left edge, and the preview centering
+   * on the whole (often mostly-empty) bounding box read as opening on empty void instead.
+   * centerOn(0, ...) clamps against the left margin same as any other camera move, so this
+   * still leaves the small backdrop-peek margin clampCam already grants every camera. */
+  centerOnBoardLeft(): void {
+    this.centerOn(0, (this.rows - 1) / 2);
+  }
+
   private centerOn(col: number, row: number): void {
     const { cx, cy } = this.hexCenter(col, row);
     this.camX += cx - this.viewW / 2;

@@ -5,9 +5,6 @@
     "aldeia",
     "thebridge"
   ],
-  "wisp-forest": [
-    "wisp-forest-2"
-  ],
   "estalagem": [
     "estalagem"
   ],
@@ -21,5 +18,13 @@
     "colina",
     "passagem",
     "profundezas"
+  ],
+  "misty-cave": [
+    "vertente",
+    "portao",
+    "misty-cave-dungeon"
+  ],
+  "wisp-forest": [
+    "wisp-forest-crossing"
   ]
 }

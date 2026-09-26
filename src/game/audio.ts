@@ -393,27 +393,27 @@ function getTrack(theme: Theme): HTMLAudioElement | null {
     return templeEl;
   }
   if (theme === "aldeia") {
-    if (!aldeiaEl) aldeiaEl = attachTrack(new Audio("/game/MUSIC/aldeia.mp3?v=2"), 0.4);
+    if (!aldeiaEl) aldeiaEl = attachTrack(new Audio(`/game/MUSIC/${encodeURIComponent("EMBERBattle01-Balanced-High.mp3")}`), 0.4);
     return aldeiaEl;
   }
   if (theme === "siege") {
-    if (!siegeEl) siegeEl = attachTrack(new Audio("/game/MUSIC/siege.mp3"), 0.4);
+    if (!siegeEl) siegeEl = attachTrack(new Audio(`/game/MUSIC/${encodeURIComponent("Absolute Mental Descruction 00-Balanced-High.mp3")}`), 0.4);
     return siegeEl;
   }
   if (theme === "inn") {
-    if (!innEl) innEl = attachTrack(new Audio("/game/MUSIC/inn.mp3"), 0.4);
+    if (!innEl) innEl = attachTrack(new Audio(`/game/MUSIC/${encodeURIComponent("Connard The Barbarian 10.mp3")}`), 0.4);
     return innEl;
   }
   if (theme === "hill") {
-    if (!hillEl) hillEl = attachTrack(new Audio("/game/MUSIC/hill.mp3"), 0.4);
+    if (!hillEl) hillEl = attachTrack(new Audio(`/game/MUSIC/${encodeURIComponent("Long Space _Opera DJ  UMN+  022-Balanced-High.mp3")}`), 0.4);
     return hillEl;
   }
   if (theme === "portao") {
-    if (!portaoEl) portaoEl = attachTrack(new Audio("/game/MUSIC/portao.mp3"), 0.4);
+    if (!portaoEl) portaoEl = attachTrack(new Audio(`/game/MUSIC/${encodeURIComponent("TempleEntrance-Balanced-High.mp3")}`), 0.4);
     return portaoEl;
   }
   if (theme === "early") {
-    if (!earlyEl) earlyEl = attachTrack(new Audio("/game/MUSIC/early.mp3"), 0.4);
+    if (!earlyEl) earlyEl = attachTrack(new Audio(`/game/MUSIC/${encodeURIComponent("LANDR-Absolute Mental Descruction umn3 10 (3)-Balanced-High.mp3")}`), 0.4);
     return earlyEl;
   }
   if (theme === "worldMap") {
@@ -442,7 +442,7 @@ function menuElement(): HTMLAudioElement | null {
     });
   }
   if (introEl) return introEl;
-  const node = new Audio("/game/MUSIC/intro.mp3");
+  const node = new Audio(`/game/MUSIC/${encodeURIComponent("LANDR-AsheraIntrol-Balanced-High.mp3")}`);
   node.id = "ember-intro";
   node.loop = true;
   node.preload = "auto";

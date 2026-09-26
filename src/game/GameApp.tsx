@@ -751,7 +751,7 @@ export function GameApp() {
   // the editor itself is open and its "ember:locations-saved" event has fired this session.
   const [campaignLocations, setCampaignLocations] = useState<WorldLocation[]>(() => {
     const local = loadLocaisLocal();
-    return local ? locationsForOrder(local.order, local.locationOrder, local.submaps) : ALL_LOCATIONS;
+    return local ? locationsForOrder(local.order, local.locationOrder, local.submaps, local.knownMissionIds) : ALL_LOCATIONS;
   });
   const [campaignMissionRevision, setCampaignMissionRevision] = useState(0);
   useEffect(() => {
@@ -771,7 +771,8 @@ export function GameApp() {
         rec.submaps && typeof rec.submaps === "object" && !Array.isArray(rec.submaps)
           ? (rec.submaps as Record<string, { missionId: string; floor: number }[]>)
           : undefined;
-      if (missionOrder) setCampaignLocations(locationsForOrder(missionOrder, locationOrder, submapsDetail));
+      const knownMissionIds = Array.isArray(rec.knownMissionIds) ? (rec.knownMissionIds as string[]) : undefined;
+      if (missionOrder) setCampaignLocations(locationsForOrder(missionOrder, locationOrder, submapsDetail, knownMissionIds));
     };
     window.addEventListener("ember:locations-saved", applySavedLocations);
     return () => window.removeEventListener("ember:locations-saved", applySavedLocations);
@@ -3601,7 +3602,11 @@ function MapEditorScreen({
     // confirmed before the repo write is even attempted, so a missing/unreachable dev server
     // never costs the author their change, only the bonus copy in src/game/map-order.json.
     const localOk = saveLocaisLocal({ order: next, slots, locationOrder, submaps });
-    window.dispatchEvent(new CustomEvent("ember:locations-saved", { detail: { missionOrder: next, locationOrder, submaps } }));
+    window.dispatchEvent(
+      new CustomEvent("ember:locations-saved", {
+        detail: { missionOrder: next, locationOrder, submaps, knownMissionIds: ALL_LOCATIONS.flatMap((l) => l.missionIds) },
+      }),
+    );
     try {
       const res = await fetch("/__map-order", {
         method: "POST",
@@ -3884,7 +3889,11 @@ function MapEditorScreen({
   const saveScenarios = async () => {
     setBigNote(null);
     const localOk = saveLocaisLocal({ order, slots, locationOrder, submaps });
-    window.dispatchEvent(new CustomEvent("ember:locations-saved", { detail: { missionOrder: order, locationOrder, submaps } }));
+    window.dispatchEvent(
+      new CustomEvent("ember:locations-saved", {
+        detail: { missionOrder: order, locationOrder, submaps, knownMissionIds: ALL_LOCATIONS.flatMap((l) => l.missionIds) },
+      }),
+    );
     if (!localOk) {
       setBigNote({
         ok: false,
@@ -4223,10 +4232,12 @@ function MapEditorScreen({
     // Waypoint, instead of being blocked by it or redirecting the click to it. Placing two
     // exits near each other is common (e.g. both ends of a small room), and since exits are
     // 2 hexes wide, clicking near one used to land on its own second hex and silently select
-    // it instead of placing the new one. Selecting an existing Waypoint to edit/delete it now
-    // only happens by clicking it with a non-Waypoint brush active.
+    // it instead of placing the new one. With a Waypoint brush active, a click still selects
+    // (for delete/edit) when it lands exactly on an existing placement's OWN anchor hex —
+    // only a click that only reaches an existing Waypoint through its second/offset hex falls
+    // through to placing a new one instead, which is the actual "clicking near it" case above.
     const brushIsWaypoint = !!DECORATIONS[decoBrush]?.exitKind;
-    if (clicked && !brushIsWaypoint) {
+    if (clicked && (!brushIsWaypoint || (clicked.x === x && clicked.y === y))) {
       const clickedDef = DECORATIONS[clicked.id];
       setSelectedPlacedDecoration({ id: clicked.id, x: clicked.x, y: clicked.y, rot: clicked.rot });
       setNote(`${clickedDef?.name ?? clicked.id} selecionada. Pressione Delete para remover.`);

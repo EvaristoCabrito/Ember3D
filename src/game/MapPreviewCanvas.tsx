@@ -214,11 +214,11 @@ export function MapPreviewCanvas({
       } else if (needsInitialCenter) {
         // First-ever mount for this draft: the draw() above just ran the engine's own
         // first-render focus (a spawn unit, or nowhere at all on a still-empty draft) —
-        // override it so the preview always opens on the map's own middle instead of
-        // wherever that landed. Only runs once — drawGroundAndUnits() can rerun many times
-        // after this (resize, elemental-FX animation frames) and must never re-center over
-        // panning the author already did.
-        engine.centerOnBoard();
+        // override it so the preview always opens on the map's own left edge, where every
+        // map's content starts, instead of wherever that landed. Only runs once —
+        // drawGroundAndUnits() can rerun many times after this (resize, elemental-FX
+        // animation frames) and must never re-center over panning the author already did.
+        engine.centerOnBoardLeft();
         drawGroundAndUnits();
         needsInitialCenter = false;
       }
@@ -440,7 +440,8 @@ export function MapPreviewCanvas({
       const engine = engineRef.current;
       if (canvas && engine) {
         const rect = canvas.getBoundingClientRect();
-        const cell = engine.cellAt(event.clientX - rect.left, event.clientY - rect.top);
+        const scale = renderScaleRef.current;
+        const cell = engine.cellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
         if (cell) onCellClick?.(cell.x, cell.y);
       }
     }

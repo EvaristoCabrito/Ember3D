@@ -402,6 +402,11 @@ export interface LocaisLocal {
    * a Locais save made before this existed has no such key and reads as "no submaps anywhere",
    * so nothing already saved changes. */
   submaps?: Record<string, { missionId: string; floor: number }[]>;
+  /** Every mission id this save's own `order` already knew about (any location, at save time)
+   * — see locationsForOrder's "unchanged" fallback for why this exists. Optional: a save made
+   * before this existed has no such list, so that fallback just keeps its old (pre-fix)
+   * behavior until the next save fills it in. */
+  knownMissionIds?: string[];
 }
 
 export function loadLocaisLocal(): LocaisLocal | null {
@@ -411,9 +416,15 @@ export function loadLocaisLocal(): LocaisLocal | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object") return null;
-    const { order, slots, locationOrder, submaps } = parsed as Partial<LocaisLocal>;
+    const { order, slots, locationOrder, submaps, knownMissionIds } = parsed as Partial<LocaisLocal>;
     if (!order || typeof order !== "object" || !slots || typeof slots !== "object" || !Array.isArray(locationOrder)) return null;
-    return { order, slots, locationOrder, submaps: submaps && typeof submaps === "object" ? submaps : undefined };
+    return {
+      order,
+      slots,
+      locationOrder,
+      submaps: submaps && typeof submaps === "object" ? submaps : undefined,
+      knownMissionIds: Array.isArray(knownMissionIds) ? knownMissionIds : undefined,
+    };
   } catch {
     return null;
   }
@@ -421,10 +432,15 @@ export function loadLocaisLocal(): LocaisLocal | null {
 
 /** Returns false when the browser refused the write (private mode, blocked storage, quota),
  * same signal as saveVersionStore above — this is the one write Locais can actually promise,
- * so a caller has to be able to tell if even this failed. */
+ * so a caller has to be able to tell if even this failed.
+ *
+ * Always stamps the save with EVERY mission id ALL_LOCATIONS knows about right now (whatever
+ * `next.knownMissionIds` said, if anything, is replaced) — see locationsForOrder's "unchanged"
+ * fallback for what this is for. */
 export function saveLocaisLocal(next: LocaisLocal): boolean {
   try {
-    window.localStorage.setItem(LOCAIS_LOCAL_KEY, JSON.stringify(next));
+    const stamped: LocaisLocal = { ...next, knownMissionIds: ALL_LOCATIONS.flatMap((l) => l.missionIds) };
+    window.localStorage.setItem(LOCAIS_LOCAL_KEY, JSON.stringify(stamped));
     return true;
   } catch {
     return false;
@@ -590,16 +606,27 @@ export function missionsForLocation(loc: WorldLocation): Mission[] {
 
 /** Applies an editor-saved Local order to the campaign that is already running. `submaps`
  * (see WorldLocation.submaps) is authoring bookkeeping only — it never touches missionIds, so
- * omitting it here changes nothing about which missions a location plays. */
+ * omitting it here changes nothing about which missions a location plays.
+ *
+ * `knownMissionIds` (see LocaisLocal) is what tells "a mission the author deliberately removed
+ * from every location" apart from "a mission this saved order simply predates" — both look
+ * identical from `order` alone (absent from every location's chosen list either way). Without
+ * it, the "unchanged" fallback below used to resurrect a removed mission from ALL_LOCATIONS'
+ * own default placement the instant it wasn't reassigned anywhere else, which is exactly the
+ * "removed maps come back" bug this parameter fixes. Left undefined (an old save made before
+ * this existed), the fallback keeps its old, more permissive behavior — self-healing the moment
+ * that save is next written, since saveLocaisLocal always stamps a fresh one. */
 export function locationsForOrder(
   order: Record<string, string[]>,
   locationOrder: string[] = LOCATION_ORDER,
   submaps?: Record<string, { missionId: string; floor: number }[]>,
+  knownMissionIds?: string[],
 ): WorldLocation[] {
   const assigned = new Set(Object.values(order).flat());
+  const known = knownMissionIds ? new Set(knownMissionIds) : null;
   const locations = ALL_LOCATIONS.map((loc) => {
     const chosen = order[loc.id] ?? [];
-    const unchanged = loc.missionIds.filter((id) => !assigned.has(id) && !chosen.includes(id));
+    const unchanged = loc.missionIds.filter((id) => !assigned.has(id) && !chosen.includes(id) && !(known?.has(id) ?? false));
     return { ...loc, missionIds: [...chosen, ...unchanged], submaps: submaps?.[loc.id] ?? loc.submaps };
   });
   return inLocationOrder(locations, locationOrder);

@@ -33,7 +33,9 @@ const WEAK_FIRE: LightDef = { color: FIRE, intensity: 1.6, radius: 2.4, flicker:
 /** Which decorations emit light, and how strongly (per the user's list). */
 export const LIGHT_DEFS: Record<string, LightDef> = {
   "city-brazier": NORMAL_FIRE,
-  "wilds-brazier-tripod": NORMAL_FIRE,
+  // Larger reach than the other braziers, per direct request — its own LightDef (not
+  // NORMAL_FIRE) so city-brazier/light-brazier-bowl/etc. aren't affected by this.
+  "wilds-brazier-tripod": { ...NORMAL_FIRE, radius: 4.2 },
   "ember-channels-001": WEAK_FIRE,
   "burning-house": NORMAL_FIRE,
   "burnt-house-ruins": NORMAL_FIRE,
