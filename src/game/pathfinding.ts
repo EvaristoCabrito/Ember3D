@@ -612,7 +612,7 @@ export function canHitFrom(unit: Unit, from: Point, foe: Unit, tiles: TerrainId[
   // behind (any hex only adjacent to a trailing/back-row footprint cell, e.g. Familiar
   // Titã's own dy:-1 row) landed the hit but could never swing back, since the front row
   // never came within range of an attacker standing next to the back instead.
-  for (const p of fullFootprint ? footprint(placed) : footprintFrontRow(placed)) {
+  for (const p of fullFootprint || !placed.footprintOffsets ? footprint(placed) : footprintFrontRow(placed)) {
     if (inRangeOf(p.x, p.y, foe, unit.minRange, max)) {
       ok = true;
       break;
