@@ -43,7 +43,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { WEB_SHOT_TRAVEL, type BattleEngine } from "../../engine";
+import { WEB_SHOT_TRAVEL, type BattleEngine, type MagicMissileV2VfxRequest } from "../../engine";
 import { BIG_HOUSE_DECOR_IDS, BLESS, CHEST_DECOR_IDS, DECOR_ART_SCALE, DECORATIONS, HOUSE_ART_SCALE, HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, TERRAIN, decorationFacing, decorationImage, decorationImageRetryWebp, placedFootprint } from "../../data";
 import { footprint, hexNeighbors, tileAt } from "../../pathfinding";
 import type { DecorationDef, DecorationPlacement, MapTimeOfDay, TerrainId } from "../../types";
@@ -511,6 +511,9 @@ export class ThreeBattleRenderer {
   private phantasmalForceVfx: PhantasmalForceVFX | null = null;
   private blessVfx: BlessVFX | null = null;
   private magicMissileV2Vfx: MagicMissileV2VFX | null = null;
+  /** Keep one complete hero-missile effect per queued Magic Missile target. */
+  private readonly pendingMagicMissileV2VfxRequests: MagicMissileV2VfxRequest[] = [];
+  private activeMagicMissileV2VfxRequestId: string | null = null;
   /** The former tavern preview model, now reserved for the actual cast trajectory. */
   private readonly tavernFireball = new OldFireBall(LIGHT_DECAY);
   private disposed = false;
@@ -1884,44 +1887,61 @@ export class ThreeBattleRenderer {
   private syncMagicMissileV2Vfx(dt: number, tile: number): void {
     const system = this.magicMissileV2Vfx;
     if (!system) return;
-    const requests = this.engine.magicMissileV2VfxRequests.splice(0);
-    if (!requests.length) system.update(dt);
-    for (const request of requests) {
-      const caster = this.engine.units.find((unit) => unit.id === request.casterId && unit.alive);
-      const target = this.engine.units.find((unit) => unit.id === request.targetUnitId && unit.alive);
-      if (!caster || !target || (this.engine.fogged && !this.engine.visible(target.x, target.y))) {
-        this.engine.magicMissileV2VfxEvents.push({ id: request.id, phase: "impact", index: 0 }, { id: request.id, phase: "complete" });
-        continue;
-      }
-      const casterAnchor = this.engine.unitAnchor(caster);
-      const casterVisual = this.engine.unitVisual(caster, tile);
-      const casterGroundY = casterAnchor.worldY + casterVisual.footY;
-      const casterCenterY = (casterVisual.footOffset - casterVisual.h * 0.38) * casterVisual.scaleY;
-      const origin = new THREE.Vector3(
-        casterAnchor.worldX + casterVisual.sway,
-        -(casterGroundY + casterVisual.bob - casterVisual.lift + casterCenterY),
-        spriteDepthZ(casterGroundY, tile) + UNIT_DEPTH_TIE + tile * 0.08,
-      );
-      const targetAnchor = this.engine.unitAnchor(target);
-      const targetVisual = this.engine.unitVisual(target, tile);
-      const targetGroundY = targetAnchor.worldY + targetVisual.footY;
-      const targetCenterY = (targetVisual.footOffset - targetVisual.h * 0.48) * targetVisual.scaleY;
-      const destination = new THREE.Vector3(
-        targetAnchor.worldX + targetVisual.sway,
-        -(targetGroundY + targetVisual.bob - targetVisual.lift + targetCenterY),
-        spriteDepthZ(targetGroundY, tile) + UNIT_DEPTH_TIE + tile * 0.08,
-      );
-      system.castSpell({
-        id: request.id,
-        origin,
-        target: destination,
-        missileCount: 1,
-        onImpact: (index) => this.engine.magicMissileV2VfxEvents.push({ id: request.id, phase: "impact", index }),
-        onComplete: () => this.engine.magicMissileV2VfxEvents.push({ id: request.id, phase: "complete" }),
-        onTimelineEvent: (event, index) => this.engine.magicMissileV2TimelineEvents.push({ id: request.id, event, index }),
-      });
+    this.pendingMagicMissileV2VfxRequests.push(...this.engine.magicMissileV2VfxRequests.splice(0));
+    if (this.activeMagicMissileV2VfxRequestId) system.update(dt);
+
+    // Multiple target shots can be emitted in one engine frame. Never call castSpell for each
+    // request at once: castSpell reuses one pooled effect and the next call would erase the one
+    // before it. Finish each hero missile (including its impact light) before starting the next.
+    while (!this.activeMagicMissileV2VfxRequestId && this.pendingMagicMissileV2VfxRequests.length) {
+      const request = this.pendingMagicMissileV2VfxRequests.shift()!;
+      this.activeMagicMissileV2VfxRequestId = request.id;
+      if (!this.startMagicMissileV2Vfx(system, request, tile)) continue;
+      system.update(0);
     }
-    if (requests.length) system.update(0);
+  }
+
+  private startMagicMissileV2Vfx(system: MagicMissileV2VFX, request: MagicMissileV2VfxRequest, tile: number): boolean {
+    const caster = this.engine.units.find((unit) => unit.id === request.casterId && unit.alive);
+    const target = this.engine.units.find((unit) => unit.id === request.targetUnitId && unit.alive);
+    if (!caster || !target || (this.engine.fogged && !this.engine.visible(target.x, target.y))) {
+      this.engine.magicMissileV2VfxEvents.push({ id: request.id, phase: "impact", index: 0 }, { id: request.id, phase: "complete" });
+      this.activeMagicMissileV2VfxRequestId = null;
+      return false;
+    }
+    const casterAnchor = this.engine.unitAnchor(caster);
+    const casterVisual = this.engine.unitVisual(caster, tile);
+    const casterGroundY = casterAnchor.worldY + casterVisual.footY;
+    const casterCenterY = (casterVisual.footOffset - casterVisual.h * 0.38) * casterVisual.scaleY;
+    const origin = new THREE.Vector3(
+      casterAnchor.worldX + casterVisual.sway,
+      -(casterGroundY + casterVisual.bob - casterVisual.lift + casterCenterY),
+      spriteDepthZ(casterGroundY, tile) + UNIT_DEPTH_TIE + tile * 0.08,
+    );
+    const targetAnchor = this.engine.unitAnchor(target);
+    const targetVisual = this.engine.unitVisual(target, tile);
+    const targetGroundY = targetAnchor.worldY + targetVisual.footY;
+    const targetCenterY = (targetVisual.footOffset - targetVisual.h * 0.48) * targetVisual.scaleY;
+    const destination = new THREE.Vector3(
+      targetAnchor.worldX + targetVisual.sway,
+      -(targetGroundY + targetVisual.bob - targetVisual.lift + targetCenterY),
+      spriteDepthZ(targetGroundY, tile) + UNIT_DEPTH_TIE + tile * 0.08,
+    );
+    system.castSpell({
+      id: request.id,
+      origin,
+      target: destination,
+      // One complete hero missile belongs to each queued target shot; damage stays per shot.
+      missileCount: 1,
+      worldScale: tile,
+      onImpact: (index) => this.engine.magicMissileV2VfxEvents.push({ id: request.id, phase: "impact", index }),
+      onComplete: () => {
+        this.engine.magicMissileV2VfxEvents.push({ id: request.id, phase: "complete" });
+        if (this.activeMagicMissileV2VfxRequestId === request.id) this.activeMagicMissileV2VfxRequestId = null;
+      },
+      onTimelineEvent: (event, index) => this.engine.magicMissileV2TimelineEvents.push({ id: request.id, event, index }),
+    });
+    return true;
   }
 
   /** Render the bloom buffer while temporarily omitting the visible art of map light sources.
@@ -2214,6 +2234,8 @@ export class ThreeBattleRenderer {
 
   dispose(): void {
     this.disposed = true;
+    this.pendingMagicMissileV2VfxRequests.length = 0;
+    this.activeMagicMissileV2VfxRequestId = null;
     this.engine.fireballVfxAvailable = false;
     this.engine.phantasmalForceVfxAvailable = false;
     this.engine.blessVfxAvailable = false;

@@ -2769,13 +2769,15 @@ export class BattleEngine {
         const event = this.magicMissileV2VfxEvents[index]!;
         if (event.id !== a.magicMissileV2VfxId) continue;
         this.magicMissileV2VfxEvents.splice(index, 1);
-        if (event.phase === "impact") a.magicMissileV2Impact = true;
-        else a.magicMissileV2Complete = true;
+        // Each queued target shot has its own damage roll and complete hero-missile impact.
+        if (event.phase === "impact") {
+          if (event.index === 0) a.magicMissileV2Impact = true;
+        } else a.magicMissileV2Complete = true;
       }
-      // Keep combat authoritative even if a renderer is torn down or misses an event while
-      // the cast is active. The VFX normally impacts by 0.70s and completes shortly after.
-      if (!a.magicMissileV2Impact && a.t >= 1.0) a.magicMissileV2Impact = true;
-      if (!a.magicMissileV2Complete && a.t >= 1.3) a.magicMissileV2Complete = true;
+      // Keep combat authoritative if the renderer is torn down or misses an event. These
+      // fallbacks sit after the deliberate V2 charge, flight and residual-light sequence.
+      if (!a.magicMissileV2Impact && a.t >= 2.5) a.magicMissileV2Impact = true;
+      if (!a.magicMissileV2Complete && a.t >= 3.2) a.magicMissileV2Complete = true;
     }
     const arrowSpell = a.spellKind === "longShot" || a.spellKind === "multiShot" || a.spellKind === "piercing";
     const hitAt = arrowSpell ? ARROW_TRAVEL : a.spellKind === "phantasmalForce" || a.spellKind === "fantomForce" ? PHANTASMAL_FORCE_TRAVEL : a.spellKind === "magicMissile" || a.spellKind === "magicMissileV2" || a.spellKind === "fireball" || a.spellKind === "causticVenom" ? SPELL_TRAVEL : 0.18;

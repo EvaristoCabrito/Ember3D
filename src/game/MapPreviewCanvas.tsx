@@ -301,6 +301,17 @@ export function MapPreviewCanvas({
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
+    // Leave native scrollbar gutters available to the scrollbar thumb. Capturing those
+    // pointer events as map gestures made it impossible to drag the view back from an edge.
+    const bounds = viewport.getBoundingClientRect();
+    const contentLeft = bounds.left + viewport.clientLeft;
+    const contentTop = bounds.top + viewport.clientTop;
+    if (
+      event.clientX < contentLeft ||
+      event.clientX >= contentLeft + viewport.clientWidth ||
+      event.clientY < contentTop ||
+      event.clientY >= contentTop + viewport.clientHeight
+    ) return;
     // Units are deliberately picked up with the secondary button. The primary button stays
     // available for the map itself: a held left-drag pans, while an ordinary left click uses
     // the active paint brush.
@@ -387,7 +398,17 @@ export function MapPreviewCanvas({
     }
     if (drag.moved) {
       const scale = renderScaleRef.current;
-      engineRef.current?.panBy(-dx / scale, -dy / scale);
+      const panX = -dx / scale;
+      const panY = -dy / scale;
+      engineRef.current?.panBy(panX, panY);
+      // Keep the scrollbar thumb in step with pointer panning. Updating the refs first means
+      // the resulting scroll event won't apply the same camera movement a second time.
+      const scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + panX));
+      const scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + panY));
+      horizontalScrollLeftRef.current = scrollLeft;
+      verticalScrollTopRef.current = scrollTop;
+      viewport.scrollLeft = scrollLeft;
+      viewport.scrollTop = scrollTop;
       redrawRef.current?.();
     }
     drag.x = event.clientX;

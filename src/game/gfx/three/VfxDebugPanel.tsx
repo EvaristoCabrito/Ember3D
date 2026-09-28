@@ -151,11 +151,8 @@ const BLESS_SLIDERS: { key: BlessNumericKey; label: string; min: number; max: nu
 type MagicMissileNumericKey = { [K in keyof MagicMissileV2Settings]: MagicMissileV2Settings[K] extends number ? K : never }[keyof MagicMissileV2Settings];
 type MagicMissileToggleKey = { [K in keyof MagicMissileV2Settings]: MagicMissileV2Settings[K] extends boolean ? K : never }[keyof MagicMissileV2Settings];
 const MAGIC_MISSILE_V2_SLIDERS: { key: MagicMissileNumericKey; label: string; min: number; max: number; step: number; integer?: boolean }[] = [
-  { key: "missileCount", label: "Mísseis no editor", min: 1, max: 3, step: 1, integer: true },
   { key: "missileScale", label: "Escala do projétil", min: 0.08, max: 0.55, step: 0.01 },
-  { key: "formationSpacing", label: "Espaçamento da formação", min: 0.1, max: 0.8, step: 0.01 },
-  { key: "launchInterval", label: "Intervalo de lançamento", min: 0.03, max: 0.18, step: 0.005 },
-  { key: "projectileSpeed", label: "Velocidade", min: 4, max: 24, step: 0.5 },
+  { key: "projectileSpeed", label: "Velocidade (hex/s)", min: 2, max: 12, step: 0.25 },
   { key: "acceleration", label: "Aceleração", min: 0.5, max: 3.5, step: 0.05 },
   { key: "trajectoryCurvature", label: "Curvatura", min: 0, max: 1.4, step: 0.02 },
   { key: "trajectoryHeight", label: "Altura da trajetória", min: 0, max: 1.8, step: 0.02 },
@@ -165,7 +162,7 @@ const MAGIC_MISSILE_V2_SLIDERS: { key: MagicMissileNumericKey; label: string; mi
   { key: "trailLength", label: "Comprimento da trilha", min: 0.1, max: 0.8, step: 0.01 },
   { key: "trailThickness", label: "Espessura da trilha", min: 0.02, max: 0.2, step: 0.005 },
   { key: "trailFragmentation", label: "Fragmentação da trilha", min: 0, max: 1, step: 0.02 },
-  { key: "particleCount", label: "Partículas por míssil", min: 0, max: 80, step: 1, integer: true },
+  { key: "particleCount", label: "Fragmentos por conjuração", min: 0, max: 80, step: 1, integer: true },
   { key: "emissive", label: "Emissão HDR", min: 0, max: 12, step: 0.1 },
   { key: "travelLightIntensity", label: "Luz em voo", min: 0, max: 14, step: 0.25 },
   { key: "travelLightRadius", label: "Raio da luz em voo", min: 0.5, max: 8, step: 0.1 },
@@ -307,7 +304,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     id: "magic-missile-v2-preview",
     origin: new THREE.Vector3(-1.15, 1.18, 0.1),
     target,
-    missileCount: state.current.magicMissileV2Settings.missileCount,
+    missileCount: 1,
     onImpact: () => {},
     onComplete: () => { state.current.playing = state.current.looping; },
   });
@@ -671,10 +668,10 @@ export function VfxDebugPanel() {
             <option value="impact-v2">Explosão V2 · novas folhas de fogo e fumaça</option>
             <option value="phantasmal">Força Fantasmal · 3D compressão espectral</option>
             <option value="bless">Bless · onda dourada 3D e luz real</option>
-            <option value="magic-missile-v2">Míssil Mágico V2 · projéteis arcanos 3D</option>
+          <option value="magic-missile-v2">Míssil Mágico V2 · projétil arcano 3D</option>
           </select>
         </label>
-        <p className="text-sm text-muted mt-1">{mode === "flame" ? "Chama contínua ancorada em um hex de batalha." : mode === "impact-v2" ? "Nova versão com os flipbooks de fogo e fumaça anexados. A explosão original continua disponível acima." : mode === "phantasmal" ? "Força 3D que envolve o alvo, comprime energia espectral para dentro e libera uma onda real no espaço. Clique no hex para reposicionar." : mode === "bless" ? "Bless reúne energia no conjurador, propaga a onda por três hexes e envolve cada aliado na ordem em que ela chega. A luz real e o bônus são os mesmos usados no combate." : mode === "magic-missile-v2" ? "Projéteis violetas em trajetórias curvas 3D, com trilhas procedurais, impactos sincronizados e luz real. Clique no tabuleiro para trocar o alvo. Magic Missile V1 continua reservado aos inimigos." : "Clique no hex para posicionar e repetir a explosão original. Câmera fixa; sem projétil ou AOE. Ajustes salvos automaticamente neste navegador e aplicados às próximas conjurações de Fireball."}</p>
+        <p className="text-sm text-muted mt-1">{mode === "flame" ? "Chama contínua ancorada em um hex de batalha." : mode === "impact-v2" ? "Nova versão com os flipbooks de fogo e fumaça anexados. A explosão original continua disponível acima." : mode === "phantasmal" ? "Força 3D que envolve o alvo, comprime energia espectral para dentro e libera uma onda real no espaço. Clique no hex para reposicionar." : mode === "bless" ? "Bless reúne energia no conjurador, propaga a onda por três hexes e envolve cada aliado na ordem em que ela chega. A luz real e o bônus são os mesmos usados no combate." : mode === "magic-missile-v2" ? "Um projétil arcano 3D se forma junto ao conjurador, ilumina o campo, percorre uma curva visível e colapsa no alvo. Cada disparo da magia recebe seu próprio efeito. Clique no tabuleiro para trocar o alvo." : "Clique no hex para posicionar e repetir a explosão original. Câmera fixa; sem projétil ou AOE. Ajustes salvos automaticamente neste navegador e aplicados às próximas conjurações de Fireball."}</p>
       </div>
       <canvas ref={canvasRef} onPointerDown={() => { if (mode !== "flame") { stateRef.current.playing = true; setPlaying(true); } }} className={`w-full h-80 rounded-lg border border-border bg-black/40 ${mode !== "flame" ? "cursor-crosshair" : ""}`} aria-label="3D spell effect preview" />
       <div className="grid grid-cols-2 gap-2">
@@ -735,7 +732,7 @@ export function VfxDebugPanel() {
           ))}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {([ ["geometry", "Geometria dos projéteis"], ["trails", "Trilhas 3D"], ["particles", "Partículas instanciadas"], ["emissiveEnabled", "Emissão HDR"], ["lights", "Luzes dinâmicas reais"], ["bloom", "Bloom"] ] as [MagicMissileToggleKey, string][]).map(([key, label]) => (
+          {([ ["geometry", "Geometria 3D"], ["trails", "Trilha 3D"], ["particles", "Fragmentos instanciados"], ["distortion", "Distorção espacial"], ["emissiveEnabled", "Emissão HDR"], ["lights", "Luzes dinâmicas reais"], ["bloom", "Bloom"] ] as [MagicMissileToggleKey, string][]).map(([key, label]) => (
             <label key={key} className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>{label}</span><input type="checkbox" checked={magicMissileV2Settings[key]} onChange={(event) => updateMagicMissileV2Setting(key, event.target.checked)} /></label>
           ))}
         </div>
@@ -759,7 +756,7 @@ export function VfxDebugPanel() {
         </div>
       </> : null}
       {mode !== "bless" && mode !== "magic-missile-v2" && <label className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>Bloom de pós-processamento</span><input type="checkbox" checked={bloomEnabled} onChange={(event) => { stateRef.current.bloomEnabled = event.target.checked; setBloomEnabled(event.target.checked); }} /></label>}
-      <p className="text-xs leading-relaxed text-muted">{mode === "flame" ? "Flipbook com 16 quadros · partículas instanciadas · suavização por profundidade · luz real no terreno" : mode === "impact-v2" ? "Versão adicional · sprites anexados em flipbook · fogo, fumaça e luz · a explosão Etapa 02 permanece preservada" : mode === "phantasmal" ? "Tendril meshes com profundidade real · partículas instanciadas · PointLight violeta com sombras · semente determinística; ajustes persistem e valem no combate" : mode === "bless" ? "Onda radius-3 · chegada sincronizada por aliado · PointLights reais no caster e na equipe · as configurações persistem e também regem conjurações de combate" : mode === "magic-missile-v2" ? "Procedural 3D e splines no espaço do mundo · PointLights reais durante o voo e em cada impacto · controles salvos e usados na magia do jogador; inimigos mantêm V1" : "Timeline de impacto original · partículas em um draw call · mesma semente reproduz o mesmo padrão · bloom começa desligado para avaliar a estrutura"}</p>
+      <p className="text-xs leading-relaxed text-muted">{mode === "flame" ? "Flipbook com 16 quadros · partículas instanciadas · suavização por profundidade · luz real no terreno" : mode === "impact-v2" ? "Versão adicional · sprites anexados em flipbook · fogo, fumaça e luz · a explosão Etapa 02 permanece preservada" : mode === "phantasmal" ? "Tendril meshes com profundidade real · partículas instanciadas · PointLight violeta com sombras · semente determinística; ajustes persistem e valem no combate" : mode === "bless" ? "Onda radius-3 · chegada sincronizada por aliado · PointLights reais no caster e na equipe · as configurações persistem e também regem conjurações de combate" : mode === "magic-missile-v2" ? "Charge prolongado · projétil de escala mundial · spline 3D e trail procedural · luzes pontuais reais com sombras no caster, em voo e no impacto · uma ocorrência por disparo" : "Timeline de impacto original · partículas em um draw call · mesma semente reproduz o mesmo padrão · bloom começa desligado para avaliar a estrutura"}</p>
     </section>
   );
 }
