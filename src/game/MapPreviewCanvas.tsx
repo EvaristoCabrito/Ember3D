@@ -165,7 +165,7 @@ export function MapPreviewCanvas({
     if (fxCanvas) {
       try {
         fx = new EffectsRenderer(fxCanvas);
-        for (const p of engine.elementalFxPlacements) fx.spawnEffect(p.kind, p.x, p.y, { radiusTiles: p.radiusTiles, rotation: p.rotation });
+        for (const p of engine.elementalFxPlacements) if (p.family !== "procedural_pixel") fx.spawnEffect(p.kind, p.x, p.y, { radiusTiles: p.radiusTiles, rotation: p.rotation });
       } catch {
         fx = null;
       }

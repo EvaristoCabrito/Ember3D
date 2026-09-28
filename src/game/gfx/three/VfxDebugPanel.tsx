@@ -6,10 +6,12 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { DEFAULT_FIRE_EMITTER, ParticleEmitter, loadFireFlipbook, type FireEmitterSettings } from "./ThreeVfxSystem";
 import { DEFAULT_IMPACT_SETTINGS, FireballImpactVFX, getActiveImpactSettings, setActiveImpactSettings, type ImpactSettings } from "./FireballImpactVFX";
-import { FireballExplosionV2 } from "./FireballExplosionV2";
 import { DEFAULT_PHANTASMAL_FORCE_SETTINGS, getActivePhantasmalForceSettings, PhantasmalForceVFX, setActivePhantasmalForceSettings, type PhantasmalForceSettings } from "./PhantasmalForceVFX";
 import { BlessVFX, DEFAULT_BLESS_VFX_SETTINGS, getActiveBlessVfxSettings, setActiveBlessVfxSettings, type BlessVfxSettings } from "./BlessVFX";
 import { DEFAULT_MAGIC_MISSILE_V2_SETTINGS, getActiveMagicMissileV2Settings, MagicMissileV2VFX, setActiveMagicMissileV2Settings, type MagicMissileV2Settings } from "./MagicMissileV2VFX";
+import { DEFAULT_WEB_OF_DREAMS_VFX_SETTINGS, getActiveWebOfDreamsVfxSettings, setActiveWebOfDreamsVfxSettings, WebOfDreamsVFX, type WebOfDreamsVfxSettings } from "./WebOfDreamsVFX";
+import { BurningHandsV2VFX, DEFAULT_BURNING_HANDS_V2_SETTINGS, getActiveBurningHandsV2Settings, setActiveBurningHandsV2Settings, type BurningHandsV2Settings } from "./BurningHandsV2VFX";
+import { DEFAULT_VARREDURA_SETTINGS, getActiveVarreduraSettings, setActiveVarreduraSettings, VarreduraVFX, type VarreduraSettings } from "./VarreduraVFX";
 
 type PreviewState = {
   settings: FireEmitterSettings;
@@ -17,7 +19,10 @@ type PreviewState = {
   phantasmalSettings: PhantasmalForceSettings;
   blessSettings: BlessVfxSettings;
   magicMissileV2Settings: MagicMissileV2Settings;
-  mode: "flame" | "impact" | "impact-v2" | "phantasmal" | "bless" | "magic-missile-v2";
+  webDreamSettings: WebOfDreamsVfxSettings;
+  burningHandsSettings: BurningHandsV2Settings;
+  varreduraSettings: VarreduraSettings;
+  mode: "flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "varredura-v2";
   playing: boolean;
   looping: boolean;
   bloomEnabled: boolean;
@@ -29,6 +34,10 @@ type PreviewControls = {
   setPhantasmalSettings: (settings: PhantasmalForceSettings) => void;
   setBlessSettings: (settings: BlessVfxSettings) => void;
   setMagicMissileV2Settings: (settings: MagicMissileV2Settings) => void;
+  setWebDreamSettings: (settings: WebOfDreamsVfxSettings) => void;
+  setBurningHandsSettings: (settings: BurningHandsV2Settings) => void;
+  setVarreduraSettings: (settings: VarreduraSettings) => void;
+  releaseWebDreamPreview: () => void;
 };
 
 type ImpactSlider = { key: keyof ImpactSettings; label: string; min: number; max: number; step: number };
@@ -172,6 +181,68 @@ const MAGIC_MISSILE_V2_SLIDERS: { key: MagicMissileNumericKey; label: string; mi
   { key: "finalImpactMultiplier", label: "Multiplicador final", min: 1, max: 1.5, step: 0.01 },
 ];
 
+type WebDreamNumericKey = { [K in keyof WebOfDreamsVfxSettings]: WebOfDreamsVfxSettings[K] extends number ? K : never }[keyof WebOfDreamsVfxSettings];
+type WebDreamToggleKey = { [K in keyof WebOfDreamsVfxSettings]: WebOfDreamsVfxSettings[K] extends boolean ? K : never }[keyof WebOfDreamsVfxSettings];
+const WEB_DREAM_SLIDERS: { key: WebDreamNumericKey; label: string; min: number; max: number; step: number; integer?: boolean }[] = [
+  { key: "radius", label: "Raio do campo", min: 0.5, max: 2, step: 0.05 },
+  { key: "seedCount", label: "Nós de ancoragem", min: 4, max: 12, step: 1, integer: true },
+  { key: "filamentCount", label: "Fios da rede", min: 6, max: 40, step: 1, integer: true },
+  { key: "targetFilamentCount", label: "Fios por alvo", min: 2, max: 12, step: 1, integer: true },
+  { key: "filamentThickness", label: "Espessura dos fios", min: 0.004, max: 0.04, step: 0.001 },
+  { key: "curvature", label: "Curvatura", min: 0, max: 1.2, step: 0.02 },
+  { key: "verticalSpread", label: "Profundidade 3D", min: 0.1, max: 1.8, step: 0.05 },
+  { key: "displacement", label: "Ondulação espacial", min: 0, max: 0.2, step: 0.005 },
+  { key: "formationSpeed", label: "Velocidade de formação", min: 0.3, max: 2, step: 0.05 },
+  { key: "pulseSpeed", label: "Velocidade do pulso", min: 0.2, max: 3, step: 0.05 },
+  { key: "pulseBrightness", label: "Brilho do pulso", min: 0, max: 5, step: 0.1 },
+  { key: "nodeCount", label: "Nós visíveis", min: 2, max: 12, step: 1, integer: true },
+  { key: "nodeSize", label: "Tamanho dos nós", min: 0.025, max: 0.18, step: 0.005 },
+  { key: "tightening", label: "Contração ao prender", min: 0, max: 0.7, step: 0.02 },
+  { key: "centralLightIntensity", label: "Luz central", min: 0, max: 12, step: 0.2 },
+  { key: "centralLightRadius", label: "Raio da luz central", min: 0.5, max: 10, step: 0.1 },
+  { key: "secondaryLightCount", label: "Luzes secundárias", min: 0, max: 3, step: 1, integer: true },
+  { key: "secondaryLightIntensity", label: "Intensidade secundária", min: 0, max: 8, step: 0.1 },
+  { key: "secondaryLightRadius", label: "Raio secundário", min: 0.5, max: 8, step: 0.1 },
+  { key: "bindingFlashIntensity", label: "Clarão ao prender", min: 0, max: 20, step: 0.25 },
+  { key: "sustainedLightIntensity", label: "Luz sustentada", min: 0, max: 3, step: 0.05 },
+  { key: "seed", label: "Semente", min: 1, max: 999999, step: 1, integer: true },
+];
+
+type BurningHandsNumericKey = { [K in keyof BurningHandsV2Settings]: BurningHandsV2Settings[K] extends number ? K : never }[keyof BurningHandsV2Settings];
+type BurningHandsToggleKey = { [K in keyof BurningHandsV2Settings]: BurningHandsV2Settings[K] extends boolean ? K : never }[keyof BurningHandsV2Settings];
+type VarreduraNumericKey = { [K in keyof VarreduraSettings]: VarreduraSettings[K] extends number ? K : never }[keyof VarreduraSettings];
+type VarreduraToggleKey = { [K in keyof VarreduraSettings]: VarreduraSettings[K] extends boolean ? K : never }[keyof VarreduraSettings];
+const VARREDURA_SLIDERS: { key: VarreduraNumericKey; label: string; min: number; max: number; step: number; integer?: boolean }[] = [
+  { key: "angle", label: "Abertura do arco", min: 0.8, max: 3.1, step: 0.05 },
+  { key: "radius", label: "Alcance em hexes", min: 1, max: 5, step: 0.1 },
+  { key: "waveSpeed", label: "Velocidade de propagação", min: 0.25, max: 2.5, step: 0.05 },
+  { key: "thickness", label: "Espessura da onda", min: 0.08, max: 1.1, step: 0.02 },
+  { key: "height", label: "Altura da lâmina", min: 0.1, max: 2.5, step: 0.05 },
+  { key: "leadingEdge", label: "Definição da borda", min: 0.01, max: 0.2, step: 0.005 },
+  { key: "turbulence", label: "Turbulência", min: 0, max: 1, step: 0.02 },
+  { key: "breakup", label: "Fragmentação da onda", min: 0, max: 1, step: 0.02 },
+  { key: "trailLength", label: "Rastro de pressão", min: 0.2, max: 3, step: 0.05 },
+  { key: "trailThickness", label: "Espessura do rastro", min: 0.02, max: 0.6, step: 0.01 },
+  { key: "dustAmount", label: "Quantidade de poeira", min: 0, max: 2, step: 0.05 },
+  { key: "debrisCount", label: "Detritos", min: 0, max: 120, step: 1, integer: true },
+  { key: "debrisVelocity", label: "Velocidade dos detritos", min: 0.1, max: 4, step: 0.05 },
+  { key: "impactSize", label: "Tamanho do impacto", min: 0.05, max: 1, step: 0.02 },
+  { key: "spearLight", label: "Intensidade da luz da lâmina", min: 0, max: 12, step: 0.25 },
+  { key: "spearRadius", label: "Alcance da luz da lâmina", min: 0.2, max: 5, step: 0.1 },
+  { key: "impactLight", label: "Intensidade da luz de impacto", min: 0, max: 16, step: 0.25 },
+  { key: "impactRadius", label: "Alcance da luz de impacto", min: 0.2, max: 5, step: 0.1 },
+  { key: "residualDuration", label: "Duração residual", min: 0, max: 1.5, step: 0.05 },
+  { key: "seed", label: "Semente procedural", min: 1, max: 999999, step: 1, integer: true },
+];
+const BURNING_HANDS_SLIDERS: { key: BurningHandsNumericKey; label: string; min: number; max: number; step: number; integer?: boolean }[] = [
+  { key: "tongueCount", label: "Línguas volumétricas", min: 8, max: 16, step: 1, integer: true },
+  { key: "flameLength", label: "Comprimento da língua", min: 0.6, max: 1.5, step: 0.05 },
+  { key: "flameWidth", label: "Abertura do cone", min: 0.65, max: 1.4, step: 0.05 },
+  { key: "turbulence", label: "Turbulência 3D", min: 0, max: 0.45, step: 0.01 },
+  { key: "lightIntensity", label: "Intensidade das luzes", min: 0, max: 30, step: 0.5 },
+  { key: "lightRadius", label: "Alcance das luzes", min: 1, max: 9, step: 0.1 },
+];
+
 function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<PreviewState>, controls: MutableRefObject<PreviewControls | null>): () => void {
   let disposed = false;
   let raf = 0;
@@ -179,10 +250,13 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
   let simulationClock = 0;
   let emitter: ParticleEmitter | null = null;
   let impact: FireballImpactVFX | null = null;
-  let impactV2: FireballExplosionV2 | null = null;
   let phantasmal: PhantasmalForceVFX | null = null;
   let bless: BlessVFX | null = null;
   let magicMissileV2: MagicMissileV2VFX | null = null;
+  let webOfDreams: WebOfDreamsVFX | null = null;
+  let burningHands: BurningHandsV2VFX | null = null;
+  let varredura: VarreduraVFX | null = null;
+  let varreduraLayer: THREE.Group | null = null;
   let flipbook: THREE.Texture | null = null;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(1);
@@ -258,26 +332,8 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
   }
   baseScene.add(stones);
 
-  // A simple posed 3D combatant gives the inward field a real front/behind target in the
-  // editor preview, matching the spatial relationship used on the live battlefield.
-  const subject = new THREE.Group();
-  const armor = new THREE.MeshStandardMaterial({ color: 0x77736f, roughness: 0.78, metalness: 0.22 });
-  const darkArmor = new THREE.MeshStandardMaterial({ color: 0x29272a, roughness: 0.88, metalness: 0.12 });
-  const makeBodyPart = (geometry: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1) => {
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y, z);
-    mesh.scale.set(sx, sy, sz);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    subject.add(mesh);
-  };
-  makeBodyPart(new THREE.CylinderGeometry(0.2, 0.24, 0.52, 8), armor, 0, 0.68, 0);
-  makeBodyPart(new THREE.SphereGeometry(0.18, 12, 10), darkArmor, 0, 1.06, 0);
-  makeBodyPart(new THREE.CylinderGeometry(0.075, 0.11, 0.43, 7), darkArmor, -0.13, 0.23, 0, 1, 1, 1);
-  makeBodyPart(new THREE.CylinderGeometry(0.075, 0.11, 0.43, 7), darkArmor, 0.13, 0.23, 0, 1, 1, 1);
-  makeBodyPart(new THREE.CylinderGeometry(0.07, 0.09, 0.46, 7), armor, -0.28, 0.72, 0, 1, 1, 1);
-  makeBodyPart(new THREE.CylinderGeometry(0.07, 0.09, 0.46, 7), armor, 0.28, 0.72, 0, 1, 1, 1);
-  baseScene.add(subject);
+  // Keep the spell preview focused on the effect and battlefield surface; do not add a
+  // placeholder combatant/model to the FX lab.
   const phantasmalTarget = new THREE.Vector3(0, 0.78, 0);
   phantasmal = new PhantasmalForceVFX(baseScene);
   phantasmal.setSettings(state.current.phantasmalSettings);
@@ -288,6 +344,12 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
   magicMissileV2 = new MagicMissileV2VFX(baseScene);
   magicMissileV2.setSettings(state.current.magicMissileV2Settings);
   magicMissileV2.hide();
+  webOfDreams = new WebOfDreamsVFX(baseScene);
+  webOfDreams.setSettings(state.current.webDreamSettings);
+  const previewWebOfDreams = () => {
+    webOfDreams?.resetPreview();
+    state.current.playing = true;
+  };
   const previewBless = () => bless?.castSpell({
     id: "bless-preview",
     center: new THREE.Vector3(0, 0.18, 0.08),
@@ -308,6 +370,35 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     onImpact: () => {},
     onComplete: () => { state.current.playing = state.current.looping; },
   });
+  const previewBurningHandsV2 = () => {
+    burningHands?.dispose();
+    burningHands = new BurningHandsV2VFX(baseScene, {
+      id: "burning-hands-v2-preview",
+      origin: new THREE.Vector3(-0.08, 0.23, 0.14),
+      direction: new THREE.Vector2(0.34, 0.94).normalize(),
+      length: 1.9,
+      width: 1.55,
+      worldScale: 1,
+      settings: state.current.burningHandsSettings,
+      onRelease: () => {},
+      onComplete: () => {
+        if (state.current.looping) previewBurningHandsV2();
+        else state.current.playing = false;
+      },
+    });
+  };
+  const previewVarredura = (origin = new THREE.Vector3(-1.35, 0, 0.15)) => {
+    varredura?.dispose();
+    if (varreduraLayer) fireScene.remove(varreduraLayer);
+    varreduraLayer = new THREE.Group();
+    // The battle VFX uses XY as the map plane and Z as height. Rotate that local
+    // coordinate frame onto this lab's XZ ground plane (Y-up).
+    varreduraLayer.rotation.x = -Math.PI / 2;
+    fireScene.add(varreduraLayer);
+    const targets = [0.9, 1.75, 2.55].map((x,index)=>({id:`preview-target-${index}`,position:new THREE.Vector3(x, index===1?0.4:-0.45, 0.2)}));
+    varredura = new VarreduraVFX(varreduraLayer, origin, targets, 1, { ...state.current.varreduraSettings });
+    state.current.playing = true;
+  };
 
   const baseTarget = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: true, stencilBuffer: false });
   baseTarget.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
@@ -363,7 +454,9 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       }
       if (state.current.mode === "bless") { previewBless(); return; }
       if (state.current.mode === "magic-missile-v2") { previewMagicMissileV2(); return; }
-      if (state.current.mode === "impact-v2" && impactV2) { impactV2.restart(); return; }
+      if (state.current.mode === "web-of-dreams") { previewWebOfDreams(); return; }
+      if (state.current.mode === "burning-hands-v2") { previewBurningHandsV2(); return; }
+      if (state.current.mode === "varredura-v2") { previewVarredura(); return; }
       if (state.current.mode === "impact" && impact) { impact.restart(state.current.impactSettings); return; }
       if (!emitter) return;
       simulationClock = 0;
@@ -373,7 +466,9 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       if (state.current.mode === "phantasmal" && phantasmal) { phantasmal.update(1 / 24); return; }
       if (state.current.mode === "bless" && bless) { bless.update(1 / 24); return; }
       if (state.current.mode === "magic-missile-v2" && magicMissileV2) { magicMissileV2.update(1 / 24); return; }
-      if (state.current.mode === "impact-v2" && impactV2) { impactV2.update(1 / 24, state.current.looping); return; }
+      if (state.current.mode === "web-of-dreams") { webOfDreams?.previewAt(new THREE.Vector3(0, 0.8, 0), 1, 1.9, [{ id: "preview-target", position: new THREE.Vector3(0, 0.78, 0) }], 1 / 24); return; }
+      if (state.current.mode === "burning-hands-v2") { burningHands?.update(1 / 24); return; }
+      if (state.current.mode === "varredura-v2") { varredura?.update(1 / 24); return; }
       if (state.current.mode === "impact" && impact) { impact.update(1 / Math.max(1, state.current.impactSettings.flipbookFps), state.current.impactSettings, state.current.looping, camera); return; }
       if (!emitter) return;
       const s = state.current.settings;
@@ -384,6 +479,10 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     setPhantasmalSettings: (next) => phantasmal?.setSettings(next),
     setBlessSettings: (next) => bless?.setSettings(next),
     setMagicMissileV2Settings: (next) => magicMissileV2?.setSettings(next),
+    setWebDreamSettings: (next) => webOfDreams?.setSettings(next),
+    setBurningHandsSettings: (next) => burningHands?.setSettings(next),
+    setVarreduraSettings: (next) => { state.current.varreduraSettings = next; if (state.current.mode === "varredura-v2") previewVarredura(); },
+    releaseWebDreamPreview: () => webOfDreams?.releasePreview(),
   };
 
   void loadFireFlipbook().then((texture) => {
@@ -410,17 +509,15 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     impact.flash.visible = false;
     fireScene.add(impact.mesh, impact.flash);
     baseScene.add(impact.light);
-    void FireballExplosionV2.create(fireScene, camera).then((effect) => {
-      if (disposed) { effect.dispose(); return; }
-      impactV2 = effect;
-      if (state.current.mode === "impact-v2") effect.restart(new THREE.Vector3(0, 0.19, 0));
-    }).catch((error) => console.error("Falha ao carregar Explosão V2", error));
     resize();
   });
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   const placeImpact = (event: PointerEvent) => {
+    if (state.current.mode === "varredura-v2") {
+      const rect=canvas.getBoundingClientRect();pointer.set(((event.clientX-rect.left)/rect.width)*2-1,-((event.clientY-rect.top)/rect.height)*2+1);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObject(top,false)[0];if(!hit)return;previewVarredura(new THREE.Vector3(hit.point.x,hit.point.z,0.15));return;
+    }
     if (state.current.mode === "phantasmal" && phantasmal) {
       const rect = canvas.getBoundingClientRect();
       pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
@@ -429,16 +526,6 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       if (!hit) return;
       const position = hit.point.clone().setY(0.78);
       phantasmal.restartAt(position, 1, { onComplete: () => { state.current.playing = state.current.looping; } });
-      state.current.playing = true;
-      return;
-    }
-    if (state.current.mode === "impact-v2" && impactV2) {
-      const rect = canvas.getBoundingClientRect();
-      pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
-      raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObject(top, false)[0];
-      if (!hit) return;
-      impactV2.restart(hit.point);
       state.current.playing = true;
       return;
     }
@@ -475,24 +562,35 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     } else if (state.current.mode === "bless" || state.current.mode === "magic-missile-v2") {
       camera.position.set(0.15, 2.7, 5.7);
       camera.lookAt(0, 0.15, 0);
+    } else if (state.current.mode === "web-of-dreams") {
+      camera.position.set(0.2, 2.45, 5.4);
+      camera.lookAt(0, 0.72, 0);
     } else {
       camera.position.set(2.25, 2.75, 3.35);
       camera.lookAt(0, 0.48, 0);
     }
-    bloomPass.enabled = state.current.mode === "bless" ? state.current.blessSettings.bloom : state.current.mode === "magic-missile-v2" ? state.current.magicMissileV2Settings.bloom : state.current.bloomEnabled;
+    bloomPass.enabled = state.current.mode === "bless" ? state.current.blessSettings.bloom : state.current.mode === "magic-missile-v2" ? state.current.magicMissileV2Settings.bloom : state.current.mode === "burning-hands-v2" ? state.current.burningHandsSettings.bloom : state.current.bloomEnabled;
     if (state.current.mode !== "phantasmal") phantasmal?.hide();
     else if (phantasmal && state.current.playing) phantasmal.update(dt);
     if (state.current.mode !== "bless") bless?.hide();
     else if (bless && state.current.playing) bless.update(dt);
     if (state.current.mode !== "magic-missile-v2") magicMissileV2?.hide();
     else if (magicMissileV2 && state.current.playing) magicMissileV2.update(dt);
+    if (state.current.mode !== "web-of-dreams") webOfDreams?.resetPreview();
+    else if (webOfDreams && state.current.playing) webOfDreams.previewAt(
+      new THREE.Vector3(0, 0.8, 0), 1, 1.9,
+      [{ id: "preview-target", position: new THREE.Vector3(0, 0.78, 0) }], dt,
+    );
+    if (state.current.mode !== "burning-hands-v2") burningHands?.dispose();
+    else if (burningHands && state.current.playing) burningHands.update(dt);
+    if (state.current.mode !== "varredura-v2") { varredura?.dispose(); varredura = null; }
+    else if (varredura && state.current.playing) { varredura.update(dt); if (varredura.finished) { if (state.current.looping) previewVarredura(); else state.current.playing=false; } }
     if (emitter) {
       const s = state.current.settings;
       emitter.material.uniforms.uSceneDepth!.value = baseTarget.depthTexture;
       emitter.material.uniforms.uViewport!.value.set(canvas.width, canvas.height);
       emitter.material.uniforms.uIntensity!.value = s.coreIntensity;
       if (state.current.mode === "flame") {
-        if (impactV2) impactV2.hide();
         emitter.mesh.visible = true;
         emitter.light.visible = true;
         if (impact) { impact.mesh.visible = false; impact.flash.visible = false; impact.light.visible = false; }
@@ -512,19 +610,14 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       } else {
         emitter.mesh.visible = false;
         emitter.light.visible = false;
-        if (state.current.mode === "impact-v2") {
-          if (impact) { impact.mesh.visible = false; impact.flash.visible = false; impact.light.visible = false; }
-          if (impactV2) {
-            if (state.current.playing) impactV2.update(dt, state.current.looping);
-            else impactV2.hide();
-          }
-        } else if (impact) {
-          if (impactV2) impactV2.hide();
+        if (state.current.mode === "impact" && impact) {
           impact.mesh.visible = true;
           impact.light.visible = true;
           const fx = state.current.impactSettings;
           if (state.current.playing) impact.update(dt, fx, state.current.looping, camera);
           else impact.update(0, fx, state.current.looping, camera);
+        } else {
+          if (impact) { impact.mesh.visible = false; impact.flash.visible = false; impact.light.visible = false; }
         }
       }
     }
@@ -549,10 +642,13 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     canvas.removeEventListener("pointerdown", placeImpact);
     emitter?.dispose();
     impact?.dispose();
-    impactV2?.dispose();
     phantasmal?.dispose();
     bless?.dispose();
     magicMissileV2?.dispose();
+    webOfDreams?.dispose();
+    burningHands?.dispose();
+    varredura?.dispose();
+    if (varreduraLayer) fireScene.remove(varreduraLayer);
     flipbook?.dispose();
     renderer.dispose();
     composer.dispose();
@@ -569,13 +665,8 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     for (const stone of stones.children) {
       if (stone instanceof THREE.Mesh) stone.geometry.dispose();
     }
-    for (const part of subject.children) {
-      if (part instanceof THREE.Mesh) part.geometry.dispose();
-    }
     stoneMat.dispose();
     stoneMat2.dispose();
-    armor.dispose();
-    darkArmor.dispose();
   };
 }
 
@@ -587,14 +678,17 @@ export function VfxDebugPanel() {
   const [phantasmalSettings, setPhantasmalSettings] = useState(() => getActivePhantasmalForceSettings());
   const [blessSettings, setBlessSettings] = useState(() => getActiveBlessVfxSettings());
   const [magicMissileV2Settings, setMagicMissileV2Settings] = useState(() => getActiveMagicMissileV2Settings());
-  const [mode, setMode] = useState<"flame" | "impact" | "impact-v2" | "phantasmal" | "bless" | "magic-missile-v2">("flame");
+  const [webDreamSettings, setWebDreamSettings] = useState(() => getActiveWebOfDreamsVfxSettings());
+  const [burningHandsSettings, setBurningHandsSettings] = useState(() => getActiveBurningHandsV2Settings());
+  const [varreduraSettings, setVarreduraSettings] = useState(() => getActiveVarreduraSettings());
+  const [mode, setMode] = useState<"flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "varredura-v2">("flame");
   const [playing, setPlaying] = useState(true);
   const [looping, setLooping] = useState(true);
   const [bloomEnabled, setBloomEnabled] = useState(false);
-  const stateRef = useRef<PreviewState>({ settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, mode, playing, looping, bloomEnabled });
-  stateRef.current = { settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, mode, playing, looping, bloomEnabled };
+  const stateRef = useRef<PreviewState>({ settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, varreduraSettings, mode, playing, looping, bloomEnabled });
+  stateRef.current = { settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, varreduraSettings, mode, playing, looping, bloomEnabled };
 
-  const switchMode = (next: "flame" | "impact" | "impact-v2" | "phantasmal" | "bless" | "magic-missile-v2") => {
+  const switchMode = (next: "flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "varredura-v2") => {
     stateRef.current.mode = next;
     stateRef.current.playing = true;
     setMode(next);
@@ -636,6 +730,26 @@ export function VfxDebugPanel() {
     setMagicMissileV2Settings(next);
   };
 
+  const updateWebDreamSetting = <K extends keyof WebOfDreamsVfxSettings>(key: K, value: WebOfDreamsVfxSettings[K]) => {
+    const next = { ...stateRef.current.webDreamSettings, [key]: value };
+    stateRef.current.webDreamSettings = next;
+    setActiveWebOfDreamsVfxSettings(next);
+    runtimeRef.current?.setWebDreamSettings(next);
+    setWebDreamSettings(next);
+  };
+
+  const updateBurningHandsSetting = <K extends keyof BurningHandsV2Settings>(key: K, value: BurningHandsV2Settings[K]) => {
+    const next = { ...stateRef.current.burningHandsSettings, [key]: value };
+    stateRef.current.burningHandsSettings = next;
+    setActiveBurningHandsV2Settings(next);
+    runtimeRef.current?.setBurningHandsSettings(next);
+    setBurningHandsSettings(next);
+  };
+
+  const updateVarreduraSetting = <K extends keyof VarreduraSettings>(key:K,value:VarreduraSettings[K])=>{
+    const next={...stateRef.current.varreduraSettings,[key]:value};stateRef.current.varreduraSettings=next;setActiveVarreduraSettings(next);setVarreduraSettings(next);runtimeRef.current?.setVarreduraSettings(next);
+  };
+
   const restart = () => { stateRef.current.playing = true; setPlaying(true); runtimeRef.current?.restart(); };
 
   useEffect(() => {
@@ -645,33 +759,44 @@ export function VfxDebugPanel() {
     const savedPhantasmalSettings = getActivePhantasmalForceSettings();
     const savedBlessSettings = getActiveBlessVfxSettings();
     const savedMagicMissileV2Settings = getActiveMagicMissileV2Settings();
+    const savedWebDreamSettings = getActiveWebOfDreamsVfxSettings();
+    const savedBurningHandsSettings = getActiveBurningHandsV2Settings();
+    const savedVarreduraSettings = getActiveVarreduraSettings();
     stateRef.current.impactSettings = savedImpactSettings;
     stateRef.current.phantasmalSettings = savedPhantasmalSettings;
     stateRef.current.blessSettings = savedBlessSettings;
     stateRef.current.magicMissileV2Settings = savedMagicMissileV2Settings;
+    stateRef.current.webDreamSettings = savedWebDreamSettings;
+    stateRef.current.burningHandsSettings = savedBurningHandsSettings;
+    stateRef.current.varreduraSettings = savedVarreduraSettings;
     setImpactSettings(savedImpactSettings);
     setPhantasmalSettings(savedPhantasmalSettings);
     setBlessSettings(savedBlessSettings);
     setMagicMissileV2Settings(savedMagicMissileV2Settings);
+    setWebDreamSettings(savedWebDreamSettings);
+    setBurningHandsSettings(savedBurningHandsSettings);
+    setVarreduraSettings(savedVarreduraSettings);
     return mountVfxPreview(canvas, stateRef, runtimeRef);
   }, []);
 
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-bg/40 p-4" aria-label="VFX debug editor">
       <div>
-        <p className="text-sm uppercase tracking-[0.14em] text-muted">Laboratório VFX · etapa {mode === "flame" ? "01" : mode === "phantasmal" ? "03" : mode === "bless" ? "04" : mode === "magic-missile-v2" ? "05" : "02"}</p>
+        <p className="text-sm uppercase tracking-[0.14em] text-muted">Laboratório VFX · etapa {mode === "flame" ? "01" : mode === "phantasmal" ? "03" : mode === "bless" ? "04" : mode === "magic-missile-v2" ? "05" : mode === "web-of-dreams" ? "06" : mode === "burning-hands-v2" ? "07" : mode === "varredura-v2" ? "08" : "02"}</p>
         <label className="mt-2 flex flex-col gap-1 text-sm">
           <span className="text-muted">Efeito</span>
-          <select aria-label="Selecionar efeito VFX" value={mode} onChange={(event) => switchMode(event.target.value as "flame" | "impact" | "impact-v2" | "phantasmal" | "bless" | "magic-missile-v2")} className="min-h-11 rounded-md border border-border bg-bg px-3 py-2 font-display text-lg text-fg focus:border-accent focus:outline-none">
+          <select aria-label="Selecionar efeito VFX" value={mode} onChange={(event) => switchMode(event.target.value as "flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "varredura-v2")} className="min-h-11 rounded-md border border-border bg-bg px-3 py-2 font-display text-lg text-fg focus:border-accent focus:outline-none">
             <option value="flame">Emissor de fogo estacionário</option>
             <option value="impact">Explosão de impacto Fireball · original</option>
-            <option value="impact-v2">Explosão V2 · novas folhas de fogo e fumaça</option>
             <option value="phantasmal">Força Fantasmal · 3D compressão espectral</option>
             <option value="bless">Bless · onda dourada 3D e luz real</option>
           <option value="magic-missile-v2">Míssil Mágico V2 · projétil arcano 3D</option>
+            <option value="web-of-dreams">Web of Dreams · rede 3D persistente</option>
+            <option value="burning-hands-v2">Burning Hands V2 · leque de fogo 3D</option>
+            <option value="varredura-v2">Varredura V2 · pressão 3D e impacto sequencial</option>
           </select>
         </label>
-        <p className="text-sm text-muted mt-1">{mode === "flame" ? "Chama contínua ancorada em um hex de batalha." : mode === "impact-v2" ? "Nova versão com os flipbooks de fogo e fumaça anexados. A explosão original continua disponível acima." : mode === "phantasmal" ? "Força 3D que envolve o alvo, comprime energia espectral para dentro e libera uma onda real no espaço. Clique no hex para reposicionar." : mode === "bless" ? "Bless reúne energia no conjurador, propaga a onda por três hexes e envolve cada aliado na ordem em que ela chega. A luz real e o bônus são os mesmos usados no combate." : mode === "magic-missile-v2" ? "Um projétil arcano 3D se forma junto ao conjurador, ilumina o campo, percorre uma curva visível e colapsa no alvo. Cada disparo da magia recebe seu próprio efeito. Clique no tabuleiro para trocar o alvo." : "Clique no hex para posicionar e repetir a explosão original. Câmera fixa; sem projétil ou AOE. Ajustes salvos automaticamente neste navegador e aplicados às próximas conjurações de Fireball."}</p>
+        <p className="text-sm text-muted mt-1">{mode === "flame" ? "Chama contínua ancorada em um hex de batalha." : mode === "phantasmal" ? "Força 3D que envolve o alvo, comprime energia espectral para dentro e libera uma onda real no espaço. Clique no hex para reposicionar." : mode === "bless" ? "Bless reúne energia no conjurador, propaga a onda por três hexes e envolve cada aliado na ordem em que ela chega. A luz real e o bônus são os mesmos usados no combate." : mode === "magic-missile-v2" ? "Um projétil arcano 3D se forma junto ao conjurador, ilumina o campo, percorre uma curva visível e colapsa no alvo. Cada disparo da magia recebe seu próprio efeito. Clique no tabuleiro para trocar o alvo." : mode === "web-of-dreams" ? "Fios volumétricos crescem ao redor do alvo, ligam nós de energia e se contraem ao prendê-lo. Teste profundidade, geometria e luzes dinâmicas reais abaixo." : mode === "burning-hands-v2" ? "As mãos acendem, comprimem o fogo e liberam um leque largo de línguas volumétricas. As luzes reais percorrem o cone; o efeito usa os hexes já resolvidos pelo combate." : mode === "varredura-v2" ? "Uma lâmina de pressão volumétrica atravessa a área e acende cada impacto em sequência. Ajuste geometria, detritos e luzes abaixo; clique no chão para reposicionar." : "Clique no hex para posicionar e repetir a explosão original. Câmera fixa; sem projétil ou AOE. Ajustes salvos automaticamente neste navegador e aplicados às próximas conjurações de Fireball."}</p>
       </div>
       <canvas ref={canvasRef} onPointerDown={() => { if (mode !== "flame") { stateRef.current.playing = true; setPlaying(true); } }} className={`w-full h-80 rounded-lg border border-border bg-black/40 ${mode !== "flame" ? "cursor-crosshair" : ""}`} aria-label="3D spell effect preview" />
       <div className="grid grid-cols-2 gap-2">
@@ -705,7 +830,7 @@ export function VfxDebugPanel() {
             </label>)}
           </div>
         </details>)}
-      </> : mode === "impact-v2" ? <p className="rounded-md border border-border px-3 py-3 text-sm text-muted">V2 usa as três folhas animadas de fogo e a folha de fumaça enviadas nesta conversa. Clique no hex para reposicionar e reiniciar.</p> : mode === "phantasmal" ? <>
+      </> : mode === "phantasmal" ? <>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => updatePhantasmalSetting("seed", Math.floor(Math.random() * 999999) + 1)} className="min-h-11 rounded-md border border-accent bg-accent/10 px-3 py-2 hover:bg-accent/20">Sortear semente · {phantasmalSettings.seed}</button>
           <button type="button" onClick={() => { const defaults = { ...DEFAULT_PHANTASMAL_FORCE_SETTINGS }; stateRef.current.phantasmalSettings = defaults; setPhantasmalSettings(defaults); setActivePhantasmalForceSettings(defaults); runtimeRef.current?.setPhantasmalSettings(defaults); restart(); }} className="min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Restaurar valores padrão</button>
@@ -754,9 +879,68 @@ export function VfxDebugPanel() {
             <label key={key} className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>{label}</span><input type="checkbox" checked={blessSettings[key]} onChange={(event) => updateBlessSetting(key, event.target.checked)} /></label>
           ))}
         </div>
+      </> : mode === "web-of-dreams" ? <>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => updateWebDreamSetting("seed", Math.floor(Math.random() * 999999) + 1)} className="min-h-11 rounded-md border border-accent bg-accent/10 px-3 py-2 hover:bg-accent/20">Sortear semente · {webDreamSettings.seed}</button>
+          <button type="button" onClick={() => { const defaults = { ...DEFAULT_WEB_OF_DREAMS_VFX_SETTINGS }; stateRef.current.webDreamSettings = defaults; setWebDreamSettings(defaults); setActiveWebOfDreamsVfxSettings(defaults); runtimeRef.current?.setWebDreamSettings(defaults); restart(); }} className="min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Restaurar valores padrão</button>
+          <button type="button" onClick={() => { updateWebDreamSetting("geometry", false); updateWebDreamSetting("nodes", false); updateWebDreamSetting("particles", false); updateWebDreamSetting("distortion", false); updateWebDreamSetting("emissive", false); updateWebDreamSetting("lights", true); restart(); }} className="col-span-2 min-h-11 rounded-md border border-accent bg-accent/10 px-3 py-2 hover:bg-accent/20">Teste: somente luz dinâmica real</button>
+          <button type="button" onClick={() => { runtimeRef.current?.releaseWebDreamPreview(); stateRef.current.playing = true; setPlaying(true); }} className="col-span-2 min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Soltar a rede e ver a luz desaparecer</button>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {WEB_DREAM_SLIDERS.map(({ key, label, min, max, step, integer }) => (
+            <label key={key} className="flex flex-col gap-1 rounded-md border border-border px-3 py-2">
+              <span className="flex items-center justify-between gap-2 text-sm"><span>{label}</span><output className="tabular-nums text-muted">{integer ? Math.round(webDreamSettings[key]) : webDreamSettings[key].toFixed(2)}</output></span>
+              <input aria-label={label} type="range" min={min} max={max} step={step} value={webDreamSettings[key]} onChange={(event) => updateWebDreamSetting(key, Number(event.target.value))} />
+            </label>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {([["geometry", "Fios 3D"], ["nodes", "Nós de energia"], ["particles", "Partículas"], ["distortion", "Distorção espacial"], ["emissive", "Emissão HDR"], ["lights", "Luzes dinâmicas reais"]] as [WebDreamToggleKey, string][]).map(([key, label]) => (
+            <label key={key} className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>{label}</span><input type="checkbox" checked={webDreamSettings[key]} onChange={(event) => updateWebDreamSetting(key, event.target.checked)} /></label>
+          ))}
+        </div>
+      </> : mode === "burning-hands-v2" ? <>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => { updateBurningHandsSetting("geometry", false); updateBurningHandsSetting("particles", false); updateBurningHandsSetting("distortion", false); updateBurningHandsSetting("emissive", false); updateBurningHandsSetting("lights", true); }} className="col-span-2 min-h-11 rounded-md border border-accent bg-accent/10 px-3 py-2 hover:bg-accent/20">Teste: apenas luzes dinâmicas reais</button>
+          <button type="button" onClick={() => { updateBurningHandsSetting("geometry", true); updateBurningHandsSetting("particles", true); updateBurningHandsSetting("distortion", true); updateBurningHandsSetting("emissive", true); updateBurningHandsSetting("lights", false); }} className="col-span-2 min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Teste: geometria sem luz dinâmica</button>
+          <button type="button" onClick={() => { const defaults = { ...DEFAULT_BURNING_HANDS_V2_SETTINGS }; stateRef.current.burningHandsSettings = defaults; setActiveBurningHandsV2Settings(defaults); runtimeRef.current?.setBurningHandsSettings(defaults); setBurningHandsSettings(defaults); restart(); }} className="col-span-2 min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Restaurar valores padrão</button>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {BURNING_HANDS_SLIDERS.map(({ key, label, min, max, step, integer }) => (
+            <label key={key} className="flex flex-col gap-1 rounded-md border border-border px-3 py-2">
+              <span className="flex items-center justify-between gap-2 text-sm"><span>{label}</span><output className="tabular-nums text-muted">{integer ? Math.round(burningHandsSettings[key]) : burningHandsSettings[key].toFixed(2)}</output></span>
+              <input aria-label={label} type="range" min={min} max={max} step={step} value={burningHandsSettings[key]} onChange={(event) => updateBurningHandsSetting(key, Number(event.target.value))} />
+            </label>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {([["geometry", "Línguas de fogo 3D"], ["particles", "Faíscas e brasas"], ["distortion", "Ondulação de calor"], ["emissive", "Emissão HDR"], ["lights", "Luzes dinâmicas reais"], ["bloom", "Bloom"]] as [BurningHandsToggleKey, string][]).map(([key, label]) => (
+            <label key={key} className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>{label}</span><input type="checkbox" checked={burningHandsSettings[key]} onChange={(event) => updateBurningHandsSetting(key, event.target.checked)} /></label>
+          ))}
+        </div>
+      </> : mode === "varredura-v2" ? <>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => { const defaults={...DEFAULT_VARREDURA_SETTINGS}; stateRef.current.varreduraSettings=defaults; setActiveVarreduraSettings(defaults); setVarreduraSettings(defaults); runtimeRef.current?.setVarreduraSettings(defaults); }} className="col-span-2 min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Restaurar valores padrão</button>
+          <button type="button" onClick={() => { updateVarreduraSetting("geometryEnabled",false); updateVarreduraSetting("debrisEnabled",false); updateVarreduraSetting("lightEnabled",true); restart(); }} className="min-h-11 rounded-md border border-accent bg-accent/10 px-3 py-2 hover:bg-accent/20">Teste: só luz dinâmica</button>
+          <button type="button" onClick={() => { updateVarreduraSetting("geometryEnabled",true); updateVarreduraSetting("debrisEnabled",true); updateVarreduraSetting("lightEnabled",false); restart(); }} className="min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Teste: só geometria</button>
+          <button type="button" onClick={() => updateVarreduraSetting("seed", Math.floor(Math.random()*999999)+1)} className="col-span-2 min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Nova variação procedural · semente {varreduraSettings.seed}</button>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {VARREDURA_SLIDERS.map(({key,label,min,max,step,integer}) => (
+            <label key={key} className="flex flex-col gap-1 rounded-md border border-border px-3 py-2">
+              <span className="flex items-center justify-between gap-2 text-sm"><span>{label}</span><output className="tabular-nums text-muted">{integer?Math.round(varreduraSettings[key]):varreduraSettings[key].toFixed(2)}</output></span>
+              <input aria-label={label} type="range" min={min} max={max} step={step} value={varreduraSettings[key]} onChange={(event)=>updateVarreduraSetting(key,Number(event.target.value))}/>
+            </label>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {([["geometryEnabled","Lâmina e onda 3D"],["debrisEnabled","Detritos no rastro"],["lightEnabled","Luzes dinâmicas reais"]] as [VarreduraToggleKey,string][]).map(([key,label])=>(
+            <label key={key} className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>{label}</span><input type="checkbox" checked={varreduraSettings[key]} onChange={(event)=>updateVarreduraSetting(key,event.target.checked)}/></label>
+          ))}
+        </div>
       </> : null}
-      {mode !== "bless" && mode !== "magic-missile-v2" && <label className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>Bloom de pós-processamento</span><input type="checkbox" checked={bloomEnabled} onChange={(event) => { stateRef.current.bloomEnabled = event.target.checked; setBloomEnabled(event.target.checked); }} /></label>}
-      <p className="text-xs leading-relaxed text-muted">{mode === "flame" ? "Flipbook com 16 quadros · partículas instanciadas · suavização por profundidade · luz real no terreno" : mode === "impact-v2" ? "Versão adicional · sprites anexados em flipbook · fogo, fumaça e luz · a explosão Etapa 02 permanece preservada" : mode === "phantasmal" ? "Tendril meshes com profundidade real · partículas instanciadas · PointLight violeta com sombras · semente determinística; ajustes persistem e valem no combate" : mode === "bless" ? "Onda radius-3 · chegada sincronizada por aliado · PointLights reais no caster e na equipe · as configurações persistem e também regem conjurações de combate" : mode === "magic-missile-v2" ? "Charge prolongado · projétil de escala mundial · spline 3D e trail procedural · luzes pontuais reais com sombras no caster, em voo e no impacto · uma ocorrência por disparo" : "Timeline de impacto original · partículas em um draw call · mesma semente reproduz o mesmo padrão · bloom começa desligado para avaliar a estrutura"}</p>
+      {mode !== "bless" && mode !== "magic-missile-v2" && mode !== "burning-hands-v2" && <label className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>Bloom de pós-processamento</span><input type="checkbox" checked={bloomEnabled} onChange={(event) => { stateRef.current.bloomEnabled = event.target.checked; setBloomEnabled(event.target.checked); }} /></label>}
+      <p className="text-xs leading-relaxed text-muted">{mode === "flame" ? "Flipbook com 16 quadros · partículas instanciadas · suavização por profundidade · luz real no terreno" : mode === "phantasmal" ? "Tendril meshes com profundidade real · partículas instanciadas · PointLight violeta com sombras · semente determinística; ajustes persistem e valem no combate" : mode === "bless" ? "Onda radius-3 · chegada sincronizada por aliado · PointLights reais no caster e na equipe · as configurações persistem e também regem conjurações de combate" : mode === "magic-missile-v2" ? "Charge prolongado · projétil de escala mundial · spline 3D e trail procedural · luzes pontuais reais com sombras no caster, em voo e no impacto · uma ocorrência por disparo" : mode === "burning-hands-v2" ? "Leque de malhas 3D deformadas · fogo branco-dourado sobre núcleo âmbar · quatro luzes reais móveis · brilho e ondulação locais · sem modelo placeholder" : mode === "varredura-v2" ? "Lâmina e onda de pressão 3D · fragmentos no rastro · impactos iluminados na ordem dos alvos · parâmetros visuais persistem" : "Timeline de impacto original · partículas em um draw call · mesma semente reproduz o mesmo padrão · bloom começa desligado para avaliar a estrutura"}</p>
     </section>
   );
 }

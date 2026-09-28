@@ -69,6 +69,12 @@ export const LIGHT_RADIUS_MUL = 1.3;
  * props above. Swamp Blue Calf: a soft pale-blue glow, between WEAK_FIRE and NORMAL_FIRE in
  * strength and reach, with a gentle slow pulse instead of a fire's flicker. */
 export const UNIT_LIGHT_DEFS: Record<string, LightDef> = {
+  // Summoned familiars carry compact magical light pools. The stronger tier reaches two
+  // hexes; Familiar Titã spreads a restrained red glow over each occupied body hex so its
+  // full footprint and adjacent target area receive the light.
+  familiar: { color: [0.68, 0.82, 1.0], intensity: 1.5, radius: 1, flicker: 0.08 },
+  familiar2: { color: [0.64, 0.76, 1.0], intensity: 1.8, radius: 2, flicker: 0.08 },
+  familiar3: { color: [1.0, 0.08, 0.1], intensity: 0.7, radius: 2, flicker: 0.04 },
   swampBlueCalf: { color: [0.55, 0.75, 1.0], intensity: 1.8, radius: 3, flicker: 0.3 },
 };
 

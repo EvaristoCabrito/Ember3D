@@ -1,6 +1,6 @@
 {
-  "serial": 2,
-  "savedAt": 1790624138391,
+  "serial": 3,
+  "savedAt": 1790627404046,
   "draft": {
     "id": "frozen-tundra-crossing",
     "index": 13,
@@ -2729,7 +2729,7 @@
       "snow",
       "snow",
       "snow",
-      "snow",
+      "plains",
       "snow",
       "snow",
       "snow",
@@ -6059,7 +6059,7 @@
       4,
       4,
       4,
-      4,
+      0,
       4,
       4,
       4,
@@ -10021,8 +10021,8 @@
     "decorations": [
       {
         "id": "wilds-snowy-pines",
-        "x": 7,
-        "y": 7
+        "x": 10,
+        "y": 8
       },
       {
         "id": "wilds-snowy-pines",

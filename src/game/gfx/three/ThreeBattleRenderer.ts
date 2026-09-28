@@ -43,10 +43,10 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { WEB_SHOT_TRAVEL, type BattleEngine, type MagicMissileV2VfxRequest } from "../../engine";
+import { WEB_SHOT_TRAVEL, type BattleEngine, type BurningHandsV2VfxRequest, type MagicMissileV2VfxRequest, type VarreduraVfxRequest } from "../../engine";
 import { BIG_HOUSE_DECOR_IDS, BLESS, CHEST_DECOR_IDS, DECOR_ART_SCALE, DECORATIONS, HOUSE_ART_SCALE, HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, TERRAIN, decorationFacing, decorationImage, decorationImageRetryWebp, placedFootprint } from "../../data";
-import { footprint, hexNeighbors, tileAt } from "../../pathfinding";
-import type { DecorationDef, DecorationPlacement, MapTimeOfDay, TerrainId } from "../../types";
+import { footprint, footprintFrontRow, hexNeighbors, tileAt } from "../../pathfinding";
+import type { DecorationDef, DecorationPlacement, ElementalFxPlacement, MapTimeOfDay, TerrainId } from "../../types";
 import { GroundAO, type AoOccluder } from "./ThreeGroundAO";
 import { FOG_EXPLORED, FOG_UNSEEN, FOG_VISIBLE, FogMask } from "./ThreeFogMask";
 import { LIGHT_DECAY, LIGHT_DEFS, LIGHT_RADIUS_MUL, UNIT_LIGHT_DEFS, flickerAt, type EnvLight, type LightDef } from "../../lighting";
@@ -56,8 +56,12 @@ import { FireballVFX } from "./FireballVFX";
 import { getActivePhantasmalForceSettings, PhantasmalForceVFX } from "./PhantasmalForceVFX";
 import { BlessVFX, getActiveBlessVfxSettings } from "./BlessVFX";
 import { getActiveMagicMissileV2Settings, MagicMissileV2VFX } from "./MagicMissileV2VFX";
+import { WebOfDreamsVFX } from "./WebOfDreamsVFX";
+import { BurningHandsV2VFX, getActiveBurningHandsV2Settings } from "./BurningHandsV2VFX";
 import { OldFireBall } from "./OldFireBall";
 import { getDevGfx } from "./devGfx";
+import { pixelPreset, ProceduralElementEmitter, type PixelElement } from "./ProceduralElementEmitter";
+import { VarreduraVFX } from "./VarreduraVFX";
 
 const SQRT3 = Math.sqrt(3);
 /** Must match BattleEngine's private boardPad() (tile * 2.4) — duplicated here rather than
@@ -517,6 +521,10 @@ export class ThreeBattleRenderer {
   private phantasmalForceVfx: PhantasmalForceVFX | null = null;
   private blessVfx: BlessVFX | null = null;
   private magicMissileV2Vfx: MagicMissileV2VFX | null = null;
+  private webOfDreamsVfx: WebOfDreamsVFX | null = null;
+  private readonly burningHandsVfx: BurningHandsV2VFX[] = [];
+  private readonly pixelElementEmitters: { placement: ElementalFxPlacement; emitter: ProceduralElementEmitter }[] = [];
+  private readonly varreduraVfx: VarreduraVFX[] = [];
   /** Keep one complete hero-missile effect per queued Magic Missile target. */
   private readonly pendingMagicMissileV2VfxRequests: MagicMissileV2VfxRequest[] = [];
   private activeMagicMissileV2VfxRequestId: string | null = null;
@@ -765,9 +773,21 @@ export class ThreeBattleRenderer {
     this.scene.add(this.decorGroup);
     this.scene.add(this.unitGroup);
     this.scene.add(this.fogMask.mesh);
+    for (const placement of engine.elementalFxPlacements) {
+      if (placement.family !== "procedural_pixel" || !placement.element || placement.element === "fire") continue;
+      const emitter = new ProceduralElementEmitter(this.scene, pixelPreset(placement.element as Exclude<PixelElement, "fire">), placement.parameters);
+      this.pixelElementEmitters.push({ placement, emitter });
+    }
     // Sized to cover every light the map carries, so no torch goes dark just because the
     // camera is looking elsewhere; POINT_LIGHT_POOL stays the floor.
-    const mapLights = engine.decorations.filter((p) => LIGHT_DEFS[p.id]).length + engine.units.filter((u) => UNIT_LIGHT_DEFS[u.classId]).length;
+    const mapUnitLights = engine.units.reduce((count, u) => {
+      if (!UNIT_LIGHT_DEFS[u.classId]) return count;
+      return count + (u.classId === "familiar3" ? footprint(u).length : 1);
+    }, 0);
+    // Familiar lights are created after the renderer when a Conjurer summons them. Reserve
+    // room now for all three tiers (one + one + the Titan's six footprint lights).
+    const futureFamiliarLights = engine.units.filter((u) => u.classId === "conjurer").length * 8;
+    const mapLights = engine.decorations.filter((p) => LIGHT_DEFS[p.id]).length + mapUnitLights + futureFamiliarLights;
     const poolSize = Math.max(POINT_LIGHT_POOL, mapLights);
     for (let i = 0; i < poolSize; i++) {
       const pl = new THREE.PointLight(0xffffff, 0, 1, LIGHT_DECAY);
@@ -784,7 +804,7 @@ export class ThreeBattleRenderer {
     this.scene.add(this.atmosphere.group);
     // Construct synchronously: every live Fireball impact particle is procedural, so no image
     // request can leave the spell without its flight or explosion when cast immediately.
-    this.fireballVfx = new FireballVFX(this.scene, this.camera, "original", this.tavernFireball);
+    this.fireballVfx = new FireballVFX(this.scene, this.camera, this.tavernFireball);
     this.engine.fireballVfxAvailable = true;
     this.phantasmalForceVfx = new PhantasmalForceVFX(this.scene);
     this.phantasmalForceVfx.setSettings(getActivePhantasmalForceSettings());
@@ -795,6 +815,8 @@ export class ThreeBattleRenderer {
     this.magicMissileV2Vfx = new MagicMissileV2VFX(this.scene);
     this.magicMissileV2Vfx.setSettings(getActiveMagicMissileV2Settings());
     this.engine.magicMissileV2VfxAvailable = true;
+    this.webOfDreamsVfx = new WebOfDreamsVFX(this.scene);
+    this.engine.burningHandsV2VfxAvailable = true;
 
     // Only the wisp embers ever render into the bloom-only pass (everything else gets forced to
     // black during it, see render()) — a low fixed threshold is correct now, since there's
@@ -1735,7 +1757,6 @@ export class ThreeBattleRenderer {
     this.syncLights(tile, cssW, cssH);
     this.syncSpriteExposure();
     this.syncDecorVisibility();
-    this.syncWebZones(tile);
     this.syncOverlay(tile);
     this.syncUnits(tile);
     this.syncSky();
@@ -1746,6 +1767,7 @@ export class ThreeBattleRenderer {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastFrameTime) / 1000);
     this.lastFrameTime = now;
+    this.syncPixelElementEmitters(tile, cssW, cssH, dt);
     // The camera moves; the tiles never do — see module comment. This is the one line that
     // has to run every frame for panning/zooming to work. Y is `-camY - cssH` to match the
     // mesh placement's own Y-negation (see module comment) — verified numerically to
@@ -1755,6 +1777,9 @@ export class ThreeBattleRenderer {
     this.syncPhantasmalForceVfx(dt, tile);
     this.syncBlessVfx(dt, tile);
     this.syncMagicMissileV2Vfx(dt, tile);
+    this.syncBurningHandsV2Vfx(dt, tile);
+    this.syncVarreduraVfx(dt, tile);
+    this.webOfDreamsVfx?.update(this.engine, tile, dt);
     this.atmosphere.sync(
       this.engine,
       tile,
@@ -1772,6 +1797,38 @@ export class ThreeBattleRenderer {
     // must not turn into a blinding white halo when bloom is enabled.
     this.renderBloomWithoutLightSourceArt();
     this.finalComposer.render();
+  }
+
+  /** Persistent pixel emitters use one shared instanced-particle implementation. Prioritize
+   * real PointLights near the current view; every placement keeps its emissive particles. */
+  private syncPixelElementEmitters(tile: number, cssW: number, cssH: number, dt: number): void {
+    const centerX = this.engine.camX + cssW / 2;
+    const centerY = this.engine.camY + cssH / 2;
+    const visible = this.pixelElementEmitters.map((entry) => {
+      const pos = hexWorld(entry.placement.x, entry.placement.y, tile);
+      const seen = !this.engine.fogged || this.engine.visible(entry.placement.x, entry.placement.y);
+      return { ...entry, x: pos.wx, y: pos.wy, distance: (pos.wx-centerX)**2+(pos.wy-centerY)**2, seen };
+    });
+    const lights = visible.filter((entry) => entry.seen && entry.placement.parameters?.lightEnabled !== false).sort((a,b)=>a.distance-b.distance);
+    const lightWinners = new Set(lights.slice(0, 8).map((entry)=>entry.placement.id));
+    for (const entry of visible) {
+      entry.emitter.group.visible = entry.seen;
+      entry.emitter.setLightPriority(lightWinners.has(entry.placement.id));
+      entry.emitter.update(dt, tile, this.engine.time, entry.x, entry.y);
+    }
+  }
+
+  private syncVarreduraVfx(dt:number,tile:number):void{
+    const requests:VarreduraVfxRequest[]=this.engine.varreduraVfxRequests.splice(0);
+    for(const request of requests){
+      const caster=this.engine.units.find((unit)=>unit.id===request.casterId);
+      if(!caster)continue;
+      const source=this.engine.unitAnchor(caster);
+      const targets=request.targetIds.map((id)=>this.engine.units.find((unit)=>unit.id===id)).filter((unit)=>!!unit).map((unit)=>{const anchor=this.engine.unitAnchor(unit);return{id:unit.id,position:new THREE.Vector3(anchor.worldX,-anchor.worldY,1)};});
+      if(targets.length===0)for(const cell of request.tiles){const anchor=this.engine.effectAnchor(cell.x,cell.y);targets.push({id:`tile-${cell.x}-${cell.y}`,position:new THREE.Vector3(anchor.worldX,-anchor.worldY,1)});}
+      this.varreduraVfx.push(new VarreduraVFX(this.scene,new THREE.Vector3(source.worldX,-source.worldY,1),targets,tile));
+    }
+    for(let i=this.varreduraVfx.length-1;i>=0;i--){const fx=this.varreduraVfx[i]!;fx.update(dt);if(fx.finished){fx.dispose();this.varreduraVfx.splice(i,1);}}
   }
 
   private syncFireballVfx(dt: number, cssW: number, cssH: number, tile: number): void {
@@ -1905,6 +1962,58 @@ export class ThreeBattleRenderer {
       if (!this.startMagicMissileV2Vfx(system, request, tile)) continue;
       system.update(0);
     }
+  }
+
+  private syncBurningHandsV2Vfx(dt: number, tile: number): void {
+    for (const request of this.engine.burningHandsV2VfxRequests.splice(0)) {
+      if (!this.startBurningHandsV2Vfx(request, tile)) {
+        this.engine.burningHandsV2VfxEvents.push({ id: request.id, phase: "release" }, { id: request.id, phase: "complete" });
+      }
+    }
+    for (let i = this.burningHandsVfx.length - 1; i >= 0; i--) {
+      const effect = this.burningHandsVfx[i]!;
+      effect.update(dt);
+      if (effect.finished) this.burningHandsVfx.splice(i, 1);
+    }
+  }
+
+  private startBurningHandsV2Vfx(request: BurningHandsV2VfxRequest, tile: number): boolean {
+    const caster = this.engine.units.find((unit) => unit.id === request.casterId && unit.alive);
+    if (!caster || request.tiles.length === 0) return false;
+    const casterAnchor = this.engine.unitAnchor(caster);
+    const visual = this.engine.unitVisual(caster, tile);
+    const groundY = casterAnchor.worldY + visual.footY;
+    const origin = new THREE.Vector3(
+      casterAnchor.worldX + visual.sway + (caster.facing < 0 ? -1 : 1) * visual.w * visual.scaleX * 0.24,
+      -(groundY + visual.bob - visual.lift + (visual.footOffset - visual.h * 0.54) * visual.scaleY),
+      spriteDepthZ(groundY, tile) + UNIT_DEPTH_TIE + tile * 0.09,
+    );
+    const cells = request.tiles.map((cell) => this.engine.effectAnchor(cell.x, cell.y));
+    const avgX = cells.reduce((sum, cell) => sum + cell.worldX, 0) / cells.length;
+    const avgY = cells.reduce((sum, cell) => sum - cell.worldY, 0) / cells.length;
+    const axisX = avgX - origin.x;
+    const axisY = avgY - origin.y;
+    const length = Math.max(tile, Math.hypot(axisX, axisY));
+    const direction = new THREE.Vector2(axisX, axisY).normalize();
+    let halfWidth = tile * 0.38;
+    for (const cell of cells) {
+      const relX = cell.worldX - origin.x;
+      const relY = -cell.worldY - origin.y;
+      halfWidth = Math.max(halfWidth, Math.abs(-direction.y * relX + direction.x * relY));
+    }
+    const effect = new BurningHandsV2VFX(this.scene, {
+      id: request.id,
+      origin,
+      direction,
+      length,
+      width: halfWidth * 2,
+      worldScale: tile,
+      settings: getActiveBurningHandsV2Settings(),
+      onRelease: () => this.engine.burningHandsV2VfxEvents.push({ id: request.id, phase: "release" }),
+      onComplete: () => this.engine.burningHandsV2VfxEvents.push({ id: request.id, phase: "complete" }),
+    });
+    this.burningHandsVfx.push(effect);
+    return true;
   }
 
   private startMagicMissileV2Vfx(system: MagicMissileV2VFX, request: MagicMissileV2VfxRequest, tile: number): boolean {
@@ -2149,7 +2258,31 @@ export class ThreeBattleRenderer {
         let seed = 0;
         for (let i = 0; i < u.id.length; i++) seed = (seed * 31 + u.id.charCodeAt(i)) % 628;
         const k = def.intensity * flickerAt(engine.time * 0.5, seed / 100, def.flicker) * Math.min(1, u.fade);
-        out.push({ x: a.worldX, y: a.worldY, h: tile, r: def.radius * tile, rgb: [def.color[0] * k, def.color[1] * k, def.color[2] * k] });
+        const rgb: [number, number, number] = [def.color[0] * k, def.color[1] * k, def.color[2] * k];
+        if (u.classId === "familiar3") {
+          // Familiar Titã is a six-hex body: distribute its red point lights over the whole
+          // footprint so its body and adjacent target area glow together. Offset from the
+          // front-row anchor, which follows the interpolated sprite while it walks.
+          const cells = footprint(u);
+          const frontRow = footprintFrontRow(u);
+          const anchorCells = frontRow.length > 0 ? frontRow : [{ x: u.x, y: u.y }];
+          const anchorBase = anchorCells.reduce((sum, cell) => {
+            const pos = hexWorld(cell.x, cell.y, tile);
+            return { wx: sum.wx + pos.wx / anchorCells.length, wy: sum.wy + pos.wy / anchorCells.length };
+          }, { wx: 0, wy: 0 });
+          for (const cell of cells) {
+            const pos = hexWorld(cell.x, cell.y, tile);
+            out.push({
+              x: a.worldX + pos.wx - anchorBase.wx,
+              y: a.worldY + pos.wy - anchorBase.wy,
+              h: tile,
+              r: def.radius * tile,
+              rgb,
+            });
+          }
+        } else {
+          out.push({ x: a.worldX, y: a.worldY, h: tile, r: def.radius * tile, rgb });
+        }
       }
       // Nearest the view first: they win the pool.
       const cx = engine.camX + cssW / 2;
@@ -2246,6 +2379,7 @@ export class ThreeBattleRenderer {
     this.engine.phantasmalForceVfxAvailable = false;
     this.engine.blessVfxAvailable = false;
     this.engine.magicMissileV2VfxAvailable = false;
+    this.engine.burningHandsV2VfxAvailable = false;
     this.fireballVfx?.dispose();
     this.fireballVfx = null;
     this.phantasmalForceVfx?.dispose();
@@ -2254,6 +2388,14 @@ export class ThreeBattleRenderer {
     this.blessVfx = null;
     this.magicMissileV2Vfx?.dispose();
     this.magicMissileV2Vfx = null;
+    this.webOfDreamsVfx?.dispose();
+    this.webOfDreamsVfx = null;
+    for (const effect of this.burningHandsVfx) effect.dispose();
+    this.burningHandsVfx.length = 0;
+    for (const entry of this.pixelElementEmitters) entry.emitter.dispose();
+    this.pixelElementEmitters.length = 0;
+    for (const effect of this.varreduraVfx) effect.dispose();
+    this.varreduraVfx.length = 0;
     // MILESTONE 4 — EffectComposer.dispose() only frees its own two ping-pong render targets and
     // internal copy pass, NOT the passes added to it — bloomPass owns several render targets of
     // its own (bright-pass + per-mip horizontal/vertical blur buffers) that leak without this.

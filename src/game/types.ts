@@ -403,6 +403,11 @@ export interface ElementalFxPlacement {
   radiusTiles?: number;
   /** Radians; mainly useful for lightning's tall/narrow bolt shape. */
   rotation?: number;
+  /** New render family. Missing on legacy map data means the original regular effect. */
+  family?: "regular" | "procedural_pixel";
+  element?: "fire" | "frost" | "lightning" | "poison" | "arcane" | "holy" | "shadow" | "ember";
+  preset?: string;
+  parameters?: Record<string, number | boolean>;
 }
 
 export interface Mission {

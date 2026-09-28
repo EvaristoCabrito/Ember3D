@@ -209,6 +209,9 @@ export type BlessVfxTimelineEvent = "bless_charge" | "bless_release" | "bless_wa
 export type BlessVfxEvent = { id: string; phase: "apply"; unitId: string } | { id: string; phase: "complete" } | { id: string; phase: "timeline"; event: BlessVfxTimelineEvent; unitId?: string };
 export interface MagicMissileV2VfxRequest { id: string; casterId: string; targetUnitId: string }
 export type MagicMissileV2VfxEvent = { id: string; phase: "impact"; index: number } | { id: string; phase: "complete" };
+export interface BurningHandsV2VfxRequest { id: string; casterId: string; tiles: Point[] }
+export type BurningHandsV2VfxEvent = { id: string; phase: "release" | "complete" };
+export interface VarreduraVfxRequest { id: string; casterId: string; tiles: Point[]; targetIds: string[] }
 export type MagicMissileV2TimelineEvent = "magic_missile_charge" | "magic_missile_launch_1" | "magic_missile_launch_2" | "magic_missile_launch_3" | "magic_missile_impact_1" | "magic_missile_impact_2" | "magic_missile_impact_3" | "magic_missile_complete";
 
 /** A traveling spell bolt (currently just Magic Missile) — hex-to-hex in pixel space, timed to
@@ -511,6 +514,10 @@ interface SpellAnim {
   magicMissileV2VfxId?: string;
   magicMissileV2Impact?: boolean;
   magicMissileV2Complete?: boolean;
+  burningHandsVfxId?: string;
+  burningHandsReleased?: boolean;
+  burningHandsComplete?: boolean;
+  varreduraVfxQueued?: boolean;
   extraDice: number;
   extraFaces: number;
   extraBonus: number;
@@ -1303,6 +1310,12 @@ export class BattleEngine {
   readonly magicMissileV2TimelineEvents: { id: string; event: MagicMissileV2TimelineEvent; index?: number }[] = [];
   magicMissileV2VfxAvailable = false;
   private magicMissileV2VfxSequence = 0;
+  readonly burningHandsV2VfxRequests: BurningHandsV2VfxRequest[] = [];
+  readonly burningHandsV2VfxEvents: BurningHandsV2VfxEvent[] = [];
+  burningHandsV2VfxAvailable = false;
+  private burningHandsV2VfxSequence = 0;
+  readonly varreduraVfxRequests: VarreduraVfxRequest[] = [];
+  private varreduraVfxSequence = 0;
 
   constructor(mission: Mission, art: GameArt, roster: Roster, seed = 1, debugFreeCast = false) {
     this.debugFreeCast = debugFreeCast;
@@ -2721,6 +2734,28 @@ export class BattleEngine {
     }
     const syncFireballVfx = a.spellKind === "fireball" && this.fireballVfxAvailable && !this.reducedMotion && !!a.projectileTo;
     const syncPhantasmalVfx = a.spellKind === "phantasmalForce" && this.phantasmalForceVfxAvailable && !this.reducedMotion;
+    const syncBurningHandsVfx = a.spellKind === "burningHands" && this.burningHandsV2VfxAvailable && !this.reducedMotion;
+    if (a.spellKind === "sweep" && !a.varreduraVfxQueued && a.t >= 0.18 && !this.reducedMotion) {
+      a.varreduraVfxQueued = true;
+      this.varreduraVfxRequests.push({ id: `varredura-${++this.varreduraVfxSequence}`, casterId: att.id, tiles: a.tiles.map((tile) => ({ ...tile })), targetIds: [...a.ids] });
+    }
+    if (syncBurningHandsVfx) {
+      if (!a.burningHandsVfxId) {
+        const id = `burning-hands-v2-${++this.burningHandsV2VfxSequence}`;
+        a.burningHandsVfxId = id;
+        this.burningHandsV2VfxRequests.push({ id, casterId: att.id, tiles: a.tiles.map((tile) => ({ ...tile })) });
+      }
+      for (let index = this.burningHandsV2VfxEvents.length - 1; index >= 0; index--) {
+        const event = this.burningHandsV2VfxEvents[index]!;
+        if (event.id !== a.burningHandsVfxId) continue;
+        this.burningHandsV2VfxEvents.splice(index, 1);
+        if (event.phase === "release") a.burningHandsReleased = true;
+        else a.burningHandsComplete = true;
+      }
+      // Preserve authoritative damage timing if the renderer is interrupted mid-cast.
+      if (!a.burningHandsReleased && a.t >= 0.7) a.burningHandsReleased = true;
+      if (!a.burningHandsComplete && a.t >= 2.5) a.burningHandsComplete = true;
+    }
     if (syncFireballVfx) {
       if (!a.fireballVfxId) {
         const id = `fireball-${++this.fireballVfxSequence}`;
@@ -2788,7 +2823,7 @@ export class BattleEngine {
     // reach (bow shots, Cleave, Sweep, the two charge skills) are not magic — only the actual
     // spellcasters' kinds get the casting cue below.
     const meleeSkill = a.spellKind === "cleave" || a.spellKind === "sweep" || a.spellKind === "shoulderSmash" || a.spellKind === "stampede";
-    if (!a.hit && (syncFireballVfx ? a.fireballImpact === true : syncPhantasmalVfx ? a.phantasmalImpact === true : syncMagicMissileV2Vfx ? a.magicMissileV2Impact === true : a.t >= hitAt)) {
+    if (!a.hit && (syncFireballVfx ? a.fireballImpact === true : syncPhantasmalVfx ? a.phantasmalImpact === true : syncMagicMissileV2Vfx ? a.magicMissileV2Impact === true : syncBurningHandsVfx ? a.burningHandsReleased === true : a.t >= hitAt)) {
       a.hit = true;
       if (a.spellKind === "webOfDreams") sfxPlay.dreamingWeb();
       else if (att.sprite === "cultist-v2") sfxPlay.cultistV2Spellcast();
@@ -2966,7 +3001,7 @@ export class BattleEngine {
         const { a0, a1 } = this.arcSweepAngles({ x: att.x, y: att.y }, a.tiles);
         this.emitBladeFx("arc", att.x, att.y, { a0, a1, warm: a.spellKind === "shoulderSmash" });
       }
-      if (a.spellKind === "sweep") this.emitBladeFx("ring", att.x, att.y);
+      if (a.spellKind === "sweep" && !a.varreduraVfxQueued) this.emitBladeFx("ring", att.x, att.y);
       if ((a.spellKind === "piercingThrust" || a.spellKind === "stampede") && a.tiles.length > 0) {
         const end = a.tiles[a.tiles.length - 1]!;
         this.emitBladeFx("dash", att.x, att.y, { toX: end.x, toY: end.y });
@@ -2987,6 +3022,8 @@ export class BattleEngine {
       if (a.phantasmalComplete && this.heldDone(a)) this.finishCombat(att);
     } else if (syncMagicMissileV2Vfx) {
       if (a.magicMissileV2Complete && this.heldDone(a)) this.finishCombat(att);
+    } else if (syncBurningHandsVfx) {
+      if (a.burningHandsComplete && this.heldDone(a)) this.finishCombat(att);
     } else if (a.t >= spellEnd && this.heldDone(a)) this.finishCombat(att);
   }
 
@@ -7884,6 +7921,17 @@ export class BattleEngine {
   private clampCam(): void {
     const tile = ZOOM_RADII[this.zoom]!;
     const { w, h } = this.boardSize(tile);
+    // Under fog of war, the camera stays within the playable board instead of exposing the
+    // decorative dark rim around it. The first tile row starts after boardPad; keep that
+    // offset out of view too. If a board is smaller than the viewport, center it as a whole.
+    if (this.fogged) {
+      const maxX = w - this.viewW;
+      const boardTop = this.boardPad(tile);
+      const maxY = h - this.viewH;
+      this.camX = maxX < 0 ? maxX / 2 : Math.min(maxX, Math.max(0, this.camX));
+      this.camY = maxY < boardTop ? (boardTop + maxY) / 2 : Math.min(maxY, Math.max(boardTop, this.camY));
+      return;
+    }
     const margin = this.cameraMargin(tile);
     // For a board smaller than its window, the natural resting camera is its centered
     // position. Larger boards retain their existing origin, merely gaining this small rim.

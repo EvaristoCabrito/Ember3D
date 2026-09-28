@@ -5,6 +5,7 @@ import { loadGameArt, portraitFor, TILE_VARIANT_COUNT, tileVariantName, tileVari
 import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { BattleCanvas } from "./BattleCanvas";
 import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } from "./gfx/params";
+import { DEFAULT_PIXEL_SETTINGS, PIXEL_ELEMENT_IDS, type PixelElement, type PixelElementSettings } from "./gfx/three/ProceduralElementEmitter";
 import { DEFAULT_AMBIENT_INTENSITY, DEFAULT_BLOOM_INTENSITY, DEFAULT_SUN_INTENSITY, TIME_OF_DAY_LIGHT } from "./gfx/three/ThreeBattleRenderer";
 import { getDevGfx, setDevGfx, subscribeDevGfx, type DevGfxSettings } from "./gfx/three/devGfx";
 import { DevGfxPreview } from "./gfx/three/DevGfxPreview";
@@ -375,6 +376,7 @@ const BRIEF_ART: Record<string, string> = {
   thebridge: "/game/assets/brief-thebridge.jpg?v=2",
   "wisp-forest": "/game/assets/brief-wisp-forest.jpg",
   "wisp-forest-crossing": "/game/assets/brief-wisp-forest.jpg",
+  "frozen-tundra-crossing": "/game/assets/brief-frozen-tundra.jpg",
 };
 
 function briefArt(id: string): string | null {
@@ -3371,7 +3373,7 @@ const BUILDER_TERRAIN: TerrainId[] = [
  * than deleted: variant indices are positional, so dropping one would shift every later
  * variant and repaint saved maps. plains 15 = "Lama", 16 = "Trilha de Terra". */
 const HIDDEN_VARIANTS: Partial<Record<TerrainId, number[]>> = {
-  plains: [15, 16, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  plains: [15, 16, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38],
   // Keep these saved-map indices intact while removing them from the water picker.
   water: [3, 7],
 };
@@ -3384,6 +3386,14 @@ const VARIANT_LABEL: Partial<Record<TerrainId, string[]>> = {
     "Rua de cascalho", "Caminho de terra", "Calçamento de pedras", "Rua em ruínas",
     "Calçamento destruído", "Trilha de pedras", "Pedregulho antigo", "Trilha lamacenta",
     "Piso de madeira",
+    "Piso de madeira rústica",
+    "Piso de taverna escuro",
+    "Piso hexagonal de madeira",
+    "Piso de madeira remendada",
+    "Piso de madeira em mosaico",
+    "Piso de tábuas usadas",
+    "Piso de taverna clássica",
+    "Piso de taverna tranquila",
   ],
   woods: ["Solo de bosque", "Bosque sombrio", "Bosque", "Sebes", "Pinhal", "Bosque 04", "Terra", "Bosque 12", "Bosque 13"],
   ruins: ["Ruínas sombrias", "Ruínas originais", "Pedra 02", "Pedra 03", "Pedra 04", "Pátio mosaico", "Lajes partidas"],
@@ -3583,6 +3593,9 @@ function MapEditorScreen({
   const [selectedPlacedDecoration, setSelectedPlacedDecoration] = useState<{ id: string; x: number; y: number; rot?: number } | null>(null);
   const [decoSection, setDecoSection] = useState("Todas");
   const [fxBrush, setFxBrush] = useState<PlaceableElementKind>("fire");
+  const [fxFamily, setFxFamily] = useState<"regular" | "procedural_pixel">("regular");
+  const [pixelFxBrush, setPixelFxBrush] = useState<PixelElement>("frost");
+  const [pixelFxSettings, setPixelFxSettings] = useState<PixelElementSettings>({ ...DEFAULT_PIXEL_SETTINGS });
   const [mode, setMode] = useState<"paint" | "player" | "enemy" | "npc" | "summon" | "decoration" | "elementalFx">("paint");
   // Which summon class the "Invocação" brush drops. Summons live in playerSpawns alongside
   // the heroes — the class itself says which of the two a spawn is (isSummonClass), so
@@ -4327,11 +4340,15 @@ function MapEditorScreen({
       const list = d.elementalFx ?? [];
       const hit = list.find((p) => p.x === x && p.y === y);
       if (hit) {
-        setNote(`${ELEMENT_LABELS[hit.kind]} FX removido de ${x},${y}.`);
+        setNote(`${hit.family === "procedural_pixel" ? hit.element : ELEMENT_LABELS[hit.kind]} FX removido de ${x},${y}.`);
         return { ...d, elementalFx: list.filter((p) => p !== hit) };
       }
-      const placed: ElementalFxPlacement = { id: `fx-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`, kind: fxBrush, x, y };
-      setNote(`${ELEMENT_LABELS[fxBrush]} FX colocado em ${x},${y}. Clique de novo pra remover.`);
+      const pixelKinds: Record<PixelElement, PlaceableElementKind> = { frost:"ice",lightning:"lightning",poison:"acid",arcane:"darkness",holy:"holy",shadow:"darkness",ember:"fire" };
+      const kind = fxFamily === "procedural_pixel" ? pixelKinds[pixelFxBrush] : fxBrush;
+      const placed: ElementalFxPlacement = fxFamily === "procedural_pixel"
+        ? { id: `fx-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`, kind, x, y, family: "procedural_pixel", element: pixelFxBrush, preset: `procedural_pixel_${pixelFxBrush}`, parameters: { ...pixelFxSettings } }
+        : { id: `fx-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`, kind, x, y, family: "regular" };
+      setNote(`${fxFamily === "procedural_pixel" ? pixelFxBrush : ELEMENT_LABELS[fxBrush]} FX colocado em ${x},${y}. Clique de novo pra remover.`);
       return { ...d, elementalFx: [...list, placed] };
     });
   };
@@ -5433,10 +5450,10 @@ function MapEditorScreen({
                         setBrush(terrain);
                         if (key === "city") {
                           setCityMode(true);
-                          setVariant((v) => (v >= 22 && v <= 30 ? v : 22));
+                          setVariant((v) => (v >= 22 && v <= 38 ? v : 22));
                         } else {
                           setCityMode(false);
-                          setVariant((v) => (terrain === "plains" && v >= 22 && v <= 30 ? 0 : Math.min(v, (TILE_VARIANT_COUNT[terrain] ?? 1) - 1)));
+                          setVariant((v) => (terrain === "plains" && v >= 22 && v <= 38 ? 0 : Math.min(v, (TILE_VARIANT_COUNT[terrain] ?? 1) - 1)));
                         }
                       }}
                       className={`text-xs px-1.5 py-1 rounded-md border flex items-center gap-1.5 ${selected ? "border-accent" : "border-border"}`}
@@ -5497,7 +5514,7 @@ function MapEditorScreen({
                         original variant index i (art file, saved-map value), so re-sorting
                         this list can never relabel or repaint an existing tile. */}
                     {Array.from({ length: TILE_VARIANT_COUNT[brush] ?? 1 }, (_, i) => i)
-                      .filter((i) => cityMode && brush === "plains" ? i >= 22 && i <= 30 : !HIDDEN_VARIANTS[brush]?.includes(i))
+                      .filter((i) => cityMode && brush === "plains" ? i >= 22 && i <= 38 : !HIDDEN_VARIANTS[brush]?.includes(i))
                       .sort((a, b) => byName(VARIANT_LABEL[brush]?.[a] ?? String(a + 1).padStart(3, "0"), VARIANT_LABEL[brush]?.[b] ?? String(b + 1).padStart(3, "0")))
                       .map((i) => (
                   <button
@@ -5785,8 +5802,9 @@ function MapEditorScreen({
               prévia abaixo pra colocar o elemento escolhido; clique de novo na mesma casa pra remover. Toca sozinho
               assim que a batalha carrega, e continua a batalha inteira.
             </p>
+            <label className="flex flex-col gap-1 text-xs text-muted sm:max-w-xs"><span>Família de FX</span><select aria-label="Família de FX" value={fxFamily} onChange={(event) => setFxFamily(event.target.value as "regular" | "procedural_pixel")} className="min-h-9 rounded border border-border bg-bg px-2 text-sm text-fg"><option value="regular">Regular</option><option value="procedural_pixel">Procedural Pixel</option></select></label>
             <div className="flex flex-wrap gap-1.5">
-              {PLACEABLE_ELEMENT_KINDS.map((k) => (
+              {fxFamily === "regular" ? PLACEABLE_ELEMENT_KINDS.map((k) => (
                 <button
                   key={k}
                   type="button"
@@ -5795,8 +5813,17 @@ function MapEditorScreen({
                 >
                   {ELEMENT_LABELS[k]}
                 </button>
+              )) : PIXEL_ELEMENT_IDS.map((element) => (
+                <button key={element} type="button" onClick={() => setPixelFxBrush(element)} className={`text-xs px-2 py-1 rounded-md border ${pixelFxBrush === element ? "border-accent bg-accent/15" : "border-border"}`}>{element[0]!.toUpperCase() + element.slice(1)}</button>
               ))}
             </div>
+            {fxFamily === "procedural_pixel" && <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {([
+                ["scale","Escala",0.4,2.5,0.05],["intensity","Intensidade",0.2,2.5,0.05],["particleCount","Partículas",12,160,1],["density","Densidade",0.25,2.5,0.05],["spawnRate","Taxa de emissão",0.25,2.5,0.05],["lifetime","Duração de partícula",0.4,5,0.1],["duration","Duração total",0,60,0.5],["velocity","Velocidade",0.1,2,0.05],["verticalForce","Força vertical",0.01,0.5,0.01],["spread","Abertura",0.1,1.2,0.05],["drag","Arrasto",0,1.5,0.05],["turbulence","Turbulência",0,1.5,0.05],["rotation","Rotação",0,3,0.05],["emissive","Emissão HDR",0,5,0.1],["opacity","Opacidade",0.1,1,0.05],["lightIntensity","Luz real",0,3,0.05],["lightRadius","Raio da luz",0.3,5,0.1],["lightDecay","Decaimento da luz",0.5,3,0.1],["flickerAmount","Oscilação da luz",0,1,0.05],["flickerSpeed","Velocidade da oscilação",0.2,30,0.2],["animationSpeed","Velocidade da animação",0.2,3,0.05],["seed","Semente",1,999999,1]
+              ] as [keyof PixelElementSettings,string,number,number,number][]).map(([key,label,min,max,step]) => <label key={key} className="flex flex-col gap-1 rounded border border-border px-2 py-1.5 text-xs"><span className="flex justify-between gap-2"><span>{label}</span><output>{pixelFxSettings[key]}</output></span><input aria-label={label} type="range" min={min} max={max} step={step} value={pixelFxSettings[key] as number} onChange={(event) => setPixelFxSettings((settings) => ({ ...settings, [key]: Number(event.target.value) }))} /></label>)}
+              <label className="flex min-h-9 items-center justify-between rounded border border-border px-2 text-xs"><span>Luz real habilitada</span><input type="checkbox" checked={pixelFxSettings.lightEnabled} onChange={(event) => setPixelFxSettings((settings) => ({ ...settings, lightEnabled: event.target.checked }))} /></label>
+              <label className="flex min-h-9 items-center justify-between rounded border border-border px-2 text-xs"><span>Loop</span><input type="checkbox" checked={pixelFxSettings.loop} onChange={(event) => setPixelFxSettings((settings) => ({ ...settings, loop: event.target.checked }))} /></label>
+            </div>}
             {(draft.elementalFx?.length ?? 0) > 0 && (
               <p className="text-xs text-muted">{draft.elementalFx?.length} colocado(s) — lista pra remover fica lá embaixo, com decorações e unidades.</p>
             )}

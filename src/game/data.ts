@@ -125,18 +125,15 @@ export const FOOTPRINT_TYPE_5 = [
   { dx: 0, dy: -1 },
 ];
 
-/** Tipo 6 — Familiar Titã ("the Big Guy"): FOOTPRINT_TYPE_5 with a third back-row hex added
- * at dx:1 (per direct instruction — the back row was reading as too narrow, a full 3-wide row
- * to match the front instead of the 2-wide one Type 5 has), making it a true 3-wide/2-tall
- * rectangle: 3-hex front row (dy:0, closest to the player) plus a matching 3-hex row behind
- * it (dy:-1). */
+/** Tipo 6 — Familiar Titã: a broad 3–3 body. The rear row is shifted one hex left so the
+ * upper-right outer body cell sits toward the tail-side instead of tapering to a single tail. */
 export const FOOTPRINT_TYPE_6 = [
   { dx: -1, dy: 0 },
   { dx: 0, dy: 0 },
   { dx: 1, dy: 0 },
+  { dx: -2, dy: -1 },
   { dx: -1, dy: -1 },
   { dx: 0, dy: -1 },
-  { dx: 1, dy: -1 },
 ];
 
 const DECO_PAIR = [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }];
@@ -290,7 +287,9 @@ const NEW_DECOR_2026: Record<string, DecorationDef> = {
   "wilds-snowy-dead-tree": { id: "wilds-snowy-dead-tree", name: "Árvore Morta Nevada", footprint: DECO_PAIR },
   "wilds-mushroom-stump": { id: "wilds-mushroom-stump", name: "Toco Oco com Cogumelos", footprint: DECO_ONE },
   "wilds-snowy-log": { id: "wilds-snowy-log", name: "Tronco Caído Nevado", footprint: DECO_PAIR },
-  "wilds-snowy-pines": { id: "wilds-snowy-pines", name: "Pinheiros Nevados", footprint: DECO_PAIR },
+  // Its two-hex footprint normally renders 2.3 hexes tall; 3.3 makes the pine cluster
+  // exactly one hex taller while keeping its base anchored in both renderers.
+  "wilds-snowy-pines": { id: "wilds-snowy-pines", name: "Pinheiros Nevados", footprint: DECO_PAIR, heightScale: 3.3 / 2.3 },
   "wilds-camp": { id: "wilds-camp", name: "Acampamento", footprint: DECO_PAIR },
   "wilds-snowy-bush": { id: "wilds-snowy-bush", name: "Arbusto Seco Nevado", footprint: DECO_ONE },
   "wilds-iron-cage": { id: "wilds-iron-cage", name: "Gaiola de Ferro", footprint: DECO_ONE },

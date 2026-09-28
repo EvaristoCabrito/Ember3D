@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { OldFireBall } from "./OldFireBall";
 import { getActiveImpactSettings, FireballImpactVFX } from "./FireballImpactVFX";
-import { FireballExplosionV2 } from "./FireballExplosionV2";
 import { loadFireFlipbook } from "./ThreeVfxSystem";
 
 export interface FireballCastOptions {
@@ -22,9 +21,6 @@ type Phase = "idle" | "travel" | "impact";
 export class FireballVFX {
   private readonly projectile: OldFireBall;
   private readonly impact: FireballImpactVFX;
-  private readonly impactV2Ready: Promise<FireballExplosionV2 | null>;
-  private impactV2: FireballExplosionV2 | null = null;
-  private v2ImpactActive = false;
   private fallbackImpactActive = false;
   private impactTexture: THREE.Texture;
   private impactSettings = getActiveImpactSettings();
@@ -46,7 +42,6 @@ export class FireballVFX {
   constructor(
     private readonly scene: THREE.Scene,
     private readonly camera: THREE.Camera,
-    private readonly impactVariant: "original" | "v2" = "original",
     projectile?: OldFireBall,
   ) {
     const viewport = new THREE.Vector2(1, 1);
@@ -81,16 +76,6 @@ export class FireballVFX {
       this.impactTexture = texture;
       this.setImpactFlipbook(texture);
     }).catch((error) => console.error("Falha ao carregar o flipbook original de Fireball", error));
-    this.impactV2Ready = this.impactVariant === "v2"
-      ? FireballExplosionV2.create(this.scene, this.camera).then((effect) => {
-          if (this.disposed) { effect.dispose(); return null; }
-          effect.hide();
-          return effect;
-        }).catch((error) => {
-          console.error("Falha ao carregar Explosão V2 de Fireball", error);
-          return null;
-        })
-      : Promise.resolve(null);
   }
 
   cast(options: FireballCastOptions): void {
@@ -119,7 +104,6 @@ export class FireballVFX {
     this.impact.mesh.visible = false;
     this.impact.flash.visible = false;
     this.impact.light.visible = false;
-    this.impactV2?.hide();
     this.projectile.light.visible = true;
     options.onLaunch();
     this.updateProjectile(0);
@@ -142,15 +126,13 @@ export class FireballVFX {
       if (this.elapsed >= this.travelDuration) this.beginImpact();
       return;
     }
-    if (this.v2ImpactActive && this.impactV2) {
-      this.impactV2.update(safeDt);
-    } else if (this.fallbackImpactActive) {
+    if (this.fallbackImpactActive) {
       // The preview uses one world unit per hex; the battle scene uses screen-pixel world
       // units. Scale the exact same Etapa 02 particles and light by the live tile size.
       this.impact.update(safeDt, this.impactSettings, false, this.camera, new THREE.Vector2(viewportWidth, viewportHeight), this.impactScale, this.aoeRadius);
       this.impact.light.intensity *= 1.5;
     }
-    const impactFinished = this.v2ImpactActive ? this.impactV2?.finished : this.fallbackImpactActive && this.impact.finished;
+    const impactFinished = this.fallbackImpactActive && this.impact.finished;
     if (impactFinished && !this.completedImpact) {
       this.completedImpact = true;
       this.phase = "idle";
@@ -169,7 +151,6 @@ export class FireballVFX {
     this.projectile.dispose();
     this.impact.dispose();
     this.impactTexture.dispose();
-    this.impactV2?.dispose();
   }
 
   private updateProjectile(dt: number): void {
@@ -195,29 +176,19 @@ export class FireballVFX {
     this.impact.mesh.visible = false;
     this.impact.flash.visible = false;
     this.impact.light.visible = false;
-    this.v2ImpactActive = false;
     this.fallbackImpactActive = false;
     const cast = this.currentCast;
-    const startImpact = (effect: FireballExplosionV2 | null) => {
+    const startImpact = () => {
       if (this.disposed || this.phase !== "impact" || this.currentCast !== cast || !cast) return;
-      if (effect && this.impactVariant === "v2") {
-        this.impactV2 = effect;
-        this.v2ImpactActive = true;
-        effect.restartAtScale(this.target, this.worldScale);
-      } else {
-        // Play the exact original Dev Controls impact timeline at the battle target.
-        this.fallbackImpactActive = true;
-        this.impact.setOrigin(this.target);
-        this.impact.restart(this.impactSettings);
-        this.impact.mesh.visible = true;
-        this.impact.light.visible = true;
-      }
+      // Keep the original Fireball impact; the removed V2 never participates in combat.
+      this.fallbackImpactActive = true;
+      this.impact.setOrigin(this.target);
+      this.impact.restart(this.impactSettings);
+      this.impact.mesh.visible = true;
+      this.impact.light.visible = true;
       cast.onImpact();
     };
-    if (this.impactVariant === "v2") {
-      if (this.impactV2) startImpact(this.impactV2);
-      else void this.impactV2Ready.then(startImpact);
-    } else startImpact(null);
+    startImpact();
   }
 
   private cancel(): void {
@@ -229,8 +200,6 @@ export class FireballVFX {
     this.impact.flash.visible = false;
     this.impact.light.intensity = 0;
     this.impact.light.visible = false;
-    this.impactV2?.hide();
-    this.v2ImpactActive = false;
     this.fallbackImpactActive = false;
   }
 }

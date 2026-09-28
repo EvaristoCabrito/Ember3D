@@ -6,7 +6,7 @@ import type { GameArt, SpriteId, TerrainId } from "./types";
 // different variant in Mission.tileVariants — keep it as the tile that's safe
 // for existing maps.
 export const TILE_VARIANT_COUNT: Record<TerrainId, number> = {
-  plains: 31,
+  plains: 39,
   woods: 9,
   ruins: 7,
   water: 22,
@@ -35,10 +35,10 @@ export function tileVariantName(id: TerrainId, variant: number): string {
     if (variant === 2) return "plains001";
     if (variant === 15) return "plains017";
     if (variant === 16) return "plains018";
-    // 17-21 are the five existing ground variants; 22-30 are the City tiles.
+    // 17-21 are the five existing ground variants; 22-38 are the City tiles.
     // These ranges continue the numbered art files at plains019, avoiding the older
     // plains017/plains018 files already used by variants 15 and 16.
-    if (variant >= 17 && variant <= 30) return `plains${String(variant + 2).padStart(3, "0")}`;
+    if (variant >= 17 && variant <= 38) return `plains${String(variant + 2).padStart(3, "0")}`;
     return `plains${String(variant).padStart(3, "0")}`;
   }
   if (id === "water" && variant === 0) return "water023";
@@ -467,6 +467,7 @@ export async function loadGameArt(): Promise<GameArt> {
   ]);
   const webfloor = await loadImage("/game/fx/webfloor.png?v=1");
   const backdrops: Record<string, HTMLImageElement> = {
+    "frozen-tundra-crossing": await loadImage("/game/assets/frozen-tundra-background.jpg"),
     profundezas: await loadImage("/game/assets/profundezas-bg.jpg?v=2"),
     thebridge: await loadImage("/game/assets/thebridge-bg.jpg?v=1"),
     "wisp-forest": await loadImage("/game/assets/wisp-forest-bg.jpg"),
