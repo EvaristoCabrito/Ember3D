@@ -212,6 +212,7 @@ export type MagicMissileV2VfxEvent = { id: string; phase: "impact"; index: numbe
 export interface BurningHandsV2VfxRequest { id: string; casterId: string; tiles: Point[] }
 export type BurningHandsV2VfxEvent = { id: string; phase: "release" | "complete" };
 export interface VarreduraVfxRequest { id: string; casterId: string; tiles: Point[]; targetIds: string[] }
+export interface CleaveVfxRequest { id: string; casterId: string; tiles: Point[]; targetIds: string[] }
 export type MagicMissileV2TimelineEvent = "magic_missile_charge" | "magic_missile_launch_1" | "magic_missile_launch_2" | "magic_missile_launch_3" | "magic_missile_impact_1" | "magic_missile_impact_2" | "magic_missile_impact_3" | "magic_missile_complete";
 
 /** A traveling spell bolt (currently just Magic Missile) — hex-to-hex in pixel space, timed to
@@ -518,6 +519,7 @@ interface SpellAnim {
   burningHandsReleased?: boolean;
   burningHandsComplete?: boolean;
   varreduraVfxQueued?: boolean;
+  cleaveVfxQueued?: boolean;
   extraDice: number;
   extraFaces: number;
   extraBonus: number;
@@ -1316,6 +1318,8 @@ export class BattleEngine {
   private burningHandsV2VfxSequence = 0;
   readonly varreduraVfxRequests: VarreduraVfxRequest[] = [];
   private varreduraVfxSequence = 0;
+  readonly cleaveVfxRequests: CleaveVfxRequest[] = [];
+  private cleaveVfxSequence = 0;
 
   constructor(mission: Mission, art: GameArt, roster: Roster, seed = 1, debugFreeCast = false) {
     this.debugFreeCast = debugFreeCast;
@@ -2735,6 +2739,10 @@ export class BattleEngine {
     const syncFireballVfx = a.spellKind === "fireball" && this.fireballVfxAvailable && !this.reducedMotion && !!a.projectileTo;
     const syncPhantasmalVfx = a.spellKind === "phantasmalForce" && this.phantasmalForceVfxAvailable && !this.reducedMotion;
     const syncBurningHandsVfx = a.spellKind === "burningHands" && this.burningHandsV2VfxAvailable && !this.reducedMotion;
+    if (a.spellKind === "cleave" && !a.cleaveVfxQueued && a.t >= 0.18 && !this.reducedMotion) {
+      a.cleaveVfxQueued = true;
+      this.cleaveVfxRequests.push({ id: `cleave-sweep-${++this.cleaveVfxSequence}`, casterId: att.id, tiles: a.tiles.map((tile) => ({ ...tile })), targetIds: [...a.ids] });
+    }
     if (a.spellKind === "sweep" && !a.varreduraVfxQueued && a.t >= 0.18 && !this.reducedMotion) {
       a.varreduraVfxQueued = true;
       this.varreduraVfxRequests.push({ id: `varredura-${++this.varreduraVfxSequence}`, casterId: att.id, tiles: a.tiles.map((tile) => ({ ...tile })), targetIds: [...a.ids] });
@@ -2997,7 +3005,7 @@ export class BattleEngine {
       }
       const elementFx = a.spellKind ? SPELL_ELEMENT_FX[a.spellKind] : undefined;
       if (elementFx) this.queueElementalFx(elementFx.kind, a.tiles, elementFx.duration);
-      if ((a.spellKind === "cleave" || a.spellKind === "shoulderSmash") && a.tiles.length > 0) {
+      if (((a.spellKind === "cleave" && !a.cleaveVfxQueued) || a.spellKind === "shoulderSmash") && a.tiles.length > 0) {
         const { a0, a1 } = this.arcSweepAngles({ x: att.x, y: att.y }, a.tiles);
         this.emitBladeFx("arc", att.x, att.y, { a0, a1, warm: a.spellKind === "shoulderSmash" });
       }

@@ -11,7 +11,9 @@ import { BlessVFX, DEFAULT_BLESS_VFX_SETTINGS, getActiveBlessVfxSettings, setAct
 import { DEFAULT_MAGIC_MISSILE_V2_SETTINGS, getActiveMagicMissileV2Settings, MagicMissileV2VFX, setActiveMagicMissileV2Settings, type MagicMissileV2Settings } from "./MagicMissileV2VFX";
 import { DEFAULT_WEB_OF_DREAMS_VFX_SETTINGS, getActiveWebOfDreamsVfxSettings, setActiveWebOfDreamsVfxSettings, WebOfDreamsVFX, type WebOfDreamsVfxSettings } from "./WebOfDreamsVFX";
 import { BurningHandsV2VFX, DEFAULT_BURNING_HANDS_V2_SETTINGS, getActiveBurningHandsV2Settings, setActiveBurningHandsV2Settings, type BurningHandsV2Settings } from "./BurningHandsV2VFX";
-import { DEFAULT_VARREDURA_SETTINGS, getActiveVarreduraSettings, setActiveVarreduraSettings, VarreduraVFX, type VarreduraSettings } from "./VarreduraVFX";
+import { CleaveSweepVFX, DEFAULT_VARREDURA_SETTINGS, getActiveVarreduraSettings, setActiveVarreduraSettings, VarreduraVFX, type VarreduraSettings } from "./VarreduraVFX";
+
+type PreviewMode = "flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "varredura-v2" | "cleave-sweep-v2";
 
 type PreviewState = {
   settings: FireEmitterSettings;
@@ -22,7 +24,7 @@ type PreviewState = {
   webDreamSettings: WebOfDreamsVfxSettings;
   burningHandsSettings: BurningHandsV2Settings;
   varreduraSettings: VarreduraSettings;
-  mode: "flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "varredura-v2";
+  mode: PreviewMode;
   playing: boolean;
   looping: boolean;
   bloomEnabled: boolean;
@@ -256,6 +258,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
   let webOfDreams: WebOfDreamsVFX | null = null;
   let burningHands: BurningHandsV2VFX | null = null;
   let varredura: VarreduraVFX | null = null;
+  let cleaveSweep: CleaveSweepVFX | null = null;
   let varreduraLayer: THREE.Group | null = null;
   let flipbook: THREE.Texture | null = null;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
@@ -387,16 +390,29 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       },
     });
   };
-  const previewVarredura = (origin = new THREE.Vector3(-1.35, 0, 0.15)) => {
-    varredura?.dispose();
-    if (varreduraLayer) fireScene.remove(varreduraLayer);
+  const ensureVarreduraLayer = () => {
+    if (varreduraLayer) return varreduraLayer;
     varreduraLayer = new THREE.Group();
-    // The battle VFX uses XY as the map plane and Z as height. Rotate that local
-    // coordinate frame onto this lab's XZ ground plane (Y-up).
+    // Battle effects use XY as the map plane and Z as height; the lab ground is XZ/Y-up.
     varreduraLayer.rotation.x = -Math.PI / 2;
     fireScene.add(varreduraLayer);
-    const targets = [0.9, 1.75, 2.55].map((x,index)=>({id:`preview-target-${index}`,position:new THREE.Vector3(x, index===1?0.4:-0.45, 0.2)}));
-    varredura = new VarreduraVFX(varreduraLayer, origin, targets, 1, { ...state.current.varreduraSettings });
+    return varreduraLayer;
+  };
+  const previewVarredura = (origin = new THREE.Vector3(0, 0, 0.15)) => {
+    varredura?.dispose();
+    cleaveSweep?.dispose();
+    const targets = [
+      [2.55, 0], [1.8, 1.8], [0, 2.55], [-1.8, 1.8],
+      [-2.55, 0], [-1.8, -1.8], [0, -2.55], [1.8, -1.8],
+    ].map(([x, y], index) => ({ id: `preview-target-${index}`, position: new THREE.Vector3(origin.x + x!, origin.y + y!, 0.2) }));
+    varredura = new VarreduraVFX(ensureVarreduraLayer(), origin, targets, 1);
+    state.current.playing = true;
+  };
+  const previewCleaveSweep = (origin = new THREE.Vector3(-1.35, 0, 0.15)) => {
+    cleaveSweep?.dispose();
+    varredura?.dispose();
+    const targets = [0.9, 1.75, 2.55].map((x, index) => ({ id: `preview-cleave-target-${index}`, position: new THREE.Vector3(origin.x + x, origin.y + (index === 1 ? 0.4 : -0.45), 0.2) }));
+    cleaveSweep = new CleaveSweepVFX(ensureVarreduraLayer(), origin, targets, 1, { ...state.current.varreduraSettings });
     state.current.playing = true;
   };
 
@@ -457,6 +473,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       if (state.current.mode === "web-of-dreams") { previewWebOfDreams(); return; }
       if (state.current.mode === "burning-hands-v2") { previewBurningHandsV2(); return; }
       if (state.current.mode === "varredura-v2") { previewVarredura(); return; }
+      if (state.current.mode === "cleave-sweep-v2") { previewCleaveSweep(); return; }
       if (state.current.mode === "impact" && impact) { impact.restart(state.current.impactSettings); return; }
       if (!emitter) return;
       simulationClock = 0;
@@ -469,6 +486,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       if (state.current.mode === "web-of-dreams") { webOfDreams?.previewAt(new THREE.Vector3(0, 0.8, 0), 1, 1.9, [{ id: "preview-target", position: new THREE.Vector3(0, 0.78, 0) }], 1 / 24); return; }
       if (state.current.mode === "burning-hands-v2") { burningHands?.update(1 / 24); return; }
       if (state.current.mode === "varredura-v2") { varredura?.update(1 / 24); return; }
+      if (state.current.mode === "cleave-sweep-v2") { cleaveSweep?.update(1 / 24); return; }
       if (state.current.mode === "impact" && impact) { impact.update(1 / Math.max(1, state.current.impactSettings.flipbookFps), state.current.impactSettings, state.current.looping, camera); return; }
       if (!emitter) return;
       const s = state.current.settings;
@@ -481,7 +499,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     setMagicMissileV2Settings: (next) => magicMissileV2?.setSettings(next),
     setWebDreamSettings: (next) => webOfDreams?.setSettings(next),
     setBurningHandsSettings: (next) => burningHands?.setSettings(next),
-    setVarreduraSettings: (next) => { state.current.varreduraSettings = next; if (state.current.mode === "varredura-v2") previewVarredura(); },
+    setVarreduraSettings: (next) => { state.current.varreduraSettings = next; if (state.current.mode === "cleave-sweep-v2") previewCleaveSweep(); },
     releaseWebDreamPreview: () => webOfDreams?.releasePreview(),
   };
 
@@ -515,8 +533,16 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   const placeImpact = (event: PointerEvent) => {
-    if (state.current.mode === "varredura-v2") {
-      const rect=canvas.getBoundingClientRect();pointer.set(((event.clientX-rect.left)/rect.width)*2-1,-((event.clientY-rect.top)/rect.height)*2+1);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObject(top,false)[0];if(!hit)return;previewVarredura(new THREE.Vector3(hit.point.x,hit.point.z,0.15));return;
+    if (state.current.mode === "varredura-v2" || state.current.mode === "cleave-sweep-v2") {
+      const rect = canvas.getBoundingClientRect();
+      pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      const hit = raycaster.intersectObject(top, false)[0];
+      if (!hit) return;
+      const origin = new THREE.Vector3(hit.point.x, hit.point.z, 0.15);
+      if (state.current.mode === "varredura-v2") previewVarredura(origin);
+      else previewCleaveSweep(origin);
+      return;
     }
     if (state.current.mode === "phantasmal" && phantasmal) {
       const rect = canvas.getBoundingClientRect();
@@ -556,7 +582,10 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     raf = requestAnimationFrame(animate);
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
-    if (state.current.mode === "phantasmal") {
+    if (state.current.mode === "varredura-v2") {
+      camera.position.set(0, 8.5, 12.5);
+      camera.lookAt(0, 0.15, 0);
+    } else if (state.current.mode === "phantasmal") {
       camera.position.set(3.2, 3.1, 5.8);
       camera.lookAt(0, 0.62, 0);
     } else if (state.current.mode === "bless" || state.current.mode === "magic-missile-v2") {
@@ -585,6 +614,8 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     else if (burningHands && state.current.playing) burningHands.update(dt);
     if (state.current.mode !== "varredura-v2") { varredura?.dispose(); varredura = null; }
     else if (varredura && state.current.playing) { varredura.update(dt); if (varredura.finished) { if (state.current.looping) previewVarredura(); else state.current.playing=false; } }
+    if (state.current.mode !== "cleave-sweep-v2") { cleaveSweep?.dispose(); cleaveSweep = null; }
+    else if (cleaveSweep && state.current.playing) { cleaveSweep.update(dt); if (cleaveSweep.finished) { if (state.current.looping) previewCleaveSweep(); else state.current.playing = false; } }
     if (emitter) {
       const s = state.current.settings;
       emitter.material.uniforms.uSceneDepth!.value = baseTarget.depthTexture;
@@ -648,6 +679,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     webOfDreams?.dispose();
     burningHands?.dispose();
     varredura?.dispose();
+    cleaveSweep?.dispose();
     if (varreduraLayer) fireScene.remove(varreduraLayer);
     flipbook?.dispose();
     renderer.dispose();
@@ -681,14 +713,14 @@ export function VfxDebugPanel() {
   const [webDreamSettings, setWebDreamSettings] = useState(() => getActiveWebOfDreamsVfxSettings());
   const [burningHandsSettings, setBurningHandsSettings] = useState(() => getActiveBurningHandsV2Settings());
   const [varreduraSettings, setVarreduraSettings] = useState(() => getActiveVarreduraSettings());
-  const [mode, setMode] = useState<"flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "varredura-v2">("flame");
+  const [mode, setMode] = useState<PreviewMode>("flame");
   const [playing, setPlaying] = useState(true);
   const [looping, setLooping] = useState(true);
   const [bloomEnabled, setBloomEnabled] = useState(false);
   const stateRef = useRef<PreviewState>({ settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, varreduraSettings, mode, playing, looping, bloomEnabled });
   stateRef.current = { settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, varreduraSettings, mode, playing, looping, bloomEnabled };
 
-  const switchMode = (next: "flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "varredura-v2") => {
+  const switchMode = (next: PreviewMode) => {
     stateRef.current.mode = next;
     stateRef.current.playing = true;
     setMode(next);
@@ -782,10 +814,10 @@ export function VfxDebugPanel() {
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-bg/40 p-4" aria-label="VFX debug editor">
       <div>
-        <p className="text-sm uppercase tracking-[0.14em] text-muted">Laboratório VFX · etapa {mode === "flame" ? "01" : mode === "phantasmal" ? "03" : mode === "bless" ? "04" : mode === "magic-missile-v2" ? "05" : mode === "web-of-dreams" ? "06" : mode === "burning-hands-v2" ? "07" : mode === "varredura-v2" ? "08" : "02"}</p>
+        <p className="text-sm uppercase tracking-[0.14em] text-muted">Laboratório VFX · etapa {mode === "flame" ? "01" : mode === "phantasmal" ? "03" : mode === "bless" ? "04" : mode === "magic-missile-v2" ? "05" : mode === "web-of-dreams" ? "06" : mode === "burning-hands-v2" ? "07" : mode === "varredura-v2" ? "08" : mode === "cleave-sweep-v2" ? "09" : "02"}</p>
         <label className="mt-2 flex flex-col gap-1 text-sm">
           <span className="text-muted">Efeito</span>
-          <select aria-label="Selecionar efeito VFX" value={mode} onChange={(event) => switchMode(event.target.value as "flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "varredura-v2")} className="min-h-11 rounded-md border border-border bg-bg px-3 py-2 font-display text-lg text-fg focus:border-accent focus:outline-none">
+          <select aria-label="Selecionar efeito VFX" value={mode} onChange={(event) => switchMode(event.target.value as PreviewMode)} className="min-h-11 rounded-md border border-border bg-bg px-3 py-2 font-display text-lg text-fg focus:border-accent focus:outline-none">
             <option value="flame">Emissor de fogo estacionário</option>
             <option value="impact">Explosão de impacto Fireball · original</option>
             <option value="phantasmal">Força Fantasmal · 3D compressão espectral</option>
@@ -793,10 +825,11 @@ export function VfxDebugPanel() {
           <option value="magic-missile-v2">Míssil Mágico V2 · projétil arcano 3D</option>
             <option value="web-of-dreams">Web of Dreams · rede 3D persistente</option>
             <option value="burning-hands-v2">Burning Hands V2 · leque de fogo 3D</option>
-            <option value="varredura-v2">Varredura V2 · pressão 3D e impacto sequencial</option>
+            <option value="varredura-v2">Varredura V2 · onda de choque circular</option>
+            <option value="cleave-sweep-v2">Cleave · varredura da lança 3D</option>
           </select>
         </label>
-        <p className="text-sm text-muted mt-1">{mode === "flame" ? "Chama contínua ancorada em um hex de batalha." : mode === "phantasmal" ? "Força 3D que envolve o alvo, comprime energia espectral para dentro e libera uma onda real no espaço. Clique no hex para reposicionar." : mode === "bless" ? "Bless reúne energia no conjurador, propaga a onda por três hexes e envolve cada aliado na ordem em que ela chega. A luz real e o bônus são os mesmos usados no combate." : mode === "magic-missile-v2" ? "Um projétil arcano 3D se forma junto ao conjurador, ilumina o campo, percorre uma curva visível e colapsa no alvo. Cada disparo da magia recebe seu próprio efeito. Clique no tabuleiro para trocar o alvo." : mode === "web-of-dreams" ? "Fios volumétricos crescem ao redor do alvo, ligam nós de energia e se contraem ao prendê-lo. Teste profundidade, geometria e luzes dinâmicas reais abaixo." : mode === "burning-hands-v2" ? "As mãos acendem, comprimem o fogo e liberam um leque largo de línguas volumétricas. As luzes reais percorrem o cone; o efeito usa os hexes já resolvidos pelo combate." : mode === "varredura-v2" ? "Uma lâmina de pressão volumétrica atravessa a área e acende cada impacto em sequência. Ajuste geometria, detritos e luzes abaixo; clique no chão para reposicionar." : "Clique no hex para posicionar e repetir a explosão original. Câmera fixa; sem projétil ou AOE. Ajustes salvos automaticamente neste navegador e aplicados às próximas conjurações de Fireball."}</p>
+        <p className="text-sm text-muted mt-1">{mode === "flame" ? "Chama contínua ancorada em um hex de batalha." : mode === "phantasmal" ? "Força 3D que envolve o alvo, comprime energia espectral para dentro e libera uma onda real no espaço. Clique no hex para reposicionar." : mode === "bless" ? "Bless reúne energia no conjurador, propaga a onda por três hexes e envolve cada aliado na ordem em que ela chega. A luz real e o bônus são os mesmos usados no combate." : mode === "magic-missile-v2" ? "Um projétil arcano 3D se forma junto ao conjurador, ilumina o campo, percorre uma curva visível e colapsa no alvo. Cada disparo da magia recebe seu próprio efeito. Clique no tabuleiro para trocar o alvo." : mode === "web-of-dreams" ? "Fios volumétricos crescem ao redor do alvo, ligam nós de energia e se contraem ao prendê-lo. Teste profundidade, geometria e luzes dinâmicas reais abaixo." : mode === "burning-hands-v2" ? "As mãos acendem, comprimem o fogo e liberam um leque largo de línguas volumétricas. As luzes reais percorrem o cone; o efeito usa os hexes já resolvidos pelo combate." : mode === "varredura-v2" ? "Uma frente de choque circular se expande em 360° a partir do centro e ilumina os alvos quando os alcança. Clique no chão para reposicionar o centro." : mode === "cleave-sweep-v2" ? "Um golpe direcional de lança varre a área de Cleave, com fragmentos e impactos iluminados em sequência. Ajuste geometria e luzes abaixo; clique no chão para reposicionar." : "Clique no hex para posicionar e repetir a explosão original. Câmera fixa; sem projétil ou AOE. Ajustes salvos automaticamente neste navegador e aplicados às próximas conjurações de Fireball."}</p>
       </div>
       <canvas ref={canvasRef} onPointerDown={() => { if (mode !== "flame") { stateRef.current.playing = true; setPlaying(true); } }} className={`w-full h-80 rounded-lg border border-border bg-black/40 ${mode !== "flame" ? "cursor-crosshair" : ""}`} aria-label="3D spell effect preview" />
       <div className="grid grid-cols-2 gap-2">
@@ -918,7 +951,7 @@ export function VfxDebugPanel() {
             <label key={key} className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>{label}</span><input type="checkbox" checked={burningHandsSettings[key]} onChange={(event) => updateBurningHandsSetting(key, event.target.checked)} /></label>
           ))}
         </div>
-      </> : mode === "varredura-v2" ? <>
+      </> : mode === "cleave-sweep-v2" ? <>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => { const defaults={...DEFAULT_VARREDURA_SETTINGS}; stateRef.current.varreduraSettings=defaults; setActiveVarreduraSettings(defaults); setVarreduraSettings(defaults); runtimeRef.current?.setVarreduraSettings(defaults); }} className="col-span-2 min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Restaurar valores padrão</button>
           <button type="button" onClick={() => { updateVarreduraSetting("geometryEnabled",false); updateVarreduraSetting("debrisEnabled",false); updateVarreduraSetting("lightEnabled",true); restart(); }} className="min-h-11 rounded-md border border-accent bg-accent/10 px-3 py-2 hover:bg-accent/20">Teste: só luz dinâmica</button>
@@ -940,7 +973,7 @@ export function VfxDebugPanel() {
         </div>
       </> : null}
       {mode !== "bless" && mode !== "magic-missile-v2" && mode !== "burning-hands-v2" && <label className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>Bloom de pós-processamento</span><input type="checkbox" checked={bloomEnabled} onChange={(event) => { stateRef.current.bloomEnabled = event.target.checked; setBloomEnabled(event.target.checked); }} /></label>}
-      <p className="text-xs leading-relaxed text-muted">{mode === "flame" ? "Flipbook com 16 quadros · partículas instanciadas · suavização por profundidade · luz real no terreno" : mode === "phantasmal" ? "Tendril meshes com profundidade real · partículas instanciadas · PointLight violeta com sombras · semente determinística; ajustes persistem e valem no combate" : mode === "bless" ? "Onda radius-3 · chegada sincronizada por aliado · PointLights reais no caster e na equipe · as configurações persistem e também regem conjurações de combate" : mode === "magic-missile-v2" ? "Charge prolongado · projétil de escala mundial · spline 3D e trail procedural · luzes pontuais reais com sombras no caster, em voo e no impacto · uma ocorrência por disparo" : mode === "burning-hands-v2" ? "Leque de malhas 3D deformadas · fogo branco-dourado sobre núcleo âmbar · quatro luzes reais móveis · brilho e ondulação locais · sem modelo placeholder" : mode === "varredura-v2" ? "Lâmina e onda de pressão 3D · fragmentos no rastro · impactos iluminados na ordem dos alvos · parâmetros visuais persistem" : "Timeline de impacto original · partículas em um draw call · mesma semente reproduz o mesmo padrão · bloom começa desligado para avaliar a estrutura"}</p>
+      <p className="text-xs leading-relaxed text-muted">{mode === "flame" ? "Flipbook com 16 quadros · partículas instanciadas · suavização por profundidade · luz real no terreno" : mode === "phantasmal" ? "Tendril meshes com profundidade real · partículas instanciadas · PointLight violeta com sombras · semente determinística; ajustes persistem e valem no combate" : mode === "bless" ? "Onda radius-3 · chegada sincronizada por aliado · PointLights reais no caster e na equipe · as configurações persistem e também regem conjurações de combate" : mode === "magic-missile-v2" ? "Charge prolongado · projétil de escala mundial · spline 3D e trail procedural · luzes pontuais reais com sombras no caster, em voo e no impacto · uma ocorrência por disparo" : mode === "burning-hands-v2" ? "Leque de malhas 3D deformadas · fogo branco-dourado sobre núcleo âmbar · quatro luzes reais móveis · brilho e ondulação locais · sem modelo placeholder" : mode === "varredura-v2" ? "Frente circular 3D completa · expansão radial uniforme · luzes e impactos em torno de todo o perímetro" : mode === "cleave-sweep-v2" ? "Golpe direcional 3D · fragmentos no rastro · impactos iluminados na ordem dos alvos · parâmetros visuais persistem" : "Timeline de impacto original · partículas em um draw call · mesma semente reproduz o mesmo padrão · bloom começa desligado para avaliar a estrutura"}</p>
     </section>
   );
 }

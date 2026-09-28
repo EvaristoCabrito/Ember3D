@@ -43,7 +43,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { WEB_SHOT_TRAVEL, type BattleEngine, type BurningHandsV2VfxRequest, type MagicMissileV2VfxRequest, type VarreduraVfxRequest } from "../../engine";
+import { WEB_SHOT_TRAVEL, type BattleEngine, type BurningHandsV2VfxRequest, type CleaveVfxRequest, type MagicMissileV2VfxRequest, type VarreduraVfxRequest } from "../../engine";
 import { BIG_HOUSE_DECOR_IDS, BLESS, CHEST_DECOR_IDS, DECOR_ART_SCALE, DECORATIONS, HOUSE_ART_SCALE, HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, TERRAIN, decorationFacing, decorationImage, decorationImageRetryWebp, placedFootprint } from "../../data";
 import { footprint, footprintFrontRow, hexNeighbors, tileAt } from "../../pathfinding";
 import type { DecorationDef, DecorationPlacement, ElementalFxPlacement, MapTimeOfDay, TerrainId } from "../../types";
@@ -61,7 +61,7 @@ import { BurningHandsV2VFX, getActiveBurningHandsV2Settings } from "./BurningHan
 import { OldFireBall } from "./OldFireBall";
 import { getDevGfx } from "./devGfx";
 import { pixelPreset, ProceduralElementEmitter, type PixelElement } from "./ProceduralElementEmitter";
-import { VarreduraVFX } from "./VarreduraVFX";
+import { CleaveSweepVFX, VarreduraVFX } from "./VarreduraVFX";
 
 const SQRT3 = Math.sqrt(3);
 /** Must match BattleEngine's private boardPad() (tile * 2.4) — duplicated here rather than
@@ -525,6 +525,7 @@ export class ThreeBattleRenderer {
   private readonly burningHandsVfx: BurningHandsV2VFX[] = [];
   private readonly pixelElementEmitters: { placement: ElementalFxPlacement; emitter: ProceduralElementEmitter }[] = [];
   private readonly varreduraVfx: VarreduraVFX[] = [];
+  private readonly cleaveVfx: CleaveSweepVFX[] = [];
   /** Keep one complete hero-missile effect per queued Magic Missile target. */
   private readonly pendingMagicMissileV2VfxRequests: MagicMissileV2VfxRequest[] = [];
   private activeMagicMissileV2VfxRequestId: string | null = null;
@@ -1779,6 +1780,7 @@ export class ThreeBattleRenderer {
     this.syncMagicMissileV2Vfx(dt, tile);
     this.syncBurningHandsV2Vfx(dt, tile);
     this.syncVarreduraVfx(dt, tile);
+    this.syncCleaveVfx(dt, tile);
     this.webOfDreamsVfx?.update(this.engine, tile, dt);
     this.atmosphere.sync(
       this.engine,
@@ -1829,6 +1831,29 @@ export class ThreeBattleRenderer {
       this.varreduraVfx.push(new VarreduraVFX(this.scene,new THREE.Vector3(source.worldX,-source.worldY,1),targets,tile));
     }
     for(let i=this.varreduraVfx.length-1;i>=0;i--){const fx=this.varreduraVfx[i]!;fx.update(dt);if(fx.finished){fx.dispose();this.varreduraVfx.splice(i,1);}}
+  }
+
+  private syncCleaveVfx(dt: number, tile: number): void {
+    const requests: CleaveVfxRequest[] = this.engine.cleaveVfxRequests.splice(0);
+    for (const request of requests) {
+      const caster = this.engine.units.find((unit) => unit.id === request.casterId);
+      if (!caster) continue;
+      const source = this.engine.unitAnchor(caster);
+      const targets = request.targetIds.map((id) => this.engine.units.find((unit) => unit.id === id)).filter((unit) => !!unit).map((unit) => {
+        const anchor = this.engine.unitAnchor(unit);
+        return { id: unit.id, position: new THREE.Vector3(anchor.worldX, -anchor.worldY, 1) };
+      });
+      if (targets.length === 0) for (const cell of request.tiles) {
+        const anchor = this.engine.effectAnchor(cell.x, cell.y);
+        targets.push({ id: `tile-${cell.x}-${cell.y}`, position: new THREE.Vector3(anchor.worldX, -anchor.worldY, 1) });
+      }
+      this.cleaveVfx.push(new CleaveSweepVFX(this.scene, new THREE.Vector3(source.worldX, -source.worldY, 1), targets, tile));
+    }
+    for (let i = this.cleaveVfx.length - 1; i >= 0; i--) {
+      const fx = this.cleaveVfx[i]!;
+      fx.update(dt);
+      if (fx.finished) { fx.dispose(); this.cleaveVfx.splice(i, 1); }
+    }
   }
 
   private syncFireballVfx(dt: number, cssW: number, cssH: number, tile: number): void {
@@ -2396,6 +2421,8 @@ export class ThreeBattleRenderer {
     this.pixelElementEmitters.length = 0;
     for (const effect of this.varreduraVfx) effect.dispose();
     this.varreduraVfx.length = 0;
+    for (const effect of this.cleaveVfx) effect.dispose();
+    this.cleaveVfx.length = 0;
     // MILESTONE 4 — EffectComposer.dispose() only frees its own two ping-pong render targets and
     // internal copy pass, NOT the passes added to it — bloomPass owns several render targets of
     // its own (bright-pass + per-mip horizontal/vertical blur buffers) that leak without this.

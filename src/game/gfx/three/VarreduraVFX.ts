@@ -7,9 +7,9 @@ const STORAGE_KEY="emberashes.vfx.varredura.v2";
 export function getActiveVarreduraSettings():VarreduraSettings{try{const stored=localStorage.getItem(STORAGE_KEY);if(stored)return{...DEFAULT_VARREDURA_SETTINGS,...JSON.parse(stored) as Partial<VarreduraSettings>};}catch{}return{...DEFAULT_VARREDURA_SETTINGS};}
 export function setActiveVarreduraSettings(settings:VarreduraSettings):void{try{localStorage.setItem(STORAGE_KEY,JSON.stringify(settings));}catch{}}
 
-/** Spatial pressure crescent for Varredura. Visual-only: the caller supplies combat's exact
+/** Lancer's directional spear sweep, assigned to Cleave. Visual-only: the caller supplies combat's exact
  * target list; this class never queries targets, causes damage, or changes hit rules. */
-export class VarreduraVFX {
+export class CleaveSweepVFX {
   private readonly root=new THREE.Group(); private readonly blade:THREE.Mesh; private readonly edge:THREE.Mesh; private readonly wake:THREE.Mesh; private readonly debris:THREE.InstancedMesh;
   private readonly spearhead:THREE.Mesh; private readonly trail:THREE.Line; private readonly trailPositions:THREE.Vector3[]=[];
   private readonly spearLight:THREE.PointLight; private readonly impactLights:THREE.PointLight[]=[]; private readonly impactAt:number[]=[];
@@ -51,4 +51,104 @@ export class VarreduraVFX {
     const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));geo.setIndex(indices);geo.computeVertexNormals();return geo;
   }
   private random():number{let x=this.rng;x^=x<<13;x^=x>>>17;x^=x<<5;this.rng=x>>>0;return this.rng/4294967296;}
+}
+
+/** Full circular pressure wave for Varredura. This is a radial shockwave, not a directional
+ * weapon slash. Target positions come from the combat resolution and remain visual-only here. */
+export class VarreduraVFX {
+  private readonly root = new THREE.Group();
+  private readonly outer: THREE.Mesh;
+  private readonly inner: THREE.Mesh;
+  private readonly debris: THREE.InstancedMesh;
+  private readonly edgeLight: THREE.PointLight;
+  private readonly targetLights: THREE.PointLight[] = [];
+  private readonly impactAt: number[] = [];
+  private readonly dummy = new THREE.Object3D();
+  private readonly targetOffsets: THREE.Vector3[];
+  private readonly radius: number;
+  private elapsed = 0;
+  private disposed = false;
+
+  constructor(private readonly scene: THREE.Object3D, private readonly origin: THREE.Vector3, targets: VarreduraTarget[], tile: number) {
+    this.radius = tile * 3.2;
+    this.targetOffsets = targets.map((target) => target.position.clone().sub(origin));
+    this.root.position.copy(origin);
+    scene.add(this.root);
+
+    const outerMaterial = new THREE.MeshBasicMaterial({ color: 0xe7fbff, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false, toneMapped: false });
+    this.outer = new THREE.Mesh(new THREE.TorusGeometry(this.radius, tile * 0.085, 8, 96), outerMaterial);
+    this.outer.position.z = tile * 0.12;
+    this.root.add(this.outer);
+    const innerMaterial = new THREE.MeshStandardMaterial({ color: 0xa8d5e1, emissive: 0x7ac8dc, emissiveIntensity: 1.25, transparent: true, opacity: 0.56, side: THREE.DoubleSide, depthWrite: false });
+    this.inner = new THREE.Mesh(new THREE.TorusGeometry(this.radius * 0.78, tile * 0.045, 10, 96), innerMaterial);
+    this.inner.position.z = tile * 0.16;
+    this.root.add(this.inner);
+
+    const count = 42;
+    this.debris = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(tile * 0.035, 0), new THREE.MeshStandardMaterial({ color: 0xcbdce0, roughness: 0.9 }), count);
+    this.debris.count = count;
+    this.root.add(this.debris);
+    this.edgeLight = new THREE.PointLight(0xdaf8ff, 0, tile * 2.8, 2);
+    scene.add(this.edgeLight);
+    for (let i = 0; i < targets.length; i++) {
+      const light = new THREE.PointLight(0xe7fbff, 0, tile * 1.4, 2);
+      scene.add(light);
+      this.targetLights.push(light);
+      this.impactAt.push(-1);
+    }
+  }
+
+  get finished(): boolean { return this.elapsed > 1.18; }
+
+  update(dt: number): void {
+    if (this.disposed) return;
+    this.elapsed += Math.max(0, Math.min(0.08, dt));
+    const t = this.elapsed;
+    const progress = THREE.MathUtils.clamp((t - 0.12) / 0.68, 0, 1);
+    const radius = this.radius * THREE.MathUtils.smoothstep(progress, 0, 1);
+    const fade = 1 - THREE.MathUtils.smoothstep(t, 0.72, 1.12);
+    this.outer.scale.set(progress, progress, 1);
+    this.inner.scale.set(progress, progress, 1);
+    this.outer.visible = t >= 0.12 && fade > 0.01;
+    this.inner.visible = t >= 0.18 && fade > 0.01;
+    (this.outer.material as THREE.MeshBasicMaterial).opacity = 0.9 * fade;
+    (this.inner.material as THREE.MeshStandardMaterial).opacity = 0.58 * fade;
+    this.root.rotation.z = Math.sin(t * 5.5) * 0.035;
+
+    for (let i = 0; i < this.debris.count; i++) {
+      const angle = (i / this.debris.count) * Math.PI * 2 + Math.sin(t * 6 + i * 1.7) * 0.07;
+      const travel = radius * (0.72 + (i % 5) * 0.07);
+      this.dummy.position.set(Math.cos(angle) * travel, Math.sin(angle) * travel, 0.1 + Math.abs(Math.sin(t * 12 + i * 2.3)) * 0.36);
+      const scale = (0.35 + (i % 4) * 0.16) * fade;
+      this.dummy.scale.setScalar(Math.max(0.001, scale));
+      this.dummy.rotation.set(t * 6 + i, t * 4 - i, t * 7 + i * 0.3);
+      this.dummy.updateMatrix();
+      this.debris.setMatrixAt(i, this.dummy.matrix);
+    }
+    this.debris.instanceMatrix.needsUpdate = true;
+    const orbit = t * 9.5;
+    this.edgeLight.position.set(this.origin.x + Math.cos(orbit) * radius, this.origin.y + Math.sin(orbit) * radius, this.origin.z + 0.42);
+    this.edgeLight.intensity = t > 0.12 && t < 0.86 ? 3.2 * (0.55 + 0.45 * Math.sin(orbit * 0.5)) : 0;
+
+    for (let i = 0; i < this.targetOffsets.length; i++) {
+      const offset = this.targetOffsets[i]!;
+      const distance = Math.hypot(offset.x, offset.y);
+      const arrival = 0.12 + Math.min(1, distance / this.radius) * 0.68;
+      if (this.impactAt[i] === -1 && t >= arrival) this.impactAt[i] = t;
+      const light = this.targetLights[i]!;
+      light.position.copy(this.origin).add(offset).add(new THREE.Vector3(0, 0, 0.45));
+      const age = this.impactAt[i] === -1 ? Infinity : t - this.impactAt[i]!;
+      light.intensity = 5.2 * (1 - THREE.MathUtils.smoothstep(age, 0, 0.12));
+    }
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.scene.remove(this.root, this.edgeLight, ...this.targetLights);
+    for (const mesh of [this.outer, this.inner, this.debris]) {
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+  }
 }
