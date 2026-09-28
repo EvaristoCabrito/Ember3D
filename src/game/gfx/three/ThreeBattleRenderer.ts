@@ -110,7 +110,8 @@ const SUN_DISTANCE = 2000;
  * elevation (long shadows) in place of Dev Controls' "Sol — altura". Dark night is the old Dev
  * Controls "Noite" (Moon 0.9, sky fill 12% of the daytime 2). */
 export const TIME_OF_DAY_LIGHT: Record<MapTimeOfDay, { label: string; moon: boolean; key: number; ambient: number; keyColor: number; skyColor: number; elevation?: number }> = {
-  day: { label: "Dia", moon: false, key: 5, ambient: 2, keyColor: 0xfff0d6, skyColor: 0xfff2df },
+  day: { label: "Dia", moon: false, key: 3.5, ambient: 1.4, keyColor: 0xfff0d6, skyColor: 0xfff2df },
+  noon: { label: "Meio-dia", moon: false, key: 5, ambient: 2, keyColor: 0xfff0d6, skyColor: 0xfff2df },
   dawn: { label: "Amanhecer", moon: false, key: 3.2, ambient: 1.3, keyColor: 0xffc8a8, skyColor: 0xf2d8d4, elevation: 20 },
   dusk: { label: "Entardecer", moon: false, key: 2.8, ambient: 1.1, keyColor: 0xffca9f, skyColor: 0xf7ddc3, elevation: 15 },
   brightNight: { label: "Noite clara", moon: true, key: 1.8, ambient: 0.6, keyColor: 0x9fb4ff, skyColor: 0xb4c0e4 },
@@ -121,10 +122,10 @@ export const TIME_OF_DAY_LIGHT: Record<MapTimeOfDay, { label: string; moon: bool
  * `sunIntensity`/`ambientIntensity` (see types.ts) — also what the Map Editor's "Iluminação"
  * sliders default a new/untouched map to (see GameApp.tsx), so the editor's default and the
  * renderer's fallback can never drift apart. Set to match the exact values the user tuned by
- * hand on "O Vau" (saved as vau016.json) and asked to be the standard daytime look for every
- * outdoor mission ("the basic setup for every daytime map... everything but caves"). */
-export const DEFAULT_SUN_INTENSITY = 5;
-export const DEFAULT_AMBIENT_INTENSITY = 2;
+ * hand on "O Vau" (saved as vau016.json). Those previous noon values stay available through
+ * TIME_OF_DAY_LIGHT.noon; the everyday daytime default is intentionally softer. */
+export const DEFAULT_SUN_INTENSITY = 3.5;
+export const DEFAULT_AMBIENT_INTENSITY = 1.4;
 /** "indoor" environment preset (see Mission.environment): a raking outdoor sun makes no sense
  * inside a building, so indoor missions get a much weaker directional light and a much stronger
  * ambient fill instead — flatter, but not fully unlit. Only applied when the mission doesn't
@@ -226,6 +227,7 @@ function decorSize(id: string, def: DecorationDef, tile: number): { w: number; h
   const tree = id === "dead-tree";
   const log = id === "fallen-log";
   const wall = id === "barricade";
+  const waypoint = !!def.exitKind;
   const anyHouse = HOUSE_DECOR_IDS.has(id) || BIG_HOUSE_DECOR_IDS.has(id);
   const w = tree
     ? tile * 1.28
@@ -235,11 +237,13 @@ function decorSize(id: string, def: DecorationDef, tile: number): { w: number; h
         ? tile * 1.42
         : anyHouse
           ? tile * 1.45 * 3
-          : item
-            ? tile * 0.92
-            : one
-              ? tile * 1.55
-              : tile * SQRT3 * (maxDx - minDx + 1.7);
+          : waypoint
+            ? tile * SQRT3 * (one ? 1 : 2)
+            : item
+              ? tile * 0.92
+              : one
+                ? tile * 1.55
+                : tile * SQRT3 * (maxDx - minDx + 1.7);
   const baseH = tree
     ? tile * 2.55
     : log
@@ -248,15 +252,17 @@ function decorSize(id: string, def: DecorationDef, tile: number): { w: number; h
         ? tile * 1.18
         : anyHouse
           ? tile * 1.58 * 3
-          : item
-            ? tile * 0.72
-            : one
-              ? tile * 1.65
-              : tile * (1.5 * (maxDy - minDy) + 2.3);
+          : waypoint
+            ? tile * 2
+            : item
+              ? tile * 0.72
+              : one
+                ? tile * 1.65
+                : tile * (1.5 * (maxDy - minDy) + 2.3);
   const h = baseH * (def.heightScale ?? 1);
-  const dy = (tree ? -tile * 0.55 : wall ? -tile * 0.12 : anyHouse ? -tile * 0.28 * 3 : item ? tile * 0.08 : 0) - (h - baseH) * 0.42;
+  const dy = waypoint ? 0 : (tree ? -tile * 0.55 : wall ? -tile * 0.12 : anyHouse ? -tile * 0.28 * 3 : item ? tile * 0.08 : 0) - (h - baseH) * 0.42;
   // Global art scale (see DECOR_ART_SCALE), grown from the bottom edge so the base stays put.
-  const s = (anyHouse ? HOUSE_ART_SCALE : DECOR_ART_SCALE) * (def.artScale ?? 1);
+  const s = waypoint ? 1 : (anyHouse ? HOUSE_ART_SCALE : DECOR_ART_SCALE) * (def.artScale ?? 1);
   return { w: w * s, h: h * s, dy: dy - (h * (s - 1)) / 2 };
 }
 
@@ -722,7 +728,7 @@ export class ThreeBattleRenderer {
     const indoor = engine.mission.environment === "indoor";
     this.timeOfDay = engine.mission.timeOfDay ?? "day";
     const tod = TIME_OF_DAY_LIGHT[this.timeOfDay];
-    const isDay = this.timeOfDay === "day";
+    const isDay = this.timeOfDay === "day" || this.timeOfDay === "noon";
     this.sunLight.intensity = engine.mission.sunIntensity ?? (indoor ? INDOOR_SUN_INTENSITY : isDay ? DEFAULT_SUN_INTENSITY : tod.key);
     this.hemiLight.intensity = engine.mission.ambientIntensity ?? (indoor ? INDOOR_AMBIENT_INTENSITY : isDay ? DEFAULT_AMBIENT_INTENSITY : tod.ambient);
     this.baseSunIntensity = this.sunLight.intensity;

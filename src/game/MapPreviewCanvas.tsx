@@ -1,6 +1,6 @@
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { placedFootprint } from "./data";
-import { BattleEngine } from "./engine";
+import { BattleEngine, ZOOM_RADII } from "./engine";
 import { EffectsRenderer } from "./gfx/EffectsRenderer";
 import { WebGL2DRenderer } from "./gfx/WebGL2DRenderer";
 import type { GameArt, Mission } from "./types";
@@ -65,25 +65,28 @@ export function MapPreviewCanvas({
   // the board. Only a real drag past the threshold (see onPointerMove) arms a drop on release.
   const unitDragRef = useRef<{ pointerId: number; unit: PreviewUnitSelection; startX: number; startY: number; moved: boolean } | null>(null);
   const decorationDragRef = useRef<{ pointerId: number; decoration: PreviewDecorationSelection } | null>(null);
-  const cameraRef = useRef<{ x: number; y: number } | null>(null);
-  /** CSS pixels divided by this value become the preview engine's logical pixels while the
-   * board is fitted into a smaller editor panel. */
+  const cameraRef = useRef<{ x: number; y: number; missionId: string; tile: number; viewW: number; viewH: number } | null>(null);
+  /** CSS pixels divided by this value become preview-engine logical pixels. This preserves
+   * the requested zoom while keeping the engine on one of its supported tile sizes. */
   const renderScaleRef = useRef(1);
   const verticalScrollTopRef = useRef(0);
   const horizontalScrollLeftRef = useRef(0);
   const verticalScrollInitializedRef = useRef(false);
-  // Start at the engine's widest framing. An editor preview is for reading the whole
-  // composition; authors can still zoom in when they need to place or inspect something.
+  // Start at a true 75% scale. Large maps extend beyond the viewport and can be panned.
   const [zoom, setZoom] = useState(PREVIEW_ZOOM_MIN);
   const [isPanning, setIsPanning] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  // Same board size the engine itself renders at (see BattleEngine.boardSize) — the scroll
-  // surface only grows past its window when the real board is actually bigger than it.
-  const previewTileRadius = zoom < 0.875 ? 22 : zoom < 1.125 ? 34 : zoom < 1.375 ? 50 : 72;
-  const previewBoardWidth = Math.ceil(previewTileRadius * Math.sqrt(3) * (mission.cols + 0.5));
-  // Keep this in step with BattleEngine.boardSize: its extra 2.4 radii are the board's
-  // vertical breathing room, which must be included when calculating a genuine fit.
-  const previewBoardHeight = Math.ceil(previewTileRadius * (1.5 * (mission.rows - 1) + 4.4));
+  // Map the percentage control to an actual rendered tile size relative to the game's 34px
+  // default. The engine renders at its nearest supported radius; the canvas scale supplies
+  // the exact percentage between those discrete sizes.
+  const targetTileRadius = 34 * zoom;
+  const previewZoomLevel = ZOOM_RADII.reduce((best, radius, index) =>
+    Math.abs(radius - targetTileRadius) < Math.abs(ZOOM_RADII[best]! - targetTileRadius) ? index : best, 0);
+  const previewTileRadius = ZOOM_RADII[previewZoomLevel]!;
+  const previewRenderScale = targetTileRadius / previewTileRadius;
+  const previewBoardWidth = Math.ceil(previewTileRadius * Math.sqrt(3) * (mission.cols + 0.5) * previewRenderScale);
+  // Keep this in step with BattleEngine.boardSize, including vertical breathing room.
+  const previewBoardHeight = Math.ceil(previewTileRadius * (1.5 * (mission.rows - 1) + 4.4) * previewRenderScale);
   // Scrolling only moves the camera at PREVIEW_SCROLL_PAN_RATE of the raw scroll delta (a
   // deliberately gentler feel than the technical grid's native scroll), so the scrollable
   // range has to be inflated by the same factor — otherwise dragging the scrollbar all the
@@ -143,17 +146,15 @@ export function MapPreviewCanvas({
       engine = new BattleEngine({ ...mission, fog: false }, art, { hp: {}, levels: {} }, 1);
       // Keep the canvas the size of the window. The BattleEngine owns the real
       // camera, so dragging moves the board rather than an oversized empty canvas.
-      engine.setZoom(Math.max(0, Math.min(3, Math.round((zoom - 0.75) * 4))));
-      // Real battle never needs sideways pan room (the board fills the play window's
-      // width), but the editor's preview panel is often narrower than the board plus its
-      // backdrop, so give it the same pan margin left/right that cameraMargin already
-      // grants vertically.
-      engine.setHorizontalPanMargin(3);
+      engine.setZoom(previewZoomLevel);
+      // Keep a small edge rim so the preview can pan without opening onto a half-window of
+      // empty space when the party's starting hex is near the board boundary.
+      engine.setPreviewPanMargin(3);
       engineRef.current = engine;
     } catch {
       return;
     }
-    let needsCameraRestore = cameraRef.current !== null;
+    let needsCameraRestore = cameraRef.current?.missionId === mission.id;
     let needsInitialCenter = !needsCameraRestore;
 
     // Live preview of any elemental FX placed on this map (see the editor's "FX" mode) —
@@ -176,15 +177,11 @@ export function MapPreviewCanvas({
       const w = Math.max(1, Math.floor(viewport.clientWidth));
       const h = Math.max(1, Math.floor(viewport.clientHeight));
       if (w <= 0 || h <= 0) return;
-      // At the editor's default (widest) zoom, render into a larger logical viewport and
-      // scale it down to the panel. Unlike merely choosing the smallest tactical zoom, this
-      // guarantees that even a large draft opens as one complete, inspectable board.
-      const fitScale = zoom <= PREVIEW_ZOOM_MIN
-        ? Math.max(0.1, Math.min(1, (w - 12) / previewBoardWidth, (h - 12) / previewBoardHeight))
-        : 1;
-      const renderW = Math.ceil(w / fitScale);
-      const renderH = Math.ceil(h / fitScale);
-      renderScaleRef.current = fitScale;
+      // Keep the requested zoom percentage independent of map dimensions. The canvas is
+      // rendered at the engine's nearest tile size, then scaled to the exact selected zoom.
+      const renderW = Math.ceil(w / previewRenderScale);
+      const renderH = Math.ceil(h / previewRenderScale);
+      renderScaleRef.current = previewRenderScale;
       canvas.width = Math.max(1, Math.floor(renderW * dpr));
       canvas.height = Math.max(1, Math.floor(renderH * dpr));
       canvas.style.width = `${w}px`;
@@ -211,18 +208,23 @@ export function MapPreviewCanvas({
       if (needsCameraRestore) {
         const savedCamera = cameraRef.current;
         if (savedCamera) {
-          engine.restoreCamera(savedCamera);
+          const centerX = (savedCamera.x + savedCamera.viewW / 2) / savedCamera.tile;
+          const centerY = (savedCamera.y + savedCamera.viewH / 2) / savedCamera.tile;
+          engine.restoreCamera({
+            x: centerX * previewTileRadius - renderW / 2,
+            y: centerY * previewTileRadius - renderH / 2,
+          });
           drawGroundAndUnits();
         }
         needsCameraRestore = false;
       } else if (needsInitialCenter) {
         // First-ever mount for this draft: the draw() above just ran the engine's own
         // first-render focus (a spawn unit, or nowhere at all on a still-empty draft) —
-        // override it so the preview always opens on the map's own left edge, where every
-        // map's content starts, instead of wherever that landed. Only runs once —
+        // override it so the preview opens at the party's starting location, not the board
+        // edge or a stale camera from another map. Only runs once —
         // drawGroundAndUnits() can rerun many times after this (resize, elemental-FX
         // animation frames) and must never re-center over panning the author already did.
-        engine.centerOnBoardLeft();
+        engine.centerOnStartingParty();
         drawGroundAndUnits();
         needsInitialCenter = false;
       }
@@ -276,7 +278,15 @@ export function MapPreviewCanvas({
       ro.disconnect();
       if (fxRaf) cancelAnimationFrame(fxRaf);
       fx?.dispose();
-      cameraRef.current = engine.cameraPosition();
+      const camera = engine.cameraPosition();
+      const scale = renderScaleRef.current;
+      cameraRef.current = {
+        ...camera,
+        missionId: mission.id,
+        tile: ZOOM_RADII[engine.zoom]!,
+        viewW: (viewportRef.current?.clientWidth ?? 1) / scale,
+        viewH: (viewportRef.current?.clientHeight ?? 1) / scale,
+      };
       if (engineRef.current === engine) engineRef.current = null;
       if (redrawRef.current === draw) redrawRef.current = null;
     };
@@ -543,10 +553,12 @@ export function MapPreviewCanvas({
         onScroll={onViewportScroll}
       >
         <div style={{ width: `max(100%, ${previewScrollWidth}px)`, minHeight: `max(100%, ${previewScrollHeight}px)` }}>
-          <div className="sticky left-0 top-0 relative">
-            <canvas ref={canvasRef} className="block" />
-            <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block" style={{ display: "none" }} />
-            <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block" />
+          <div className="sticky left-0 top-0 w-max">
+            <div className="relative">
+              <canvas ref={canvasRef} className="block" />
+              <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block" style={{ display: "none" }} />
+              <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block" />
+            </div>
           </div>
         </div>
       </div>

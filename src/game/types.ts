@@ -1,4 +1,4 @@
-export type MapTimeOfDay = "day" | "dawn" | "dusk" | "brightNight" | "darkNight";
+export type MapTimeOfDay = "day" | "noon" | "dawn" | "dusk" | "brightNight" | "darkNight";
 export type PotionId ="mid" | "weak" | "potent" | "disease" | "manaSmall" | "manaMid" | "manaLarge";
 
 export interface Bag {
@@ -292,9 +292,8 @@ export interface Spawn {
 }
 
 /** "escape" is Transversal Dungeons: winning has nothing to do with combat — the field never
- * has to be cleared. It becomes available the instant a living player unit stands on an
- * Escape/Dungeon Exit or a floor connector (see DecorationDef.exitKind), exactly like rout/boss
- * make winAvailable true once the field is clear — see BattleEngine.evaluateEnd. */
+ * has to be cleared. It becomes available when a living player unit stands on a waypoint
+ * (see DecorationDef.exitKind), exactly like rout/boss make it available once the field is clear. */
 export type WinCondition = "rout" | "boss" | "escape";
 
 /** A multi-hex terrain prop (mountain, ruin, bridge, ...): rendered as a single image
@@ -347,13 +346,10 @@ export interface DecorationDef {
    * (see ThreeBattleRenderer's decor sync). For thin/tall scenery whose cast shadow reads as
    * an unwanted dark stripe across the board rather than grounding the prop. */
   noShadow?: boolean;
-  /** Marks this decoration as a Transversal Dungeon exit hex (see WinCondition's "escape" doc
-   * and BattleEngine.evaluateEnd). "escape"/"dungeon" are the two blue exit markers — reaching
-   * either makes winAvailable true, same as clearing the field does on a rout/boss mission;
-   * which one was reached only changes the result screen's flavor, not the outcome. "connector"
-   * is the red floor-to-floor hex: reaching it also makes winAvailable true, but confirming
-   * sends the party straight into DecorationPlacement.targetMapId (see startBattle) instead of
-   * back to the campaign map — see DecorationPlacement.returnConnector for its two directions. */
+  /** Marks this decoration as a usable waypoint (see BattleEngine.evaluateEnd). "escape" and
+   * "dungeon" are the two blue exits; confirming an escape marker rolls the existing 60% flee
+   * chance, while a dungeon exit ends the mission directly. "connector" is the red floor link:
+   * confirming it sends the party to DecorationPlacement.targetMapId rather than the campaign map. */
   exitKind?: "escape" | "dungeon" | "connector";
 }
 
@@ -448,8 +444,8 @@ export interface Mission {
    * without this set play "outdoor" (today's default look), so nothing shipped changes. */
   environment?: "outdoor" | "indoor";
   /** Time of day, Three renderer only (see ThreeBattleRenderer's TIME_OF_DAY_LIGHT). Undefined
-   * plays "day", so every map saved before this existed looks exactly as it did. At night the
-   * Moon replaces the Sun and sunIntensity drives the Moon instead. */
+   * uses the softer "day" preset. "noon" retains the former stronger daytime preset. At night
+   * the Moon replaces the Sun and sunIntensity drives the Moon instead. */
   timeOfDay?: MapTimeOfDay;
   /** DirectionalLight ("sun") intensity override, for the Three renderer only. Undefined uses
    * the renderer's own default. Author-tunable per mission because "how strong should the light
@@ -921,9 +917,8 @@ export interface HudSnapshot {
   busy: boolean;
   result: "victory" | "defeat" | null;
   winAvailable: boolean;
-  /** Transversal Dungeon ("escape" win condition) only: the exit hex currently satisfying
-   * winAvailable — see DecorationDef.exitKind and BattleEngine.evaluateEnd. Null on every other
-   * mission, and null on this one too whenever no player unit is standing on an exit hex. */
+  /** The waypoint currently offering an exit action — see DecorationDef.exitKind and
+   * BattleEngine.evaluateEnd. Null when no living player unit is standing on a waypoint. */
   activeExit: DecorationPlacement | null;
   /** Whether the movement taken this turn can still be taken back — see canUndoMove. */
   canUndoMove: boolean;

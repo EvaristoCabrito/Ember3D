@@ -1166,15 +1166,11 @@ export class BattleEngine {
   private lastClickAt = 0;
   private lastClickCell: Point | null = null;
   result: "victory" | "defeat" | null = null;
-  /** True once every enemy the win condition cares about is dead — the battle CAN end, but
-   * doesn't until the player confirms (see confirmFinish). Lets them keep playing to loot
-   * remaining chests, and flips back to false on its own if a trap/trigger spawns a fresh
-   * enemy after the field first looked clear. */
+  /** True when the mission's normal objective is complete or a waypoint is occupied. The
+   * player confirms before ending; it flips back if a new enemy appears or the party leaves. */
   winAvailable = false;
-  /** Transversal Dungeon ("escape" win condition) only: which exit hex a player unit is
-   * currently standing on, set alongside winAvailable by evaluateEnd. Read by the HUD/result
-   * screen once confirmFinish resolves the battle, to tell an ordinary exit (back to the
-   * campaign map) from a floor connector (straight into DecorationPlacement.targetMapId). */
+  /** The waypoint a player unit is standing on, set alongside winAvailable by evaluateEnd.
+   * The HUD and result screen use it to select the correct action and destination. */
   activeExit: DecorationPlacement | null = null;
   banner: string | null = null;
   /** Ember found in chests opened mid-battle; folded into the save's Ember total on victory. */
@@ -1223,10 +1219,9 @@ export class BattleEngine {
   speedMode: "slow" | "normal" | "fast" = "normal";
   camX = 0;
   camY = 0;
-  /** Off (0) by default so real battle camera panning is unchanged. The map editor's
-   * preview panel opts in via setHorizontalPanMargin() so authors can pan left/right into
-   * a mission's painted backdrop the same way cameraMargin's y already allows. */
-  private previewPanMarginX = 0;
+  /** Off (0) in battle. The editor preview opts into a small edge rim so camera focus near
+   * the board boundary does not expose half a viewport of empty void. */
+  private previewPanMarginRadii = 0;
   private viewW = 1;
   private viewH = 1;
   private camReady = false;
@@ -2377,6 +2372,11 @@ export class BattleEngine {
       const k = Math.min(1, a.t / dur);
       unit.drawX = from.x + (to.x - from.x) * k;
       unit.drawY = from.y + (to.y - from.y) * k;
+      if (unit.side === "player" && this.activeTurnUnit()?.id === unit.id) {
+        const cx = fromScreen.cx + (toScreen.cx - fromScreen.cx) * k;
+        const cy = fromScreen.cy + (toScreen.cy - fromScreen.cy) * k;
+        this.centerOnPoint(cx, cy);
+      }
       if (a.t >= dur) {
         a.i += 1;
         // Carry the leftover into the next hex so the glide never hitches between steps.
@@ -3940,9 +3940,11 @@ export class BattleEngine {
     const p = this.units.some((u) => u.side === "player" && u.alive && !u.summoned);
     const bossAlive = this.units.some((u) => u.side === "enemy" && u.alive && isBossClass(u.classId));
     const anyEnemy = this.units.some((u) => u.side === "enemy" && u.alive);
-    // Transversal Dungeon: combat is irrelevant, reaching a marked exit is the whole objective.
-    const exitHit = this.mission.win === "escape" ? this.exitDecorationHere() : null;
-    const won = this.mission.win === "boss" ? !bossAlive : this.mission.win === "escape" ? !!exitHit : !anyEnemy;
+    // A placed waypoint is usable on every mission. Escape markers request a 60% escape
+    // attempt when confirmed; dungeon exits and floor connectors end the mission directly.
+    // Without this, the markers on ordinary rout maps were silently ignored.
+    const exitHit = this.exitDecorationHere();
+    const won = !!exitHit || (this.mission.win === "boss" ? !bossAlive : this.mission.win === "escape" ? false : !anyEnemy);
     // Victory doesn't end the battle by itself anymore — it just makes ending it an option
     // (see winAvailable/confirmFinish) so the player can keep taking normal turns to loot
     // remaining chests, with a click-whenever-ready control staying available the whole
@@ -3955,8 +3957,7 @@ export class BattleEngine {
     if (!p) this.result = "defeat";
   }
 
-  /** Transversal Dungeon only: the exit hex a living player unit is currently standing on, if
-   * any — see DecorationDef.exitKind and evaluateEnd. */
+  /** The waypoint a living player unit is currently standing on, if any. */
   private exitDecorationHere(): DecorationPlacement | null {
     for (const u of this.units) {
       if (u.side !== "player" || !u.alive) continue;
@@ -3966,11 +3967,42 @@ export class BattleEngine {
     return null;
   }
 
-  /** Player-confirmed "yes, end the mission now" — only takes effect while winAvailable
-   * (the field is actually clear); a beat too late (a fresh spawn just made it false again)
-   * is simply ignored rather than ending the battle out from under a live fight. */
+  /** Confirms the currently offered mission exit. Escape waypoints keep their explicit 60%
+   * chance; on failure the active hero loses their turn and the encounter continues. */
+  canConfirmFinish(): boolean {
+    if (!this.winAvailable || this.result) return false;
+    if (this.activeExit && DECORATIONS[this.activeExit.id]?.exitKind === "escape") {
+      const u = this.activeTurnUnit();
+      return !!u && placedFootprint(this.activeExit).some((f) => this.activeExit!.x + f.dx === u.x && this.activeExit!.y + f.dy === u.y);
+    }
+    return true;
+  }
+
   confirmFinish(): void {
-    if (this.winAvailable && !this.result) this.result = "victory";
+    if (!this.canConfirmFinish()) return;
+    if (this.activeExit && DECORATIONS[this.activeExit.id]?.exitKind === "escape") {
+      const u = this.activeTurnUnit();
+      if (!u) return;
+      if (this.rng() < 0.6) {
+        this.tip = `${u.name} encontrou uma saída! O grupo foge do combate.`;
+        this.pushLog(this.tip);
+        this.result = "victory";
+      } else {
+        u.moved = true;
+        u.acted = true;
+        u.x = Math.round(u.drawX);
+        u.y = Math.round(u.drawY);
+        u.drawX = u.x;
+        u.drawY = u.y;
+        this.deselect(true);
+        this.tip = `${u.name} não conseguiu fugir — o combate continua.`;
+        this.pushLog(this.tip);
+      }
+      sfxPlay.ui();
+      this.emit();
+      return;
+    }
+    this.result = "victory";
   }
 
   /** First not-yet-acted unit in this round's initiative order, or null if everyone has gone. */
@@ -7831,14 +7863,21 @@ export class BattleEngine {
    * painted backdrop (thebridge-bg.jpg) needs more room to actually show above and below
    * the board than the default margin leaves. */
   private cameraMargin(tile: number): { x: number; y: number } {
-    return { x: this.previewPanMarginX * tile, y: tile * (this.mission.id === "thebridge" ? 4.5 : 3) };
+    // A centered unit may be near the board edge; allow half a viewport of camera travel
+    // beyond every edge so the party can still stay in the exact screen center there. The
+    // editor preview opts into a small fixed rim instead: a half-viewport overscroll exposes
+    // a huge black strip when a map's starting party is close to its edge.
+    const previewMargin = this.previewPanMarginRadii > 0 ? this.previewPanMarginRadii * tile : null;
+    return {
+      x: previewMargin ?? Math.max(this.viewW / 2, 0),
+      y: previewMargin ?? Math.max(tile * (this.mission.id === "thebridge" ? 4.5 : 3), this.viewH / 2),
+    };
   }
 
-  /** Editor-only: let the map editor's preview panel pan left/right into the backdrop
-   * margin, matching the vertical room cameraMargin already gives every camera. Real battle
-   * play never calls this, so its camera stays exactly as before. */
-  setHorizontalPanMargin(radii: number): void {
-    this.previewPanMarginX = radii;
+  /** Editor-only edge room for panning. Real battle never calls this, so battle camera bounds
+   * stay unchanged. */
+  setPreviewPanMargin(radii: number): void {
+    this.previewPanMarginRadii = Math.max(0, radii);
     this.clampCam();
   }
 
@@ -7894,9 +7933,16 @@ export class BattleEngine {
   }
 
   private focusPlayers(): void {
-    const u = this.units.find((x) => x.side === "player" && x.alive) ?? this.units[0];
-    if (!u) return;
-    this.centerOn(u.x, u.y);
+    // Use roster/spawn order, not initiative: the opening camera must start at the party's
+    // configured start point every time, even when a different hero wins initiative.
+    const firstStartingPlayer = this.units.find((unit) => unit.side === "player" && unit.alive);
+    const firstUnit = firstStartingPlayer ?? this.units[0];
+    if (firstUnit) this.centerOn(firstUnit.x, firstUnit.y);
+  }
+
+  /** Opens an editor preview at the party's first configured starting position. */
+  centerOnStartingParty(): void {
+    this.focusPlayers();
   }
 
   /** Centers the camera on the board's own geometric middle, independent of any unit's
@@ -7919,6 +7965,12 @@ export class BattleEngine {
 
   private centerOn(col: number, row: number): void {
     const { cx, cy } = this.hexCenter(col, row);
+    this.centerOnPoint(cx, cy);
+  }
+
+  private centerOnPoint(cx: number, cy: number): void {
+    // cx/cy are screen coordinates in the current layout, so apply their offset from the
+    // viewport center to the existing camera origin.
     this.camX += cx - this.viewW / 2;
     this.camY += cy - this.viewH / 2;
     this.clampCam();
@@ -8064,6 +8116,7 @@ export class BattleEngine {
       const tree = p.id === "dead-tree";
       const log = p.id === "fallen-log";
       const wall = p.id === "barricade";
+      const waypoint = !!def.exitKind;
       // Small single-building houses and the one big-house mansion share the same 3x
       // "house" art scale (per user request); only their footprints (3 hexes vs 5) differ.
       const house = HOUSE_DECOR_IDS.has(p.id);
@@ -8077,11 +8130,13 @@ export class BattleEngine {
             ? tile * 1.42
             : anyHouse
               ? tile * 1.45 * 3
-              : item
-                ? tile * 0.92
-                : one
-                  ? tile * 1.55
-                  : tile * SQRT3 * (maxDx - minDx + 1.7);
+              : waypoint
+                ? tile * SQRT3 * (one ? 1 : 2)
+                : item
+                  ? tile * 0.92
+                  : one
+                    ? tile * 1.55
+                    : tile * SQRT3 * (maxDx - minDx + 1.7);
       const baseH = tree
         ? tile * 2.55
         : log
@@ -8090,18 +8145,20 @@ export class BattleEngine {
             ? tile * 1.18
             : anyHouse
               ? tile * 1.58 * 3
-              : item
-                ? tile * 0.72
-                : one
-                  ? tile * 1.65
-                  : tile * (1.5 * (maxDy - minDy) + 2.3);
+              : waypoint
+                ? tile * 2
+                : item
+                  ? tile * 0.72
+                  : one
+                    ? tile * 1.65
+                    : tile * (1.5 * (maxDy - minDy) + 2.3);
       const h0 = baseH * (def.heightScale ?? 1);
       // Taller near-side props rise upward from their ground anchor instead of stretching
       // equally in both directions. That preserves the shallow isometric perspective.
-      const dy0 = (tree ? -tile * 0.55 : wall ? -tile * 0.12 : anyHouse ? -tile * 0.28 * 3 : item ? tile * 0.08 : 0) - (h0 - baseH) * 0.42;
+      const dy0 = waypoint ? 0 : (tree ? -tile * 0.55 : wall ? -tile * 0.12 : anyHouse ? -tile * 0.28 * 3 : item ? tile * 0.08 : 0) - (h0 - baseH) * 0.42;
       // Global art scale (see DECOR_ART_SCALE), grown from the bottom edge — same as
       // ThreeBattleRenderer's decorSize, so both renderers draw props the same size.
-      const artScale = (anyHouse ? HOUSE_ART_SCALE : DECOR_ART_SCALE) * (def.artScale ?? 1);
+      const artScale = waypoint ? 1 : (anyHouse ? HOUSE_ART_SCALE : DECOR_ART_SCALE) * (def.artScale ?? 1);
       const w = w0 * artScale;
       const h = h0 * artScale;
       const dy = dy0 - (h0 * (artScale - 1)) / 2;
@@ -8794,15 +8851,23 @@ export class BattleEngine {
    * behavior is byte-for-byte unchanged. Returns the current zoom level's tile size, since
    * every caller needs it right after anyway. */
   updateCameraLayout(cssW: number, cssH: number): number {
+    const tile = ZOOM_RADII[this.zoom]!;
+    // Battle screens can mount during a route transition while their container is still
+    // zero-sized. Do not lock camReady until a real viewport exists; the first visible frame
+    // must focus the party with the final viewport dimensions.
+    if (cssW < 64 || cssH < 64) return tile;
     // Cheap no-op unless the party moved since the last frame — see refreshVisibility.
     // Sitting here means anything drawn, and anything the HUD reads off this engine,
     // is deciding against current sight rather than last turn's.
     this.refreshVisibility();
-    const tile = ZOOM_RADII[this.zoom]!;
     this.viewW = cssW;
     this.viewH = cssH;
     if (!this.camReady) {
       this.layout = { ox: 0, oy: 0, tile, cols: this.cols, rows: this.rows };
+      // beginUnitTurn can run on the first animation frame before a real viewport has ever
+      // been measured. Discard that provisional camera delta before focusing the party.
+      this.camX = 0;
+      this.camY = 0;
       this.camReady = true;
       this.focusPlayers();
     }

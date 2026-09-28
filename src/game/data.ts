@@ -452,26 +452,14 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   ...TORTURE_DECORATIONS,
   ...CITY_DECORATIONS,
   ...NEW_DECOR_2026,
-  // Transversal Dungeon exit hexes (see WinCondition's "escape" doc and BattleEngine.evaluateEnd).
-  // A couple of blue hexes each, ground-layer so they read as a floor marking rather than an
-  // object; neither casts a shadow, same reasoning as the Parapeito props above (a raised
-  // shadow would fight the "flat marking on the ground" read).
-  //
-  // Per-decoration artScale ONLY, no heightScale — drawDecorations/decorSize's shared sizing
-  // formula is untouched. heightScale changes h0 relative to baseH, and the shared dy0 formula
-  // shifts the whole prop vertically by (h0-baseH)*0.42 to compensate — fine for a genuinely
-  // taller/shorter prop, but for a flat ground marking that shift reads as "not placed where I
-  // clicked". artScale alone (both axes scaled together, no dy0 contribution since h0===baseH)
-  // targets a same-row DECO_PAIR's height to tile*2 — one hex tall, matching how a terrain
-  // tile's own art is drawn into a tile*2 box per hex (see renderGround) — accepting the width
-  // landing a bit past two hexes' own combined width rather than reintroducing vertical drift.
+  // Waypoints are flat ground markings and their rendered bounds match their board footprint:
+  // one hex for the connector, two adjacent hexes for the paired blue exits.
   "escape-exit": {
     id: "escape-exit",
     name: "Saída de Fuga",
     footprint: DECO_PAIR,
     exitKind: "escape",
     noShadow: true,
-    artScale: 2 / (2.3 * DECOR_ART_SCALE),
   },
   "dungeon-exit": {
     id: "dungeon-exit",
@@ -479,20 +467,16 @@ export const DECORATIONS: Record<string, DecorationDef> = {
     footprint: DECO_PAIR,
     exitKind: "dungeon",
     noShadow: true,
-    artScale: 2 / (2.3 * DECOR_ART_SCALE),
   },
   // One red hex, placed on both ends of a floor connection — DecorationPlacement.targetMapId
   // says which mission it leads to, DecorationPlacement.returnConnector picks its wording.
-  // Single-hex footprint falls into the formula's own "one" branch (base box tile*1.55 by
-  // tile*1.65); same no-heightScale reasoning as the pair above, height targeted to tile*2 —
-  // one hex's own drawn box, since this marking covers exactly one hex.
+  // The renderer fits this marking to one hex, like other single-cell waypoint art.
   "floor-connector": {
     id: "floor-connector",
     name: "Passagem de Andar",
     footprint: DECO_ONE,
     exitKind: "connector",
     noShadow: true,
-    artScale: 2 / (1.65 * DECOR_ART_SCALE),
   },
 };
 

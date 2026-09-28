@@ -6837,11 +6837,8 @@ function BattleScreen({
   const [hotbars, setHotbars] = useState<Record<string, (SlotAction | null)[]>>({});
   const [editingSlots, setEditingSlots] = useState(false);
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
-  // Dismissing the "encerrar missão?" popup only hides THAT popup — the "Encerrar missão"
-  // button in the footer stays available the whole time the field is clear (see hud.winAvailable),
-  // so dismissing never strands the player without a way to finish when they're ready.
-  // Resets whenever the field freshly clears again (a trap/trigger spawn dealt with),
-  // rather than staying dismissed for the rest of the battle.
+  // Dismissing the finish/waypoint prompt hides only the prompt. The footer keeps a reopen
+  // action available, so dismissing it never strands the player without a way to proceed.
   const [winPopupDismissed, setWinPopupDismissed] = useState(false);
   // The "Primeira batalha" orientation hint below — stays up until tapped, since it was
   // pointer-events-none and had no way to dismiss it at all.
@@ -6851,10 +6848,16 @@ function BattleScreen({
   // startBattle), never on a re-render.
   const [introDialogOpen, setIntroDialogOpen] = useState(() => !!engine.mission.introDialog && engine.mission.introDialogEnabled !== false);
   const wasWinAvailable = useRef(false);
+  const previousExitKey = useRef<string | null>(null);
   useEffect(() => {
     if (hud.winAvailable && !wasWinAvailable.current) setWinPopupDismissed(false);
     wasWinAvailable.current = hud.winAvailable;
   }, [hud.winAvailable]);
+  useEffect(() => {
+    const exitKey = hud.activeExit ? `${hud.activeExit.id}:${hud.activeExit.x}:${hud.activeExit.y}` : null;
+    if (exitKey && exitKey !== previousExitKey.current) setWinPopupDismissed(false);
+    previousExitKey.current = exitKey;
+  }, [hud.activeExit]);
   useEffect(() => {
     setHotbars(loadHotbars());
   }, []);
@@ -7287,13 +7290,23 @@ function BattleScreen({
         {hud.winAvailable && !hud.result && !winPopupDismissed && (
           <div className="pointer-events-none absolute inset-x-2 bottom-2 flex justify-center">
             <div className="pointer-events-auto bg-surface/95 border border-accent rounded-md px-3 py-2 flex items-center gap-3 flex-wrap justify-center">
-              <p className="text-sm">Todos os inimigos caíram. Encerrar a missão?</p>
+              <p className="text-sm">
+                {hud.activeExit?.id === "escape-exit"
+                  ? "Encontraram uma rota de fuga. Desejam tentar escapar? (60% de chance)"
+                  : hud.activeExit?.id === "dungeon-exit"
+                    ? "Encontraram a saída da masmorra. Desejam sair?"
+                    : hud.activeExit?.id === "floor-connector"
+                      ? hud.activeExit.returnConnector
+                        ? "Encontraram a passagem de volta. Desejam voltar?"
+                        : "Encontraram uma passagem para o próximo andar. Desejam avançar?"
+                      : "Todos os inimigos caíram. Encerrar a missão?"}
+              </p>
               <div className="flex items-center gap-2">
-                <Button size="sm" onClick={() => engine.confirmFinish()}>
-                  Encerrar missão
+                <Button size="sm" disabled={!engine.canConfirmFinish()} onClick={() => engine.confirmFinish()}>
+                  {hud.activeExit?.id === "escape-exit" ? "Tentar escapar" : hud.activeExit ? "Sair" : "Encerrar missão"}
                 </Button>
                 <Button size="sm" variant="quiet" onClick={() => setWinPopupDismissed(true)}>
-                  Continuar explorando
+                  {hud.activeExit ? "Ficar" : "Continuar explorando"}
                 </Button>
               </div>
             </div>
@@ -7535,8 +7548,8 @@ function BattleScreen({
             </div>
           )}
           {hud.winAvailable && !hud.result && (
-            <Button size="sm" className="ml-auto" onClick={() => engine.confirmFinish()}>
-              Encerrar missão
+            <Button size="sm" className="ml-auto" onClick={() => hud.activeExit ? setWinPopupDismissed(false) : engine.confirmFinish()}>
+              {hud.activeExit ? "Usar waypoint" : "Encerrar missão"}
             </Button>
           )}
           {hud.canUndoMove && !hud.result && (
