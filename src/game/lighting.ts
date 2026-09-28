@@ -32,23 +32,35 @@ const WEAK_FIRE: LightDef = { color: FIRE, intensity: 1.6, radius: 2.4, flicker:
 
 /** Which decorations emit light, and how strongly (per the user's list). */
 export const LIGHT_DEFS: Record<string, LightDef> = {
+  // Open flames and braziers share one reach; intensity carries their visual difference.
   "city-brazier": NORMAL_FIRE,
-  // Larger reach than the other braziers, per direct request — its own LightDef (not
-  // NORMAL_FIRE) so city-brazier/light-brazier-bowl/etc. aren't affected by this.
-  "wilds-brazier-tripod": { ...NORMAL_FIRE, radius: 4.2 },
+  Brazier3: NORMAL_FIRE,
+  "wilds-brazier-tripod": NORMAL_FIRE,
+  "city-campfire": NORMAL_FIRE,
+  "wilds-campfire-cauldron": NORMAL_FIRE,
+  "city-forge": { ...NORMAL_FIRE, intensity: 6 },
   "ember-channels-001": WEAK_FIRE,
   "burning-house": NORMAL_FIRE,
   "burnt-house-ruins": NORMAL_FIRE,
   "burning-hamlet": NORMAL_FIRE,
+  // Candles/incense use the same short reach; multi-flame fixtures are brighter, not wider.
+  "light-candle": { color: [1.0, 0.66, 0.34], intensity: 1.6, radius: 2.4, flicker: 0.6 },
+  "wilds-incense-burner": { ...WEAK_FIRE, intensity: 1.2 },
+  "wilds-candle-menhir": NORMAL_LANTERN,
+  "city-shrineCandle": NORMAL_LANTERN,
+  Chandelier: NORMAL_LANTERN,
   "city-lantern-post": NORMAL_LANTERN,
   "wilds-lantern-post": NORMAL_LANTERN,
   lamppost: NORMAL_LANTERN,
-  // New light props: candle small and soft, torch and bowl normal, fireplace the largest.
-  "light-candle": { color: [1.0, 0.66, 0.34], intensity: 8, radius: 4, flicker: 0.6 },
-  "light-wall-torch": { color: FIRE, intensity: 6, radius: 4.4, flicker: 1 },
+  // Wall torches and bowls share normal-fire reach; the fireplace has extra intensity only.
+  "light-wall-torch": { ...NORMAL_FIRE, intensity: 6 },
   "light-brazier-bowl": NORMAL_FIRE,
-  "light-fireplace": { color: FIRE, intensity: 9, radius: 4.4, flicker: 0.8 },
+  "light-fireplace": { ...NORMAL_FIRE, intensity: 9, flicker: 0.8 },
 };
+
+/** Reach multiplier for every light-emitting decoration in LIGHT_DEFS, applied in
+ * ThreeBattleRenderer.syncLights — per direct request, all light props get a larger radius. */
+export const LIGHT_RADIUS_MUL = 1.3;
 
 /** Units that carry their own light and walk with it, keyed by classId — same LightDef as the
  * props above. Swamp Blue Calf: a soft pale-blue glow, between WEAK_FIRE and NORMAL_FIRE in

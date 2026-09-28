@@ -526,6 +526,11 @@ export function BattleCanvas({
       const showAct =
         hud.mode === "awaitAction" || hud.mode === "awaitAttack" || hud.mode === "selected" || hud.mode === "awaitSpell";
       if (!showAct || hud.busy) return;
+      // Free exploration: right-click never undoes movement — deselect in place instead.
+      if (engine.mission.explore && (hud.mode === "selected" || hud.mode === "awaitAction")) {
+        engine.deselect(true);
+        return;
+      }
       engine.cancel();
     };
     canvas.addEventListener("pointerdown", onDown);

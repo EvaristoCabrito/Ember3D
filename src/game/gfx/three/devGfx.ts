@@ -29,13 +29,10 @@ export interface DevGfxSettings {
   /** Moon position, same convention. */
   moonAzimuth: number;
   moonElevation: number;
-  /** Fire V2 test: one procedural 3D fireball with a real PointLight, floating back and forth
-   * along the first player unit's row (see ThreeFireballV2.ts). */
-  fireballV2Test: boolean;
 }
 
 const KEY = "emberash:devGfx";
-const DEFAULTS: DevGfxSettings = { realShadows: true, softShadows: true, contactShadows: true, ambientOcclusion: true, fogOfWar: true, fogDebug: false, localLights: true,sunAzimuth: 53.13, sunElevation: 45, moonAzimuth: 140, moonElevation: 35, fireballV2Test: false };
+const DEFAULTS: DevGfxSettings = { realShadows: true, softShadows: true, contactShadows: true, ambientOcclusion: true, fogOfWar: true, fogDebug: false, localLights: true, sunAzimuth: 53.13, sunElevation: 45, moonAzimuth: 140, moonElevation: 35 };
 
 function load(): DevGfxSettings {
   try {

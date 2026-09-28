@@ -8,6 +8,7 @@ import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } fr
 import { DEFAULT_AMBIENT_INTENSITY, DEFAULT_BLOOM_INTENSITY, DEFAULT_SUN_INTENSITY, TIME_OF_DAY_LIGHT } from "./gfx/three/ThreeBattleRenderer";
 import { getDevGfx, setDevGfx, subscribeDevGfx, type DevGfxSettings } from "./gfx/three/devGfx";
 import { DevGfxPreview } from "./gfx/three/DevGfxPreview";
+import { VfxDebugPanel } from "./gfx/three/VfxDebugPanel";
 import { Hd2dTestScreen } from "./gfx/three/Hd2dTestScene";
 import { InnScreen } from "./InnScreen";
 import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
@@ -372,6 +373,7 @@ const BRIEF_ART: Record<string, string> = {
   profundezas: "/game/assets/profundezas-bg.jpg?v=2",
   thebridge: "/game/assets/brief-thebridge.jpg?v=2",
   "wisp-forest": "/game/assets/brief-wisp-forest.jpg",
+  "wisp-forest-crossing": "/game/assets/brief-wisp-forest.jpg",
 };
 
 function briefArt(id: string): string | null {
@@ -439,7 +441,10 @@ function classSpells(classId: ClassId, level = Number.POSITIVE_INFINITY): SpellK
         return [];
     }
   })();
-  return [...base, ...(PRESTIGE_SPELLS[classId] ?? [])].filter((spell) => spell !== "bullRush" || level >= BULL_RUSH_UNLOCK_LEVEL);
+  return [...base, ...(PRESTIGE_SPELLS[classId] ?? [])].filter((spell) =>
+    (spell !== "bullRush" || level >= BULL_RUSH_UNLOCK_LEVEL) &&
+    (spell !== "burningHands" || level >= 5),
+  );
 }
 
 function defaultSlots(classId: ClassId, level = Number.POSITIVE_INFINITY): (SlotAction | null)[] {
@@ -1593,6 +1598,7 @@ export function GameApp() {
 
       {screen === "testMenu" && (
         <TestMenuScreen
+          ready={!!art}
           onBack={goToTitle}
           onDebug={goToMap}
           onMapEditor={() => setScreen("mapEditor")}
@@ -2407,7 +2413,6 @@ function TitleScreen({
           "Nova campanha" or "Continuar". */}
       <button
         type="button"
-        disabled={!ready}
         onClick={onTest}
         className="absolute z-10 bottom-2 left-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted/60 hover:text-muted disabled:opacity-40"
       >
@@ -2866,11 +2871,13 @@ function HelpModal({ onClose }: { onClose: () => void }) {
 }
 
 function TestMenuScreen({
+  ready,
   onBack,
   onDebug,
   onMapEditor,
   onDevControls,
 }: {
+  ready: boolean;
   onBack: () => void;
   onDebug: () => void;
   onMapEditor: () => void;
@@ -2890,16 +2897,18 @@ function TestMenuScreen({
       <div className="flex-1 min-h-0 flex flex-col justify-center gap-3 p-5 max-w-md mx-auto w-full">
         <button
           type="button"
+          disabled={!ready}
           onClick={onDebug}
-          className="text-left rounded-xl border border-border bg-bg/40 px-5 py-4 hover:border-accent"
+          className="text-left rounded-xl border border-border bg-bg/40 px-5 py-4 hover:border-accent disabled:opacity-40"
         >
           <p className="font-display text-2xl leading-tight">Debug</p>
           <p className="text-sm text-muted mt-1">Joga qualquer missão da campanha, sem travar progresso — o de sempre.</p>
         </button>
         <button
           type="button"
+          disabled={!ready}
           onClick={onMapEditor}
-          className="text-left rounded-xl border border-border bg-bg/40 px-5 py-4 hover:border-accent"
+          className="text-left rounded-xl border border-border bg-bg/40 px-5 py-4 hover:border-accent disabled:opacity-40"
         >
           <p className="font-display text-2xl leading-tight">Map Editor</p>
           <p className="text-sm text-muted mt-1">Pinta terreno, posiciona spawns, testa na hora e exporta pra colar no jogo.</p>
@@ -2917,8 +2926,7 @@ function TestMenuScreen({
   );
 }
 
-const DEV_GFX_ROWS: { key: "realShadows" | "softShadows" | "contactShadows" | "localLights" | "fogOfWar" | "fogDebug" | "ambientOcclusion" | "fireballV2Test"; label: string; hint: string }[] = [
-  { key: "fireballV2Test", label: "Bola de fogo V2 (teste)", hint: "Uma bola de fogo 3D procedural com luz real (PointLight) indo e voltando devagar na fileira do primeiro herói." },
+const DEV_GFX_ROWS: { key: "realShadows" | "softShadows" | "contactShadows" | "localLights" | "fogOfWar" | "fogDebug" | "ambientOcclusion"; label: string; hint: string }[] = [
   { key: "realShadows", label: "Sombras reais", hint: "Sombra projetada pelo sol (unidades e props)." },
   { key: "softShadows", label: "Sombras suaves (PCF)", hint: "Borda da sombra suavizada em vez de serrilhada." },
   { key: "contactShadows", label: "Contact shadows", hint: "Mancha escura curta nos pés de cada unidade." },
@@ -2952,7 +2960,8 @@ function DevControlsScreen({ onBack }: { onBack: () => void }) {
           <h1 className="font-display text-3xl leading-none">Dev Controls</h1>
         </div>
       </header>
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 p-5 max-w-md mx-auto w-full">
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 p-5 max-w-3xl mx-auto w-full">
+        <VfxDebugPanel />
         <DevGfxPreview />
         <button type="button" onClick={() => setHd2dTest(true)} className="rounded-xl border border-accent bg-bg/40 px-5 py-4 text-left font-display text-xl hover:bg-accent/10">
           Cena 3D — teste HD-2D
@@ -3341,10 +3350,23 @@ const BUILDER_TERRAIN: TerrainId[] = [
   "snow",
 ];
 
+/** Variants removed from the editor's "Versões" picker, per direct request. Hidden rather
+ * than deleted: variant indices are positional, so dropping one would shift every later
+ * variant and repaint saved maps. plains 15 = "Lama", 16 = "Trilha de Terra". */
+const HIDDEN_VARIANTS: Partial<Record<TerrainId, number[]>> = {
+  plains: [15, 16, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  // Keep these saved-map indices intact while removing them from the water picker.
+  water: [3, 7],
+};
+
 const VARIANT_LABEL: Partial<Record<TerrainId, string[]>> = {
   plains: [
     "Planície sombria", "Planície florida", "Planície original", "Antiga", "Terra", "Pedra", "Cinza", "Pedras",
     "Clareira", "Rochas", "Lajedo", "Pedregulho", "Prado", "Flores silvestres", "Relva", "Lama", "Trilha de Terra",
+    "Terra com pedregulhos", "Lama com pegadas", "Grama viçosa", "Grama com trevos", "Grama com arbustos",
+    "Rua de cascalho", "Caminho de terra", "Calçamento de pedras", "Rua em ruínas",
+    "Calçamento destruído", "Trilha de pedras", "Pedregulho antigo", "Trilha lamacenta",
+    "Piso de madeira",
   ],
   woods: ["Solo de bosque", "Bosque sombrio", "Bosque", "Sebes", "Pinhal", "Bosque 04", "Terra", "Bosque 12", "Bosque 13"],
   ruins: ["Ruínas sombrias", "Ruínas originais", "Pedra 02", "Pedra 03", "Pedra 04", "Pátio mosaico", "Lajes partidas"],
@@ -3354,7 +3376,12 @@ const VARIANT_LABEL: Partial<Record<TerrainId, string[]>> = {
   flame: ["Chama", "Antiga", "Fogo"],
   nave: ["Laje", "Laje Negra"],
   column: ["Coluna", "Antiga"],
-  snow: ["Neve Rasa 4", "Neve Rasa 5", "Neve Funda 2"],
+  snow: [
+    "Neve Rasa 4", "Neve Rasa 5", "Neve Funda 2",
+    "Mato Seco", "Folhas Mortas", "Pinhal Ressequido", "Bosque Gelado",
+    "Pinhal Frio", "Folhas Congeladas", "Brejo Congelado", "Urze Gelada",
+    "Planície Ressequida", "Planície Congelada", "Encosta Morta", "Arbustos Frios",
+  ],
 };
 
 /** Hover text for a terrain type: its combat stats plus terrainNote()'s callout, so the
@@ -3530,6 +3557,7 @@ function MapEditorScreen({
   }, [draft, draftFuture]);
   const [brush, setBrush] = useState<TerrainId>("plains");
   const [variant, setVariant] = useState(0);
+  const [cityMode, setCityMode] = useState(false);
   // While armed, clicking a hex in Terreno mode turns it instead of painting it.
   const [turning, setTurning] = useState(false);
   const [turningDeco, setTurningDeco] = useState(false);
@@ -4698,8 +4726,6 @@ function MapEditorScreen({
     if (DEADWOODS_DECOR_IDS.has(id)) return "Madeira Morta";
     if (
       id === "barricade" ||
-      id === "barricade-2" ||
-      id === "wooden-barricade" ||
       id === "wooden-barricade-1" ||
       id === "city-spike-barricade-low" ||
       id === "city-palisade-frame" ||
@@ -5192,11 +5218,18 @@ function MapEditorScreen({
             <select
               className="bg-bg border border-border rounded-md px-2 py-1 flex-1"
               value={draft.mistType ?? "mist2"}
-              onChange={(e) => setDraft((d) => ({ ...d, mistType: e.target.value as "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4" }))}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  mistType: e.target.value as "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4" | "fog1" | "none",
+                }))
+              }
             >
+              <option value="none">Sem névoa</option>
               <option value="mist2">Névoa 2 (textura suave, mundo inteiro)</option>
               <option value="mist3">Névoa 3 (ruído original, mundo inteiro)</option>
               <option value="mist4">Névoa 4 (vórtice nas bordas do mapa, centro sempre limpo)</option>
+              <option value="fog1">Névoa 01 (só sobre área não revelada e o fundo, limpa no mapa revelado)</option>
               <option value="vignette">Vinheta (tela inteira, bordas suaves)</option>
               <option value="vignette2">Vinheta 2 (bancos de névoa profundos, centro limpo)</option>
               <option value="vignette3">Vinheta 3 (névoa rasteira em faixas, sem bordas escuras)</option>
@@ -5341,7 +5374,7 @@ function MapEditorScreen({
         {mode === "paint" && (
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs text-muted flex-1 min-w-[12rem]">Básicos na campanha: planície, bosque, água. Aqui pinta qualquer um.</p>
+              <p className="text-xs text-muted flex-1 min-w-[12rem]">Escolha um terreno ou grupo de tiles para pintar o mapa.</p>
               <Button
                 size="sm"
                 variant={turning ? "primary" : "ghost"}
@@ -5355,23 +5388,83 @@ function MapEditorScreen({
               </Button>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {[...BUILDER_TERRAIN].sort((a, b) => byName(TERRAIN[a].name, TERRAIN[b].name)).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  title={terrainHint(t, brush === t ? variant : 0)}
-                  onClick={() => {
-                    setBrush(t);
-                    setVariant((v) => Math.min(v, (TILE_VARIANT_COUNT[t] ?? 1) - 1));
-                  }}
-                  className={`text-xs px-1.5 py-1 rounded-md border flex items-center gap-1.5 ${brush === t ? "border-accent" : "border-border"}`}
-                >
-                  <img src={tileVariantSrc(t, 0)} alt="" className="size-7 rounded-sm object-cover bg-bg" />
-                  {TERRAIN[t].name}
-                </button>
-              ))}
+              {[
+                ...BUILDER_TERRAIN.filter((t) => t !== "snow").map((terrain) => ({
+                  key: terrain,
+                  terrain,
+                  label: TERRAIN[terrain].name,
+                  tileVariant: 0,
+                })),
+                { key: "city" as const, terrain: "plains" as const, label: "City", tileVariant: 22 },
+              ]
+                .sort((a, b) => byName(a.label, b.label))
+                .map(({ key, terrain, label, tileVariant }) => {
+                  const selected = key === "city" ? cityMode && brush === "plains" : !cityMode && brush === terrain;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      title={key === "city" ? `City · ${terrainHint("plains", 22)}` : terrainHint(terrain, brush === terrain ? variant : 0)}
+                      onClick={() => {
+                        setBrush(terrain);
+                        if (key === "city") {
+                          setCityMode(true);
+                          setVariant((v) => (v >= 22 && v <= 30 ? v : 22));
+                        } else {
+                          setCityMode(false);
+                          setVariant((v) => (terrain === "plains" && v >= 22 && v <= 30 ? 0 : Math.min(v, (TILE_VARIANT_COUNT[terrain] ?? 1) - 1)));
+                        }
+                      }}
+                      className={`text-xs px-1.5 py-1 rounded-md border flex items-center gap-1.5 ${selected ? "border-accent" : "border-border"}`}
+                    >
+                      <img src={tileVariantSrc(terrain, tileVariant)} alt="" className="size-7 rounded-sm object-cover bg-bg" />
+                      {label}
+                    </button>
+                  );
+                })}
             </div>
-            {(TILE_VARIANT_COUNT[brush] ?? 1) >= 1 && (
+            <section className="flex flex-col gap-2 rounded-md border border-border bg-bg/30 p-2" aria-label="Icelands">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Icelands</h3>
+                <button
+                  type="button"
+                  title={terrainHint("snow", brush === "snow" ? variant : 0)}
+                  onClick={() => {
+                    setBrush("snow");
+                    setCityMode(false);
+                    setVariant((v) => Math.min(v, TILE_VARIANT_COUNT.snow - 1));
+                  }}
+                  className={`text-xs px-1.5 py-1 rounded-md border flex items-center gap-1.5 ${brush === "snow" ? "border-accent" : "border-border"}`}
+                >
+                  <img src={tileVariantSrc("snow", 0)} alt="" className="size-7 rounded-sm object-cover bg-bg" />
+                  Neve e gelo
+                </button>
+              </div>
+              {brush === "snow" && (
+                <div className="flex items-start gap-1.5 text-xs">
+                  <span className="mt-1 text-muted uppercase tracking-wide">Tiles</span>
+                  <div className="h-28 min-h-[104px] min-w-0 flex-1 ember-scrollbar overflow-x-auto overflow-y-hidden rounded-md border border-border bg-bg/40 p-1.5">
+                    <div className="grid grid-flow-col grid-rows-2 auto-cols-max gap-1.5">
+                      {Array.from({ length: TILE_VARIANT_COUNT.snow }, (_, i) => i)
+                        .sort((a, b) => byName(VARIANT_LABEL.snow?.[a] ?? String(a + 1).padStart(3, "0"), VARIANT_LABEL.snow?.[b] ?? String(b + 1).padStart(3, "0")))
+                        .map((i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            title={VARIANT_LABEL.snow?.[i] ?? `Arte ${String(i + 1).padStart(3, "0")}`}
+                            onClick={() => setVariant(i)}
+                            className={`flex items-center gap-1 rounded-md border overflow-hidden pr-1.5 ${variant === i ? "border-accent" : "border-border"}`}
+                          >
+                            <img src={tileVariantSrc("snow", i)} alt="" className="size-8 object-cover" />
+                            <span>{VARIANT_LABEL.snow?.[i] ?? String(i + 1).padStart(3, "0")}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+            {brush !== "snow" && (TILE_VARIANT_COUNT[brush] ?? 1) >= 1 && (
               <div className="flex items-start gap-1.5 text-xs">
                 <span className="mt-1 text-muted uppercase tracking-wide">Versões</span>
                 <div className="h-28 min-h-[104px] min-w-0 flex-1 ember-scrollbar overflow-x-auto overflow-y-hidden rounded-md border border-border bg-bg/40 p-1.5">
@@ -5380,6 +5473,7 @@ function MapEditorScreen({
                         original variant index i (art file, saved-map value), so re-sorting
                         this list can never relabel or repaint an existing tile. */}
                     {Array.from({ length: TILE_VARIANT_COUNT[brush] ?? 1 }, (_, i) => i)
+                      .filter((i) => cityMode && brush === "plains" ? i >= 22 && i <= 30 : !HIDDEN_VARIANTS[brush]?.includes(i))
                       .sort((a, b) => byName(VARIANT_LABEL[brush]?.[a] ?? String(a + 1).padStart(3, "0"), VARIANT_LABEL[brush]?.[b] ?? String(b + 1).padStart(3, "0")))
                       .map((i) => (
                   <button

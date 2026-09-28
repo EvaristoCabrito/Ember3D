@@ -65,7 +65,7 @@ export interface MapDraft {
   /** See Mission.mistIntensity. */
   mistIntensity?: number;
   /** See Mission.mistType. */
-  mistType?: "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4";
+  mistType?: "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4" | "fog1" | "none";
   /** See Mission.bloomIntensity. */
   bloomIntensity?: number;
   /** See Mission.mistSpeed. */
@@ -572,7 +572,9 @@ function inLocationOrder(locations: WorldLocation[], wanted = LOCATION_ORDER): W
 export const ALL_LOCATIONS: WorldLocation[] = (() => {
   const moved = new Map<string, string>();
   for (const file of LATEST.values()) {
-    if (file.draft.locationId) moved.set(file.draft.id, file.draft.locationId);
+    // A location Locais has a saved list for is exactly that list — a map file's own
+    // locationId can't put back a mission Locais removed from it.
+    if (file.draft.locationId && !ORDER[file.draft.locationId]) moved.set(file.draft.id, file.draft.locationId);
   }
   // map-order.json wins over a map file's own locationId: it is what the editor's Locais
   // panel writes, and it is the only way to move a mission that has no map file.

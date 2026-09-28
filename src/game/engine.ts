@@ -37,6 +37,7 @@ import {
 } from "./pathfinding";
 import { packExplored, relight, sightReaches, unpackExplored } from "./fog";
 import { getDevGfx } from "./gfx/three/devGfx";
+import { decorationAnchor } from "./gfx/decorationAnchor";
 import { buildDecorOverlay, hexDef, type DecorOverlay } from "./hexprops";
 import { ACTION_HUNGER_COST, drainHunger, fullness } from "./hunger";
 import { HUNGER_PENALTY_MAX } from "./overworld";
@@ -106,8 +107,6 @@ export const ZOOM_RADII = [22, 34, 50, 72];
  * see EffectsRenderer.spawnEffect's `duration` option. Only spells with a clear elemental
  * theme are listed; anything absent here (melee skills, arrows, heals, ...) queues no FX. */
 const SPELL_ELEMENT_FX: Partial<Record<SpellKind, { kind: ElementKind; duration: number }>> = {
-  // Fireball leaves its flames burning on the floor for a couple of seconds after the blast.
-  fireball: { kind: "fire", duration: 2.0 },
   causticVenom: { kind: "acid", duration: 1.3 },
   // Lightning/Lightning Tier 3/Choque deliberately have NO entry here — per direct report,
   // the newer WebGL shader burst this table drives read as an odd "3D" pop layered on top
@@ -195,12 +194,14 @@ const MISSILE_AFTERGLOW = 0.2;
  * can just be as long as it needs to be to actually read as the dense, tangled WebGL beam it
  * is (see BattleEngine.webShotBeam / shaders.ts WEB_SHOT) instead of a blink-and-miss streak. */
 export const WEB_SHOT_TRAVEL = 0.85;
-/** Which Fireball in-flight visual plays. "v2" = the procedural 3D ball carrying a real
- * PointLight, drawn by ThreeBattleRenderer (see ThreeFireballV2.ts, BattleEngine.fireballShot);
- * "v1" = the original Canvas2D comet art, kept intact below — set this back to "v1" to restore
- * it. Familiar Titã's Fireball always keeps V1 (MissileFx.classicFireball). Only the flying
- * ball changes; the impact burst is the same for both. */
-export const FIREBALL_VISUAL: "v1" | "v2" = "v2";
+export interface FireballVfxRequest {
+  id: string;
+  casterId: string;
+  target: Point;
+  /** Exact board cells included in Fireball's damage resolution. */
+  tiles: Point[];
+}
+export type FireballVfxEvent = { id: string; phase: "launch" | "impact" | "complete" };
 
 /** A traveling spell bolt (currently just Magic Missile) — hex-to-hex in pixel space, timed to
  * land right as stepSpell's own hit/damage tick fires (a.t >= MISSILE_HIT_AT), so the streak
@@ -217,8 +218,6 @@ interface MissileFx {
   hue: number;
   kind: "magicMissile" | "phantasmalForce" | "fireball" | "causticVenom" | "longShot" | "arcaneBolt" | "webOfDreams";
   seed: number;
-  /** Fireball only: keep the original V1 comet art for this shot (Familiar Titã's Fireball). */
-  classicFireball?: boolean;
 }
 
 
@@ -491,6 +490,10 @@ interface SpellAnim {
   ids: string[];
   t: number;
   hit: boolean;
+  fireballVfxId?: string;
+  fireballVfxLaunched?: boolean;
+  fireballImpact?: boolean;
+  fireballComplete?: boolean;
   extraDice: number;
   extraFaces: number;
   extraBonus: number;
@@ -1261,6 +1264,10 @@ export class BattleEngine {
    * without the normal "that's not a valid target" gameplay rules getting in the way. Wired
    * from GameApp's testMode — never true for a real save. */
   private debugFreeCast = false;
+  readonly fireballVfxRequests: FireballVfxRequest[] = [];
+  readonly fireballVfxEvents: FireballVfxEvent[] = [];
+  fireballVfxAvailable = false;
+  private fireballVfxSequence = 0;
 
   constructor(mission: Mission, art: GameArt, roster: Roster, seed = 1, debugFreeCast = false) {
     this.debugFreeCast = debugFreeCast;
@@ -2213,11 +2220,10 @@ export class BattleEngine {
         const target = step.tiles[0];
         if (caster && target) this.emitMissileFx(caster.x, caster.y, target.x, target.y, "phantasmalForce");
       }
-      if (step.spellKind === "fireball" || step.spellKind === "causticVenom") {
+      if (step.spellKind === "causticVenom") {
         const caster = this.units.find((u) => u.id === step.att);
         const target = step.projectileTo ?? null;
-        // Familiar Titã keeps the original V1 Fireball look; every other caster gets Fire V2.
-        if (caster && target) this.emitMissileFx(caster.x, caster.y, target.x, target.y, step.spellKind, caster.classId === "familiar3");
+        if (caster && target) this.emitMissileFx(caster.x, caster.y, target.x, target.y, step.spellKind);
       }
       if (step.spellKind === "longShot") {
         const caster = this.units.find((u) => u.id === step.att);
@@ -2622,13 +2628,32 @@ export class BattleEngine {
       return;
     }
     a.t += dt;
+    const syncFireballVfx = a.spellKind === "fireball" && this.fireballVfxAvailable && !this.reducedMotion && !!a.projectileTo;
+    if (syncFireballVfx) {
+      if (!a.fireballVfxId) {
+        const id = `fireball-${++this.fireballVfxSequence}`;
+        a.fireballVfxId = id;
+        this.fireballVfxRequests.push({ id, casterId: att.id, target: { ...a.projectileTo! }, tiles: a.tiles.map((tile) => ({ ...tile })) });
+      }
+      for (let index = this.fireballVfxEvents.length - 1; index >= 0; index--) {
+        const event = this.fireballVfxEvents[index]!;
+        if (event.id !== a.fireballVfxId) continue;
+        this.fireballVfxEvents.splice(index, 1);
+        if (event.phase === "launch") {
+          a.fireballVfxLaunched = true;
+          // The fallback remains until the 3D renderer confirms it has taken over the shot.
+          for (const missile of this.missileFx) if (missile.kind === "fireball") missile.live = false;
+        } else if (event.phase === "impact") a.fireballImpact = true;
+        else if (event.phase === "complete") a.fireballComplete = true;
+      }
+    }
     const arrowSpell = a.spellKind === "longShot" || a.spellKind === "multiShot" || a.spellKind === "piercing";
     const hitAt = arrowSpell ? ARROW_TRAVEL : a.spellKind === "phantasmalForce" ? PHANTASMAL_FORCE_TRAVEL : a.spellKind === "magicMissile" || a.spellKind === "fireball" || a.spellKind === "causticVenom" ? SPELL_TRAVEL : 0.18;
     // Weapon-based skills routed through this same SpellAnim machinery for their multi-target
     // reach (bow shots, Cleave, Sweep, the two charge skills) are not magic — only the actual
     // spellcasters' kinds get the casting cue below.
     const meleeSkill = a.spellKind === "cleave" || a.spellKind === "sweep" || a.spellKind === "shoulderSmash" || a.spellKind === "stampede";
-    if (!a.hit && a.t >= hitAt) {
+    if (!a.hit && (syncFireballVfx ? a.fireballImpact === true : a.t >= hitAt)) {
       a.hit = true;
       if (a.spellKind === "webOfDreams") sfxPlay.dreamingWeb();
       else if (att.sprite === "cultist-v2") sfxPlay.cultistV2Spellcast();
@@ -2796,7 +2821,9 @@ export class BattleEngine {
           }
         }
       }
-      if (a.spellKind === "fireball" || a.spellKind === "causticVenom") this.emitFireballBurstFx(a.tiles, a.spellKind);
+      if (a.spellKind === "causticVenom") {
+        this.emitFireballBurstFx(a.tiles, a.spellKind);
+      }
       const elementFx = a.spellKind ? SPELL_ELEMENT_FX[a.spellKind] : undefined;
       if (elementFx) this.queueElementalFx(elementFx.kind, a.tiles, elementFx.duration);
       if ((a.spellKind === "cleave" || a.spellKind === "shoulderSmash") && a.tiles.length > 0) {
@@ -2817,7 +2844,9 @@ export class BattleEngine {
     // trail afterglow.
     const boltSpell = a.spellKind === "magicMissile" || a.spellKind === "fireball" || a.spellKind === "causticVenom";
     const spellEnd = Math.max(att.sprite === "conjurer" ? 0.72 : 0.55, boltSpell ? SPELL_TRAVEL + MISSILE_AFTERGLOW + 0.15 : 0);
-    if (a.t >= spellEnd && this.heldDone(a)) this.finishCombat(att);
+    if (syncFireballVfx) {
+      if (a.fireballComplete && this.heldDone(a)) this.finishCombat(att);
+    } else if (a.t >= spellEnd && this.heldDone(a)) this.finishCombat(att);
   }
 
   private stepHeal(a: HealAnim, dt: number): void {
@@ -3151,7 +3180,7 @@ export class BattleEngine {
         // that is now walkable.
         for (let d = this.decorations.length - 1; d >= 0; d--) {
           const dec = this.decorations[d];
-          if ((dec.id === "barricade" || dec.id === "barricade-2") && dec.x === c.x && dec.y === c.y) {
+          if (dec.id === "barricade" && dec.x === c.x && dec.y === c.y) {
             this.decorations.splice(d, 1);
             this.refreshDecorOverlay();
           }
@@ -3527,7 +3556,7 @@ export class BattleEngine {
   }
 
   /** One glowing bolt per target, hex-to-hex — see MissileFx. */
-  private emitMissileFx(fromX: number, fromY: number, toX: number, toY: number, kind: "magicMissile" | "phantasmalForce" | "fireball" | "causticVenom" | "longShot" | "arcaneBolt" | "webOfDreams", classicFireball = false): void {
+  private emitMissileFx(fromX: number, fromY: number, toX: number, toY: number, kind: "magicMissile" | "phantasmalForce" | "fireball" | "causticVenom" | "longShot" | "arcaneBolt" | "webOfDreams"): void {
     if (this.reducedMotion) return;
     let slot = this.missileFx.find((m) => !m.live);
     if (!slot) {
@@ -3551,7 +3580,6 @@ export class BattleEngine {
     slot.hue = kind === "fireball" ? 22 : kind === "causticVenom" ? 104 : kind === "longShot" ? 205 : kind === "arcaneBolt" ? 2 : kind === "webOfDreams" ? 276 : kind === "phantasmalForce" ? 202 : 268;
     slot.kind = kind;
     slot.seed = this.rng() * Math.PI * 2;
-    slot.classicFireball = classicFireball;
   }
 
   /** A bolt struck down onto one hex — see LightningFx. The jagged shape (main bolt plus
@@ -4874,6 +4902,7 @@ export class BattleEngine {
   }
 
   private tierRemaining(u: Unit, kind: SpellKind): number {
+    if (kind === "burningHands" && u.level < 5) return 0;
     const tier = spellTier(kind);
     return tier ? u.spells[tierKey(tier)] : 0;
   }
@@ -7489,19 +7518,6 @@ export class BattleEngine {
    * BattleCanvas polls this every frame and feeds it straight into
    * EffectsRenderer.updateOverride — see EffectOverride for why a fixed-hex getAnchor(col,row)
    * effect can't represent a continuously moving, continuously growing beam on its own. */
-  /** Fire V2: world position (hexWorld units, y-down) of a Fireball currently in flight, or null
-   * when none is — the same straight from→to path and m.t/m.travel timing the V1 comet used, so
-   * the damage/impact still lands exactly when the ball arrives. */
-  fireballShot(): { worldX: number; worldY: number; tile: number } | null {
-    if (FIREBALL_VISUAL !== "v2") return null;
-    const m = this.missileFx.find((x) => x.live && x.kind === "fireball" && !x.classicFireball && x.t < x.travel);
-    if (!m) return null;
-    const from = this.effectAnchor(m.fromX, m.fromY);
-    const to = this.effectAnchor(m.toX, m.toY);
-    const k = Math.min(1, m.t / m.travel);
-    return { worldX: from.worldX + (to.worldX - from.worldX) * k, worldY: from.worldY + (to.worldY - from.worldY) * k, tile: from.tile };
-  }
-
   webShotBeam(): { x: number; y: number; worldX: number; worldY: number; tile: number; angle: number; length: number } | null {
     const m = this.missileFx.find((x) => x.live && x.kind === "webOfDreams" && x.t < x.travel);
     if (!m) return null;
@@ -7838,7 +7854,7 @@ export class BattleEngine {
       const item = CHEST_DECOR_IDS.has(p.id);
       const tree = p.id === "dead-tree";
       const log = p.id === "fallen-log";
-      const wall = p.id === "barricade" || p.id === "barricade-2";
+      const wall = p.id === "barricade";
       // Small single-building houses and the one big-house mansion share the same 3x
       // "house" art scale (per user request); only their footprints (3 hexes vs 5) differ.
       const house = HOUSE_DECOR_IDS.has(p.id);
@@ -7896,19 +7912,24 @@ export class BattleEngine {
       // back to turning the bitmap, which tilts rather than faces and is a placeholder.
       const facing = decorationFacing(p.id, p.rot ?? 0, (file) => this.decorArtReady(file));
       const art = facing.own ? (this.art.decorations[facing.file] ?? img) : img;
+      const anchor = decorationAnchor(art);
+      let anchorDx = anchor ? (0.5 - (anchor.u0 + anchor.u1) / 2) * w : 0;
+      let anchorDy = anchor ? (1 - anchor.v) * h : 0;
 
       if (facing.step === 0) {
-        ctx.drawImageLit(art, cx - w / 2, cy - h / 2 + dy, w, h);
+        ctx.drawImageLit(art, cx - w / 2 + anchorDx, cy - h / 2 + dy + anchorDy, w, h);
       } else if (facing.own) {
         ctx.save();
         ctx.translate(cx, cy + dy);
-        if (facing.mirror) ctx.scale(-1, 1);
+        if (facing.mirror) { ctx.scale(-1, 1); anchorDx = -anchorDx; }
+        ctx.translate(anchorDx, anchorDy);
         ctx.drawImageLit(art, -w / 2, -h / 2, w, h);
         ctx.restore();
       } else {
         ctx.save();
         ctx.translate(cx, cy + dy);
         ctx.rotate((facing.step * Math.PI) / 3);
+        ctx.translate(anchorDx, anchorDy);
         ctx.drawImageLit(art, -w / 2, -h / 2, w, h);
         ctx.restore();
       }
@@ -9511,8 +9532,9 @@ export class BattleEngine {
     if (this.missileFxLive) {
       for (const m of this.missileFx) {
         if (!m.live) continue;
-        // Fire V2: the flying ball is a 3D object in ThreeBattleRenderer instead (fireballShot).
-        if (m.kind === "fireball" && FIREBALL_VISUAL === "v2" && !m.classicFireball) continue;
+        // The integrated Three.js fireball is the only projectile visual when its renderer is
+        // active; never layer the legacy Canvas sprite over the original 3D tavern fireball.
+        if (m.kind === "fireball" && this.fireballVfxAvailable && !this.reducedMotion) continue;
         const from = this.hexCenter(m.fromX, m.fromY);
         const to = this.hexCenter(m.toX, m.toY);
         const dxT = to.cx - from.cx;

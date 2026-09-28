@@ -202,12 +202,14 @@ const WILDS_DECORATIONS = decorationSet([
 // Large cages, frames and the iron-maiden group from the upper reference band get
 // a two-hex footprint; smaller torture tools deliberately remain one hex.
 const TORTURE_TWO_HEX = new Set([
-  ...Array.from({ length: 15 }, (_, index) => `torture-gear-${String(index + 1).padStart(2, "0")}`),
-  "torture-gear-22",
+  ...Array.from({ length: 12 }, (_, index) => `torture-gear-${String(index + 1).padStart(2, "0")}`),
+  "torture-gear-14", "torture-gear-15",
 ]);
 const TORTURE_DECORATIONS = decorationSet(
-  Array.from({ length: 44 }, (_, index) => {
-    const serial = String(index + 1).padStart(2, "0");
+  Array.from({ length: 44 }, (_, index) => index + 1)
+    .filter((number) => number !== 13 && number !== 22 && number !== 30)
+    .map((number) => {
+    const serial = String(number).padStart(2, "0");
     return [`torture-gear-${serial}`, `Equipamento de tortura ${serial}`] as const;
   }),
   TORTURE_TWO_HEX,
@@ -215,7 +217,7 @@ const TORTURE_DECORATIONS = decorationSet(
 
 const CITY_TWO_HEX = new Set(["city-supply-cart", "city-covered-wagon"]);
 const CITY_DECORATIONS = decorationSet([
-  ["city-gate-banner", "Portão com estandarte"], ["city-palisade-banner", "Paliçada com estandarte"], ["city-spike-barricade-large", "Barricada de estacas grande"], ["city-spike-barricade", "Barricada de estacas"], ["city-palisade-frame", "Moldura de paliçada"], ["city-wooden-barricade", "Barricada de madeira"], ["city-banner-barricade", "Barricada com bandeira"], ["city-spike-barricade-low", "Estacas baixas"], ["city-wattle-fence", "Cerca trançada"], ["city-stone-banner-wall", "Muralha baixa com estandarte"], ["city-banner-post", "Mastro de estandarte"], ["city-lantern-post", "Poste de lanterna"], ["city-well", "Poço da cidade"], ["city-signpost", "Placa direcional"], ["city-market-stall", "Barraca de mercado"], ["city-supply-cart", "Carroça de suprimentos"], ["city-covered-wagon", "Carroça coberta"], ["city-covered-crate", "Caixa coberta"], ["city-workbench", "Bancada"], ["city-execution-block", "Bloco de execução"], ["city-provisions", "Mantimentos"], ["city-log-stack", "Pilha de lenha"], ["city-campfire", "Fogueira"], ["city-barrels", "Barris"], ["city-stool", "Banco de madeira"], ["city-shrine", "Oratório urbano"], ["city-stone-pillar", "Pilar de pedra"], ["city-notice-post", "Poste de avisos"], ["city-ring-pillar", "Pilar com argola"], ["city-brazier", "Braseiro"], ["city-clothesline", "Varal"], ["city-wheelbarrow", "Carrinho de mão"], ["city-gallows-cages", "Forca com gaiolas"],
+  ["city-gate-banner", "Portão com estandarte"], ["city-palisade-banner", "Paliçada com estandarte"], ["city-spike-barricade-large", "Barricada de estacas grande"], ["city-spike-barricade", "Barricada de estacas"], ["city-palisade-frame", "Moldura de paliçada"], ["city-wooden-barricade", "Barricada de madeira"], ["city-banner-barricade", "Barricada com bandeira"], ["city-spike-barricade-low", "Estacas baixas"], ["city-wattle-fence", "Cerca trançada"], ["city-stone-banner-wall", "Muralha baixa com estandarte"], ["city-banner-post", "Mastro de estandarte"], ["city-lantern-post", "Poste de lanterna"], ["city-well", "Poço da cidade"], ["city-signpost", "Placa direcional"], ["city-market-stall", "Barraca de mercado"], ["city-supply-cart", "Carroça de suprimentos"], ["city-covered-wagon", "Carroça coberta"], ["city-covered-crate", "Caixa coberta"], ["city-workbench", "Bancada"], ["city-execution-block", "Bloco de execução"], ["city-provisions", "Mantimentos"], ["city-log-stack", "Pilha de lenha"], ["city-campfire", "Fogueira"], ["city-barrels", "Barris"], ["city-stool", "Banco de madeira"], ["city-shrineCandle", "Oratório urbano com velas"], ["city-stone-pillar", "Pilar de pedra"], ["city-notice-post", "Poste de avisos"], ["city-ring-pillar", "Pilar com argola"], ["city-brazier", "Braseiro"], ["city-clothesline", "Varal"], ["city-wheelbarrow", "Carrinho de mão"], ["city-gallows-cages", "Forca com gaiolas"], ["city-gallows-cages2", "Forca com gaiolas II"],
 ], CITY_TWO_HEX);
 
 // 2026-09-16 art drop: 49 items cut from 11 AI-generated reference sheets (already
@@ -241,6 +243,8 @@ const NEW_DECOR_2026: Record<string, DecorationDef> = {
   "light-wall-torch": { id: "light-wall-torch", name: "Tocha de Parede", footprint: DECO_ONE },
   "light-brazier-bowl": { id: "light-brazier-bowl", name: "Braseiro II", footprint: DECO_ONE },
   "light-fireplace": { id: "light-fireplace", name: "Lareira", footprint: DECO_ONE, artScale: 2, unitLayer: "behind" },
+  Brazier3: { id: "Brazier3", name: "Braseiro III", footprint: DECO_ONE, artScale: 1.05 },
+  Chandelier: { id: "Chandelier", name: "Lustre", footprint: DECO_ONE, artScale: 1.1, heightScale: 1.25, unitLayer: "behind", noShadow: true },
   "city-root-shrine": { id: "city-root-shrine", name: "Santuário Coberto de Raízes", footprint: DECO_PAIR },
   "city-market-stall-2": { id: "city-market-stall-2", name: "Barraca de Mercado II", footprint: DECO_PAIR },
   "city-bear-trap": { id: "city-bear-trap", name: "Armadilha de Urso", footprint: DECO_ONE },
@@ -361,8 +365,7 @@ export const DEADWOODS_DECOR_IDS = new Set([
 export const DECORATIONS: Record<string, DecorationDef> = {
   "mountain-ridge": { id: "mountain-ridge", name: "Cordilheira", footprint: DECO_PAIR, tile: "hill" },
   "spike-rocks": { id: "spike-rocks", name: "Agulhas de Pedra", footprint: DECO_PAIR, tile: "column" },
-  // No tile stamp (unlike mountain-ridge/spike-rocks/dense-forest/broken-cliff-wall/
-  // boulder-cluster above) — it used to stamp "highwood" underneath itself, which is exactly
+  // No tile stamp — it used to stamp "highwood" underneath itself, which is exactly
   // the terrain deadtree/highwood/highruin were retired for being (see
   // clearScrappedGroundTiles' own doc comment): a fallen-tree PROP re-creating a fallen-tree
   // GROUND TILE the instant it's placed, including by scatterDecor's random scatter (which
@@ -371,12 +374,6 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   // decorative now, same as wilds-fallen-log/wilds-dead-oak.
   "dead-tree-large": { id: "dead-tree-large", name: "Árvore Morta Grande", footprint: DECO_PAIR },
   "dense-forest": { id: "dense-forest", name: "Bosque Denso", footprint: DECO_PAIR, tile: "woods" },
-  "broken-cliff-wall": { id: "broken-cliff-wall", name: "Muralha Rochosa Partida", footprint: DECO_PAIR, tile: "column", repeatGroup: "broken-cliff-wall" },
-  "boulder-cluster": { id: "boulder-cluster", name: "Amontoado de Pedras", footprint: DECO_TRIO, tile: "column" },
-  "ruined-cottage": { id: "ruined-cottage", name: "Casa em Ruínas", footprint: DECO_TRIO },
-  "broken-tower": { id: "broken-tower", name: "Torre Derrubada", footprint: DECO_PAIR },
-  "ruined-chapel": { id: "ruined-chapel", name: "Capela em Ruínas", footprint: DECO_PAIR },
-  "abandoned-mansion": { id: "abandoned-mansion", name: "Mansão Abandonada", footprint: DECO_BLOCK_5 },
   "stone-bridge": { id: "stone-bridge", name: "Ponte de Pedra", footprint: DECO_PAIR },
   // Long, repeatable transparent modules for the two outer edges of a bridge map.
   // Every Parapeito prop casts no shadow — a thin, tall railing throwing a hard shadow stripe
@@ -389,10 +386,8 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "bridge-parapet-tall-001": { id: "bridge-parapet-tall-001", name: "Tall-Parapeito", footprint: DECO_ROW_FIVE, unitLayer: "behind", repeatGroup: "bridge-parapet-tall", heightScale: 1.8, noShadow: true, aboveGroundMist: true },
   "bridge-parapet-tall-statues-001": { id: "bridge-parapet-tall-statues-001", name: "Tall-Parapeito — Estátuas", footprint: DECO_ROW_FIVE, foreground: true, unitLayer: "front", decorRenderOrder: 10, repeatGroup: "bridge-parapet-tall", heightScale: 1.8, noShadow: true, aboveGroundMist: true },
   "ember-channels-001": { id: "ember-channels-001", name: "Canais de Brasa", footprint: DECO_PAIR },
-  "broken-wall-segment": { id: "broken-wall-segment", name: "Muralha em Ruínas", footprint: DECO_PAIR, tile: "column", repeatGroup: "broken-wall-segment" },
   gatehouse: { id: "gatehouse", name: "Portão Fortificado", footprint: DECO_PAIR },
   watchtower: { id: "watchtower", name: "Torre de Vigia", footprint: DECO_PAIR },
-  "ancient-shrine": { id: "ancient-shrine", name: "Santuário Antigo", footprint: DECO_PAIR },
   // No `tile` — a chest is translucent scenery sitting on whatever ground was already
   // there (grass, ruins, a hill), never a terrain of its own. Its lock/block behavior
   // comes from CHEST_DECOR_IDS + hexprops.buildDecorOverlay instead of stamping the hex,
@@ -408,8 +403,6 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   // Barricades are props. Their blocking rules come from BARRICADE_LIKE_DECOR, so the
   // painted ground beneath them is always left exactly as the map author chose it.
   barricade: { id: "barricade", name: "Barricada", footprint: DECO_ONE },
-  "barricade-2": { id: "barricade-2", name: "Barricada 2", footprint: DECO_ONE },
-  "wooden-barricade": { id: "wooden-barricade", name: "Barricada de Estacas", footprint: DECO_ONE },
   "wooden-barricade-1": { id: "wooden-barricade-1", name: "Barricada de Estacas II", footprint: DECO_ONE },
   "dead-tree": { id: "dead-tree", name: "Árvore morta", footprint: DECO_ONE },
   "fallen-log": { id: "fallen-log", name: "Tronco caído", footprint: DECO_PAIR },
@@ -492,11 +485,10 @@ export const CHEST_DECOR_IDS = new Set(["locked-chest", "chest-medium", "chest-l
 /** Small single-building house props — a 3-hex footprint (DECO_TRIO), drawn at the shared
  * "house" art scale in BattleEngine.drawDecorations. Kept separate from BIG_HOUSE_DECOR_IDS
  * so the renderer can size the mansion's larger 5-hex footprint on its own. */
-export const HOUSE_DECOR_IDS = new Set(["small-house", "stone-hut", "burning-house", "burnt-house-ruins", "ruined-cottage"]);
+export const HOUSE_DECOR_IDS = new Set(["small-house", "stone-hut", "burning-house", "burnt-house-ruins"]);
 
-/** The one big-house prop (a mansion) — a 5-hex footprint (DECO_BLOCK_5), same 3x art scale
- * as HOUSE_DECOR_IDS but sized for its wider footprint. */
-export const BIG_HOUSE_DECOR_IDS = new Set(["abandoned-mansion"]);
+/** Retained empty set for renderer compatibility; the large mansion prop was removed. */
+export const BIG_HOUSE_DECOR_IDS = new Set<string>();
 
 /** Other house props (drawn at their own size, not the house art scale) that are just as solid:
  * impassable and never faded by fog, same as HOUSE_DECOR_IDS. */
@@ -510,8 +502,6 @@ export const SOLID_HOUSE_DECOR_IDS = new Set(["burning-hamlet"]);
  * city-gate-banner is excluded on purpose — it is a gate, meant to be walked through. */
 export const BARRICADE_LIKE_DECOR = new Set([
   "barricade",
-  "barricade-2",
-  "wooden-barricade",
   "wooden-barricade-1",
   "city-spike-barricade-low",
   "city-palisade-frame",
@@ -593,7 +583,6 @@ function decorationImagePath(id: string, ext: "png" | "webp"): string {
       : id === "dead-tree" ||
           id === "fallen-log" ||
           id === "barricade" ||
-          id === "barricade-2" ||
           id === "small-house" ||
           id === "stone-hut"
         ? "?v=4"
@@ -642,7 +631,7 @@ export function barricadeDecor(
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       if (tiles[y * cols + x] !== "barricade") continue;
-      if (existing.some((d) => (d.id === "barricade" || d.id === "barricade-2") && d.x === x && d.y === y)) continue;
+      if (existing.some((d) => d.id === "barricade" && d.x === x && d.y === y)) continue;
       out.push({ id: "barricade", x, y });
     }
   }
@@ -4922,7 +4911,7 @@ export function scatterTactics(m: Mission): Mission {
 
 // Solid props only: the mountain ridge left this list when it became climbable, since
 // rockifyColumns draws these over column tiles that stay impassable underneath.
-const ROCK_IDS = ["spike-rocks", "broken-cliff-wall"];
+const ROCK_IDS = ["spike-rocks"];
 
 /** Replaces every "column" tile (a marble pillar rendered on its own patch of grass —
  * looks absurd indoors, and doubly so on a plains/cave map that has no grass anywhere
@@ -5044,12 +5033,12 @@ function seedFromId(id: string): number {
 }
 
 const TREE_DECOS = ["dense-forest", "dead-tree-large"];
-const RUIN_DECOS = ["ruined-cottage", "broken-tower", "ruined-chapel", "broken-wall-segment", "boulder-cluster", "abandoned-mansion"];
+const RUIN_DECOS = ["burnt-house-ruins", "wilds-ruined-wayside-shrine", "wilds-ruined-gate", "wilds-mossy-shrine"];
 // Fallback dressing for an indoor/underground map (floorChar "n") with nothing of its own to
 // convert — no trees, no buildings, just loose rock. The buildings in RUIN_DECOS also read as
 // extra doorways/entrances when scattered around a cave, easy to mistake for actual lockable
 // doors on top of it looking wrong on its own.
-const INDOOR_DECOS = ["boulder-cluster"];
+const INDOOR_DECOS = ["large-boulder", "wilds-mossy-stones"];
 const CONVERT_TO_OPEN = new Set(["w", "r"]);
 const KEEP_HOST = new Set([".", "h", "f", "n"]);
 

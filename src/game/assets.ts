@@ -6,7 +6,7 @@ import type { GameArt, SpriteId, TerrainId } from "./types";
 // different variant in Mission.tileVariants — keep it as the tile that's safe
 // for existing maps.
 export const TILE_VARIANT_COUNT: Record<TerrainId, number> = {
-  plains: 22,
+  plains: 31,
   woods: 9,
   ruins: 7,
   water: 22,
@@ -18,7 +18,9 @@ export const TILE_VARIANT_COUNT: Record<TerrainId, number> = {
   barricade: 1,
   door: 1,
   void: 1,
-  snow: 3,
+  // The Icelands section keeps legacy snow variants first, then the 12 supplied
+  // cold-ground tiles (snow004–snow015) so saved maps retain their old indices.
+  snow: 15,
 };
 
 /** The art file a tile variant paints with, without path or cache-buster — "woods002".
@@ -33,10 +35,10 @@ export function tileVariantName(id: TerrainId, variant: number): string {
     if (variant === 2) return "plains001";
     if (variant === 15) return "plains017";
     if (variant === 16) return "plains018";
-    // 17-21: dirt (pebbles), dirt (mud + footprints), lush grass, grass + clover, grass +
-    // bushes. Named explicitly — the padded fallback below would land 17 on plains017,
-    // which variant 15 already uses.
-    if (variant >= 17 && variant <= 21) return `plains${String(variant + 2).padStart(3, "0")}`;
+    // 17-21 are the five existing ground variants; 22-30 are the City tiles.
+    // These ranges continue the numbered art files at plains019, avoiding the older
+    // plains017/plains018 files already used by variants 15 and 16.
+    if (variant >= 17 && variant <= 30) return `plains${String(variant + 2).padStart(3, "0")}`;
     return `plains${String(variant).padStart(3, "0")}`;
   }
   if (id === "water" && variant === 0) return "water023";
@@ -58,7 +60,7 @@ export function tileVariantName(id: TerrainId, variant: number): string {
 }
 
 export function tileVariantSrc(id: TerrainId, variant: number): string {
-  return `/game/tiles/${tileVariantName(id, variant)}.png?v=55`;
+  return `/game/tiles/${tileVariantName(id, variant)}.png?v=66`;
 }
 /** Framed portrait art for the sprites that have one; every other sprite falls back to its
  * own first battle-frame, unframed. */
@@ -186,7 +188,16 @@ export async function loadGameArt(): Promise<GameArt> {
     Object.keys(DECORATIONS).map(async (id) => {
       // PNG first (every existing decoration ships as one); a prop supplied as WebP with real
       // alpha baked in (see decorationImage's own note) falls back to that automatically.
-      decorations[id] = await loadImage(decorationImage(id)).catch(() => loadImage(decorationImageWebp(id)));
+      decorations[id] = await loadImage(decorationImage(id))
+        .catch(() => loadImage(decorationImageWebp(id)))
+        .catch(() => {
+          // Registered-but-not-shipped optional decor should not prevent the whole game from
+          // loading; callers already skip images with naturalWidth 0.
+          const placeholder = new Image();
+          placeholder.width = 1;
+          placeholder.height = 1;
+          return placeholder;
+        });
     }),
   );
   const sprites = {} as Record<SpriteId, HTMLImageElement[]>;
@@ -459,6 +470,7 @@ export async function loadGameArt(): Promise<GameArt> {
     profundezas: await loadImage("/game/assets/profundezas-bg.jpg?v=2"),
     thebridge: await loadImage("/game/assets/thebridge-bg.jpg?v=1"),
     "wisp-forest": await loadImage("/game/assets/wisp-forest-bg.jpg"),
+    "wisp-forest-crossing": await loadImage("/game/assets/wisp-forest-bg.jpg"),
     "random-encounter-1": await loadImage("/game/assets/random-encounter-1-bg.jpg"),
     "random-encounter-2": await loadImage("/game/assets/random-encounter-2-bg.jpg"),
     "random-encounter-4": await loadImage("/game/assets/random-encounter-4-bg.jpg"),

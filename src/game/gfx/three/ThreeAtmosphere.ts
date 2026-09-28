@@ -42,6 +42,7 @@
 
 import * as THREE from "three";
 import type { BattleEngine } from "../../engine";
+import { boxBlur } from "./ThreeGroundAO";
 
 /** Mist tuning for one frame — built fresh from Mission.mistIntensity in ThreeAtmosphere.sync()
  * (see its own comment) rather than a hardcoded per-mission-id table, so the Map Editor's
@@ -678,6 +679,238 @@ class BoardFogArtwork {
 }
 
 // ---------------------------------------------------------------------------------------------
+// "Fog 01" — Fog 2's own smooth drifting mist, but masked by the party's fog-of-war: it only
+// ever shows over ground they haven't revealed yet, plus the exterior backdrop past the board's
+// edge (reusing BoardFogArtwork's own board-rectangle test for that half). Real explored/visible
+// terrain stays completely clear underneath it, so it never washes out ground you can already see.
+
+const REVEAL_RES = 3;
+const REVEAL_BLUR_R = 2;
+const REVEAL_BLUR_PASSES = 2;
+
+/** Per-hex "has the party revealed this ground" mask, baked into a small DataTexture — same
+ * board-local-grid idea ThreeFogMask.ts uses for the real fog-of-war sheet (same `cellAt`
+ * callback, same per-hex state lookup), but coarser (RES=3, not 8) since this only ever feeds
+ * a soft, already-blurred atmospheric layer, never a crisp gameplay edge — and sampled by hand
+ * in the fragment shader (see REVEAL_FOG_FRAGMENT's revealUv) instead of through a plain mesh
+ * UV, so `flipY` is turned off here and the data written in plain row order: no implicit "which
+ * convention is this texture in" to get backwards. Deliberately sized to boardSize()'s own
+ * (w,h) rather than ThreeFogMask's slightly larger padded grid, so its UV mapping can share
+ * BoardFogArtwork's uBoardCenter/uBoardHalfSize uniforms instead of tracking a second,
+ * mismatched rectangle. */
+class RevealMask {
+  private texture: THREE.DataTexture | null = null;
+  private key = "";
+
+  get tex(): THREE.Texture | null {
+    return this.texture;
+  }
+
+  update(
+    key: string,
+    tile: number,
+    boardW: number,
+    boardH: number,
+    cellAt: (x: number, y: number) => number,
+    revealedAt: (index: number) => boolean,
+  ): void {
+    if (key === this.key) return;
+    this.key = key;
+    const gw = Math.max(1, Math.ceil((boardW / tile) * REVEAL_RES));
+    const gh = Math.max(1, Math.ceil((boardH / tile) * REVEAL_RES));
+    const n = gw * gh;
+    let alpha = new Float32Array(n);
+    for (let y = 0; y < gh; y++) {
+      for (let x = 0; x < gw; x++) {
+        const c = cellAt((x + 0.5) / REVEAL_RES, (y + 0.5) / REVEAL_RES);
+        alpha[y * gw + x] = c < 0 || !revealedAt(c) ? 1 : 0;
+      }
+    }
+    const tmp = new Float32Array(n);
+    for (let pass = 0; pass < REVEAL_BLUR_PASSES; pass++) {
+      boxBlur(alpha, tmp, gw, gh, REVEAL_BLUR_R, true);
+      boxBlur(tmp, alpha, gw, gh, REVEAL_BLUR_R, false);
+    }
+    const data = new Uint8Array(n * 4);
+    for (let y = 0; y < gh; y++) {
+      for (let x = 0; x < gw; x++) {
+        const v = Math.round(255 * alpha[y * gw + x]!);
+        // No row flip here (unlike ThreeFogMask): flipY below is explicitly off, so texel row
+        // y (source y, increasing = further down the y-down world) samples at v = y/gh
+        // directly — see the fragment shader's revealUv derivation from -vWorldXY.y.
+        const j = (y * gw + x) * 4;
+        data[j] = v;
+        data[j + 1] = v;
+        data[j + 2] = v;
+        data[j + 3] = 255;
+      }
+    }
+    this.texture?.dispose();
+    const tex = new THREE.DataTexture(data, gw, gh, THREE.RGBAFormat, THREE.UnsignedByteType);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    // Explicit and load-bearing: Texture.flipY defaults to true, which would silently reverse
+    // the row order a second time on upload (on top of the deliberate CPU-side layout above),
+    // sampling every hex's reveal state from its mirror-image row instead of its own.
+    tex.flipY = false;
+    tex.needsUpdate = true;
+    this.texture = tex;
+    alpha = new Float32Array(0);
+  }
+
+  dispose(): void {
+    this.texture?.dispose();
+  }
+}
+
+const REVEAL_FOG_VERTEX = /* glsl */ `
+  varying vec2 vWorldXY;
+  void main() {
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldXY = worldPos.xy;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
+
+const REVEAL_FOG_FRAGMENT = /* glsl */ `
+  uniform sampler2D uNoiseTex;
+  uniform sampler2D uReveal;
+  uniform float uHasReveal;
+  uniform float uTime;
+  uniform float uScale;
+  uniform vec2 uDrift;
+  uniform vec3 uColor;
+  uniform vec3 uSunColor;
+  uniform float uAlpha;
+  uniform vec2 uBoardCenter;
+  uniform vec2 uBoardHalfSize;
+  varying vec2 vWorldXY;
+
+  float fbm(vec2 uv) {
+    return texture2D(uNoiseTex, uv).r * 0.55
+         + texture2D(uNoiseTex, uv * 2.3 + 3.1).g * 0.3
+         + texture2D(uNoiseTex, uv * 4.7 + 9.4).b * 0.15;
+  }
+
+  void main() {
+    vec2 uv = vWorldXY * uScale + uTime * uDrift;
+    // Two independent octaves multiplied together, not just one fbm sample like Fog 2 — more
+    // depth/variation for the same cost (still only texture fetches, no new noise math).
+    float n1 = fbm(uv);
+    float n2 = fbm(uv * -1.6 + 7.0 - uTime * uDrift * 0.35);
+    float n = clamp(n1 * 0.6 + n1 * n2 * 0.9, 0.0, 1.0);
+
+    vec2 over = abs(vWorldXY - uBoardCenter) - uBoardHalfSize;
+    float exterior = smoothstep(-14.0, 14.0, max(over.x, over.y));
+    // uReveal's texel row y was written directly (no flip, flipY off — see RevealMask), so
+    // v = 0 is the y-down world's TOP (scene Y = 0) and v = 1 is its BOTTOM (scene Y = -h);
+    // scene Y is already negated from the y-down "wy" the mask was built from, hence -vWorldXY.y.
+    vec2 revealUv = vec2(
+      (vWorldXY.x - (uBoardCenter.x - uBoardHalfSize.x)) / (2.0 * uBoardHalfSize.x),
+      -vWorldXY.y / (2.0 * uBoardHalfSize.y)
+    );
+    float unrevealed = uHasReveal > 0.5 ? texture2D(uReveal, revealUv).r : 1.0;
+    // Only ever shows past the board's edge (the exterior backdrop) or over ground the party
+    // hasn't revealed yet — real explored/visible terrain stays completely clear.
+    float mask = max(exterior, unrevealed);
+
+    vec3 color = mix(uColor, uSunColor, 0.35);
+    gl_FragColor = vec4(color, n * uAlpha * mask);
+  }
+`;
+
+class RevealFog {
+  readonly group = new THREE.Group();
+  private readonly geometry = new THREE.PlaneGeometry(1, 1);
+  private readonly noiseTex = buildMistNoiseTexture();
+  private readonly reveal = new RevealMask();
+  private readonly material: THREE.ShaderMaterial;
+  private readonly mesh: THREE.Mesh;
+  private builtKey = "";
+
+  constructor() {
+    this.material = new THREE.ShaderMaterial({
+      vertexShader: REVEAL_FOG_VERTEX,
+      fragmentShader: REVEAL_FOG_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      uniforms: {
+        uNoiseTex: { value: this.noiseTex },
+        uReveal: { value: null },
+        uHasReveal: { value: 0 },
+        uTime: { value: 0 },
+        uScale: { value: 0.0032 },
+        uDrift: { value: new THREE.Vector2(0.05, 0.08) },
+        uColor: { value: new THREE.Color(0xaab4ad) },
+        uSunColor: { value: new THREE.Color(0xffffff) },
+        uAlpha: { value: 0 },
+        uBoardCenter: { value: new THREE.Vector2() },
+        uBoardHalfSize: { value: new THREE.Vector2(1, 1) },
+      },
+    });
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    this.mesh.renderOrder = 11;
+    this.group.add(this.mesh);
+  }
+
+  rebuild(cols: number, rows: number, tile: number, missionId: string, tier: AtmosphereTier): void {
+    const key = `${missionId}:${cols}:${rows}:${tile}`;
+    if (key !== this.builtKey) {
+      this.builtKey = key;
+      const { w, h } = boardSize(cols, rows, tile);
+      (this.material.uniforms.uBoardCenter!.value as THREE.Vector2).set(w / 2, -h / 2);
+      (this.material.uniforms.uBoardHalfSize!.value as THREE.Vector2).set(w / 2, h / 2);
+    }
+    const shapedIntensity = tier.mistIntensity * tier.mistIntensity;
+    (this.material.uniforms.uColor!.value as THREE.Color).setHex(tier.mistColor);
+    this.material.uniforms.uAlpha!.value = shapedIntensity;
+    this.group.visible = tier.mistIntensity > 0;
+  }
+
+  /** Rebuilds the reveal mask only when the party's explored state actually changed
+   * (visVersion) — same rebuild-gating idea as ThreeFogMask. Skipped (mask left fully "show
+   * fog everywhere") on a mission with no fog-of-war, so Fog 01 without fog just looks like a
+   * plain Fog 2 covering the whole board. */
+  syncReveal(engine: BattleEngine, tile: number, cellAt: (x: number, y: number) => number): void {
+    if (!this.group.visible) return;
+    if (!engine.fogged) {
+      this.material.uniforms.uHasReveal!.value = 0;
+      return;
+    }
+    const { w, h } = boardSize(engine.cols, engine.rows, tile);
+    const key = `${engine.mission.id}:${engine.cols}x${engine.rows}:${engine.visVersion}`;
+    this.reveal.update(key, tile, w, h, cellAt, (i) => {
+      const x = i % engine.cols;
+      const y = (i - x) / engine.cols;
+      return engine.explored(x, y);
+    });
+    this.material.uniforms.uReveal!.value = this.reveal.tex;
+    this.material.uniforms.uHasReveal!.value = 1;
+  }
+
+  coverViewport(cssW: number, cssH: number, camX: number, camY: number): void {
+    if (!this.group.visible) return;
+    this.mesh.scale.set(cssW * 1.16, cssH * 1.16, 1);
+    this.mesh.position.set(camX + cssW / 2, -camY - cssH / 2, 8);
+  }
+
+  sync(dt: number, sunLight: THREE.DirectionalLight, speed: number): void {
+    this.material.uniforms.uTime!.value += dt * speed;
+    (this.material.uniforms.uSunColor!.value as THREE.Color).copy(sunLight.color).multiplyScalar(Math.min(1.5, sunLight.intensity * 0.6));
+  }
+
+  dispose(): void {
+    this.geometry.dispose();
+    this.material.dispose();
+    this.noiseTex.dispose();
+    this.reveal.dispose();
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Drift particles: GPU-driven InstancedMesh quads. Position is computed per-vertex on the GPU
 // from a per-instance world-anchor + seed and the single uTime uniform — the only per-frame CPU
 // work is updating that one float (plus a cheap CPU Color.lerp for light-tinting, see sync()).
@@ -910,6 +1143,7 @@ export class ThreeAtmosphere {
   private readonly mist2 = new GroundMist();
   private readonly mist3 = new GroundMist3();
   private readonly mist4 = new GroundMist4();
+  private readonly revealFog = new RevealFog();
   private readonly fogArtwork = new BoardFogArtwork();
   private readonly dust = new ParticleField("dust");
   private readonly embers = new ParticleField("ember");
@@ -918,7 +1152,15 @@ export class ThreeAtmosphere {
   private readonly scratchWispColor = new THREE.Color();
 
   constructor() {
-    this.group.add(this.mist2.group, this.mist3.group, this.mist4.group, this.fogArtwork.group, this.dust.group, this.embers.group);
+    this.group.add(
+      this.mist2.group,
+      this.mist3.group,
+      this.mist4.group,
+      this.revealFog.group,
+      this.fogArtwork.group,
+      this.dust.group,
+      this.embers.group,
+    );
   }
 
   sync(
@@ -928,6 +1170,7 @@ export class ThreeAtmosphere {
     sunLight: THREE.DirectionalLight,
     hemiLight: THREE.HemisphereLight,
     viewport?: { cssW: number; cssH: number; camX: number; camY: number },
+    cellAt?: (x: number, y: number) => number,
   ): void {
     // Mission-authored, not a hardcoded per-id table (see Mission.mistIntensity/wispIntensity/
     // wispSpeed in types.ts) — the Map Editor's "Névoa"/"Wisps"/"Velocidade" sliders are the one
@@ -942,8 +1185,15 @@ export class ThreeAtmosphere {
     const mistSpeed = engine.mission.mistSpeed ?? 1;
     // "vignette" mistType means neither world-space mist implementation should render at all —
     // that look comes entirely from BattleCanvas.tsx's screen-space CSS vignette instead.
+    // "none" is an explicit author override: no mist, world-space or screen-space, whatever
+    // mistIntensity is set to.
     const mistType = engine.mission.mistType ?? "mist2";
-    const worldMistIntensity = mistType === "vignette" || mistType === "vignette2" || mistType === "vignette3" || mistType === "vignette4" ? 0 : (engine.mission.mistIntensity ?? 0.2);
+    // "none" ("Sem névoa") is a full atmosphere kill-switch, not just the mist layer — per
+    // direct correction, it means everything off: mist, vignette, AND wisps/embers, whatever
+    // their own sliders are set to.
+    const noFog = mistType === "none";
+    const worldMistIntensity =
+      noFog || mistType === "vignette" || mistType === "vignette2" || mistType === "vignette3" || mistType === "vignette4" ? 0 : (engine.mission.mistIntensity ?? 0.2);
     const tier: AtmosphereTier = {
       // Plain default, not a forced floor — a floor would override an explicit 0 the author
       // deliberately set to turn mist off on a specific map ("if I don't want it somewhere I'll
@@ -955,7 +1205,7 @@ export class ThreeAtmosphere {
       mistHeight: 40,
       mistColor: 0xaab4ad,
       dustCount: 0,
-      emberCount: Math.round(wisp * MAX_EMBER_COUNT),
+      emberCount: noFog ? 0 : Math.round(wisp * MAX_EMBER_COUNT),
       emberRiseHeight: 90,
     };
     const key = `${engine.mission.id}:${engine.cols}:${engine.rows}:${tile}`;
@@ -967,6 +1217,7 @@ export class ThreeAtmosphere {
     const mist2Tier: AtmosphereTier = { ...tier, mistIntensity: mistType === "mist2" ? worldMistIntensity : 0 };
     const mist3Tier: AtmosphereTier = { ...tier, mistIntensity: mistType === "mist3" ? worldMistIntensity : 0 };
     const mist4Tier: AtmosphereTier = { ...tier, mistIntensity: mistType === "mist4" ? worldMistIntensity : 0 };
+    const fog1Tier: AtmosphereTier = { ...tier, mistIntensity: mistType === "fog1" ? worldMistIntensity : 0 };
     this.mist2.rebuild(engine.cols, engine.rows, tile, engine.mission.id, mist2Tier);
     if (mistType === "mist2" && viewport) this.mist2.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
     this.mist2.sync(dt, sunLight, mistSpeed);
@@ -976,6 +1227,10 @@ export class ThreeAtmosphere {
     this.mist4.rebuild(engine.cols, engine.rows, tile, engine.mission.id, mist4Tier);
     if (mistType === "mist4" && viewport) this.mist4.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
     this.mist4.sync(dt, sunLight, mistSpeed);
+    this.revealFog.rebuild(engine.cols, engine.rows, tile, engine.mission.id, fog1Tier);
+    if (mistType === "fog1" && viewport) this.revealFog.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
+    if (mistType === "fog1" && cellAt) this.revealFog.syncReveal(engine, tile, cellAt);
+    this.revealFog.sync(dt, sunLight, mistSpeed);
     this.fogArtwork.rebuild(engine.cols, engine.rows, tile, engine.mission.id, 0);
     this.fogArtwork.sync(dt, mistSpeed);
 
@@ -992,6 +1247,7 @@ export class ThreeAtmosphere {
     this.mist2.dispose();
     this.mist3.dispose();
     this.mist4.dispose();
+    this.revealFog.dispose();
     this.fogArtwork.dispose();
     this.dust.dispose();
     this.embers.dispose();

@@ -11,7 +11,7 @@
     "win": "rout",
     "hub": false,
     "autoTactics": false,
-    "fog": true,
+    "fog": false,
     "locationId": "",
     "cols": 14,
     "rows": 12,

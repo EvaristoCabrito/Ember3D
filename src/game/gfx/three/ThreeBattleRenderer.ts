@@ -44,14 +44,16 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { WEB_SHOT_TRAVEL, type BattleEngine } from "../../engine";
-import { FireballV2 } from "./ThreeFireballV2";
 import { BIG_HOUSE_DECOR_IDS, CHEST_DECOR_IDS, DECOR_ART_SCALE, DECORATIONS, HOUSE_ART_SCALE, HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, TERRAIN, decorationFacing, decorationImage, decorationImageRetryWebp, placedFootprint } from "../../data";
-import { tileAt } from "../../pathfinding";
+import { footprint, hexNeighbors, tileAt } from "../../pathfinding";
 import type { DecorationDef, DecorationPlacement, MapTimeOfDay, TerrainId } from "../../types";
 import { GroundAO, type AoOccluder } from "./ThreeGroundAO";
 import { FOG_EXPLORED, FOG_UNSEEN, FOG_VISIBLE, FogMask } from "./ThreeFogMask";
-import { LIGHT_DECAY, LIGHT_DEFS, UNIT_LIGHT_DEFS, flickerAt, type EnvLight, type LightDef } from "../../lighting";
+import { LIGHT_DECAY, LIGHT_DEFS, LIGHT_RADIUS_MUL, UNIT_LIGHT_DEFS, flickerAt, type EnvLight, type LightDef } from "../../lighting";
 import { ThreeAtmosphere } from "./ThreeAtmosphere";
+import { decorationAnchor } from "../decorationAnchor";
+import { FireballVFX } from "./FireballVFX";
+import { OldFireBall } from "./OldFireBall";
 import { getDevGfx } from "./devGfx";
 
 const SQRT3 = Math.sqrt(3);
@@ -220,7 +222,7 @@ function decorSize(id: string, def: DecorationDef, tile: number): { w: number; h
   const item = CHEST_DECOR_IDS.has(id);
   const tree = id === "dead-tree";
   const log = id === "fallen-log";
-  const wall = id === "barricade" || id === "barricade-2";
+  const wall = id === "barricade";
   const anyHouse = HOUSE_DECOR_IDS.has(id) || BIG_HOUSE_DECOR_IDS.has(id);
   const w = tree
     ? tile * 1.28
@@ -343,7 +345,6 @@ const PROXY_LAYER = 3;
 const GROUND_BASE_IRRADIANCE = 4.9;
 /** Fraction of an image's height, measured up from its lowest opaque row, that counts as "the
  * base touching the ground" (feet, paws, trunk, wall foot). */
-const CONTACT_BASE_BAND = 0.08;
 
 /** Falloff mask shared by every contact decal. Alpha only — the material (see
  * makeContactShadowMaterial) multiplies the ground by (1 - alpha), so the color channels are
@@ -397,53 +398,7 @@ interface ArtBase {
 const artBaseCache = new WeakMap<HTMLImageElement, ArtBase | null>();
 function artBase(img: HTMLImageElement): ArtBase | null {
   if (artBaseCache.has(img)) return artBaseCache.get(img)!;
-  let result: ArtBase | null = null;
-  try {
-    const scale = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight));
-    const w = Math.max(1, Math.round(img.naturalWidth * scale));
-    const h = Math.max(1, Math.round(img.naturalHeight * scale));
-    const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
-    const ctx = c.getContext("2d", { willReadFrequently: true })!;
-    ctx.drawImage(img, 0, 0, w, h);
-    const a = ctx.getImageData(0, 0, w, h).data;
-    let bottom = -1;
-    for (let y = h - 1; y >= 0 && bottom < 0; y--) {
-      for (let x = 0; x < w; x++) {
-        if (a[(y * w + x) * 4 + 3]! > 128) {
-          bottom = y;
-          break;
-        }
-      }
-    }
-    if (bottom >= 0) {
-      const top = Math.max(0, bottom - Math.max(1, Math.round(h * CONTACT_BASE_BAND)));
-      const cols = new Float64Array(w);
-      let total = 0;
-      for (let y = top; y <= bottom; y++) {
-        for (let x = 0; x < w; x++) {
-          const al = a[(y * w + x) * 4 + 3]!;
-          if (al > 128) {
-            cols[x] += al;
-            total += al;
-          }
-        }
-      }
-      let acc = 0;
-      let x0 = 0;
-      let x1 = w - 1;
-      for (let x = 0; x < w; x++) {
-        const prev = acc;
-        acc += cols[x]!;
-        if (prev < total * 0.05 && acc >= total * 0.05) x0 = x;
-        if (prev < total * 0.95 && acc >= total * 0.95) x1 = x;
-      }
-      result = { u0: x0 / w, u1: (x1 + 1) / w, v: (bottom + 1) / h };
-    }
-  } catch {
-    result = null;
-  }
+  const result = decorationAnchor(img);
   artBaseCache.set(img, result);
   return result;
 }
@@ -539,11 +494,20 @@ interface UnitMeshEntry {
   contactFit: { dx: number; dy: number; w: number } | null;
   /** Hidden upright cylinder (PROXY_LAYER) standing at the character's feet. */
   proxy: THREE.Mesh;
+  /** Same trick as a house's DecorMeshEntry.fogCut — an invisible depth-only copy of the unit's
+   * own sprite, drawn just under the fog-of-war sheet, so the fog never blacks out a unit that
+   * is actually standing there (a unit at the edge of sight was getting half-erased by the
+   * unseen hex right next to it). */
+  fogCut: THREE.Mesh;
 }
 
 export class ThreeBattleRenderer {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
+  private fireballVfx: FireballVFX | null = null;
+  /** The former tavern preview model, now reserved for the actual cast trajectory. */
+  private readonly tavernFireball = new OldFireBall(LIGHT_DECAY);
+  private disposed = false;
   private camera: THREE.OrthographicCamera;
   private tileGroup = new THREE.Group();
   private tileMeshes = new Map<number, TileMeshEntry>();
@@ -571,8 +535,6 @@ export class ThreeBattleRenderer {
   private fogMask = new FogMask();
   /** Real point lights for map light sources (see POINT_LIGHT_POOL / syncLights). */
   private pointLights: THREE.PointLight[] = [];
-  /** Dev Controls "Bola de fogo V2 (teste)": one procedural fireball carrying a real PointLight. */
-  private fireballV2 = new FireballV2(LIGHT_DECAY);
   /** Shared proxy geometry: unit box and a Z-up unit cylinder, scaled per object. */
   private proxyBox = new THREE.BoxGeometry(1, 1, 1);
   private proxyCylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 16).rotateX(Math.PI / 2);
@@ -804,8 +766,11 @@ export class ThreeBattleRenderer {
       this.pointLights.push(pl);
       this.scene.add(pl);
     }
-    this.scene.add(this.fireballV2.group);
     this.scene.add(this.atmosphere.group);
+    // Construct synchronously: every live Fireball impact particle is procedural, so no image
+    // request can leave the spell without its flight or explosion when cast immediately.
+    this.fireballVfx = new FireballVFX(this.scene, this.camera, "original", this.tavernFireball);
+    this.engine.fireballVfxAvailable = true;
 
     // Only the wisp embers ever render into the bloom-only pass (everything else gets forced to
     // black during it, see render()) — a low fixed threshold is correct now, since there's
@@ -1163,6 +1128,14 @@ export class ThreeBattleRenderer {
       const wx = sumWx / n;
       const groundWy = sumWy / n; // ground contact, before decorSize's liftY visual offset
       const wy = groundWy + liftY;
+      const alphaBase = artBase(img);
+      let offsetX = alphaBase ? (0.5 - (alphaBase.u0 + alphaBase.u1) / 2) * w : 0;
+      let offsetY = alphaBase ? (1 - alphaBase.v) * h : 0;
+      if (facing.own && facing.mirror) offsetX = -offsetX;
+      else if (!facing.own && facing.step) {
+        const angle = (facing.step * Math.PI) / 3;
+        [offsetX, offsetY] = [offsetX * Math.cos(angle) - offsetY * Math.sin(angle), offsetX * Math.sin(angle) + offsetY * Math.cos(angle)];
+      }
 
       // Hoisted above the mesh so its renderOrder can already account for it — see
       // ABOVE_GROUND_MIST_ORDER's own comment.
@@ -1180,7 +1153,7 @@ export class ThreeBattleRenderer {
       // covers it and one further back is covered — except explicit layers and flat Waypoints.
       const pinnedBehind = decorLayer === "behind" || !!def.exitKind;
       const depthZ = pinnedBehind ? DEPTH_Z_BEHIND : decorLayer === "front" ? DEPTH_Z_FRONT : spriteDepthZ(frontWy, tile);
-      mesh.position.set(wx, -wy, depthZ);
+      mesh.position.set(wx + offsetX, -wy - offsetY, depthZ);
       if (!pinnedBehind && decorLayer !== "front") mesh.add(new THREE.Mesh(this.quadGeo, this.decorOccluderMaterialFor(fileId, mat)));
       if (facing.step === 0) {
         mesh.scale.set(w, h, 1);
@@ -1218,7 +1191,7 @@ export class ThreeBattleRenderer {
         const shadowMat = this.decorShadowMaterialFor(fileId, mat);
         shadowMesh = new THREE.Mesh(this.quadGeo, shadowMat);
         shadowMesh.castShadow = true;
-        shadowMesh.position.set(wx, -groundWy, elevation / 2 - DECOR_SHADOW_GROUND_INSET / 2);
+        shadowMesh.position.set(wx + offsetX, -(groundWy + offsetY), elevation / 2 - DECOR_SHADOW_GROUND_INSET / 2);
         if (facing.step === 0) {
           shadowMesh.rotation.x = Math.PI / 2;
           shadowMesh.scale.set(w, elevation + DECOR_SHADOW_GROUND_INSET, 1);
@@ -1242,7 +1215,7 @@ export class ThreeBattleRenderer {
         const cw = (base.u1 - base.u0) * w * CONTACT_SHADOW_W;
         contactMesh = new THREE.Mesh(this.quadGeo, this.decorContactMaterial);
         const ch = Math.min(cw * CONTACT_SHADOW_H, tile * CONTACT_SHADOW_MAX_H);
-        contactMesh.position.set(wx + sign * ((base.u0 + base.u1) / 2 - 0.5) * w, -(wy - h / 2 + base.v * h + ch * CONTACT_SHADOW_FORWARD), 0.51);
+        contactMesh.position.set(wx + offsetX + sign * ((base.u0 + base.u1) / 2 - 0.5) * w, -(wy + offsetY - h / 2 + base.v * h + ch * CONTACT_SHADOW_FORWARD), 0.51);
         contactMesh.scale.set(cw, ch, 1);
         this.decorContactGroup.add(contactMesh);
       }
@@ -1253,8 +1226,8 @@ export class ThreeBattleRenderer {
       if (lightDef) {
         const f = artFlame(img);
         const sign = facing.own && facing.mirror ? -1 : 1;
-        const flameY = wy - h / 2 + f.v * h;
-        light = { x: wx + sign * (f.u - 0.5) * w, y: groundWy, h: Math.max(0, groundWy - flameY), def: lightDef, seed: (p.x * 7.31 + p.y * 3.17) % 6.28 };
+        const flameY = wy + offsetY - h / 2 + f.v * h;
+        light = { x: wx + offsetX + sign * (f.u - 0.5) * w, y: groundWy + offsetY, h: Math.max(0, groundWy + offsetY - flameY), def: lightDef, seed: (p.x * 7.31 + p.y * 3.17) % 6.28 };
       }
 
       // Hidden physical volume: a box standing on the prop's ground spot, as wide as its
@@ -1267,12 +1240,12 @@ export class ThreeBattleRenderer {
         const sign = facing.own && facing.mirror ? -1 : 1;
         const bw = pb ? Math.max(tile * 0.3, (pb.u1 - pb.u0) * w) : w * 0.6;
         const depth = Math.min(bw, tile * 1.6) * 0.6;
-        const bx = pb ? wx + sign * ((pb.u0 + pb.u1) / 2 - 0.5) * w : wx;
+        const bx = pb ? wx + offsetX + sign * ((pb.u0 + pb.u1) / 2 - 0.5) * w : wx + offsetX;
         proxy = new THREE.Mesh(this.proxyBox, this.proxyMaterial);
         proxy.layers.set(PROXY_LAYER);
         proxy.castShadow = true;
         proxy.scale.set(bw, depth, elevation);
-        proxy.position.set(bx, -groundWy + depth / 2, elevation / 2);
+        proxy.position.set(bx, -(groundWy + offsetY) + depth / 2, elevation / 2);
         this.shadowCasterGroup.add(proxy);
       }
 
@@ -1282,7 +1255,7 @@ export class ThreeBattleRenderer {
       if (HOUSE_DECOR_IDS.has(p.id) || BIG_HOUSE_DECOR_IDS.has(p.id) || SOLID_HOUSE_DECOR_IDS.has(p.id)) {
         fogCut = new THREE.Mesh(this.quadGeo, this.decorFogCutMaterialFor(fileId, mat));
         fogCut.renderOrder = 99;
-        fogCut.position.set(wx, -wy, 60);
+        fogCut.position.set(wx + offsetX, -wy - offsetY, 60);
         fogCut.scale.copy(mesh.scale);
         fogCut.rotation.copy(mesh.rotation);
         this.decorGroup.add(fogCut);
@@ -1392,7 +1365,10 @@ export class ThreeBattleRenderer {
         this.unitGroup.add(glowMesh);
         const occluder = new THREE.Mesh(this.quadGeo, this.unitOccluderMaterialFor(this.unitTextureFor(img)));
         mesh.add(occluder);
-        entry = { mesh, glowMesh, glowMaterial, material, lightCap, occluder, img: null, shadowMesh, shadowMaterial, contactMesh, contactMaterial, contactFit: null, proxy };
+        const fogCut = new THREE.Mesh(this.quadGeo, this.unitFogCutMaterialFor(this.unitTextureFor(img)));
+        fogCut.renderOrder = 99;
+        this.unitGroup.add(fogCut);
+        entry = { mesh, glowMesh, glowMaterial, material, lightCap, occluder, img: null, shadowMesh, shadowMaterial, contactMesh, contactMaterial, contactFit: null, proxy, fogCut };
         this.unitEntries.set(u.id, entry);
       }
       entry.mesh.visible = true;
@@ -1402,6 +1378,7 @@ export class ThreeBattleRenderer {
         entry.shadowMaterial.map = this.unitTextureFor(img);
         entry.shadowMaterial.needsUpdate = true;
         entry.occluder.material = this.unitOccluderMaterialFor(this.unitTextureFor(img));
+        entry.fogCut.material = this.unitFogCutMaterialFor(this.unitTextureFor(img));
         entry.img = img;
       }
       // Same fade-in/out and post-action player-unit dimming as
@@ -1427,6 +1404,11 @@ export class ThreeBattleRenderer {
       // A unit fading in/out is see-through, so it must not blot out what stands behind it.
       entry.occluder.visible = u.fade >= 0.999;
       entry.mesh.scale.set(v.scaleX * v.w, v.scaleY * v.h, 1);
+      // Fixed z=60: above the fog sheet's z=50 (see FogMask), same height as a house's fogCut,
+      // so the fog-of-war sheet always fails its depth test over this unit, whatever row it's on.
+      entry.fogCut.position.set(wx, -wy, 60);
+      entry.fogCut.scale.copy(entry.mesh.scale);
+      entry.fogCut.visible = u.fade >= 0.999;
 
       // Hit flash: Canvas2D's ctx.filter brightness(1.8 + flash) on the sprite, as a multiplier
       // on this unit's lit material (on top of syncSpriteExposure's base color, set earlier this
@@ -1531,9 +1513,11 @@ export class ThreeBattleRenderer {
         entry.shadowMesh.visible = false;
         entry.contactMesh.visible = false;
         entry.proxy.visible = false;
+        entry.fogCut.visible = false;
       } else {
         this.unitGroup.remove(entry.mesh);
         this.unitGroup.remove(entry.glowMesh);
+        this.unitGroup.remove(entry.fogCut);
         entry.glowMaterial.dispose();
         this.shadowCasterGroup.remove(entry.shadowMesh);
         this.contactShadowGroup.remove(entry.contactMesh);
@@ -1730,7 +1714,6 @@ export class ThreeBattleRenderer {
     this.syncOverlay(tile);
     this.syncUnits(tile);
     this.syncSky();
-    this.syncFireballV2(tile);
     this.applyDevGfx();
     // MILESTONE 3 — dt derived locally (render() itself only ever receives cssW/cssH, see this
     // method's own comment) since the mist noise drift and particle GPU animation are the only
@@ -1743,12 +1726,16 @@ export class ThreeBattleRenderer {
     // mesh placement's own Y-negation (see module comment) — verified numerically to
     // reproduce BattleEngine's cx/cy screen-pixel formula exactly.
     this.camera.position.set(this.engine.camX, -this.engine.camY - cssH, 100);
-    this.atmosphere.sync(this.engine, tile, dt, this.sunLight, this.hemiLight, {
-      cssW,
-      cssH,
-      camX: this.engine.camX,
-      camY: this.engine.camY,
-    });
+    this.syncFireballVfx(dt, cssW, cssH, tile);
+    this.atmosphere.sync(
+      this.engine,
+      tile,
+      dt,
+      this.sunLight,
+      this.hemiLight,
+      { cssW, cssH, camX: this.engine.camX, camY: this.engine.camY },
+      (x, y) => this.cellAtWorld(x, y),
+    );
     // MILESTONE 2 — the sun has to re-aim every frame too, for the same reason the camera does:
     // the shadow-caster boxes are fixed in world space, only the view of them pans.
     this.updateSun(cssW, cssH, this.engine.camX, this.engine.camY);
@@ -1757,6 +1744,61 @@ export class ThreeBattleRenderer {
     // must not turn into a blinding white halo when bloom is enabled.
     this.renderBloomWithoutLightSourceArt();
     this.finalComposer.render();
+  }
+
+  private syncFireballVfx(dt: number, cssW: number, cssH: number, tile: number): void {
+    const system = this.fireballVfx;
+    if (!system) return;
+    const width = Math.max(1, this.renderer.domElement.width);
+    const height = Math.max(1, this.renderer.domElement.height);
+    const requests = this.engine.fireballVfxRequests.splice(0);
+    if (!requests.length) system.update(dt, width, height, tile);
+    for (const request of requests) {
+      const caster = this.engine.units.find((unit) => unit.id === request.casterId);
+      const destination = this.engine.effectAnchor(request.target.x, request.target.y);
+      // Measure the damage footprint from the exact resolved hexes, not a guessed spell radius.
+      const aoeRadius = request.tiles.reduce((radius, cell) => {
+        const anchor = this.engine.effectAnchor(cell.x, cell.y);
+        return Math.max(radius, Math.hypot(anchor.worldX - destination.worldX, anchor.worldY - destination.worldY) + tile);
+      }, tile);
+      // Hidden cells do not receive a luminous effect. Damage remains governed by combat's
+      // precomputed AoE list and is intentionally unaffected by this visibility gate.
+      if (!caster || (this.engine.fogged && !this.engine.visible(request.target.x, request.target.y))) {
+        this.engine.fireballVfxEvents.push({ id: request.id, phase: "impact" }, { id: request.id, phase: "complete" });
+        continue;
+      }
+      const visual = this.engine.unitVisual(caster, tile);
+      const anchor = this.engine.unitAnchor(caster);
+      const sign = caster.facing < 0 ? -1 : 1;
+      const centerYLocal = (visual.footOffset - visual.h / 2) * visual.scaleY;
+      const casterY = anchor.worldY + visual.footY + visual.bob - visual.lift + centerYLocal;
+      const origin = new THREE.Vector3(
+        anchor.worldX + visual.sway + sign * visual.w * visual.scaleX * 0.31,
+        -casterY - visual.h * visual.scaleY * 0.13,
+        1.08 + (anchor.worldY / tile) * 0.004,
+      );
+      const elevation = this.engine.hexElevated(request.target.x, request.target.y) ? destination.tile * 0.18 : 0;
+      const target = new THREE.Vector3(destination.worldX, -(destination.worldY - elevation), 1.08 + (destination.worldY / tile) * 0.004);
+      const unseenOrigin = this.engine.fogged && !this.engine.visible(caster.x, caster.y);
+      const unseenTarget = this.engine.fogged && !this.engine.visible(request.target.x, request.target.y);
+      if (unseenOrigin || unseenTarget) {
+        this.engine.fireballVfxEvents.push({ id: request.id, phase: "impact" }, { id: request.id, phase: "complete" });
+        continue;
+      }
+      system.cast({
+        id: request.id,
+        origin,
+        target,
+        worldScale: tile,
+        aoeRadius,
+        onLaunch: () => this.engine.fireballVfxEvents.push({ id: request.id, phase: "launch" }),
+        onImpact: () => this.engine.fireballVfxEvents.push({ id: request.id, phase: "impact" }),
+        onComplete: () => this.engine.fireballVfxEvents.push({ id: request.id, phase: "complete" }),
+      });
+    }
+    if (requests.length) system.update(0, width, height, tile);
+    void cssW;
+    void cssH;
   }
 
   /** Render the bloom buffer while temporarily omitting the visible art of map light sources.
@@ -1806,6 +1848,15 @@ export class ThreeBattleRenderer {
     if (hit) return hit;
     const mat = occluderMaterial(tex);
     this.unitOccluderMatCache.set(tex, mat);
+    return mat;
+  }
+  private unitFogCutMatCache = new Map<THREE.Texture, THREE.MeshBasicMaterial>();
+  /** Depth-only twin of a unit's sprite for its fogCut — same recipe as decorFogCutMaterialFor. */
+  private unitFogCutMaterialFor(tex: THREE.Texture): THREE.MeshBasicMaterial {
+    const hit = this.unitFogCutMatCache.get(tex);
+    if (hit) return hit;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5, colorWrite: false, depthWrite: true, transparent: true });
+    this.unitFogCutMatCache.set(tex, mat);
     return mat;
   }
 
@@ -1858,49 +1909,6 @@ export class ThreeBattleRenderer {
       }
     }
     for (let i = n; i < this.webMeshes.length; i++) this.webMeshes[i]!.visible = false;
-  }
-
-  /** Fire V2 test: while the dev switch is on, the fireball floats slowly back and forth along
-   * the row of the first player unit, 6 hexes east and back, and its PointLight (a child of the
-   * same group) lights the board, props and characters beneath it as it goes. */
-  private syncFireballV2(tile: number): void {
-    const fb = this.fireballV2;
-    const t = performance.now() / 1000;
-    // A real cast Fireball in flight takes priority over the dev test loop.
-    const shot = this.engine.fireballShot();
-    if (shot) {
-      const height = tile * 1.1;
-      fb.group.position.set(shot.worldX, -shot.worldY, height);
-      fb.group.scale.setScalar(tile * 0.42);
-      fb.group.visible = true;
-      fb.update(t);
-      fb.light.intensity = 8 * GROUND_BASE_IRRADIANCE * Math.pow(tile, LIGHT_DECAY);
-      fb.light.distance = Math.hypot(tile * 5, height) * 1.05;
-      return;
-    }
-    const on = getDevGfx().fireballV2Test;
-    const hero = this.engine.units.find((u) => u.side === "player" && u.alive);
-    if (!on || !hero) {
-      fb.group.visible = false;
-      fb.light.intensity = 0;
-      return;
-    }
-    const SPAN = 6;
-    const HEX_PER_SEC = 0.8;
-    const phase = (t * HEX_PER_SEC) % (SPAN * 2);
-    const along = phase <= SPAN ? phase : SPAN * 2 - phase;
-    const a = hexWorld(hero.x, hero.y, tile);
-    const b = hexWorld(hero.x + 1, hero.y, tile);
-    const x = a.wx + (b.wx - a.wx) * along;
-    const height = tile * 1.1;
-    fb.group.position.set(x, -a.wy, height);
-    fb.group.scale.setScalar(tile * 0.42);
-    fb.group.visible = true;
-    fb.update(t);
-    // Deliberately exaggerated for this test: irradiance one hex out is 8x the normal sun + sky.
-    // The light is a child of the scaled group: its local position stays at the ball's center.
-    fb.light.intensity = 8 * GROUND_BASE_IRRADIANCE * Math.pow(tile, LIGHT_DECAY);
-    fb.light.distance = Math.hypot(tile * 5, height) * 1.05;
   }
 
   /** Dev Controls toggles (see devGfx.ts) — read every frame so a flip applies immediately. */
@@ -1981,7 +1989,7 @@ export class ThreeBattleRenderer {
         const L = e.light;
         if (!L) continue;
         const k = L.def.intensity * flickerAt(engine.time, L.seed, L.def.flicker);
-        out.push({ x: L.x, y: L.y, h: L.h, r: L.def.radius * tile, rgb: [L.def.color[0] * k, L.def.color[1] * k, L.def.color[2] * k] });
+        out.push({ x: L.x, y: L.y, h: L.h, r: L.def.radius * LIGHT_RADIUS_MUL * tile, rgb: [L.def.color[0] * k, L.def.color[1] * k, L.def.color[2] * k] });
       }
       // Units that carry their own light (UNIT_LIGHT_DEFS) — follows the unit's live anchor, so
       // the light walks with it; hidden (fog) or dead units give none, fading ones fade it.
@@ -2046,7 +2054,8 @@ export class ThreeBattleRenderer {
   }
 
   /** Fog of war overlay (see ThreeFogMask.ts) — rebuilt only when the engine's visibility
-   * grid changes (visVersion), the debug view is toggled, or the board changes. */
+   * grid changes (visVersion), the debug view is toggled, the board changes, or a player unit
+   * steps to a new hex (see clearAround/partyKey below). */
   private syncFog(tile: number): void {
     const engine = this.engine;
     if (!engine.fogged) {
@@ -2054,9 +2063,26 @@ export class ThreeBattleRenderer {
       return;
     }
     const debug = getDevGfx().fogDebug;
-    const key = `${engine.mission.id}:${engine.cols}x${engine.rows}:${engine.visVersion}:${debug ? 1 : 0}`;
     const cols = engine.cols;
+    // No fog-of-war within one hex of any living player character, ever — not merely a unit
+    // drawn in front of it (see the per-unit fogCut in syncUnits, a separate sprite-level fix):
+    // the darkened fill itself must not exist right beside where the party actually is.
+    const clearAround = new Set<number>();
+    for (const u of engine.units) {
+      if (u.side !== "player" || !u.alive) continue;
+      for (const p of footprint(u)) {
+        for (const n of [p, ...hexNeighbors(p.x, p.y)]) {
+          if (n.x >= 0 && n.y >= 0 && n.x < cols && n.y < engine.rows) clearAround.add(n.y * cols + n.x);
+        }
+      }
+    }
+    const partyKey = engine.units
+      .filter((u) => u.side === "player" && u.alive)
+      .map((u) => `${u.x},${u.y}`)
+      .join("|");
+    const key = `${engine.mission.id}:${cols}x${engine.rows}:${engine.visVersion}:${debug ? 1 : 0}:${partyKey}`;
     this.fogMask.update(key, cols, engine.rows, BOARD_PAD_MUL, tile, debug, (x, y) => this.cellAtWorld(x, y), (i) => {
+      if (clearAround.has(i)) return FOG_VISIBLE;
       const x = i % cols;
       const y = (i - x) / cols;
       return engine.visible(x, y) ? FOG_VISIBLE : engine.explored(x, y) ? FOG_EXPLORED : FOG_UNSEEN;
@@ -2064,6 +2090,10 @@ export class ThreeBattleRenderer {
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.engine.fireballVfxAvailable = false;
+    this.fireballVfx?.dispose();
+    this.fireballVfx = null;
     // MILESTONE 4 — EffectComposer.dispose() only frees its own two ping-pong render targets and
     // internal copy pass, NOT the passes added to it — bloomPass owns several render targets of
     // its own (bright-pass + per-mip horizontal/vertical blur buffers) that leak without this.
@@ -2096,7 +2126,6 @@ export class ThreeBattleRenderer {
     for (const mat of this.decorShadowMatCache.values()) mat.dispose();
     for (const tex of this.unitTexCache.values()) tex.dispose();
     for (const tex of this.glowTexCache.values()) tex.dispose();
-    this.fireballV2.dispose();
     this.webMat?.map?.dispose();
     this.webMat?.dispose();
     this.webMatDim?.dispose();

@@ -9,12 +9,15 @@ import { boxBlur } from "./ThreeGroundAO";
  *
  *   VISIBLE    transparent
  *   EXPLORED   black at EXPLORED_ALPHA (terrain and static props stay readable underneath)
- *   UNEXPLORED opaque black
+ *   UNEXPLORED opaque black — genuinely black, on purpose: fog-of-war's real use is dungeons,
+ *              where a solid, opaque unseen area is the correct look (you cannot see into an
+ *              unlit room at all), not something to lighten or blend with a painted backdrop.
  *
- * The mask is blurred a little so the boundary reads as a soft edge rather than a row of
- * hexagons, but the softening only ever lives inside EXPLORED hexes: a visible hex is always
- * fully clear (a unit's surroundings are never half-shaded) and an unexplored hex is always
- * solid black, so nothing of unexplored terrain ever shows through.
+ * The mask is blurred a little so the VISIBLE/EXPLORED boundary reads as a soft edge rather than
+ * a row of hexagons; UNEXPLORED stays a flat, hard-edged fill (no bleed into or out of it) — the
+ * fix for "a black edge shows up right next to something" is ThreeBattleRenderer.syncFog's own
+ * clearAround set (no fog-of-war within one hex of any living player unit), not softening the
+ * edge once it's already on screen.
  *
  * Rebuilt only when the caller's key changes (the engine bumps visVersion when visibility
  * actually changes); between rebuilds it is one static textured quad.
@@ -29,6 +32,9 @@ const BLUR_R = 2;
 const BLUR_PASSES = 2;
 /** Darkness over explored-but-not-visible ground. */
 export const EXPLORED_ALPHA = 0.6;
+/** Darkness over never-seen ground — genuinely opaque, per direct request: fog-of-war's real
+ * use is dungeons, where solid black is the correct look, not a lighter translucent wash. */
+export const UNSEEN_ALPHA = 1;
 
 export const FOG_UNSEEN = 0;
 export const FOG_EXPLORED = 1;
@@ -140,7 +146,7 @@ export class FogMask {
         const s = state[i]!;
         // Off the board (s < 0) counts as unexplored: the black must not end in a row of hex
         // teeth that shows the backdrop/mist and so traces the map's outline.
-        alpha[i] = s === FOG_UNSEEN || s < 0 ? 1 : s === FOG_EXPLORED ? EXPLORED_ALPHA : 0;
+        alpha[i] = s === FOG_UNSEEN || s < 0 ? UNSEEN_ALPHA : s === FOG_EXPLORED ? EXPLORED_ALPHA : 0;
       }
       const tmp = new Float32Array(n);
       for (let pass = 0; pass < BLUR_PASSES; pass++) {
@@ -152,14 +158,10 @@ export class FogMask {
           const i = y * gw + x;
           const s = state[i]!;
           // Visible hexes are fully revealed (never shaded by a neighbour's feather) and
-          // unexplored hexes stay solid black; the soft edge lives only inside explored
-          // hexes, fading from clear at the edge of sight up to their normal darkness.
-          const a =
-            s === FOG_VISIBLE
-              ? 0
-              : s === FOG_UNSEEN || s < 0
-                ? 1
-                : Math.min(EXPLORED_ALPHA, alpha[i]!);
+          // unexplored hexes stay flat opaque black (no bleed in either direction); the soft
+          // edge lives only inside explored hexes, fading from clear at the edge of sight up
+          // to their normal darkness.
+          const a = s === FOG_VISIBLE ? 0 : s === FOG_UNSEEN || s < 0 ? UNSEEN_ALPHA : Math.min(EXPLORED_ALPHA, alpha[i]!);
           put(x, y, 0, 0, 0, Math.round(255 * a));
         }
       }

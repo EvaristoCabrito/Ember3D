@@ -1,7 +1,6 @@
 /**
- * Fire V2 — test of ONE procedural 3D fireball carrying a real THREE.PointLight (Dev Controls →
- * "Bola de fogo V2 (teste)"). The existing Fireball spell visuals (Fire V1) are untouched; this is
- * a separate object that only exists while the dev switch is on.
+ * Procedural 3D fireball used by the live spell projectile. The historical class name is kept
+ * so the original effect remains identifiable as OldFireBall in the project.
  *
  * The ball is a real mesh floating above the board: an icosphere whose vertices are pushed in and
  * out every frame by 3D noise (turbulent, boiling flame surface), colored hot-white in the core
@@ -111,12 +110,12 @@ function flameMaterial(amplitude: number, opacity: number, edgeFade: boolean): T
   });
 }
 
-export class FireballV2 {
+export class OldFireBall {
   readonly group = new THREE.Group();
+  readonly coreMesh: THREE.Mesh;
+  readonly shellMesh: THREE.Mesh;
   /** The real light the fireball carries — a child of `group`, so it moves with it. */
   readonly light: THREE.PointLight;
-  private core: THREE.Mesh;
-  private shell: THREE.Mesh;
   private coreMat: THREE.ShaderMaterial;
   private shellMat: THREE.ShaderMaterial;
 
@@ -124,13 +123,21 @@ export class FireballV2 {
     const geo = new THREE.IcosahedronGeometry(1, 24);
     this.coreMat = flameMaterial(0.28, 1.0, false);
     this.shellMat = flameMaterial(0.55, 0.45, true);
-    this.core = new THREE.Mesh(geo, this.coreMat);
-    this.shell = new THREE.Mesh(geo, this.shellMat);
-    this.shell.scale.setScalar(1.45);
-    this.core.renderOrder = 10;
-    this.shell.renderOrder = 11;
-    this.group.add(this.core, this.shell);
-    this.light = new THREE.PointLight(0xff7a2a, 0, 1, decay);
+    this.coreMesh = new THREE.Mesh(geo, this.coreMat);
+    this.shellMesh = new THREE.Mesh(geo, this.shellMat);
+    this.shellMesh.scale.setScalar(1.45);
+    this.coreMesh.renderOrder = 10;
+    this.shellMesh.renderOrder = 11;
+    this.coreMesh.castShadow = true;
+    this.group.add(this.coreMesh, this.shellMesh);
+    // Strong live illumination follows the actual projectile; avoid an unlit/fire-colored
+    // sphere masquerading as a light-emitting spell.
+    this.light = new THREE.PointLight(0xff8a38, 180, 48, decay);
+    this.light.castShadow = true;
+    this.light.shadow.mapSize.set(512, 512);
+    this.light.shadow.camera.near = 0.1;
+    this.light.shadow.camera.far = 400;
+    this.light.shadow.bias = -0.001;
     this.group.add(this.light);
     this.group.visible = false;
   }
@@ -138,12 +145,12 @@ export class FireballV2 {
   update(time: number): void {
     this.coreMat.uniforms.uTime!.value = time;
     this.shellMat.uniforms.uTime!.value = time * 1.15 + 3.7;
-    this.core.rotation.z = time * 0.6;
-    this.shell.rotation.z = -time * 0.45;
+    this.coreMesh.rotation.z = time * 0.6;
+    this.shellMesh.rotation.z = -time * 0.45;
   }
 
   dispose(): void {
-    this.core.geometry.dispose();
+    this.coreMesh.geometry.dispose();
     this.coreMat.dispose();
     this.shellMat.dispose();
   }

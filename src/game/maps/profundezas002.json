@@ -1433,28 +1433,13 @@
         "y": 0
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 2,
-        "y": 0
-      },
-      {
         "id": "spike-rocks",
         "x": 4,
         "y": 0
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 6,
-        "y": 0
-      },
-      {
         "id": "spike-rocks",
         "x": 8,
-        "y": 0
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 10,
         "y": 0
       },
       {
@@ -1463,18 +1448,8 @@
         "y": 0
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 14,
-        "y": 0
-      },
-      {
         "id": "spike-rocks",
         "x": 16,
-        "y": 0
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 18,
         "y": 0
       },
       {
@@ -1483,19 +1458,9 @@
         "y": 0
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 22,
-        "y": 0
-      },
-      {
         "id": "spike-rocks",
         "x": 24,
         "y": 0
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 0,
-        "y": 1
       },
       {
         "id": "spike-rocks",
@@ -1503,18 +1468,8 @@
         "y": 1
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 4,
-        "y": 1
-      },
-      {
         "id": "spike-rocks",
         "x": 6,
-        "y": 1
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 8,
         "y": 1
       },
       {
@@ -1523,28 +1478,13 @@
         "y": 1
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 12,
-        "y": 1
-      },
-      {
         "id": "spike-rocks",
         "x": 14,
         "y": 1
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 16,
-        "y": 1
-      },
-      {
         "id": "spike-rocks",
         "x": 18,
-        "y": 1
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 20,
         "y": 1
       },
       {
@@ -1553,18 +1493,8 @@
         "y": 1
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 24,
-        "y": 1
-      },
-      {
         "id": "spike-rocks",
         "x": 0,
-        "y": 2
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 24,
         "y": 2
       },
       {
@@ -1573,18 +1503,8 @@
         "y": 3
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 24,
-        "y": 3
-      },
-      {
         "id": "spike-rocks",
         "x": 0,
-        "y": 4
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 6,
         "y": 4
       },
       {
@@ -1593,18 +1513,8 @@
         "y": 4
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 24,
-        "y": 4
-      },
-      {
         "id": "spike-rocks",
         "x": 0,
-        "y": 5
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 6,
         "y": 5
       },
       {
@@ -1613,18 +1523,8 @@
         "y": 5
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 24,
-        "y": 5
-      },
-      {
         "id": "spike-rocks",
         "x": 0,
-        "y": 6
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 24,
         "y": 6
       },
       {
@@ -1633,18 +1533,8 @@
         "y": 7
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 24,
-        "y": 7
-      },
-      {
         "id": "spike-rocks",
         "x": 0,
-        "y": 8
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 4,
         "y": 8
       },
       {
@@ -1653,19 +1543,9 @@
         "y": 8
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 20,
-        "y": 8
-      },
-      {
         "id": "spike-rocks",
         "x": 24,
         "y": 8
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 0,
-        "y": 9
       },
       {
         "id": "spike-rocks",
@@ -1673,28 +1553,13 @@
         "y": 9
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 12,
-        "y": 9
-      },
-      {
         "id": "spike-rocks",
         "x": 20,
         "y": 9
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 24,
-        "y": 9
-      },
-      {
         "id": "spike-rocks",
         "x": 0,
-        "y": 10
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 24,
         "y": 10
       },
       {
@@ -1703,18 +1568,8 @@
         "y": 11
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 24,
-        "y": 11
-      },
-      {
         "id": "spike-rocks",
         "x": 0,
-        "y": 12
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 8,
         "y": 12
       },
       {
@@ -1723,28 +1578,13 @@
         "y": 12
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 24,
-        "y": 12
-      },
-      {
         "id": "spike-rocks",
         "x": 0,
         "y": 13
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 8,
-        "y": 13
-      },
-      {
         "id": "spike-rocks",
         "x": 16,
-        "y": 13
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 24,
         "y": 13
       },
       {
@@ -1753,28 +1593,13 @@
         "y": 14
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 24,
-        "y": 15
-      },
-      {
         "id": "spike-rocks",
         "x": 0,
         "y": 16
       },
       {
-        "id": "broken-cliff-wall",
-        "x": 24,
-        "y": 16
-      },
-      {
         "id": "spike-rocks",
         "x": 0,
-        "y": 17
-      },
-      {
-        "id": "broken-cliff-wall",
-        "x": 24,
         "y": 17
       },
       {

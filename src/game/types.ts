@@ -469,8 +469,15 @@ export interface Mission {
    *  - "vignette3": low, directional ground fog crossing the battlefield in pale rolling bands;
    *    deliberately no dark corner vignette or texture reuse.
    *  - "vignette4": a supplied monochrome edge-fog plate, animated as one screen layer.
+   *  - "fog1": like "mist2", but masked by the party's own fog-of-war — it only ever shows
+   *    over ground they haven't revealed yet (plus the exterior backdrop past the board's
+   *    edge); real explored/visible terrain always stays completely clear underneath it (see
+   *    ThreeAtmosphere.ts's RevealFog).
+   *  - "none": no world-space mist and no screen-space vignette at all, whatever mistIntensity
+   *    is set to — an explicit "off" the author can pick, distinct from just never having set
+   *    mistIntensity (which still defaults mist2 on at 0.2, see below).
    * Undefined defaults to "mist2", so nothing shipped changes by default. */
-  mistType?: "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4";
+  mistType?: "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4" | "fog1" | "none";
   /** Bloom strength for the Three renderer's post-processing pass (UnrealBloomPass) — real bright-
    * surface glow (sun-lit highlights, additive wisp particles), not a fake overlay. Undefined
    * uses the renderer's own conservative default. Author-tunable per mission like every other
