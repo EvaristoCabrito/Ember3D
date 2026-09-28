@@ -21,6 +21,13 @@ import LOCATION_ORDER_CONFIG from "./location-order.json";
 import RANDOM_ENCOUNTER_CONFIG from "./random-encounters.json";
 import type { ClassId, DecorationPlacement, DialogTree, ElementalFxPlacement, MapTimeOfDay, Mission, Spawn, TerrainId, WinCondition, WorldLocation } from "./types";
 
+/** A Crossing dungeon is a named crossing/traversal map or one that uses the escape
+ * objective. Keep this derived from authored mission data so both campaign maps and
+ * saved crossings get the same revisit behavior without adding another editor setting. */
+export function isCrossingDungeon(mission: Pick<Mission, "id" | "title" | "win">): boolean {
+  return mission.win === "escape" || /crossing|travessia/i.test(`${mission.id} ${mission.title}`);
+}
+
 /** A spawn as edited in the Map Editor — the real Spawn shape plus a per-spawn test
  * level, which only exists for "Testar" (balance testing). It never leaves the editor:
  * draftToMission() strips it back down to a plain Spawn before export/playtest. */

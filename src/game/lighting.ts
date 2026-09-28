@@ -51,6 +51,9 @@ export const LIGHT_DEFS: Record<string, LightDef> = {
   Chandelier: NORMAL_LANTERN,
   "city-lantern-post": NORMAL_LANTERN,
   "wilds-lantern-post": NORMAL_LANTERN,
+  // Marco's marker lantern gives a local pool of light without the wide reach of a full
+  // street lantern or a brazier.
+  "wilds-lantern-signpost": { color: LANTERN, intensity: 1.8, radius: 1.35, flicker: 0.35 },
   lamppost: NORMAL_LANTERN,
   // Wall torches and bowls share normal-fire reach; the fireplace has extra intensity only.
   "light-wall-torch": { ...NORMAL_FIRE, intensity: 6 },

@@ -44,7 +44,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { WEB_SHOT_TRAVEL, type BattleEngine } from "../../engine";
-import { BIG_HOUSE_DECOR_IDS, CHEST_DECOR_IDS, DECOR_ART_SCALE, DECORATIONS, HOUSE_ART_SCALE, HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, TERRAIN, decorationFacing, decorationImage, decorationImageRetryWebp, placedFootprint } from "../../data";
+import { BIG_HOUSE_DECOR_IDS, BLESS, CHEST_DECOR_IDS, DECOR_ART_SCALE, DECORATIONS, HOUSE_ART_SCALE, HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, TERRAIN, decorationFacing, decorationImage, decorationImageRetryWebp, placedFootprint } from "../../data";
 import { footprint, hexNeighbors, tileAt } from "../../pathfinding";
 import type { DecorationDef, DecorationPlacement, MapTimeOfDay, TerrainId } from "../../types";
 import { GroundAO, type AoOccluder } from "./ThreeGroundAO";
@@ -53,6 +53,9 @@ import { LIGHT_DECAY, LIGHT_DEFS, LIGHT_RADIUS_MUL, UNIT_LIGHT_DEFS, flickerAt, 
 import { ThreeAtmosphere } from "./ThreeAtmosphere";
 import { decorationAnchor } from "../decorationAnchor";
 import { FireballVFX } from "./FireballVFX";
+import { getActivePhantasmalForceSettings, PhantasmalForceVFX } from "./PhantasmalForceVFX";
+import { BlessVFX, getActiveBlessVfxSettings } from "./BlessVFX";
+import { getActiveMagicMissileV2Settings, MagicMissileV2VFX } from "./MagicMissileV2VFX";
 import { OldFireBall } from "./OldFireBall";
 import { getDevGfx } from "./devGfx";
 
@@ -505,6 +508,9 @@ export class ThreeBattleRenderer {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private fireballVfx: FireballVFX | null = null;
+  private phantasmalForceVfx: PhantasmalForceVFX | null = null;
+  private blessVfx: BlessVFX | null = null;
+  private magicMissileV2Vfx: MagicMissileV2VFX | null = null;
   /** The former tavern preview model, now reserved for the actual cast trajectory. */
   private readonly tavernFireball = new OldFireBall(LIGHT_DECAY);
   private disposed = false;
@@ -771,6 +777,15 @@ export class ThreeBattleRenderer {
     // request can leave the spell without its flight or explosion when cast immediately.
     this.fireballVfx = new FireballVFX(this.scene, this.camera, "original", this.tavernFireball);
     this.engine.fireballVfxAvailable = true;
+    this.phantasmalForceVfx = new PhantasmalForceVFX(this.scene);
+    this.phantasmalForceVfx.setSettings(getActivePhantasmalForceSettings());
+    this.engine.phantasmalForceVfxAvailable = true;
+    this.blessVfx = new BlessVFX(this.scene);
+    this.blessVfx.setSettings(getActiveBlessVfxSettings());
+    this.engine.blessVfxAvailable = true;
+    this.magicMissileV2Vfx = new MagicMissileV2VFX(this.scene);
+    this.magicMissileV2Vfx.setSettings(getActiveMagicMissileV2Settings());
+    this.engine.magicMissileV2VfxAvailable = true;
 
     // Only the wisp embers ever render into the bloom-only pass (everything else gets forced to
     // black during it, see render()) — a low fixed threshold is correct now, since there's
@@ -1129,7 +1144,7 @@ export class ThreeBattleRenderer {
       const groundWy = sumWy / n; // ground contact, before decorSize's liftY visual offset
       const wy = groundWy + liftY;
       const alphaBase = artBase(img);
-      let offsetX = alphaBase ? (0.5 - (alphaBase.u0 + alphaBase.u1) / 2) * w : 0;
+      let offsetX = (alphaBase ? (0.5 - (alphaBase.u0 + alphaBase.u1) / 2) : 0) * w + (def.artOffsetX ?? 0) * w;
       let offsetY = alphaBase ? (1 - alphaBase.v) * h : 0;
       if (facing.own && facing.mirror) offsetX = -offsetX;
       else if (!facing.own && facing.step) {
@@ -1147,7 +1162,8 @@ export class ThreeBattleRenderer {
       // A light prop explicitly placed behind the characters (the fireplace) stays in the base
       // decoration layer like any other background prop, instead of lifting above them.
       const mistOrder = def.aboveGroundMist || (lightDef && decorLayer !== "behind") ? ABOVE_GROUND_MIST_ORDER : 0;
-      mesh.renderOrder = mistOrder + (decorLayer === "front" ? 3 : 0) + (def.decorRenderOrder ?? 0) * 0.01;
+      const tacticalOverlayOrder = def.aboveTacticalOverlays ? ABOVE_GROUND_MIST_ORDER + 1 : 0;
+      mesh.renderOrder = Math.max(tacticalOverlayOrder, mistOrder + (decorLayer === "front" ? 3 : 0) + (def.decorRenderOrder ?? 0) * 0.01);
       // Y negated to match the tile/camera convention (see module comment). Z is the prop's
       // 2.5D depth (see DEPTH_Z_BASE): from its front-most row, so a character on a nearer row
       // covers it and one further back is covered — except explicit layers and flat Waypoints.
@@ -1727,6 +1743,9 @@ export class ThreeBattleRenderer {
     // reproduce BattleEngine's cx/cy screen-pixel formula exactly.
     this.camera.position.set(this.engine.camX, -this.engine.camY - cssH, 100);
     this.syncFireballVfx(dt, cssW, cssH, tile);
+    this.syncPhantasmalForceVfx(dt, tile);
+    this.syncBlessVfx(dt, tile);
+    this.syncMagicMissileV2Vfx(dt, tile);
     this.atmosphere.sync(
       this.engine,
       tile,
@@ -1799,6 +1818,110 @@ export class ThreeBattleRenderer {
     if (requests.length) system.update(0, width, height, tile);
     void cssW;
     void cssH;
+  }
+
+  private syncPhantasmalForceVfx(dt: number, tile: number): void {
+    const system = this.phantasmalForceVfx;
+    if (!system) return;
+    const requests = this.engine.phantasmalForceVfxRequests.splice(0);
+    if (!requests.length) system.update(dt);
+    for (const request of requests) {
+      const targetUnit = this.engine.units.find((unit) => unit.id === request.targetUnitId && unit.alive);
+      const destination = this.engine.effectAnchor(request.target.x, request.target.y);
+      if (!targetUnit || (this.engine.fogged && !this.engine.visible(request.target.x, request.target.y))) {
+        this.engine.phantasmalForceVfxEvents.push({ id: request.id, phase: "impact" }, { id: request.id, phase: "complete" });
+        continue;
+      }
+      const visual = this.engine.unitVisual(targetUnit, tile);
+      const anchor = this.engine.unitAnchor(targetUnit);
+      const centerYLocal = (visual.footOffset - visual.h / 2) * visual.scaleY;
+      const groundY = anchor.worldY + visual.footY;
+      const target = new THREE.Vector3(
+        anchor.worldX + visual.sway,
+        -(groundY + visual.bob - visual.lift + centerYLocal),
+        spriteDepthZ(groundY, tile) + UNIT_DEPTH_TIE,
+      );
+      const elevation = this.engine.hexElevated(request.target.x, request.target.y) ? destination.tile * 0.18 : 0;
+      target.y += elevation;
+      system.restartAt(target, tile, {
+        onImpact: () => this.engine.phantasmalForceVfxEvents.push({ id: request.id, phase: "impact" }),
+        onComplete: () => this.engine.phantasmalForceVfxEvents.push({ id: request.id, phase: "complete" }),
+      });
+    }
+    if (requests.length) system.update(0);
+  }
+
+  private syncBlessVfx(dt: number, tile: number): void {
+    const system = this.blessVfx;
+    if (!system) return;
+    const requests = this.engine.blessVfxRequests.splice(0);
+    if (!requests.length) system.update(dt);
+    for (const request of requests) {
+      const centerAnchor = this.engine.effectAnchor(request.center.x, request.center.y);
+      const center = new THREE.Vector3(centerAnchor.worldX, -centerAnchor.worldY + tile * 0.035, spriteDepthZ(centerAnchor.worldY, tile) + UNIT_DEPTH_TIE);
+      const allies = request.allies.map((ally) => {
+        const unit = this.engine.units.find((candidate) => candidate.id === ally.id && candidate.alive);
+        if (!unit) return null;
+        const anchor = this.engine.unitAnchor(unit);
+        const visual = this.engine.unitVisual(unit, tile);
+        const groundY = anchor.worldY + visual.footY;
+        const y = -(groundY + visual.bob - visual.lift + (visual.footOffset - visual.h * 0.36) * visual.scaleY);
+        return { id: unit.id, position: new THREE.Vector3(anchor.worldX + visual.sway, y, spriteDepthZ(groundY, tile) + UNIT_DEPTH_TIE), distanceHexes: ally.distanceHexes };
+      }).filter((ally): ally is NonNullable<typeof ally> => !!ally);
+      system.castSpell({
+        id: request.id,
+        center,
+        radiusWorld: BLESS.radius * Math.sqrt(3) * tile,
+        allies,
+        onApply: (unitId) => this.engine.blessVfxEvents.push({ id: request.id, phase: "apply", unitId }),
+        onComplete: () => this.engine.blessVfxEvents.push({ id: request.id, phase: "complete" }),
+        onTimelineEvent: (event, unitId) => this.engine.blessTimelineEvents.push({ id: request.id, event, unitId }),
+      });
+    }
+    if (requests.length) system.update(0);
+  }
+
+  private syncMagicMissileV2Vfx(dt: number, tile: number): void {
+    const system = this.magicMissileV2Vfx;
+    if (!system) return;
+    const requests = this.engine.magicMissileV2VfxRequests.splice(0);
+    if (!requests.length) system.update(dt);
+    for (const request of requests) {
+      const caster = this.engine.units.find((unit) => unit.id === request.casterId && unit.alive);
+      const target = this.engine.units.find((unit) => unit.id === request.targetUnitId && unit.alive);
+      if (!caster || !target || (this.engine.fogged && !this.engine.visible(target.x, target.y))) {
+        this.engine.magicMissileV2VfxEvents.push({ id: request.id, phase: "impact", index: 0 }, { id: request.id, phase: "complete" });
+        continue;
+      }
+      const casterAnchor = this.engine.unitAnchor(caster);
+      const casterVisual = this.engine.unitVisual(caster, tile);
+      const casterGroundY = casterAnchor.worldY + casterVisual.footY;
+      const casterCenterY = (casterVisual.footOffset - casterVisual.h * 0.38) * casterVisual.scaleY;
+      const origin = new THREE.Vector3(
+        casterAnchor.worldX + casterVisual.sway,
+        -(casterGroundY + casterVisual.bob - casterVisual.lift + casterCenterY),
+        spriteDepthZ(casterGroundY, tile) + UNIT_DEPTH_TIE + tile * 0.08,
+      );
+      const targetAnchor = this.engine.unitAnchor(target);
+      const targetVisual = this.engine.unitVisual(target, tile);
+      const targetGroundY = targetAnchor.worldY + targetVisual.footY;
+      const targetCenterY = (targetVisual.footOffset - targetVisual.h * 0.48) * targetVisual.scaleY;
+      const destination = new THREE.Vector3(
+        targetAnchor.worldX + targetVisual.sway,
+        -(targetGroundY + targetVisual.bob - targetVisual.lift + targetCenterY),
+        spriteDepthZ(targetGroundY, tile) + UNIT_DEPTH_TIE + tile * 0.08,
+      );
+      system.castSpell({
+        id: request.id,
+        origin,
+        target: destination,
+        missileCount: 1,
+        onImpact: (index) => this.engine.magicMissileV2VfxEvents.push({ id: request.id, phase: "impact", index }),
+        onComplete: () => this.engine.magicMissileV2VfxEvents.push({ id: request.id, phase: "complete" }),
+        onTimelineEvent: (event, index) => this.engine.magicMissileV2TimelineEvents.push({ id: request.id, event, index }),
+      });
+    }
+    if (requests.length) system.update(0);
   }
 
   /** Render the bloom buffer while temporarily omitting the visible art of map light sources.
@@ -2092,8 +2215,17 @@ export class ThreeBattleRenderer {
   dispose(): void {
     this.disposed = true;
     this.engine.fireballVfxAvailable = false;
+    this.engine.phantasmalForceVfxAvailable = false;
+    this.engine.blessVfxAvailable = false;
+    this.engine.magicMissileV2VfxAvailable = false;
     this.fireballVfx?.dispose();
     this.fireballVfx = null;
+    this.phantasmalForceVfx?.dispose();
+    this.phantasmalForceVfx = null;
+    this.blessVfx?.dispose();
+    this.blessVfx = null;
+    this.magicMissileV2Vfx?.dispose();
+    this.magicMissileV2Vfx = null;
     // MILESTONE 4 — EffectComposer.dispose() only frees its own two ping-pong render targets and
     // internal copy pass, NOT the passes added to it — bloomPass owns several render targets of
     // its own (bright-pass + per-mip horizontal/vertical blur buffers) that leak without this.

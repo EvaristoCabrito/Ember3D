@@ -15,7 +15,7 @@ import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
 import { LIGHT_DEFS } from "./lighting";
 import { DialogEditor } from "./DialogEditor";
-import { BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
+import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
 import { BattleEngine, heroSpriteFor } from "./engine";
 import { MapPreviewCanvas, type PreviewDecorationSelection, type PreviewUnitSelection } from "./MapPreviewCanvas";
 import { WorldMapScreen } from "./WorldMapScreen";
@@ -35,6 +35,7 @@ import {
   MAP_VERSIONS_KEY,
   RANDOM_ENCOUNTER_REGIONS,
   isRandomEncounter,
+  isCrossingDungeon,
   clearSessionMapOverride,
   draftToMission,
   latestSerialFor,
@@ -433,7 +434,7 @@ function classSpells(classId: ClassId, level = Number.POSITIVE_INFINITY): SpellK
       case "archer":
         return ["longShot", "piercing", "multiShot"];
       case "healer":
-        return ["cureMinor", "cureWounds", "burningHands", "cureDisease", "createFoodAndWater"];
+        return ["cureMinor", "bless", "cureWounds", "burningHands", "cureDisease", "createFoodAndWater"];
       case "lancer":
       case "aldric":
         return ["piercingThrust", "sweep", "trip"];
@@ -443,6 +444,7 @@ function classSpells(classId: ClassId, level = Number.POSITIVE_INFINITY): SpellK
   })();
   return [...base, ...(PRESTIGE_SPELLS[classId] ?? [])].filter((spell) =>
     (spell !== "bullRush" || level >= BULL_RUSH_UNLOCK_LEVEL) &&
+    (spell !== "bless" || level >= BLESS.unlockLevel) &&
     (spell !== "burningHands" || level >= 5),
   );
 }
@@ -534,6 +536,8 @@ function slotIcon(action: SlotAction): string {
     case "secondWind":
     case "cureLight":
       return spellIcon("cure-light");
+    case "bless":
+      return spellIcon("cure-light");
     case "auraOfProtection":
       return spellIcon("web-of-dreams");
     case "intimidatingPresence":
@@ -582,6 +586,8 @@ function slotLabel(action: SlotAction): string {
       return PIERCING.name;
     case "cureMinor":
       return CURES.cureMinor.name;
+    case "bless":
+      return BLESS.name;
     case "cureWounds":
       return CURES.cureWounds.name;
     case "cureDisease":
@@ -656,6 +662,7 @@ function slotCount(action: SlotAction, unit: UnitPublic): number {
   // so the badge reads 0 until the caster's own level catches up, matching the guard in
   // BattleEngine.startPhantasmalForce/startSummonFamiliar2.
   if (action.spell === "phantasmalForce" && unit.level < PHANTASMAL_FORCE_UNLOCK_LEVEL) return 0;
+  if (action.spell === "bless" && unit.level < BLESS.unlockLevel) return 0;
   if (action.spell === "summonFamiliar2" && unit.level < SUMMON_FAMILIAR2_UNLOCK_LEVEL) return 0;
   const tier = spellTier(action.spell);
   return tier ? unit.spells[tierKey(tier)] : 0;
@@ -1035,7 +1042,8 @@ export function GameApp() {
       const hungerPenaltyPct = testMode ? 0 : hungerPenaltyFor(save.hungerStreak);
       const heroHunger = testMode ? undefined : save.heroHunger;
       const heroDiseases = testMode ? undefined : save.heroDiseases;
-      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases }, Date.now() % 100000, testMode);
+      const crossingDefeatedSpawns = !testMode && isCrossingDungeon(m) ? save.crossingDefeatedSpawns[m.id] ?? [] : [];
+      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, crossingDefeatedSpawns }, Date.now() % 100000, testMode);
       if (resume && resume.missionId === m.id) battle.applySnapshot(resume);
       if (typeof window !== "undefined" && window.innerWidth < 720) battle.zoom = 0;
       awardedRef.current = null;
@@ -1149,6 +1157,12 @@ export function GameApp() {
     awardedRef.current = mission.id;
     const completed = save.completed.includes(mission.id) ? save.completed : [...save.completed, mission.id];
     if (!testMode) {
+      const crossingDefeatedSpawns = isCrossingDungeon(mission)
+        ? [...new Set([
+            ...(save.crossingDefeatedSpawns[mission.id] ?? []),
+            ...engine.units.filter((unit) => (unit.side === "enemy" || unit.side === "neutral") && !unit.alive && !unit.summoned).map((unit) => unit.id),
+          ])]
+        : save.crossingDefeatedSpawns;
       const loot = engine.units
         .filter((x) => x.side === "enemy" && !x.alive)
         .reduce((n, u) => n + emberForKill(u.classId), 0);
@@ -1187,6 +1201,7 @@ export function GameApp() {
       persistCurrent({
         ...save,
         completed,
+        crossingDefeatedSpawns,
         unitHp: hp,
         bags,
         heroHunger: { ...save.heroHunger, ...engine.battlePlayerHunger() },
@@ -2500,6 +2515,7 @@ const SKILL_CLASS: Partial<Record<SpellKind, ClassId>> = {
   longShot: "archer",
   piercing: "archer",
   cureMinor: "healer",
+  bless: "healer",
   cureWounds: "healer",
   cureDisease: "healer",
   piercingThrust: "lancer",
@@ -2516,6 +2532,7 @@ const SKILL_CLASS: Partial<Record<SpellKind, ClassId>> = {
 };
 
 const SKILL_DAMAGE_ROWS: { name: string; cls: ClassId; tier: SpellTier; formula: string | ((x: number) => string); param?: "level"; note: string }[] = [
+  { name: BLESS.name, cls: "healer", tier: spellTier("bless")!, formula: "—", note: `Healer nível ${BLESS.unlockLevel}. Raio ${BLESS.radius}; +1% de acerto por nível até +10% no nível 13. Duração: 3 turnos no nível 3; 4 no 5; 5 no 7; 6 no 9; 7 no 12; 8 no 15.` },
   { name: MAGIC_MISSILE.name, cls: SKILL_CLASS.magicMissile!, tier: spellTier("magicMissile")!, formula: (mag: number) => spellFormula(mag, MAGIC_MISSILE.mul, MAGIC_MISSILE.dice, MAGIC_MISSILE.faces, MAGIC_MISSILE.bonus), note: "Nunca erra. 1 míssil, 2 no nível 3, 3 no nível 6 — um alvo cada." },
   {
     name: LONG_SHOT.name,
@@ -3760,20 +3777,27 @@ function MapEditorScreen({
     }
     return ids;
   }, [order, locationOrder]);
-  /** Every scenario the "Abrir mapa salvo" picker can open, from either store. Files on disk
-   * are the real saves — a map authored offline exists only there — so they lead; a scenario
-   * that lives only in this browser (no dev server when it was saved) still gets a row.
-   * Excludes anything already assigned to a Local — that's campanha's own dropdown's job
-   * (campaignMapReferences above), and a mission showing up in both was the whole complaint. */
+  /** Reserve maps only. Campaign maps stay in their own campaign pickers; use the refreshed
+   * on-disk list so newly added reserve files appear without relying on mapstore's eager glob. */
   const pickable = (() => {
-    const rows = savedScenarios()
-      .filter((s) => !campaignIds.has(s.id))
-      .map((s) => ({ id: s.id, files: s.files, local: (versionStore[s.id] ?? []).length }));
-    const seen = new Set(rows.map((r) => r.id));
-    for (const [id, list] of Object.entries(versionStore)) {
-      if (!seen.has(id) && !campaignIds.has(id) && list.length > 0) rows.push({ id, files: 0, local: list.length });
+    const byId = new Map<string, { id: string; title: string; files: number; local: number }>();
+    for (const s of savedScenarios()) {
+      if (campaignIds.has(s.id)) continue;
+      byId.set(s.id, { id: s.id, title: latestSavedDraft(s.id)?.title ?? s.id, files: s.files, local: (versionStore[s.id] ?? []).length });
     }
-    return rows.sort((a, b) => byName(a.id, b.id));
+    for (const map of savedLocationMaps) {
+      if (campaignIds.has(map.id)) continue;
+      const existing = byId.get(map.id);
+      if (existing) existing.title = map.title || existing.title;
+      else byId.set(map.id, { id: map.id, title: map.title || map.id, files: 1, local: (versionStore[map.id] ?? []).length });
+    }
+    for (const [id, list] of Object.entries(versionStore)) {
+      if (campaignIds.has(id)) continue;
+      const existing = byId.get(id);
+      if (existing) existing.local = list.length;
+      else if (list.length > 0) byId.set(id, { id, title: list[list.length - 1].draft.title || id, files: 0, local: list.length });
+    }
+    return [...byId.values()].sort((a, b) => byName(a.title, b.title));
   })();
   /** Every "reserva" map: not in the campaign, full stop, no in-between — a saved-but-
    * unassigned file (savedLocationMaps) or a shipped-but-unassigned mission (R1/R2 —
@@ -4909,7 +4933,7 @@ function MapEditorScreen({
               <option value="">Abrir mapa salvo…</option>
               {pickable.map((row) => (
                 <option key={row.id} value={row.id}>
-                  {row.id} ({row.files > 0 ? `${row.files} arquivo${row.files === 1 ? "" : "s"}` : `${row.local} só no navegador`}
+                  {row.title} · {row.id} ({row.files > 0 ? `${row.files} arquivo${row.files === 1 ? "" : "s"}` : `${row.local} só no navegador`}
                   {activeVersions[row.id] ? `, v${serialLabel(activeVersions[row.id])} ativa` : ""})
                 </option>
               ))}
@@ -7014,6 +7038,9 @@ function BattleScreen({
       case "cureMinor":
         engine.startCure("cureMinor");
         break;
+      case "bless":
+        engine.startBless();
+        break;
       case "cureWounds":
         engine.startCure("cureWounds");
         break;
@@ -7846,7 +7873,7 @@ function SlotPicker({
 }
 
 type CharacterCondition = {
-  title: "Saudável" | "Envenenado" | "Doente" | "Atordoado" | "Dormindo" | "Eletrificado" | "Sangrando" | "Com fome" | "Inconsciente";
+  title: "Saudável" | "Abençoado" | "Envenenado" | "Doente" | "Atordoado" | "Dormindo" | "Eletrificado" | "Sangrando" | "Com fome" | "Inconsciente";
   detail: string;
   icon: "healthy" | "poisoned" | "diseased" | "stunned" | "asleep" | "shocked" | "bleeding" | "hungry";
   tone: "ok" | "danger" | "warn";
@@ -7917,6 +7944,9 @@ function characterCondition(unit: UnitPublic): CharacterCondition {
       icon: "hungry",
       tone: "warn",
     };
+  }
+  if ((unit.blessedRoundsLeft ?? 0) > 0 && (unit.blessedHitBonusPct ?? 0) > 0) {
+    return { title: "Abençoado", detail: `Bless · +${Math.round((unit.blessedHitBonusPct ?? 0) * 100)}% de chance de acerto por mais ${unit.blessedRoundsLeft} rodadas.`, icon: "healthy", tone: "ok" };
   }
   return {
     title: "Saudável",

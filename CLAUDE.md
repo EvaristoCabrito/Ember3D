@@ -17,6 +17,20 @@
 Never jump from one extreme to another. Every tuning change (brightness, intensity, size,
 speed, bloom, anything) moves gradually, to a middle value first — never to 0, never maxed out.
 
+- **Finish the active task before switching to a new one.** If another request arrives mid-task,
+  queue it and return to it only after the current task is complete. Fix regressions caused by
+  current work as part of that task before moving on.
+- **Map-editor controls are protected.** Do not change them. The preview's left-button pan is
+  armed only after a 0.5-second hold, then shows the grabbing hand and pans on drag. It must
+  reach every map corner. Keep the reminder “DO NOT MESS WITH CONTROLS” in coder-only source
+  notes; never show it in the UI.
+- **Map composition must be intentional.** Keep terrain variants in coherent geographic zones,
+  build crossing routes as continuous paths, and group decorations into landmarks or natural
+  clusters instead of scattering them randomly.
+- **Every dungeon must have a working return/exit waypoint at its entrance.** For multi-floor
+  dungeons, put `dungeon-exit` on the entrance floor, not on the deepest floor; keep floor
+  connectors for moving between levels.
+
 ## Platform
 
 FUCK CELL PHONES THIS IS A BIG ASS GAME THAT WILL NEVER RUN ON A CELLPHONE

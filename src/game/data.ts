@@ -198,6 +198,21 @@ const WILDS_DECORATIONS = decorationSet([
   ["wilds-candle-menhir", "Menir das velas"],
   ["wilds-moss-bridge", "Ponte musgosa"],
 ], WILDS_TWO_HEX);
+// This tree's lowest roots sit about 4% right of its trunk/art center. Center the
+// trunk on its map anchor instead of letting the wide root tip pull the whole image left.
+WILDS_DECORATIONS["wilds-twisted-tree"] = {
+  ...WILDS_DECORATIONS["wilds-twisted-tree"]!,
+  artScale: 1.4,
+  artOffsetX: 0.0415,
+};
+WILDS_DECORATIONS["wilds-dead-oak"] = {
+  ...WILDS_DECORATIONS["wilds-dead-oak"]!,
+  artScale: 2,
+};
+WILDS_DECORATIONS["wilds-lantern-signpost"] = {
+  ...WILDS_DECORATIONS["wilds-lantern-signpost"]!,
+  aboveTacticalOverlays: true,
+};
 
 // Large cages, frames and the iron-maiden group from the upper reference band get
 // a two-hex footprint; smaller torture tools deliberately remain one hex.
@@ -219,6 +234,10 @@ const CITY_TWO_HEX = new Set(["city-supply-cart", "city-covered-wagon"]);
 const CITY_DECORATIONS = decorationSet([
   ["city-gate-banner", "Portão com estandarte"], ["city-palisade-banner", "Paliçada com estandarte"], ["city-spike-barricade-large", "Barricada de estacas grande"], ["city-spike-barricade", "Barricada de estacas"], ["city-palisade-frame", "Moldura de paliçada"], ["city-wooden-barricade", "Barricada de madeira"], ["city-banner-barricade", "Barricada com bandeira"], ["city-spike-barricade-low", "Estacas baixas"], ["city-wattle-fence", "Cerca trançada"], ["city-stone-banner-wall", "Muralha baixa com estandarte"], ["city-banner-post", "Mastro de estandarte"], ["city-lantern-post", "Poste de lanterna"], ["city-well", "Poço da cidade"], ["city-signpost", "Placa direcional"], ["city-market-stall", "Barraca de mercado"], ["city-supply-cart", "Carroça de suprimentos"], ["city-covered-wagon", "Carroça coberta"], ["city-covered-crate", "Caixa coberta"], ["city-workbench", "Bancada"], ["city-execution-block", "Bloco de execução"], ["city-provisions", "Mantimentos"], ["city-log-stack", "Pilha de lenha"], ["city-campfire", "Fogueira"], ["city-barrels", "Barris"], ["city-stool", "Banco de madeira"], ["city-shrineCandle", "Oratório urbano com velas"], ["city-stone-pillar", "Pilar de pedra"], ["city-notice-post", "Poste de avisos"], ["city-ring-pillar", "Pilar com argola"], ["city-brazier", "Braseiro"], ["city-clothesline", "Varal"], ["city-wheelbarrow", "Carrinho de mão"], ["city-gallows-cages", "Forca com gaiolas"], ["city-gallows-cages2", "Forca com gaiolas II"],
 ], CITY_TWO_HEX);
+// A small bucket and tavern stool should read as hand props beside furniture,
+// not as full-size terrain pieces. Stool's combined multiplier below halves its
+// previous on-screen size while the shared decoration scale is brought down.
+CITY_DECORATIONS["city-stool"] = { ...CITY_DECORATIONS["city-stool"]!, artScale: 2 / 3 };
 
 // 2026-09-16 art drop: 49 items cut from 11 AI-generated reference sheets (already
 // alpha-matted per item — plain crops, no background editing). Grouped by source folder
@@ -233,7 +252,7 @@ const CITY_DECORATIONS = decorationSet([
  * grows from its ground line so it still stands on the same spot. Houses use HOUSE_ART_SCALE
  * instead (their art is already drawn at 3x). Shared by the 3D renderer and the 2D path so
  * they stay in sync. */
-export const DECOR_ART_SCALE = 1.6;
+export const DECOR_ART_SCALE = 1.2;
 /** Houses (already drawn at 3x) get their own, smaller boost instead of DECOR_ART_SCALE. */
 export const HOUSE_ART_SCALE = 1.35;
 
@@ -259,7 +278,7 @@ const NEW_DECOR_2026: Record<string, DecorationDef> = {
   "city-broken-pottery": { id: "city-broken-pottery", name: "Potes Quebrados", footprint: DECO_ONE },
   "city-basket": { id: "city-basket", name: "Cesto de Vime", footprint: DECO_ONE },
   "city-nailed-planks": { id: "city-nailed-planks", name: "Tábuas com Pregos", footprint: DECO_ONE },
-  "city-bucket": { id: "city-bucket", name: "Balde de Madeira", footprint: DECO_ONE },
+  "city-bucket": { id: "city-bucket", name: "Balde de Madeira", footprint: DECO_ONE, artScale: 0.65 },
   "city-rope-coil": { id: "city-rope-coil", name: "Rolo de Corda", footprint: DECO_ONE },
   "city-crate-stack": { id: "city-crate-stack", name: "Caixas Empilhadas", footprint: DECO_ONE },
   "city-broken-barrel": { id: "city-broken-barrel", name: "Barril Quebrado", footprint: DECO_ONE },
@@ -297,28 +316,28 @@ const NEW_DECOR_2026: Record<string, DecorationDef> = {
 
   // 2026-09-17 art drop: 22 items from the Ice reference sheets, same folder-as-category
   // rule and plain-crop (already alpha-matted) treatment as the previous drop.
-  "ice-rope-coil": { id: "ice-rope-coil", name: "Corda Congelada", footprint: DECO_PAIR },
-  "ice-barrel": { id: "ice-barrel", name: "Barril Congelado", footprint: DECO_PAIR },
-  "ice-sack": { id: "ice-sack", name: "Saco Congelado", footprint: DECO_ONE },
-  "ice-bones": { id: "ice-bones", name: "Ossos Congelados", footprint: DECO_ONE },
-  "ice-crystal-spikes": { id: "ice-crystal-spikes", name: "Espinhos de Gelo", footprint: DECO_PAIR },
-  "ice-frozen-stump": { id: "ice-frozen-stump", name: "Toco Congelado", footprint: DECO_PAIR },
-  "ice-frozen-boulder": { id: "ice-frozen-boulder", name: "Rochedo Congelado", footprint: DECO_PAIR },
-  "ice-frozen-grass": { id: "ice-frozen-grass", name: "Moita Congelada", footprint: DECO_ONE },
-  "ice-bear-trap": { id: "ice-bear-trap", name: "Armadilha Congelada", footprint: DECO_ONE },
-  "ice-lantern-cage": { id: "ice-lantern-cage", name: "Lanterna Congelada", footprint: DECO_ONE },
-  "ice-chains": { id: "ice-chains", name: "Correntes Congeladas", footprint: DECO_ONE },
-  "ice-wooden-spikes": { id: "ice-wooden-spikes", name: "Estacas Congeladas", footprint: DECO_ONE },
-  "ice-shield": { id: "ice-shield", name: "Escudo Congelado", footprint: DECO_ONE },
-  "ice-skull": { id: "ice-skull", name: "Crânio Congelado", footprint: DECO_ONE },
-  "ice-firewood": { id: "ice-firewood", name: "Lenha Congelada", footprint: DECO_ONE },
-  "ice-broken-shield": { id: "ice-broken-shield", name: "Escudo Quebrado Congelado", footprint: DECO_ONE },
-  "ice-helmet": { id: "ice-helmet", name: "Elmo Congelado", footprint: DECO_ONE },
-  "ice-crate": { id: "ice-crate", name: "Caixote Congelado", footprint: DECO_ONE },
-  "ice-cairn": { id: "ice-cairn", name: "Pedras Empilhadas Congeladas", footprint: DECO_ONE },
-  "ice-tools-pile": { id: "ice-tools-pile", name: "Ferramentas Congeladas", footprint: DECO_ONE },
-  "ice-satchel": { id: "ice-satchel", name: "Alforje Congelado", footprint: DECO_ONE },
-  "ice-weapon-pile": { id: "ice-weapon-pile", name: "Armas Congeladas", footprint: DECO_ONE },
+  "ice-rope-coil": { id: "ice-rope-coil", name: "Corda Congelada", footprint: DECO_PAIR, artScale: 0.3 },
+  "ice-barrel": { id: "ice-barrel", name: "Barril Congelado", footprint: DECO_PAIR, artScale: 0.3 },
+  "ice-sack": { id: "ice-sack", name: "Saco Congelado", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-bones": { id: "ice-bones", name: "Ossos Congelados", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-crystal-spikes": { id: "ice-crystal-spikes", name: "Espinhos de Gelo", footprint: DECO_PAIR, artScale: 0.45 },
+  "ice-frozen-stump": { id: "ice-frozen-stump", name: "Toco Congelado", footprint: DECO_PAIR, artScale: 0.4 },
+  "ice-frozen-boulder": { id: "ice-frozen-boulder", name: "Rochedo Congelado", footprint: DECO_PAIR, artScale: 0.42 },
+  "ice-frozen-grass": { id: "ice-frozen-grass", name: "Moita Congelada", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-bear-trap": { id: "ice-bear-trap", name: "Armadilha Congelada", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-lantern-cage": { id: "ice-lantern-cage", name: "Lanterna Congelada", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-chains": { id: "ice-chains", name: "Correntes Congeladas", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-wooden-spikes": { id: "ice-wooden-spikes", name: "Estacas Congeladas", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-shield": { id: "ice-shield", name: "Escudo Congelado", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-skull": { id: "ice-skull", name: "Crânio Congelado", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-firewood": { id: "ice-firewood", name: "Lenha Congelada", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-broken-shield": { id: "ice-broken-shield", name: "Escudo Quebrado Congelado", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-helmet": { id: "ice-helmet", name: "Elmo Congelado", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-crate": { id: "ice-crate", name: "Caixote Congelado", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-cairn": { id: "ice-cairn", name: "Pedras Empilhadas Congeladas", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-tools-pile": { id: "ice-tools-pile", name: "Ferramentas Congeladas", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-satchel": { id: "ice-satchel", name: "Alforje Congelado", footprint: DECO_ONE, artScale: 0.45 },
+  "ice-weapon-pile": { id: "ice-weapon-pile", name: "Armas Congeladas", footprint: DECO_ONE, artScale: 0.45 },
 
   // 2026-09-17 art drop: 15 "deadwoods" items — loose in attachments/decor (no themed
   // subfolder this time), so grouped as wilds- by content rather than by folder.
@@ -3425,6 +3444,15 @@ export const PHANTASMAL_FORCE = {
   range: 6,
 };
 
+/** Enemy-only legacy spell retained for Cultists. It shares Phantasmal Force's level curve
+ * and casts twice per battle, but its damage is reduced in BattleEngine. */
+export const FANTOM_FORCE = {
+  name: "FantomForce",
+  range: PHANTASMAL_FORCE.range,
+  usesPerBattle: 2,
+  damageMul: 0.82,
+};
+
 export const PHANTASMAL_FORCE_UNLOCK_LEVEL = 2;
 
 /** Phantasmal Force's damage dice — no flat power multiplier (spellDamage's mul stays at 1,
@@ -3709,6 +3737,13 @@ export function spellFormula(mag: number, mul: number, dice: number, faces: numb
  * by `wide` (see coneWedge in pathfinding.ts): false = the 3-hex front rank only, true =
  * that rank plus a second, wider rank further out (the "5-hex cone" tiers). */
 export const BURNING_HANDS = { name: "Mãos Flamejantes" };
+export const BLESS = {
+  name: "Bless",
+  radius: 3,
+  unlockLevel: 3,
+  hitBonusPct: (level: number) => Math.min(10, Math.max(1, level - 2)),
+  durationRounds: (level: number) => level >= 15 ? 8 : level >= 12 ? 7 : level >= 9 ? 6 : level >= 7 ? 5 : level >= 5 ? 4 : 3,
+};
 
 /** Burning Hands' cone radius: grows in even steps from 1 hex at level 1 to 6 at level 15
  * (1-3: 1, 4-6: 2, 7-9: 3, 10-12: 4, 13-14: 5, 15+: 6). Aim range always equals it. The cone
@@ -3992,6 +4027,7 @@ export function formatSpellUseGains(gains: { tier: SpellTier; gain: number }[]):
 }
 
 export const SPELL_TIER: Partial<Record<SpellKind, SpellTier>> = {
+  bless: 1,
   magicMissile: 1,
   longShot: 1,
   cureMinor: 1,

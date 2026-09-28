@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Check, ChevronLeft, Lock, MapPin, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
-import { missionsForLocation } from "./mapstore";
+import { BookOpen, Check, ChevronLeft, Lock, MapPin, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
+import { isCrossingDungeon, missionsForLocation } from "./mapstore";
 import type { EquipSlot, Mission, PotionId, SaveData, WorldLocation } from "./types";
 import { PartyInventoryOverlay } from "./InventoryScreens";
 import { CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, heroRecruited, rulesClass, tierUses } from "./data";
@@ -126,6 +126,7 @@ export function OverworldMapScreen({
   onPick: (missionId: string) => void;
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
+  const [questLogOpen, setQuestLogOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
   const [confirmVau, setConfirmVau] = useState(false);
   const [inventoryHero, setInventoryHero] = useState<string | null>(null);
@@ -326,7 +327,12 @@ export function OverworldMapScreen({
       setOpen(loc);
       return;
     }
-    if (missions[0]) onPick(missions[0].id);
+    if (missions[0]) {
+      // A crossing the party has already completed is optional on later visits: open its
+      // panel so the player can pass through or deliberately return to explore it.
+      if (isCrossingDungeon(missions[0]) && missionStatus(missions[0].id) === "done") setOpen(loc);
+      else onPick(missions[0].id);
+    }
   };
 
   return (
@@ -341,6 +347,15 @@ export function OverworldMapScreen({
           <p className="text-sm uppercase tracking-[0.18em] text-muted">{test ? "Modo teste" : "Campanha"} · RPG</p>
           <h1 className="font-display text-3xl leading-none">Mapa</h1>
         </div>
+        <button
+          type="button"
+          onClick={() => setQuestLogOpen(true)}
+          aria-label="Registro de missões"
+          className="h-10 inline-flex items-center gap-2 rounded-md border border-border bg-bg/70 px-3 text-sm"
+        >
+          <BookOpen className="size-4" />
+          <span>Missões</span>
+        </button>
         <p className="text-sm text-muted border border-border rounded-md px-2 py-1 bg-bg/70">Dia <span className="text-fg tabular-nums">{gameClock}</span></p>
         <p className="text-sm text-muted border border-border rounded-md px-2 py-1 bg-bg/70">Rações <span className="text-fg tabular-nums">{rations}</span></p>
         {hungerStreak > 0 && (
@@ -761,12 +776,22 @@ export function OverworldMapScreen({
 
       <MapLoadingOverlay progress={mapLoading.progress} visible={mapLoading.visible} />
 
+      {questLogOpen && (
+        <QuestLogPanel
+          locations={locations}
+          missionStatus={missionStatus}
+          test={test}
+          onClose={() => setQuestLogOpen(false)}
+        />
+      )}
+
       {open && (
         <LocationPanel
           location={open}
           missions={missionsForLocation(open)}
           missionStatus={missionStatus}
           test={test}
+          onPassThrough={() => setOpen(null)}
           onPick={(id) => {
             setOpen(null);
             onPick(id);
@@ -801,6 +826,71 @@ export function OverworldMapScreen({
   );
 }
 
+function QuestLogPanel({
+  locations,
+  missionStatus,
+  test,
+  onClose,
+}: {
+  locations: WorldLocation[];
+  missionStatus: (missionId: string) => LocationStatus;
+  test: boolean;
+  onClose: () => void;
+}) {
+  const quests = locations
+    .map((location) => ({ location, missions: missionsForLocation(location) }))
+    .filter(({ missions }) => missions.length > 0);
+  const doneCount = quests.reduce((total, { missions }) => total + missions.filter((mission) => missionStatus(mission.id) === "done").length, 0);
+  const totalCount = quests.reduce((total, { missions }) => total + missions.length, 0);
+
+  return (
+    <div
+      className="absolute inset-0 z-50 flex items-center justify-center bg-bg/65 p-4 backdrop-blur-sm"
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section role="dialog" aria-modal="true" aria-labelledby="quest-log-title" className="flex max-h-[82dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+        <header className="flex items-start justify-between gap-3 border-b border-border p-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-muted">Campanha · {doneCount}/{totalCount}</p>
+            <h2 id="quest-log-title" className="mt-1 font-display text-2xl">Registro de missões</h2>
+          </div>
+          <button type="button" onClick={onClose} className="grid size-9 place-items-center rounded-md border border-border" aria-label="Fechar registro de missões">
+            <X className="size-4" />
+          </button>
+        </header>
+        <div className="overflow-y-auto p-4">
+          <div className="flex flex-col gap-4">
+            {quests.map(({ location, missions }) => (
+              <section key={location.id}>
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-muted">{location.name}</h3>
+                <div className="flex flex-col gap-2">
+                  {missions.map((mission) => {
+                    const status = missionStatus(mission.id);
+                    return (
+                      <article key={mission.id} className="rounded-lg border border-border bg-bg/60 p-3">
+                        <div className="flex items-center gap-2">
+                          {status === "done" ? <Check className="size-4 shrink-0 text-accent" /> : status === "locked" ? <Lock className="size-4 shrink-0 text-muted" /> : <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-accent" />}
+                          <h4 className="min-w-0 flex-1 font-display text-lg leading-tight">{mission.title}</h4>
+                          <span className="shrink-0 text-xs text-muted">{status === "done" ? "Concluída" : status === "locked" ? "Bloqueada" : "Em aberto"}</span>
+                        </div>
+                        <p className="mt-1 pl-6 text-sm text-muted">{mission.objective}</p>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+          {test && <p className="mt-4 text-xs text-muted">Modo teste: missões também aparecem como disponíveis.</p>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 const MAP_HERO_CLASS = { Kael: "swordsman", Neera: "archer", Voss: "mage", Salazar: "healer", Aldric: "aldric", Malrec: "conjurer" } as const;
 
 function mapHeroClass(hero: string, save: SaveData) {
@@ -812,6 +902,7 @@ function LocationPanel({
   missions,
   missionStatus,
   test,
+  onPassThrough,
   onPick,
   onClose,
 }: {
@@ -819,6 +910,7 @@ function LocationPanel({
   missions: Mission[];
   missionStatus: (missionId: string) => LocationStatus;
   test: boolean;
+  onPassThrough: () => void;
   onPick: (id: string) => void;
   onClose: () => void;
 }) {
@@ -840,32 +932,47 @@ function LocationPanel({
         <ol className="flex flex-col gap-2">
           {missions.map((m, i) => {
             const st = missionStatus(m.id);
+            const optionalCrossing = st === "done" && isCrossingDungeon(m);
             return (
               <li key={m.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (st === "locked") {
-                      setFlashId(m.id);
-                      window.setTimeout(() => setFlashId((f) => (f === m.id ? null : f)), 500);
-                      return;
-                    }
-                    onPick(m.id);
-                  }}
-                  aria-label={st === "locked" ? `${m.title} (bloqueado)` : undefined}
-                  className={`w-full text-left rounded-xl border bg-surface px-4 py-3 ${
-                    st === "locked" ? `opacity-40 border-border ${m.id === flashId ? "locked-flash" : ""}` : "border-border"
-                  }`}
-                >
-                  <p className="text-sm uppercase tracking-[0.16em] text-muted flex items-center gap-1.5">
-                    {st === "locked" && <Lock className="size-3" />}
-                    {st === "done" && <Check className="size-3 text-accent" />}
-                    {String(i + 1).padStart(2, "0")} · {m.place}
-                    {st === "done" ? " · feito" : ""}
-                  </p>
-                  <p className="font-display text-2xl">{m.title}</p>
-                  <p className="text-base text-muted">{m.objective}</p>
-                </button>
+                <div className="rounded-xl border border-border bg-surface p-3">
+                  <button
+                    type="button"
+                    disabled={optionalCrossing}
+                    onClick={() => {
+                      if (st === "locked") {
+                        setFlashId(m.id);
+                        window.setTimeout(() => setFlashId((f) => (f === m.id ? null : f)), 500);
+                        return;
+                      }
+                      onPick(m.id);
+                    }}
+                    aria-label={st === "locked" ? `${m.title} (bloqueado)` : undefined}
+                    className={`w-full text-left rounded-md px-1 py-1 ${
+                      st === "locked" ? `opacity-40 ${m.id === flashId ? "locked-flash" : ""}` : optionalCrossing ? "cursor-default" : ""
+                    }`}
+                  >
+                    <p className="text-sm uppercase tracking-[0.16em] text-muted flex items-center gap-1.5">
+                      {st === "locked" && <Lock className="size-3" />}
+                      {st === "done" && <Check className="size-3 text-accent" />}
+                      {String(i + 1).padStart(2, "0")} · {m.place}
+                      {st === "done" ? " · feito" : ""}
+                    </p>
+                    <p className="font-display text-2xl">{m.title}</p>
+                    <p className="text-base text-muted">{m.objective}</p>
+                    {optionalCrossing && <p className="mt-2 text-sm text-accent">Travessia concluída · escolha como seguir</p>}
+                  </button>
+                  {optionalCrossing && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={onPassThrough} className="min-h-10 rounded-lg border border-border px-3 text-sm font-medium hover:bg-surface-2">
+                        Passar sem entrar
+                      </button>
+                      <button type="button" onClick={() => onPick(m.id)} className="min-h-10 rounded-lg bg-accent px-3 text-sm font-semibold text-bg hover:brightness-110">
+                        Explorar de novo
+                      </button>
+                    </div>
+                  )}
+                </div>
               </li>
             );
           })}

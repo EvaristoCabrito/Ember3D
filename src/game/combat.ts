@@ -69,8 +69,9 @@ function magicalHitChance(mag: number, res: number): number {
   return Math.min(100, Math.max(85, 95 + (mag - res) / 4));
 }
 
-function hitChanceFor(att: number, def: number, magical: boolean): number {
-  return magical ? magicalHitChance(att, def) : physicalHitChance(att, def);
+function hitChanceFor(att: number, def: number, magical: boolean, blessBonusPct = 0): number {
+  const base = magical ? magicalHitChance(att, def) : physicalHitChance(att, def);
+  return Math.min(100, base + Math.max(0, blessBonusPct) * 100);
 }
 
 export function rollDamage(
@@ -83,7 +84,7 @@ export function rollDamage(
   const b = terrainBonus(attacker, defender, attTile, defTile);
   const weapon = weaponRoll(attacker.weaponId, attacker.weaponEnh, rng);
   const { att, def, magical } = effectivePower(attacker, defender, weapon, b);
-  const hitChance = hitChanceFor(att, def, magical);
+  const hitChance = hitChanceFor(att, def, magical, attacker.blessedHitBonusPct);
   if (rng() * 100 >= hitChance) return { dmg: 0, crit: false, landed: false, hitChance, preCritDmg: 0 };
   const raw = powerOf(attacker) + weapon + b.atk - protOf(attacker, defender) - b.def;
   const preCritDmg = Math.max(1, Math.floor(Math.max(1, raw) * weaponClassBonusMul(attacker)));
@@ -109,7 +110,7 @@ export function rollDamageCustom(
   const b = terrainBonus(attacker, defender, attTile, defTile);
   const weapon = rollDice(dice, faces, bonus, rng);
   const { att, def, magical } = effectivePower(attacker, defender, weapon, b);
-  const hitChance = hitChanceFor(att, def, magical);
+  const hitChance = hitChanceFor(att, def, magical, attacker.blessedHitBonusPct);
   if (rng() * 100 >= hitChance) return { dmg: 0, crit: false, landed: false, hitChance, preCritDmg: 0 };
   const raw = powerOf(attacker) + weapon + b.atk - protOf(attacker, defender) - b.def;
   const preCritDmg = Math.max(1, Math.floor(raw));
@@ -128,7 +129,7 @@ export function previewDamage(
   const b = terrainBonus(attacker, defender, attTile, defTile);
   const weapon = weaponPreview(attacker.weaponId, attacker.weaponEnh);
   const { att, def, magical } = effectivePower(attacker, defender, weapon, b);
-  const hitChance = hitChanceFor(att, def, magical);
+  const hitChance = hitChanceFor(att, def, magical, attacker.blessedHitBonusPct);
   const raw = powerOf(attacker) + weapon + b.atk - protOf(attacker, defender) - b.def;
   const dmg = Math.max(1, Math.floor(Math.max(1, raw) * weaponClassBonusMul(attacker)));
   return { dmg, hitChance: Math.round(hitChance) };

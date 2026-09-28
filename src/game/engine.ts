@@ -1,4 +1,4 @@
-import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, weightedWeaponPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashFormula, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower } from "./data";
+import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
 import { canCounter, makeForecast, mulberry32, powerOf, protOf, rollDamage, rollDamageCustom } from "./combat";
 import {
@@ -202,6 +202,14 @@ export interface FireballVfxRequest {
   tiles: Point[];
 }
 export type FireballVfxEvent = { id: string; phase: "launch" | "impact" | "complete" };
+export interface PhantasmalForceVfxRequest { id: string; target: Point; targetUnitId: string }
+export type PhantasmalForceVfxEvent = { id: string; phase: "impact" | "complete" };
+export interface BlessVfxRequest { id: string; center: Point; allies: { id: string; x: number; y: number; distanceHexes: number }[] }
+export type BlessVfxTimelineEvent = "bless_charge" | "bless_release" | "bless_wave" | "bless_unit_receive" | "bless_absorb" | "bless_complete";
+export type BlessVfxEvent = { id: string; phase: "apply"; unitId: string } | { id: string; phase: "complete" } | { id: string; phase: "timeline"; event: BlessVfxTimelineEvent; unitId?: string };
+export interface MagicMissileV2VfxRequest { id: string; casterId: string; targetUnitId: string }
+export type MagicMissileV2VfxEvent = { id: string; phase: "impact"; index: number } | { id: string; phase: "complete" };
+export type MagicMissileV2TimelineEvent = "magic_missile_charge" | "magic_missile_launch_1" | "magic_missile_launch_2" | "magic_missile_launch_3" | "magic_missile_impact_1" | "magic_missile_impact_2" | "magic_missile_impact_3" | "magic_missile_complete";
 
 /** A traveling spell bolt (currently just Magic Missile) — hex-to-hex in pixel space, timed to
  * land right as stepSpell's own hit/damage tick fires (a.t >= MISSILE_HIT_AT), so the streak
@@ -216,7 +224,7 @@ interface MissileFx {
   travel: number;
   max: number;
   hue: number;
-  kind: "magicMissile" | "phantasmalForce" | "fireball" | "causticVenom" | "longShot" | "arcaneBolt" | "webOfDreams";
+  kind: "magicMissile" | "phantasmalForce" | "fantomForce" | "fireball" | "causticVenom" | "longShot" | "arcaneBolt" | "webOfDreams";
   seed: number;
 }
 
@@ -494,6 +502,15 @@ interface SpellAnim {
   fireballVfxLaunched?: boolean;
   fireballImpact?: boolean;
   fireballComplete?: boolean;
+  phantasmalVfxId?: string;
+  phantasmalImpact?: boolean;
+  phantasmalComplete?: boolean;
+  blessVfxId?: string;
+  blessComplete?: boolean;
+  blessAppliedIds?: string[];
+  magicMissileV2VfxId?: string;
+  magicMissileV2Impact?: boolean;
+  magicMissileV2Complete?: boolean;
   extraDice: number;
   extraFaces: number;
   extraBonus: number;
@@ -592,6 +609,8 @@ function pub(u: Unit, restrained: boolean, movLeft: number): UnitPublic {
     diseased: u.diseased,
     poisoned: u.poisoned,
     bleeding: u.bleeding,
+    blessedHitBonusPct: u.blessedHitBonusPct,
+    blessedRoundsLeft: u.blessedRoundsLeft,
     shock: u.shock ? { ...u.shock } : null,
     stunned: u.stunned,
     crippled: u.crippled,
@@ -658,6 +677,9 @@ interface Roster {
   enemyLevels?: Record<number, number>;
   /** Same idea as enemyLevels, but indexing mission.neutralSpawns instead. */
   neutralLevels?: Record<number, number>;
+  /** Defeated spawn ids in a previously visited crossing dungeon. The original spawn
+   * indexes are retained while filtering so ids stay stable across later incursions. */
+  crossingDefeatedSpawns?: string[];
   /** Every weapon id already in the player's save — chest and kill-drop loot rolls exclude
    * these so a drop never announces a weapon the player already has. */
   ownedWeaponIds?: string[];
@@ -875,6 +897,7 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
     footprintOffsets: cls.footprintOffsets,
     shock: null,
     shockCharges: side === "enemy" ? shockChargesFor(cls.id) : 0,
+    fantomForceCharges: side === "enemy" && (cls.id === "cultist" || cls.id === "cultistV2") ? 2 : 0,
     diseased,
     diseaseBase: diseased
       ? {
@@ -960,6 +983,9 @@ function unitFromSnap(snap: BattleUnitSnap): Unit {
     footprintOffsets: cls?.footprintOffsets,
     shock: snap.shock ? { ...snap.shock } : null,
     shockCharges: snap.shockCharges ?? 0,
+    fantomForceCharges: snap.fantomForceCharges ?? ((classId === "cultist" || classId === "cultistV2") && snap.side === "enemy" ? 2 : 0),
+    blessedHitBonusPct: snap.blessedHitBonusPct ?? 0,
+    blessedRoundsLeft: snap.blessedRoundsLeft ?? 0,
     diseased: snap.diseased,
     diseaseBase: snap.diseaseBase ? { ...snap.diseaseBase } : null,
     poisoned: snap.poisoned,
@@ -1268,6 +1294,20 @@ export class BattleEngine {
   readonly fireballVfxEvents: FireballVfxEvent[] = [];
   fireballVfxAvailable = false;
   private fireballVfxSequence = 0;
+  readonly phantasmalForceVfxRequests: PhantasmalForceVfxRequest[] = [];
+  readonly phantasmalForceVfxEvents: PhantasmalForceVfxEvent[] = [];
+  phantasmalForceVfxAvailable = false;
+  private phantasmalForceVfxSequence = 0;
+  readonly blessVfxRequests: BlessVfxRequest[] = [];
+  readonly blessVfxEvents: BlessVfxEvent[] = [];
+  readonly blessTimelineEvents: { id: string; event: BlessVfxTimelineEvent; unitId?: string }[] = [];
+  blessVfxAvailable = false;
+  private blessVfxSequence = 0;
+  readonly magicMissileV2VfxRequests: MagicMissileV2VfxRequest[] = [];
+  readonly magicMissileV2VfxEvents: MagicMissileV2VfxEvent[] = [];
+  readonly magicMissileV2TimelineEvents: { id: string; event: MagicMissileV2TimelineEvent; index?: number }[] = [];
+  magicMissileV2VfxAvailable = false;
+  private magicMissileV2VfxSequence = 0;
 
   constructor(mission: Mission, art: GameArt, roster: Roster, seed = 1, debugFreeCast = false) {
     this.debugFreeCast = debugFreeCast;
@@ -1351,10 +1391,17 @@ export class BattleEngine {
     this.decorations.push(...barricadeDecor(this.tiles, this.cols, this.rows, this.decorations));
     this.refreshDecorOverlay();
     this.rng = mulberry32(seed + mission.index * 97);
+    const defeatedCrossingSpawns = new Set(roster.crossingDefeatedSpawns ?? []);
     this.units = [
       ...mission.playerSpawns.filter((s) => !heroUnconscious(s.name, roster)).map((s, i) => spawnUnit(s, "player", i, roster)),
-      ...mission.enemySpawns.map((s, i) => spawnUnit(s, "enemy", i, roster, enemyLevelFor(mission.index))),
-      ...(mission.neutralSpawns ?? []).map((s, i) => spawnUnit(s, "neutral", i, roster, enemyLevelFor(mission.index))),
+      ...mission.enemySpawns.flatMap((s, i) => {
+        const id = `enemy-${s.name}-${i}`;
+        return defeatedCrossingSpawns.has(id) ? [] : [spawnUnit(s, "enemy", i, roster, enemyLevelFor(mission.index))];
+      }),
+      ...(mission.neutralSpawns ?? []).flatMap((s, i) => {
+        const id = `neutral-${s.name}-${i}`;
+        return defeatedCrossingSpawns.has(id) ? [] : [spawnUnit(s, "neutral", i, roster, enemyLevelFor(mission.index))];
+      }),
     ];
     for (const u of this.units) {
       this.nudgeOffHazard(u);
@@ -1676,6 +1723,9 @@ export class BattleEngine {
         weaponEnh: u.weaponEnh,
         shock: u.shock ? { ...u.shock } : null,
         shockCharges: u.shockCharges ?? 0,
+        fantomForceCharges: u.fantomForceCharges,
+        blessedHitBonusPct: u.blessedHitBonusPct,
+        blessedRoundsLeft: u.blessedRoundsLeft,
         diseased: u.diseased,
         diseaseBase: u.diseaseBase ? { ...u.diseaseBase } : null,
         poisoned: u.poisoned,
@@ -2210,12 +2260,18 @@ export class BattleEngine {
         }
       }
       this.banner = step.label ?? "";
-      sfxPlay.crit();
+      if (step.spellKind === "bless") sfxPlay.heal();
+      else sfxPlay.crit();
       if (step.spellKind === "magicMissile") {
         const caster = this.units.find((u) => u.id === step.att);
         if (caster) for (const t of step.tiles) this.emitMissileFx(caster.x, caster.y, t.x, t.y, "magicMissile");
       }
-      if (step.spellKind === "phantasmalForce") {
+      if (step.spellKind === "fantomForce") {
+        const caster = this.units.find((u) => u.id === step.att);
+        const target = step.tiles[0];
+        if (caster && target) this.emitMissileFx(caster.x, caster.y, target.x, target.y, "fantomForce");
+      }
+      if (step.spellKind === "phantasmalForce" && (!this.phantasmalForceVfxAvailable || this.reducedMotion)) {
         const caster = this.units.find((u) => u.id === step.att);
         const target = step.tiles[0];
         if (caster && target) this.emitMissileFx(caster.x, caster.y, target.x, target.y, "phantasmalForce");
@@ -2628,7 +2684,43 @@ export class BattleEngine {
       return;
     }
     a.t += dt;
+    if (a.spellKind === "bless") {
+      if (this.blessVfxAvailable && !this.reducedMotion) {
+        if (!a.blessVfxId) {
+          const id = `bless-${++this.blessVfxSequence}`;
+          a.blessVfxId = id;
+          const allies = a.ids.map((unitId) => this.units.find((unit) => unit.id === unitId && unit.alive)).filter((unit): unit is Unit => !!unit);
+          this.blessVfxRequests.push({ id, center: { x: att.x, y: att.y }, allies: allies.map((unit) => ({ id: unit.id, x: unit.x, y: unit.y, distanceHexes: hexDist(att, unit) })) });
+        }
+        for (let index = this.blessVfxEvents.length - 1; index >= 0; index--) {
+          const event = this.blessVfxEvents[index]!;
+          if (event.id !== a.blessVfxId) continue;
+          this.blessVfxEvents.splice(index, 1);
+          if (event.phase === "complete") a.blessComplete = true;
+          else if (event.phase === "timeline") continue;
+          else {
+            const applied = a.blessAppliedIds ?? (a.blessAppliedIds = []);
+            if (applied.includes(event.unitId)) continue;
+            const ally = this.units.find((unit) => unit.id === event.unitId && unit.alive && unit.side === att.side);
+            if (ally) this.applyBless(ally, att.level);
+            applied.push(event.unitId);
+          }
+        }
+      } else if (a.t >= 0.3) {
+        for (const id of a.ids) {
+          const applied = a.blessAppliedIds ?? (a.blessAppliedIds = []);
+          if (applied.includes(id)) continue;
+          const ally = this.units.find((unit) => unit.id === id && unit.alive && unit.side === att.side);
+          if (ally) this.applyBless(ally, att.level);
+          applied.push(id);
+        }
+        if (a.t >= 1.5) a.blessComplete = true;
+      }
+      if (a.blessComplete && this.heldDone(a)) this.finishCombat(att);
+      return;
+    }
     const syncFireballVfx = a.spellKind === "fireball" && this.fireballVfxAvailable && !this.reducedMotion && !!a.projectileTo;
+    const syncPhantasmalVfx = a.spellKind === "phantasmalForce" && this.phantasmalForceVfxAvailable && !this.reducedMotion;
     if (syncFireballVfx) {
       if (!a.fireballVfxId) {
         const id = `fireball-${++this.fireballVfxSequence}`;
@@ -2647,13 +2739,54 @@ export class BattleEngine {
         else if (event.phase === "complete") a.fireballComplete = true;
       }
     }
+    if (syncPhantasmalVfx) {
+      if (!a.phantasmalVfxId) {
+        const id = `phantasmal-${++this.phantasmalForceVfxSequence}`;
+        a.phantasmalVfxId = id;
+        const target = a.tiles[0];
+        if (target) this.phantasmalForceVfxRequests.push({ id, target: { ...target }, targetUnitId: a.ids[0] ?? "" });
+      }
+      for (let index = this.phantasmalForceVfxEvents.length - 1; index >= 0; index--) {
+        const event = this.phantasmalForceVfxEvents[index]!;
+        if (event.id !== a.phantasmalVfxId) continue;
+        this.phantasmalForceVfxEvents.splice(index, 1);
+        if (event.phase === "impact") a.phantasmalImpact = true;
+        else a.phantasmalComplete = true;
+      }
+    }
+    const syncMagicMissileV2Vfx = a.spellKind === "magicMissileV2" && this.magicMissileV2VfxAvailable && !this.reducedMotion;
+    if (syncMagicMissileV2Vfx) {
+      if (!a.magicMissileV2VfxId) {
+        const targetUnitId = a.ids[0];
+        const target = targetUnitId ? this.units.find((unit) => unit.id === targetUnitId) : undefined;
+        if (target) {
+          const id = `magic-missile-v2-${++this.magicMissileV2VfxSequence}`;
+          a.magicMissileV2VfxId = id;
+          this.magicMissileV2VfxRequests.push({ id, casterId: att.id, targetUnitId: target.id });
+        } else a.magicMissileV2VfxId = "";
+      }
+      for (let index = this.magicMissileV2VfxEvents.length - 1; index >= 0; index--) {
+        const event = this.magicMissileV2VfxEvents[index]!;
+        if (event.id !== a.magicMissileV2VfxId) continue;
+        this.magicMissileV2VfxEvents.splice(index, 1);
+        if (event.phase === "impact") a.magicMissileV2Impact = true;
+        else a.magicMissileV2Complete = true;
+      }
+      // Keep combat authoritative even if a renderer is torn down or misses an event while
+      // the cast is active. The VFX normally impacts by 0.70s and completes shortly after.
+      if (!a.magicMissileV2Impact && a.t >= 1.0) a.magicMissileV2Impact = true;
+      if (!a.magicMissileV2Complete && a.t >= 1.3) a.magicMissileV2Complete = true;
+    }
     const arrowSpell = a.spellKind === "longShot" || a.spellKind === "multiShot" || a.spellKind === "piercing";
-    const hitAt = arrowSpell ? ARROW_TRAVEL : a.spellKind === "phantasmalForce" ? PHANTASMAL_FORCE_TRAVEL : a.spellKind === "magicMissile" || a.spellKind === "fireball" || a.spellKind === "causticVenom" ? SPELL_TRAVEL : 0.18;
+    const hitAt = arrowSpell ? ARROW_TRAVEL : a.spellKind === "phantasmalForce" || a.spellKind === "fantomForce" ? PHANTASMAL_FORCE_TRAVEL : a.spellKind === "magicMissile" || a.spellKind === "magicMissileV2" || a.spellKind === "fireball" || a.spellKind === "causticVenom" ? SPELL_TRAVEL : 0.18;
+    if (syncMagicMissileV2Vfx && a.magicMissileV2VfxId === "") {
+      if (a.t >= hitAt) a.magicMissileV2Impact = true;
+    }
     // Weapon-based skills routed through this same SpellAnim machinery for their multi-target
     // reach (bow shots, Cleave, Sweep, the two charge skills) are not magic — only the actual
     // spellcasters' kinds get the casting cue below.
     const meleeSkill = a.spellKind === "cleave" || a.spellKind === "sweep" || a.spellKind === "shoulderSmash" || a.spellKind === "stampede";
-    if (!a.hit && (syncFireballVfx ? a.fireballImpact === true : a.t >= hitAt)) {
+    if (!a.hit && (syncFireballVfx ? a.fireballImpact === true : syncPhantasmalVfx ? a.phantasmalImpact === true : syncMagicMissileV2Vfx ? a.magicMissileV2Impact === true : a.t >= hitAt)) {
       a.hit = true;
       if (a.spellKind === "webOfDreams") sfxPlay.dreamingWeb();
       else if (att.sprite === "cultist-v2") sfxPlay.cultistV2Spellcast();
@@ -2733,6 +2866,7 @@ export class BattleEngine {
           sfxPlay.miss();
           continue;
         }
+        if (a.spellKind === "fantomForce") dmg = Math.max(1, Math.floor(dmg * FANTOM_FORCE.damageMul));
         if (a.dmgMul > 1) dmg = Math.max(1, Math.floor(dmg * a.dmgMul));
         if (a.spellKind === "cleave" && cleaveDoublesVs(foe)) dmg = Math.max(1, Math.floor(dmg * CLEAVE.largeMul));
         if (foe.asleep) {
@@ -2842,10 +2976,15 @@ export class BattleEngine {
     // changing the hit timing above; every other spell keeps the existing duration.
     // The slower spell bolts (SPELL_TRAVEL) need the step to outlast their flight, impact and
     // trail afterglow.
-    const boltSpell = a.spellKind === "magicMissile" || a.spellKind === "fireball" || a.spellKind === "causticVenom";
-    const spellEnd = Math.max(att.sprite === "conjurer" ? 0.72 : 0.55, boltSpell ? SPELL_TRAVEL + MISSILE_AFTERGLOW + 0.15 : 0);
+    const boltSpell = a.spellKind === "magicMissile" || a.spellKind === "magicMissileV2" || a.spellKind === "fireball" || a.spellKind === "causticVenom" || a.spellKind === "fantomForce";
+    const spellEnd = Math.max(att.sprite === "conjurer" ? 0.72 : 0.55, boltSpell ? SPELL_TRAVEL + MISSILE_AFTERGLOW + 0.15 : 0, syncPhantasmalVfx ? 1.5 : 0);
+    if (syncMagicMissileV2Vfx && a.magicMissileV2VfxId === "" && a.t >= spellEnd) a.magicMissileV2Complete = true;
     if (syncFireballVfx) {
       if (a.fireballComplete && this.heldDone(a)) this.finishCombat(att);
+    } else if (syncPhantasmalVfx) {
+      if (a.phantasmalComplete && this.heldDone(a)) this.finishCombat(att);
+    } else if (syncMagicMissileV2Vfx) {
+      if (a.magicMissileV2Complete && this.heldDone(a)) this.finishCombat(att);
     } else if (a.t >= spellEnd && this.heldDone(a)) this.finishCombat(att);
   }
 
@@ -3556,7 +3695,7 @@ export class BattleEngine {
   }
 
   /** One glowing bolt per target, hex-to-hex — see MissileFx. */
-  private emitMissileFx(fromX: number, fromY: number, toX: number, toY: number, kind: "magicMissile" | "phantasmalForce" | "fireball" | "causticVenom" | "longShot" | "arcaneBolt" | "webOfDreams"): void {
+  private emitMissileFx(fromX: number, fromY: number, toX: number, toY: number, kind: "magicMissile" | "phantasmalForce" | "fantomForce" | "fireball" | "causticVenom" | "longShot" | "arcaneBolt" | "webOfDreams"): void {
     if (this.reducedMotion) return;
     let slot = this.missileFx.find((m) => !m.live);
     if (!slot) {
@@ -3575,9 +3714,9 @@ export class BattleEngine {
     slot.toX = toX;
     slot.toY = toY;
     slot.t = 0;
-    slot.travel = kind === "longShot" ? ARROW_TRAVEL : kind === "webOfDreams" ? WEB_SHOT_TRAVEL : kind === "phantasmalForce" ? PHANTASMAL_FORCE_TRAVEL : kind === "magicMissile" || kind === "fireball" || kind === "causticVenom" ? SPELL_TRAVEL : MISSILE_TRAVEL;
+    slot.travel = kind === "longShot" ? ARROW_TRAVEL : kind === "webOfDreams" ? WEB_SHOT_TRAVEL : kind === "phantasmalForce" || kind === "fantomForce" ? PHANTASMAL_FORCE_TRAVEL : kind === "magicMissile" || kind === "fireball" || kind === "causticVenom" ? SPELL_TRAVEL : MISSILE_TRAVEL;
     slot.max = slot.travel + MISSILE_AFTERGLOW;
-    slot.hue = kind === "fireball" ? 22 : kind === "causticVenom" ? 104 : kind === "longShot" ? 205 : kind === "arcaneBolt" ? 2 : kind === "webOfDreams" ? 276 : kind === "phantasmalForce" ? 202 : 268;
+    slot.hue = kind === "fireball" ? 22 : kind === "causticVenom" ? 104 : kind === "longShot" ? 205 : kind === "arcaneBolt" ? 2 : kind === "webOfDreams" ? 276 : kind === "phantasmalForce" || kind === "fantomForce" ? 202 : 268;
     slot.kind = kind;
     slot.seed = this.rng() * Math.PI * 2;
   }
@@ -4650,6 +4789,28 @@ export class BattleEngine {
     sfxPlay.ui();
   }
 
+  /** Healer tier 1 Bless: the caster is the center and every living ally within three hexes
+   * receives the level-scaled accuracy bonus as the authored 3D wave reaches them. */
+  startBless(): void {
+    const u = this.units.find((x) => x.id === this.selectedId);
+    if (!u || u.acted || this.tierRemaining(u, "bless") <= 0) return;
+    if (rulesClass(u.classId) !== "healer") return;
+    if (u.level < BLESS.unlockLevel) {
+      this.tip = `Bless disponível a partir do nível ${BLESS.unlockLevel}.`;
+      sfxPlay.ui();
+      return;
+    }
+    const allies = this.units.filter((target) => target.alive && target.side === u.side && hexDist(u, target) <= BLESS.radius);
+    this.spendTier(u, "bless");
+    this.spellKind = null;
+    this.spellArmed = false;
+    this.spellAim = null;
+    this.tip = `Bless: +${BLESS.hitBonusPct(u.level)}% de chance de acerto por ${BLESS.durationRounds(u.level)} rodadas para aliados a até ${BLESS.radius} hexes.`;
+    this.mode = "locked";
+    this.queue.push({ type: "spell", att: u.id, tiles: allies.map((target) => ({ x: target.x, y: target.y })), ids: allies.map((target) => target.id), label: BLESS.name, spellKind: "bless" });
+    sfxPlay.ui();
+  }
+
   /** Healer tier 3: resolves instantly like Aura of Protection/Intimidating Presence — never
    * arms awaitSpell, so it never reaches spellAimValid/confirmSpell. Tops off the hunger of
    * the caster and every ally within CREATE_FOOD_AND_WATER.radius hexes, adding plain Rations
@@ -5256,7 +5417,7 @@ export class BattleEngine {
     if (this.spellKind === "sweep") {
       return manhattan(caster, cell) <= SWEEP.radius;
     }
-    if (this.spellKind === "magicMissile") {
+    if (this.spellKind === "magicMissile" || this.spellKind === "magicMissileV2") {
       const here = this.occ().get(key(cell.x, cell.y));
       if (!this.targetable(here) || manhattan(caster, cell) > MAGIC_MISSILE.range) return false;
       return clearShot(caster, cell, this.tiles, this.cols, "bolt", this.decorOverlay);
@@ -5638,7 +5799,7 @@ export class BattleEngine {
         bonus: MAGIC_MISSILE.bonus,
         label: MAGIC_MISSILE.name,
         spellMul: MAGIC_MISSILE.mul,
-      spellKind: "magicMissile",
+        spellKind: "magicMissileV2",
       });
     }
   }
@@ -6743,6 +6904,10 @@ export class BattleEngine {
     for (const u of this.units) {
       u.moved = false;
       u.acted = false;
+      if ((u.blessedRoundsLeft ?? 0) > 0) {
+        u.blessedRoundsLeft = Math.max(0, u.blessedRoundsLeft! - 1);
+        if (u.blessedRoundsLeft === 0) u.blessedHitBonusPct = 0;
+      }
     }
     for (const z of this.webZones) z.roundsLeft -= 1;
     this.webZones = this.webZones.filter((z) => z.roundsLeft > 0);
@@ -6754,6 +6919,16 @@ export class BattleEngine {
     this.turnOrder = this.sortByInitiative(this.units.filter(takesTurns));
     this.turn += 1;
     this.activeUnitId = null;
+  }
+
+  private applyBless(target: Unit, casterLevel: number): void {
+    const pct = BLESS.hitBonusPct(casterLevel) / 100;
+    target.blessedHitBonusPct = Math.max(target.blessedHitBonusPct ?? 0, pct);
+    const duration = BLESS.durationRounds(casterLevel);
+    target.blessedRoundsLeft = duration;
+    target.healGlow = 1;
+    target.healGlowKind = "bless";
+    this.pushLog(`${target.name} recebeu Bless: +${Math.round(pct * 100)}% de acerto por ${duration} rodadas.`);
   }
 
   /** Enemy Choque: same ignore-cover targeting as Relâmpago, ~1/3 the stats. Returns true
@@ -6823,7 +6998,7 @@ export class BattleEngine {
     // Cultist ("Feiticeiro") and Cultist V2 ("Cultista Ancestral") — same kit, same priority:
     // Relâmpago outranks Choque outranks Magic Missile. Choque ignores cover the same way
     // Relâmpago does; Magic Missile still needs line of sight.
-    if ((next.classId === "cultist" || next.classId === "cultistV2") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.shockCharges > 0)) {
+    if ((next.classId === "cultist" || next.classId === "cultistV2") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.shockCharges > 0 || (next.fantomForceCharges ?? 0) > 0)) {
       if (next.spells.tier2 > 0) {
         let bestBolt: { foe: Unit; from: Point; score: number } | null = null;
         for (const cell of reach.values()) {
@@ -6850,6 +7025,38 @@ export class BattleEngine {
             echo: { dice: LIGHTNING.echoDice, faces: LIGHTNING.echoFaces, bonus: LIGHTNING.echoBonus },
             spellMul: LIGHTNING.mul,
             spellKind: "lightning",
+          });
+          this.queue.push({ type: "delay", dur: 0.12 });
+          return;
+        }
+      }
+      if ((next.fantomForceCharges ?? 0) > 0) {
+        let bestForce: { foe: Unit; from: Point; score: number } | null = null;
+        for (const cell of reach.values()) {
+          for (const foe of players) {
+            if (manhattan(cell, foe) > FANTOM_FORCE.range) continue;
+            if (!clearShot(cell, { x: foe.x, y: foe.y }, this.tiles, this.cols, "bolt", this.decorOverlay)) continue;
+            const score = (foe.maxHp - foe.hp) * 3 + (foe.hp <= 8 ? 20 : 0);
+            if (!bestForce || score > bestForce.score) bestForce = { foe, from: { x: cell.x, y: cell.y }, score };
+          }
+        }
+        if (bestForce) {
+          if (bestForce.from.x !== next.x || bestForce.from.y !== next.y) {
+            this.queue.push({ type: "move", id: next.id, path: reconstructPath(walkReach, bestForce.from) });
+          }
+          next.fantomForceCharges = Math.max(0, next.fantomForceCharges! - 1);
+          const dice = phantasmalForceDice(next.level);
+          this.queue.push({
+            type: "spell",
+            att: next.id,
+            tiles: [{ x: bestForce.foe.x, y: bestForce.foe.y }],
+            ids: [bestForce.foe.id],
+            dice: dice.dice,
+            faces: dice.faces,
+            bonus: 0,
+            label: FANTOM_FORCE.name,
+            spellMul: 1,
+            spellKind: "fantomForce",
           });
           this.queue.push({ type: "delay", dur: 0.12 });
           return;
@@ -7913,7 +8120,7 @@ export class BattleEngine {
       const facing = decorationFacing(p.id, p.rot ?? 0, (file) => this.decorArtReady(file));
       const art = facing.own ? (this.art.decorations[facing.file] ?? img) : img;
       const anchor = decorationAnchor(art);
-      let anchorDx = anchor ? (0.5 - (anchor.u0 + anchor.u1) / 2) * w : 0;
+      let anchorDx = (anchor ? (0.5 - (anchor.u0 + anchor.u1) / 2) : 0) * w + (def.artOffsetX ?? 0) * w;
       let anchorDy = anchor ? (1 - anchor.v) * h : 0;
 
       if (facing.step === 0) {
@@ -9586,7 +9793,7 @@ export class BattleEngine {
         // missile, it just draws nothing of its own here.
         if (m.kind === "webOfDreams") continue;
 
-        if (m.kind === "phantasmalForce") {
+        if (m.kind === "phantasmalForce" || m.kind === "fantomForce") {
           // A translucent attacker races along the cast path rather than behaving like a
           // coloured projectile: skull, streaming lower body and two reaching claws make the
           // hit read as a brief hostile apparition on the victim's hex.
@@ -9965,6 +10172,7 @@ export class BattleEngine {
   }
 
   healHaloRgb(kind: Unit["healGlowKind"]): { core: string; mid: string } {
+    if (kind === "bless") return { core: "255,250,216", mid: "255,189,67" };
     if (kind === "disease") return { core: "200,255,230", mid: "70,210,160" };
     if (kind === "potion") return { core: "255,230,170", mid: "255,150,60" };
     if (kind === "holyMedium") return { core: "255,250,220", mid: "255,210,90" };

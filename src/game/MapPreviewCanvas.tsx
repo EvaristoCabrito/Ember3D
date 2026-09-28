@@ -16,6 +16,9 @@ export type PreviewDecorationSelection = { id: string; x: number; y: number; rot
 // The technical map is a native scroll surface; keep preview scrollbar travel deliberately gentler.
 const PREVIEW_SCROLL_PAN_RATE = 0.45;
 const PREVIEW_ZOOM_MIN = 0.75;
+// CODER-ONLY: DO NOT MESS WITH CONTROLS. Preserve left-button hold for 0.5 seconds,
+// then show the grabbing hand and pan on drag. Never display this warning in the UI.
+const PREVIEW_PAN_HOLD_MS = 500;
 
 /** A read-only window onto the map exactly as the real battle would render it — same tile
  * art, same decoration art, same unit sprites — instead of the paint grid's flat color
@@ -55,6 +58,7 @@ export function MapPreviewCanvas({
   const viewportRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<BattleEngine | null>(null);
   const redrawRef = useRef<(() => void) | null>(null);
+  const armTimerRef = useRef<number | null>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; startX: number; startY: number; armed: boolean; moved: boolean } | null>(null);
   // moved stays false for a plain right-click (press and release without dragging) — that's
   // a pick-up-and-hold, not a move, so releasing the button must not drop the unit back onto
@@ -176,7 +180,7 @@ export function MapPreviewCanvas({
       // scale it down to the panel. Unlike merely choosing the smallest tactical zoom, this
       // guarantees that even a large draft opens as one complete, inspectable board.
       const fitScale = zoom <= PREVIEW_ZOOM_MIN
-        ? Math.min(1, Math.max(0.1, (w - 12) / previewBoardWidth, (h - 12) / previewBoardHeight))
+        ? Math.max(0.1, Math.min(1, (w - 12) / previewBoardWidth, (h - 12) / previewBoardHeight))
         : 1;
       const renderW = Math.ceil(w / fitScale);
       const renderH = Math.ceil(h / fitScale);
@@ -344,10 +348,17 @@ export function MapPreviewCanvas({
       y: event.clientY,
       startX: event.clientX,
       startY: event.clientY,
-      armed: true,
+      armed: false,
       moved: false,
     };
     viewport.setPointerCapture(event.pointerId);
+    armTimerRef.current = window.setTimeout(() => {
+      const drag = dragRef.current;
+      if (drag?.pointerId !== event.pointerId || drag.moved) return;
+      drag.armed = true;
+      // The hand cursor confirms that the hold-to-pan gesture is armed.
+      setIsPanning(true);
+    }, PREVIEW_PAN_HOLD_MS);
   };
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const unitDrag = unitDragRef.current;
@@ -366,13 +377,12 @@ export function MapPreviewCanvas({
     if (!viewport || !drag || drag.pointerId !== event.pointerId) return;
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
-    // A stationary click still paints. Once the held pointer moves far enough, it becomes
-    // a map pan immediately—there is no delay that makes horizontal dragging feel broken.
+    // The brush owns normal clicks and drags. Pan begins only after the 0.5-second hold
+    // timer arms it, then a real movement, so it can never auto-activate.
     if (!drag.moved) {
       const movedFarEnough = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 6;
       if (drag.armed && movedFarEnough) {
         drag.moved = true;
-        setIsPanning(true);
       }
     }
     if (drag.moved) {
@@ -434,6 +444,10 @@ export function MapPreviewCanvas({
     }
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    if (armTimerRef.current !== null) {
+      window.clearTimeout(armTimerRef.current);
+      armTimerRef.current = null;
+    }
     // Normal left click remains the terrain/decorations brush. Panning is still hold + drag.
     if (!cancelled && !drag.moved && event.button === 0) {
       const canvas = canvasRef.current;

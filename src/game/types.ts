@@ -138,12 +138,14 @@ export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric
 export type HealId = "cureMinor" | "cureWounds" | "cureLight";
 export type SpellKind =
   | "fireball"
+  | "bless"
   | HealId
   | "longShot"
   | "piercing"
   | "lightning"
   | "lightningTier3"
   | "magicMissile"
+  | "magicMissileV2"
   | "causticVenom"
   | "doubleStrike"
   | "cleave"
@@ -153,6 +155,7 @@ export type SpellKind =
   | "trip"
   | "summonFamiliar"
   | "phantasmalForce"
+  | "fantomForce"
   | "summonFamiliar2"
   | "summonFamiliar3"
   | "lifeDrain"
@@ -327,6 +330,8 @@ export interface DecorationDef {
   heightScale?: number;
   /** Visual multiplier applied to both dimensions without changing the footprint or rules. */
   artScale?: number;
+  /** Normalized horizontal artwork offset from its measured base anchor. */
+  artOffsetX?: number;
   /** Draws after (in front of) the ground-mist atmosphere sheets (Mist 2/3/4 — see
    * ThreeAtmosphere.ts), which render with depthTest disabled and would otherwise paint over
    * this prop and wash it out wherever the mist band crosses it. Any decoration with a
@@ -335,6 +340,9 @@ export interface DecorationDef {
    * treatment without emitting light, e.g. tall props that commonly sit in the map's edge
    * band where Mist 4's border fog lives. */
   aboveGroundMist?: boolean;
+  /** Draws above the tactical movement/target overlay so the prop never looks washed out
+   * when its hex is highlighted. This affects rendering only, not selection or movement. */
+  aboveTacticalOverlays?: boolean;
   /** Casts no shadow — true silhouette caster and hidden shadow-blocking volume both skipped
    * (see ThreeBattleRenderer's decor sync). For thin/tall scenery whose cast shadow reads as
    * an unwanted dark stripe across the board rather than grounding the prop. */
@@ -619,7 +627,7 @@ export interface Unit {
   healGlow: number;
   /** Palette the healGlow halo uses: holy gold (minor/medium), disease teal, potion amber,
    * or Potionzero (the original warm-white glow, kept for future skills). */
-  healGlowKind: "holyMinor" | "holyMedium" | "disease" | "potion" | "potionZero" | "food";
+  healGlowKind: "holyMinor" | "holyMedium" | "disease" | "potion" | "potionZero" | "food" | "bless";
   fade: number;
   bob: number;
   level: number;
@@ -649,6 +657,12 @@ export interface Unit {
    * familiarLifeDrainCharges(conjurer's level), spent by castLifeDrain, never refilled
    * mid-battle. Undefined/0 for every other unit. */
   lifeDrainCharges?: number;
+  /** Enemy-only legacy FantomForce uses, replenished at battle start. */
+  fantomForceCharges?: number;
+  /** Current Bless accuracy bonus, stored as a fraction (0.01 = one percentage point). */
+  blessedHitBonusPct?: number;
+  /** Remaining rounds for Bless. */
+  blessedRoundsLeft?: number;
   /** A summoned familiar's own summoning conjurer, by id — set once at summon time. Consulted
    * by Familiar Maior's Dreno de Vida to know who to heal (see the lifeDrain branch in
    * BattleEngine.stepSpell); undefined for every non-familiar unit. */
@@ -749,6 +763,8 @@ export interface UnitPublic {
   diseased: boolean;
   poisoned: boolean;
   bleeding: boolean;
+  blessedHitBonusPct?: number;
+  blessedRoundsLeft?: number;
   /** Delayed lightning echo that resolves at the start of this unit's turn. */
   shock: { dice: number; faces: number; bonus: number } | null;
   /** True once the party's hunger streak has passed its 3-day grace period. Optional so
@@ -1038,6 +1054,10 @@ export interface BattleUnitSnap {
   shock: { dice: number; faces: number; bonus: number } | null;
   /** Enemy-only Choque charges. Distinct from `shock` (Relâmpago echo DoT). */
   shockCharges: number;
+  /** Enemy-only legacy FantomForce uses remaining in this battle. Optional for older saves. */
+  fantomForceCharges?: number;
+  blessedHitBonusPct?: number;
+  blessedRoundsLeft?: number;
   diseased: boolean;
   diseaseBase: { atk: number; mag: number; def: number; res: number; mov: number } | null;
   poisoned: boolean;
@@ -1106,6 +1126,9 @@ export interface BattleSnapshot {
 export interface SaveData {
   version: number;
   completed: string[];
+  /** Stable enemy/neutral spawn ids already defeated in crossing dungeons. These persist
+   * between incursions so a cleared monster stays gone when the party explores again. */
+  crossingDefeatedSpawns: Record<string, string[]>;
   unitHp: Record<string, number>;
   levels: Record<string, number>;
   xp: Record<string, number>;

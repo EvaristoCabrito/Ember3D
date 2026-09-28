@@ -9,7 +9,7 @@ import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogLine, DialogTr
 const START_HEX = OVERWORLD_START_HEX;
 
 export const SLOT_COUNT = 5;
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 const BANK_KEY = "ember-save-bank";
 const SAVE_KEY = "ember-save";
 const SAVE_BAK_KEY = "ember-save.bak";
@@ -507,6 +507,7 @@ export function emptySave(muted = false): SaveData {
   return {
     version: SAVE_VERSION,
     completed: [],
+    crossingDefeatedSpawns: {},
     unitHp: {},
     levels: { ...DEFAULT_LEVELS },
     xp: { ...DEFAULT_XP },
@@ -573,6 +574,14 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
   }
 
   const completed = cleanStringList(raw.completed, MISSION_IDS);
+  const crossingDefeatedSpawns: Record<string, string[]> = {};
+  if (raw.crossingDefeatedSpawns && typeof raw.crossingDefeatedSpawns === "object") {
+    for (const [missionId, ids] of Object.entries(raw.crossingDefeatedSpawns as Record<string, unknown>)) {
+      if (!MISSION_IDS.has(missionId) || !Array.isArray(ids)) continue;
+      const cleanIds = ids.filter((id): id is string => typeof id === "string" && id.length > 0);
+      if (cleanIds.length) crossingDefeatedSpawns[missionId] = [...new Set(cleanIds)];
+    }
+  }
   const weapons = cleanWeapons(raw.weapons);
   const equipped = cleanEquipped(raw.equipped, weapons);
   const equipment = cleanEquipment(raw.equipment);
@@ -621,6 +630,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
   return {
     version: SAVE_VERSION,
     completed,
+    crossingDefeatedSpawns,
     unitHp: cleanHp(raw.unitHp),
     levels,
     xp: cleanXp(raw.xp),
