@@ -8679,7 +8679,12 @@ export class BattleEngine {
     // pool answers which facing, walk only, per direct report. Cultist V2's own walk
     // "backwards" complaint has a different cause: see dirActionWalk below.
     const useWalkLeft = u.sprite === "lancer" ? faceRight : !faceRight;
-    const walkPool = useWalkLeft ? (this.art.walksLeft[u.sprite] ?? this.art.walks[u.sprite]) : this.art.walks[u.sprite];
+    const sideWalkPool = useWalkLeft ? (this.art.walksLeft[u.sprite] ?? this.art.walks[u.sprite]) : this.art.walks[u.sprite];
+    // Moving up the map (walkPose "back") or down it ("front") plays that direction's own
+    // cycle for sprites that have one (GameArt.walksUp/walksDown); everyone else keeps the
+    // side walk in every direction.
+    const walkPool =
+      (u.walkPose === "back" ? this.art.walksUp[u.sprite] : u.walkPose === "front" ? this.art.walksDown[u.sprite] : undefined) ?? sideWalkPool;
     // Same idleAlt alternation attackPose applies to pick its index (see that function's
     // attackPool) — mirrored here so the frame actually drawn comes from the same array.
     const atkBase = u.idleAlt ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite];

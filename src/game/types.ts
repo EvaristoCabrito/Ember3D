@@ -1008,6 +1008,12 @@ export interface GameArt {
    * flipping once per that unit's own turn so it visibly alternates stance turn to turn. */
   idles2: Partial<Record<SpriteId, HTMLImageElement[]>>;
   walkDirs: Partial<Record<SpriteId, WalkDirs>>;
+  /** Animated walk cycles for moving up the map (away from the camera) and down it (toward
+   * the camera) — move-up-*.png / move-down-*.png. Only sprites listed in assets.ts's
+   * WALK_UP_DOWN_FRAMES have them; everyone else keeps their left/right walk in every
+   * direction, exactly as before. */
+  walksUp: Partial<Record<SpriteId, HTMLImageElement[]>>;
+  walksDown: Partial<Record<SpriteId, HTMLImageElement[]>>;
   impact: HTMLImageElement[];
   /** Ultra-realistic Fireball core; its trail and light remain procedural. */
   fireballCore: HTMLImageElement;

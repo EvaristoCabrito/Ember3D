@@ -511,6 +511,21 @@ export async function loadGameArt(): Promise<GameArt> {
   const idles2: Partial<Record<SpriteId, HTMLImageElement[]>> = {
     malrec: await Promise.all(Array.from({ length: 36 }, (_, i) => loadImage(`/game/sprites/malrec/idle2-${i + 1}.png`))),
   };
+  // Up/down walk cycles (move-up-*.png / move-down-*.png), opt-in per sprite — see
+  // GameArt.walksUp/walksDown. A sprite with only one of the two keeps its left/right walk
+  // for the other direction.
+  const WALK_UP_DOWN_FRAMES: Partial<Record<SpriteId, { up?: number; down?: number; bust: string }>> = {
+    BirolhoLegs: { up: 32, down: 32, bust: "" },
+  };
+  const walksUp: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
+  const walksDown: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
+  await Promise.all(
+    (Object.keys(WALK_UP_DOWN_FRAMES) as SpriteId[]).map(async (id) => {
+      const { up, down, bust } = WALK_UP_DOWN_FRAMES[id]!;
+      if (up) walksUp[id] = await Promise.all(Array.from({ length: up }, (_, i) => loadImage(spriteFrameSrc(id, `move-up-${i + 1}`, bust))));
+      if (down) walksDown[id] = await Promise.all(Array.from({ length: down }, (_, i) => loadImage(spriteFrameSrc(id, `move-down-${i + 1}`, bust))));
+    }),
+  );
   const walkDirs: GameArt["walkDirs"] = {
     // kael-v2 has no walk-front/back/side cut, so defaultWarrior has no walkDirs entry — it
     // falls back to its idle loop while moving, like any sprite absent from this table.
@@ -541,5 +556,5 @@ export async function loadGameArt(): Promise<GameArt> {
     // priority over them while moving (see the render loop's img lookup), leaving that
     // animation dead code.
   };
-  return { tiles, decorations, sprites, attacks, attacks2, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
+  return { tiles, decorations, sprites, attacks, attacks2, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, walksUp, walksDown, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
 }
