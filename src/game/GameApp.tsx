@@ -6953,25 +6953,10 @@ function BattleScreen({
   useEffect(() => {
     if (!showStatus && !invView) setBrowseId(null);
   }, [showStatus, invView]);
-
-  // Clicking any unit that isn't selectable right now — an enemy, or an ally whose turn
-  // hasn't come up — routes through the engine's own inspect() and lands in hud.inspected.
-  // That used to only surface as a HUD tooltip, so seeing a unit's actual sheet took an
-  // extra click on the footer portrait; open the sheet directly on a fresh inspection
-  // instead, as long as it's a plain "look at them" click and not part of picking a target
-  // (hud.selected/hud.pendingFoe both null). A fresh field click also overrides whatever
-  // the status sheet was browsing — the player just asked to look at THIS unit.
-  const prevInspectedIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    const id = hud.inspected?.id ?? null;
-    if (id && id !== prevInspectedIdRef.current) {
-      setShowStatus(true);
-      // While a unit is selected, the sheet would otherwise keep showing the selected unit —
-      // browse straight to whoever was clicked instead.
-      setBrowseId(hud.inspected?.side === "player" || hud.selected || hud.pendingFoe ? id : null);
-    }
-    prevInspectedIdRef.current = id;
-  }, [hud.inspected?.id, hud.selected, hud.pendingFoe]);
+  const inspectBoardUnit = useCallback((unitId: string) => {
+    setBrowseId(unitId);
+    setShowStatus(true);
+  }, []);
 
   const unit: UnitPublic | null = hud.selected ?? hud.pendingFoe ?? hud.inspected;
   const statusUnit: UnitPublic | null = (browseId ? engine.publicUnit(browseId) : null) ?? unit;
@@ -7223,6 +7208,7 @@ function BattleScreen({
         <BattleCanvas
           engine={engine}
           onHud={onHud}
+          onInspectUnit={inspectBoardUnit}
           paused={paused || introDialogOpen || outroDialogOpen || !!hud.pendingDialog}
           onTileReadout={setHeldTile}
         />
@@ -7778,7 +7764,7 @@ function BattleScreen({
           bagIcon={pouchIcon(equippedPouchId(liveSave.equipment, statusUnit.name))}
           onClose={() => {
             setShowStatus(false);
-            if (hud.selected && hud.inspected) engine.dismissInspect();
+            if (hud.inspected) engine.dismissInspect();
           }}
           onCycle={
             hud.turnQueue.length > 1

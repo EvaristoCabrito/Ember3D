@@ -17,11 +17,13 @@ function useThreeGroundRenderer(): boolean {
 export function BattleCanvas({
   engine,
   onHud,
+  onInspectUnit,
   paused = false,
   onTileReadout,
 }: {
   engine: BattleEngine;
   onHud: (hud: HudSnapshot) => void;
+  onInspectUnit?: (unitId: string) => void;
   paused?: boolean;
   /** Fires when the pointer has settled on one tile long enough to be asking about it, so
    * the caller can show what that terrain does. With a mouse that is the cursor resting
@@ -338,7 +340,7 @@ export function BattleCanvas({
     };
     raf = requestAnimationFrame(loop);
 
-    const pos = (e: PointerEvent) => {
+    const pos = (e: MouseEvent) => {
       const r = canvas.getBoundingClientRect();
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
@@ -519,6 +521,12 @@ export function BattleCanvas({
     const onMenu = (e: MouseEvent) => {
       e.preventDefault();
       if (paused) return;
+      const p = pos(e);
+      const inspectedUnitId = engine.inspectAt(p.x, p.y);
+      if (inspectedUnitId) {
+        onInspectUnit?.(inspectedUnitId);
+        return;
+      }
       const hud = engine.getHud();
       const showAct =
         hud.mode === "awaitAction" || hud.mode === "awaitAttack" || hud.mode === "selected" || hud.mode === "awaitSpell";
@@ -560,7 +568,7 @@ export function BattleCanvas({
       fx?.dispose();
       rendererThree?.dispose();
     };
-  }, [engine, onHud, paused]);
+  }, [engine, onHud, onInspectUnit, paused]);
 
   // Mission.mistType === "vignette" (Map Editor's "Tipo de névoa") turns this from the always-on
   // subtle diorama edge shading into an author-controlled hazy corner effect, driven by the same

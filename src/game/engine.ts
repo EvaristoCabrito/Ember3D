@@ -4080,13 +4080,9 @@ export class BattleEngine {
   }
 
   private select(unit: Unit): void {
-    if (unit.side !== "player" || !unit.alive || unit.moved || this.phase !== "player") {
-      this.inspect(unit);
-      return;
-    }
+    if (unit.side !== "player" || !unit.alive || unit.moved || this.phase !== "player") return;
     const active = this.activeTurnUnit();
     if (active && active.id !== unit.id) {
-      this.inspect(unit);
       this.tip = `Ainda não é a vez de ${unit.name} — espere ${active.name} agir.`;
       return;
     }
@@ -7454,6 +7450,17 @@ export class BattleEngine {
     this.hover = cell;
   }
 
+  /** Inspect a unit under the mouse without changing the selected unit or action mode. */
+  inspectAt(cssX: number, cssY: number): string | null {
+    if (this.result) return null;
+    const cell = this.cellAt(cssX, cssY);
+    if (!cell) return null;
+    const unit = this.occ().get(key(cell.x, cell.y));
+    if (!unit?.alive) return null;
+    this.inspect(unit);
+    return unit.id;
+  }
+
   pointerDown(cssX: number, cssY: number, via: "click" | "tap" = "click"): void {
     if (this.result || this.mode === "locked") return;
     const cell = this.cellAt(cssX, cssY);
@@ -7544,12 +7551,8 @@ export class BattleEngine {
     }
 
     if (here && here.side === "player" && here.alive && this.phase === "player") {
-      // Clicking a different unit while one is selected only views its status — the selected
-      // unit stays selected, nothing else happens.
-      if (selected && here.id !== selected.id && !this.mission.explore) {
-        this.inspect(here);
-        return;
-      }
+      // A left click keeps control with the selected unit. Use right-click to inspect another.
+      if (selected && here.id !== selected.id && !this.mission.explore) return;
       if (selected && this.mode === "awaitAction") {
         if (here.id === selected.id) return;
         this.deselect();
@@ -7587,12 +7590,20 @@ export class BattleEngine {
         }
         this.tip = "Fora de alcance.";
         sfxPlay.ui();
-        this.inspect(here);
         return;
       }
-      // A plain click on an enemy only views its status; attacking by click needs the Attack
-      // button's targeting mode (awaitAttack) first.
-      if (selected && !selected.acted && this.mode === "awaitAttack") {
+      // A left click on an enemy performs the active attack or action only.
+      // A primary click on a valid enemy is the basic attack action. The Atacar button
+      // still arms targeting explicitly, while right-click is reserved for inspection.
+      if (selected && !selected.acted && (this.mode === "awaitAttack" || this.mode === "awaitAction" || this.mode === "selected")) {
+        // attackFrom stores the best reachable hex for each visible foe. Using only the
+        // unit's current hex let ranged units fire but made melee attacks appear dead
+        // unless the player first moved adjacent by hand.
+        const from = this.attackFrom.get(here.id);
+        if (from) {
+          this.commitAttack(selected, here, from);
+          return;
+        }
         if (canHitFrom(selected, selected, here, this.tiles, this.cols, this.decorOverlay)) {
           this.commitAttack(selected, here, { x: selected.x, y: selected.y });
           return;
@@ -7602,19 +7613,9 @@ export class BattleEngine {
             ? "Barricada bloqueia o projétil."
             : "O terreno alto corta a flecha.";
           sfxPlay.ui();
-          this.inspect(here);
           return;
         }
       }
-      // Clicking the enemy already under inspection again closes it, same as clicking empty
-      // ground deselects a selected hero, instead of just re-inspecting a no-op.
-      if (this.inspectedId === here.id && !selected) {
-        this.inspectedId = null;
-        this.threat = [];
-        this.tip = null;
-        return;
-      }
-      this.inspect(here);
       return;
     }
     if (selected && this.mode === "selected") {
