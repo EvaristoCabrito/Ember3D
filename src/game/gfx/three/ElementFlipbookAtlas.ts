@@ -6,7 +6,7 @@ export type FlipbookVersion = 1 | 2;
 
 const atlases = new Map<string, Promise<THREE.Texture>>();
 
-/** Load each element/layer 4x4 atlas once. ParticleEmitter owns the animation and rendering path. */
+/** Load each element/layer 4x4 atlas once; the element emitter chooses the renderer per version. */
 export function loadElementFlipbook(element: FlipbookElement, layer: FlipbookLayer = "main", version: FlipbookVersion = 1): Promise<THREE.Texture> {
   const key = `${version}:${element}:${layer}`;
   const filename = version === 2

@@ -82,8 +82,8 @@ const ELEMENT_TINTS: Record<FlipbookElement, readonly [number, number, number]> 
   ember: [1, 0.9, 0.84],
 };
 
-/** Atlas elements reuse the flame particle system, except Holy V2, which composes its same three
- * flipbooks as floor-anchored beam, halo, and star sprites to keep the seal rooted in place. */
+/** V1 atlas elements reuse the flame particle system. V2 atlases are composed as authored sprites
+ * so each complete effect remains grounded while all three animation sheets stay visible. */
 export class ProceduralElementEmitter {
   readonly group = new THREE.Group();
   private readonly preset: PixelElementPreset;
@@ -97,7 +97,7 @@ export class ProceduralElementEmitter {
   private particleEmitter: ParticleEmitter | null = null;
   private particleSettings: FireEmitterSettings | null = null;
   private readonly elementEmitters: ParticleEmitter[] = [];
-  private readonly holyV2Sprites: { sprite: THREE.Sprite; texture: THREE.Texture; phase: number; opacity: number; rotation: number }[] = [];
+  private readonly v2Sprites: { sprite: THREE.Sprite; texture: THREE.Texture; phase: number; opacity: number; rotation: number }[] = [];
   private elementLayerSettings: FireEmitterSettings[] = [];
   private fireEmitter: ParticleEmitter | null = null;
   private fireTexture: THREE.Texture | null = null;
@@ -129,8 +129,8 @@ export class ProceduralElementEmitter {
     void Promise.all(layers.map((layer) => loadElementFlipbook(element, layer, preset.version))).then((textures) => {
       if (this.disposed) return;
       const [r, g, b] = ELEMENT_TINTS[element];
-      if (preset.version === 2 && element === "holy") {
-        this.createHolyV2Sprites(textures);
+      if (preset.version === 2) {
+        this.createElementV2Sprites(element, textures);
         return;
       }
       this.elementEmitters.push(...textures.map((texture, index) => {
@@ -199,9 +199,9 @@ export class ProceduralElementEmitter {
       } else this.lightActivity=0;
       return;
     }
-    if (this.holyV2Sprites.length) {
+    if (this.v2Sprites.length) {
       const frame = Math.floor(this.time * 12) % 16;
-      for (const layer of this.holyV2Sprites) {
+      for (const layer of this.v2Sprites) {
         const currentFrame = (frame + layer.phase) % 16;
         layer.texture.offset.set((currentFrame % 4) * 0.25, 1 - (Math.floor(currentFrame / 4) + 1) * 0.25);
         layer.sprite.material.opacity = layer.opacity * s.opacity;
@@ -209,7 +209,7 @@ export class ProceduralElementEmitter {
         layer.sprite.rotation.z = layer.rotation + Math.sin(this.time * 1.8 + layer.phase) * 0.035;
         layer.sprite.visible = active && s.visualsEnabled;
       }
-      this.lightActivity=active&&s.lightEnabled&&this.lightPriority?5.5*s.lightIntensity*s.intensity:0;
+      this.lightActivity=active&&s.lightEnabled&&this.lightPriority?5.5*this.preset.light*s.lightIntensity*s.intensity:0;
       return;
     }
     if (!this.particleEmitter) { this.lightActivity=0; return; }
@@ -251,7 +251,7 @@ export class ProceduralElementEmitter {
       emitter.geometry.dispose();
       emitter.material.dispose();
     }
-    for (const layer of this.holyV2Sprites) {
+    for (const layer of this.v2Sprites) {
       layer.sprite.material.dispose();
       layer.texture.dispose();
     }
@@ -295,10 +295,19 @@ export class ProceduralElementEmitter {
     this.particleSettings = base;
   }
 
-  /** Holy V2 is authored as a floor-rooted beam, a ground halo and independent star motes.
-   * Render its three flipbooks as anchored billboards so the seal stays on the floor instead of
-   * scattering repeated full-beam frames through the generic smoke-particle simulation. */
-  private createHolyV2Sprites(textures: THREE.Texture[]):void {
+  /** Compose the three authored V2 atlases as one floor-rooted effect, its ground layer and
+   * several independent motes. The complete main frames no longer get scattered as smoke. */
+  private createElementV2Sprites(element: FlipbookElement, textures: THREE.Texture[]):void {
+    const profiles: Record<FlipbookElement, { width:number; height:number; groundWidth:number; groundHeight:number; mainY:number; motes:readonly [number,number,number,number][] }> = {
+      frost: { width:0.92,height:1.2,groundWidth:1.02,groundHeight:0.32,mainY:-0.08,motes:[[-0.3,0.33,0.16,1],[0.29,0.49,0.14,5],[-0.2,0.72,0.12,9],[0.22,0.91,0.1,13]] },
+      lightning: { width:0.82,height:1.32,groundWidth:0.9,groundHeight:0.28,mainY:-0.02,motes:[[-0.26,0.4,0.14,1],[0.24,0.58,0.12,5],[-0.18,0.8,0.1,9],[0.2,1.02,0.1,13]] },
+      poison: { width:1.02,height:1.16,groundWidth:1.08,groundHeight:0.36,mainY:-0.05,motes:[[-0.32,0.3,0.15,1],[0.3,0.45,0.15,5],[-0.2,0.67,0.13,9],[0.23,0.88,0.12,13]] },
+      arcane: { width:1.04,height:1.22,groundWidth:1.06,groundHeight:0.34,mainY:0,motes:[[-0.3,0.34,0.14,1],[0.29,0.52,0.13,5],[-0.2,0.75,0.12,9],[0.22,0.96,0.11,13]] },
+      holy: { width:1.0,height:1.28,groundWidth:0.96,groundHeight:0.34,mainY:-0.23,motes:[[-0.28,0.32,0.15,1],[0.28,0.48,0.13,5],[-0.2,0.73,0.12,9],[0.23,0.88,0.1,13]] },
+      shadow: { width:1.08,height:1.15,groundWidth:1.08,groundHeight:0.38,mainY:0,motes:[[-0.31,0.28,0.15,1],[0.29,0.45,0.13,5],[-0.21,0.69,0.12,9],[0.22,0.88,0.1,13]] },
+      ember: { width:1.08,height:1.18,groundWidth:0.98,groundHeight:0.3,mainY:-0.12,motes:[[-0.3,0.34,0.15,1],[0.3,0.5,0.14,5],[-0.2,0.74,0.12,9],[0.22,0.94,0.1,13]] },
+    };
+    const profile = profiles[element];
     const add = (source: THREE.Texture, x:number, y:number, z:number, width:number, height:number, phase:number, opacity:number, rotation=0, floorAnchored=false) => {
       const texture=source.clone();
       texture.repeat.set(0.25,0.25);
@@ -311,18 +320,15 @@ export class ProceduralElementEmitter {
       sprite.position.set(x,y,z);
       sprite.rotation.z=rotation;
       this.group.add(sprite);
-      this.holyV2Sprites.push({sprite,texture,phase,opacity,rotation});
+      this.v2Sprites.push({sprite,texture,phase,opacity,rotation});
     };
-    // Main 4x4 atlas: upright light beam with its seal on the sprite's bottom edge.
-    // The authored ring sits slightly above the image edge, so lower the billboard until its
-    // drawn seal meets the ground halo (sprite.center anchors the image's bottom edge).
-    add(textures[0]!,0,-0.23,0.035,1.0,1.28,0,0.88,0,true);
-    // Secondary 4x4 atlas: a flat halo held at ground height.
-    add(textures[1]!,0,0.025,0.04,0.96,0.34,3,0.74);
-    // Particle 4x4 atlas: four small star motes float around the beam.
-    add(textures[2]!,-0.28,0.32,0.045,0.15,0.15,1,0.9,0.15);
-    add(textures[2]!,0.28,0.48,0.046,0.13,0.13,5,0.82,-0.12);
-    add(textures[2]!,-0.2,0.73,0.047,0.12,0.12,9,0.76,0.08);
-    add(textures[2]!,0.23,0.88,0.048,0.1,0.1,13,0.7,-0.08);
+    // The first sheet's complete frames are bottom-anchored to the map floor.
+    add(textures[0]!,0,profile.mainY,0.035,profile.width,profile.height,0,0.88,0,true);
+    // The second sheet is a compact ground plane halo, seal, puddle or impact ring.
+    add(textures[1]!,0,0.025,0.04,profile.groundWidth,profile.groundHeight,3,0.74);
+    // Animate four independently placed particles from the third sheet around the plume.
+    profile.motes.forEach(([x,y,size,phase],index) => {
+      add(textures[2]!,x,y,0.045+index*0.001,size,size,phase,0.9-index*0.055,(index%2?1:-1)*0.1);
+    });
   }
 }
