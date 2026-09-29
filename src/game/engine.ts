@@ -1,4 +1,4 @@
-import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
+import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
 import { canCounter, makeForecast, mulberry32, powerOf, protOf, rollDamage, rollDamageCustom } from "./combat";
 import {
@@ -4815,6 +4815,23 @@ export class BattleEngine {
     sfxPlay.ui();
   }
 
+  startSummonFamiliar4(): void {
+    const u = this.units.find((x) => x.id === this.selectedId);
+    if (!u || u.acted || this.tierRemaining(u, "summonFamiliar4") <= 0) return;
+    if (this.hasFamiliarOut(u, "familiar4")) {
+      this.tip = `${u.name} já tem ${SUMMON_FAMILIAR4.name} invocado.`;
+      sfxPlay.ui();
+      return;
+    }
+    this.mode = "awaitSpell";
+    this.spellKind = "summonFamiliar4";
+    this.spellArmed = false;
+    this.spellAim = null;
+    this.hover = null;
+    this.tip = `${SUMMON_FAMILIAR4.name}: convoca um aliado radiante, com ${Math.round(SUMMON_FAMILIAR4.statScale * 100)}% dos seus atributos atuais, até ${SUMMON_FAMILIAR4.range} hexes. Pode lançar Míssil Mágico ou Dreno de Vida por conta própria. Toque num espaço livre.`;
+    sfxPlay.ui();
+  }
+
   startWebOfDreams(): void {
     const u = this.units.find((x) => x.id === this.selectedId);
     if (!u || u.acted || this.tierRemaining(u, "webOfDreams") <= 0) return;
@@ -5020,6 +5037,10 @@ export class BattleEngine {
     }
     if (this.spellKind === "summonFamiliar3") {
       this.castSummonFamiliar(u, cell, 3);
+      return;
+    }
+    if (this.spellKind === "summonFamiliar4") {
+      this.castSummonFamiliar(u, cell, 4);
       return;
     }
     if (this.spellKind === "webOfDreams") {
@@ -5513,8 +5534,8 @@ export class BattleEngine {
       if (!this.targetable(here) || manhattan(caster, cell) > PHANTASMAL_FORCE.range) return false;
       return clearShot(caster, cell, this.tiles, this.cols, "bolt", this.decorOverlay);
     }
-    if (this.spellKind === "summonFamiliar" || this.spellKind === "summonFamiliar2" || this.spellKind === "summonFamiliar3") {
-      const range = this.spellKind === "summonFamiliar3" ? SUMMON_FAMILIAR3.range : this.spellKind === "summonFamiliar2" ? SUMMON_FAMILIAR2.range : SUMMON_FAMILIAR.range;
+    if (this.spellKind === "summonFamiliar" || this.spellKind === "summonFamiliar2" || this.spellKind === "summonFamiliar3" || this.spellKind === "summonFamiliar4") {
+      const range = this.spellKind === "summonFamiliar4" ? SUMMON_FAMILIAR4.range : this.spellKind === "summonFamiliar3" ? SUMMON_FAMILIAR3.range : this.spellKind === "summonFamiliar2" ? SUMMON_FAMILIAR2.range : SUMMON_FAMILIAR.range;
       if (manhattan(caster, cell) > range) return false;
       // Familiar 3 is a real multi-hex creature (FOOTPRINT_TYPE_6) — every cell of the shape
       // it would actually occupy has to be checked, not just the anchor tile, or it can be
@@ -6055,13 +6076,14 @@ export class BattleEngine {
    * selects which of the three — same spawn logic, just a stronger creature/class/tier and
    * its own spell/slot per tier, never an automatic upgrade of the one before it. See
    * SUMMON_FAMILIAR2/SUMMON_FAMILIAR3's notes. */
-  private castSummonFamiliar(unit: Unit, cell: Point, tier: 1 | 2 | 3): void {
+  private castSummonFamiliar(unit: Unit, cell: Point, tier: 1 | 2 | 3 | 4): void {
     if (!this.spellAimValid(unit, cell)) {
       this.tip = "Escolha um espaço livre ao alcance.";
       sfxPlay.ui();
       return;
     }
-    const cls = tier === 3 ? CLASSES.familiar3! : tier === 2 ? CLASSES.familiar2! : CLASSES.familiar!;
+    // `tier` picks the creature (4 = Familiar Radiante, cast from spell tier 3), not the spell tier.
+    const cls = tier === 4 ? CLASSES.familiar4! : tier === 3 ? CLASSES.familiar3! : tier === 2 ? CLASSES.familiar2! : CLASSES.familiar!;
     // Re-checked here, not just in startSummonFamiliarX above — the authoritative gate, so
     // the one-per-tier cap and tier 2's own level gate hold even if the awaitSpell state was
     // ever entered some other way.
@@ -6077,10 +6099,10 @@ export class BattleEngine {
       sfxPlay.ui();
       return;
     }
-    const scale = tier === 3 ? SUMMON_FAMILIAR3.statScale : tier === 2 ? SUMMON_FAMILIAR2.statScale : SUMMON_FAMILIAR.statScale;
-    const spellKind: SpellKind = tier === 3 ? "summonFamiliar3" : tier === 2 ? "summonFamiliar2" : "summonFamiliar";
-    const spellName = tier === 3 ? SUMMON_FAMILIAR3.name : tier === 2 ? SUMMON_FAMILIAR2.name : SUMMON_FAMILIAR.name;
-    const namePrefix = tier === 3 ? "Familiar Titã de" : tier === 2 ? "Familiar Maior de" : "Familiar de";
+    const scale = tier === 4 ? SUMMON_FAMILIAR4.statScale : tier === 3 ? SUMMON_FAMILIAR3.statScale : tier === 2 ? SUMMON_FAMILIAR2.statScale : SUMMON_FAMILIAR.statScale;
+    const spellKind: SpellKind = tier === 4 ? "summonFamiliar4" : tier === 3 ? "summonFamiliar3" : tier === 2 ? "summonFamiliar2" : "summonFamiliar";
+    const spellName = tier === 4 ? SUMMON_FAMILIAR4.name : tier === 3 ? SUMMON_FAMILIAR3.name : tier === 2 ? SUMMON_FAMILIAR2.name : SUMMON_FAMILIAR.name;
+    const namePrefix = tier === 4 ? "Familiar Radiante de" : tier === 3 ? "Familiar Titã de" : tier === 2 ? "Familiar Maior de" : "Familiar de";
     const maxHp = Math.max(1, Math.round(unit.maxHp * scale));
     const familiarInitiativeRoll = 1 + Math.floor(this.rng() * 20);
     const familiar: Unit = {
@@ -6135,7 +6157,7 @@ export class BattleEngine {
       shock: null,
       shockCharges: 0,
       spellCharges: tier === 3 ? familiarSpellCharges(unit.level) : familiarMagicMissileCharges(unit.level),
-      lifeDrainCharges: tier === 2 ? familiarLifeDrainCharges(unit.level) : undefined,
+      lifeDrainCharges: tier === 2 || tier === 4 ? familiarLifeDrainCharges(unit.level) : undefined,
       summonerId: unit.id,
       diseased: false,
       diseaseBase: null,
@@ -8744,6 +8766,10 @@ export class BattleEngine {
     // the canvas's own aspect kept instead of squeezed into the tall creature box.
     const troll2HeightScale = u.sprite === "troll2" ? 1.03 : 1;
     const troll2WidthScale = u.sprite === "troll2" ? 1.59 : 1;
+    // familiar4 (1302x620 canvas, figure ~90% of its height): Familiar Maior's on-screen
+    // height, with the wide canvas's own aspect kept.
+    const familiar4HeightScale = u.sprite === "familiar4" ? 0.97 : 1;
+    const familiar4WidthScale = u.sprite === "familiar4" ? 2.61 : 1;
     const h =
       cell *
       (s >= 4 ? 3.35 : s === 2 ? 1.72 : boss ? 1.44 : 1.42) *
@@ -8759,6 +8785,7 @@ export class BattleEngine {
       familiar2WalkScale *
       birolhoLegsHeightScale *
       troll2HeightScale *
+      familiar4HeightScale *
       kaelFinalAtkScale *
       neeraAtkScale *
       neeraCastScale;
@@ -8780,6 +8807,7 @@ export class BattleEngine {
       familiar3WidthScale *
       birolhoLegsWidthScale *
       troll2WidthScale *
+      familiar4WidthScale *
       kaelFinalAtkScale *
       neeraAtkScale *
       neeraCastScale;
@@ -9268,6 +9296,10 @@ export class BattleEngine {
         if (cell && this.spellAimValid(selected, cell)) push([cell], "rgba(200,170,245,0.55)");
       } else if (selected && this.spellKind === "summonFamiliar2") {
         push(this.healRangeTiles(selected, SUMMON_FAMILIAR2.range), "rgba(180,150,235,0.45)");
+        const cell = this.hover ?? this.spellAim;
+        if (cell && this.spellAimValid(selected, cell)) push([cell], "rgba(200,170,245,0.55)");
+      } else if (selected && this.spellKind === "summonFamiliar4") {
+        push(this.healRangeTiles(selected, SUMMON_FAMILIAR4.range), "rgba(180,150,235,0.45)");
         const cell = this.hover ?? this.spellAim;
         if (cell && this.spellAimValid(selected, cell)) push([cell], "rgba(200,170,245,0.55)");
       } else if (selected && this.spellKind === "summonFamiliar3") {

@@ -1403,6 +1403,25 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     init: 6,
     summon: true,
   },
+  // Conjurer tier 3 (Invocar Familiar Radiante) — Familiar Maior's stats, kit (Magic Missile +
+  // Dreno de Vida) and 75% stat share on its own body; same "fallback only" stats as above.
+  familiar4: {
+    id: "familiar4",
+    name: "Familiar Radiante",
+    role: "Invocação",
+    hp: 16,
+    atk: 5,
+    mag: 5,
+    def: 2,
+    res: 2,
+    mov: 5,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "familiar4",
+    size: 1,
+    init: 6,
+    summon: true,
+  },
   // Conjurer tier 3 (Summon Familiar Titã, "the Big Guy") — see castSummonFamiliar. Every
   // combat stat here is a fallback only, same as familiar/familiar2 above: the real numbers
   // are 100% of the conjurer's own current attributes (SUMMON_FAMILIAR3.statScale), computed
@@ -1859,6 +1878,7 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   familiar: { hp: 0, atk: 0, mag: 0, def: 0, res: 0 },
   familiar2: { hp: 0, atk: 0, mag: 0, def: 0, res: 0 },
   familiar3: { hp: 0, atk: 0, mag: 0, def: 0, res: 0 },
+  familiar4: { hp: 0, atk: 0, mag: 0, def: 0, res: 0 },
   paladin: { hp: 5, atk: 1, mag: 1, def: 3, res: 2 },
   heavyKnight: { hp: 5, atk: 1, mag: 0, def: 3, res: 1 },
   // Provisório — copiado da classe base (ver nota em CLASSES acima).
@@ -2375,6 +2395,7 @@ export function weaponIcon(id: string): string {
 export function spellIcon(id: string): string {
   if (id === "summon-familiar2") return "/game/icons/summon-familiar2.png";
   if (id === "summon-familiar3") return "/game/icons/summon-familiar3.png";
+  if (id === "summon-familiar4") return "/game/icons/summon-familiar4.png";
   if (id === "phantasmal-force") return "/game/icons/phantasmal-force.png";
   if (id === "bull-rush") return "/game/icons/bull-rush.png";
   if (id === "executioner-strike") return "/game/icons/executioner-strike.png";
@@ -3527,13 +3548,21 @@ export const SUMMON_FAMILIAR2 = {
  * (see engine.ts) instead of relying on the tier table alone. */
 export const SUMMON_FAMILIAR2_UNLOCK_LEVEL = 5;
 
-/** Conjurer tier 3: "the Big Guy" — same summon shape as tiers 1-2, its own spell/slot, but
+/** Conjurer tier 4 (moved up from tier 3 when Familiar Radiante took tier 3): "the Big Guy" — same summon shape as tiers 1-2, its own spell/slot, but
  * at 100% of the conjurer's current attributes (not a fraction) and its own Fireball once
  * summoned — see familiarSpellCharges. */
 export const SUMMON_FAMILIAR3 = {
   name: "Invocar Familiar Titã",
   range: 5,
   statScale: 1,
+};
+
+/** Conjurer tier 3: Familiar Radiante — Familiar Maior's range, 75% stat share and kit
+ * (Magic Missile + Dreno de Vida) on its own one-hex body. */
+export const SUMMON_FAMILIAR4 = {
+  name: "Invocar Familiar Radiante",
+  range: 4,
+  statScale: 0.75,
 };
 
 /** Which of the conjurer's three familiar tiers gets a spell of its own, and which one —
@@ -3547,6 +3576,7 @@ export const FAMILIAR_SPELL: Partial<Record<ClassId, SpellKind>> = {
   familiar: "magicMissile",
   familiar2: "magicMissile",
   familiar3: "fireball",
+  familiar4: "magicMissile",
 };
 
 /** Familiar Titã's own Fireball charges for the battle — set once at summon time from the
@@ -4085,7 +4115,8 @@ export const SPELL_TIER: Partial<Record<SpellKind, SpellTier>> = {
   summonFamiliar: 1,
   phantasmalForce: 1,
   summonFamiliar2: 2,
-  summonFamiliar3: 3,
+  summonFamiliar3: 4,
+  summonFamiliar4: 3,
   webOfDreams: 2,
   fireball: 3,
   lightningTier3: 5,
