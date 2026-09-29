@@ -5,6 +5,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { DEFAULT_FIRE_EMITTER, ParticleEmitter, loadFireFlipbook, type FireEmitterSettings } from "./ThreeVfxSystem";
+import { PIXEL_ELEMENT_PRESETS, ProceduralElementEmitter, pixelDefaults, pixelPreset, type PixelElement, type PixelElementSettings } from "./ProceduralElementEmitter";
 import { DEFAULT_IMPACT_SETTINGS, FireballImpactVFX, getActiveImpactSettings, setActiveImpactSettings, type ImpactSettings } from "./FireballImpactVFX";
 import { DEFAULT_PHANTASMAL_FORCE_SETTINGS, getActivePhantasmalForceSettings, PhantasmalForceVFX, setActivePhantasmalForceSettings, type PhantasmalForceSettings } from "./PhantasmalForceVFX";
 import { BlessVFX, DEFAULT_BLESS_VFX_SETTINGS, getActiveBlessVfxSettings, setActiveBlessVfxSettings, type BlessVfxSettings } from "./BlessVFX";
@@ -14,10 +15,19 @@ import { BurningHandsV2VFX, DEFAULT_BURNING_HANDS_V2_SETTINGS, getActiveBurningH
 import { BurningHandsV3VFX, DEFAULT_BURNING_HANDS_V3_SETTINGS, getActiveBurningHandsV3Settings, setActiveBurningHandsV3Settings, type BurningHandsV3Settings } from "./BurningHandsV3VFX";
 import { CleaveSweepVFX, DEFAULT_VARREDURA_SETTINGS, getActiveVarreduraSettings, setActiveVarreduraSettings, VarreduraVFX, type VarreduraSettings } from "./VarreduraVFX";
 
-type PreviewMode = "flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "burning-hands-v3" | "varredura-v2" | "cleave-sweep-v2";
+type PreviewMode = "flame" | `pixel-${Exclude<PixelElement, "fire">}` | `pixel-v2-${Exclude<PixelElement, "fire">}` | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "burning-hands-v3" | "varredura-v2" | "cleave-sweep-v2";
+
+const pixelModeElement = (mode: PreviewMode): Exclude<PixelElement, "fire"> | null =>
+  mode.startsWith("pixel-v2-") ? mode.slice(9) as Exclude<PixelElement, "fire"> : mode.startsWith("pixel-") ? mode.slice(6) as Exclude<PixelElement, "fire"> : null;
+const pixelModePresetId = (mode: PreviewMode): string | undefined => {
+  const element = pixelModeElement(mode);
+  return element ? `procedural_pixel_${mode.startsWith("pixel-v2-") ? "v2_" : ""}${element}` : undefined;
+};
+const pixelModeVersion = (mode: PreviewMode): 1 | 2 => mode.startsWith("pixel-v2-") ? 2 : 1;
 
 type PreviewState = {
   settings: FireEmitterSettings;
+  pixelSettings: PixelElementSettings;
   impactSettings: ImpactSettings;
   phantasmalSettings: PhantasmalForceSettings;
   blessSettings: BlessVfxSettings;
@@ -255,6 +265,9 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
   let last = performance.now();
   let simulationClock = 0;
   let emitter: ParticleEmitter | null = null;
+  let pixelEmitter: ProceduralElementEmitter | null = null;
+  let activePixelElement: string | null = null;
+  let pixelClock = 0;
   let impact: FireballImpactVFX | null = null;
   let phantasmal: PhantasmalForceVFX | null = null;
   let bless: BlessVFX | null = null;
@@ -291,6 +304,9 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
   key.shadow.camera.bottom = -3;
   baseScene.add(key);
   baseScene.add(key.target);
+  const pixelLight = new THREE.PointLight(0xffffff, 0, 4, 2);
+  pixelLight.position.set(0, 0.8, 0);
+  baseScene.add(pixelLight);
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(200, 200),
@@ -489,6 +505,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
 
   controls.current = {
     restart: () => {
+      if (pixelModeElement(state.current.mode)) { pixelClock = 0; pixelEmitter?.dispose(); pixelEmitter = null; activePixelElement = null; return; }
       if (state.current.mode === "phantasmal" && phantasmal) {
         phantasmal.restartAt(phantasmalTarget, 1, { onComplete: () => { state.current.playing = state.current.looping; } });
         return;
@@ -506,6 +523,11 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       emitter.reset(state.current.settings, true);
     },
     frameStep: () => {
+      if (pixelModeElement(state.current.mode)) {
+        pixelClock += 1 / 12;
+        pixelEmitter?.update(1 / 12, 1, pixelClock, 0, -0.13);
+        return;
+      }
       if (state.current.mode === "phantasmal" && phantasmal) { phantasmal.update(1 / 24); return; }
       if (state.current.mode === "bless" && bless) { bless.update(1 / 24); return; }
       if (state.current.mode === "magic-missile-v2" && magicMissileV2) { magicMissileV2.update(1 / 24); return; }
@@ -646,6 +668,31 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     else if (varredura && state.current.playing) { varredura.update(dt); if (varredura.finished) { if (state.current.looping) previewVarredura(); else state.current.playing=false; } }
     if (state.current.mode !== "cleave-sweep-v2") { cleaveSweep?.dispose(); cleaveSweep = null; }
     else if (cleaveSweep && state.current.playing) { cleaveSweep.update(dt); if (cleaveSweep.finished) { if (state.current.looping) previewCleaveSweep(); else state.current.playing = false; } }
+    const chosenPixel = pixelModeElement(state.current.mode);
+    const chosenPixelPresetId = pixelModePresetId(state.current.mode);
+    if (chosenPixel && chosenPixelPresetId) {
+      if (!pixelEmitter || activePixelElement !== chosenPixelPresetId) {
+        pixelEmitter?.dispose();
+        pixelEmitter = new ProceduralElementEmitter(fireScene, pixelPreset(chosenPixel, chosenPixelPresetId), state.current.pixelSettings);
+        activePixelElement = chosenPixelPresetId;
+        pixelClock = 0;
+      }
+      if (state.current.playing) pixelClock += dt;
+      pixelEmitter.setSettings(state.current.pixelSettings);
+      pixelEmitter.update(state.current.playing ? dt : 0, 1, pixelClock, 0, -0.13);
+      const sample = pixelEmitter.getLightSample(0, 0, 1);
+      if (sample) {
+        const peak = Math.max(...sample.rgb, 1e-6);
+        pixelLight.color.setRGB(sample.rgb[0]/peak, sample.rgb[1]/peak, sample.rgb[2]/peak);
+        pixelLight.intensity = peak * 35;
+        pixelLight.distance = sample.r * 1.5;
+      } else pixelLight.intensity = 0;
+    } else {
+      pixelEmitter?.dispose();
+      pixelEmitter = null;
+      activePixelElement = null;
+      pixelLight.intensity = 0;
+    }
     if (emitter) {
       const s = state.current.settings;
       emitter.material.uniforms.uSceneDepth!.value = baseTarget.depthTexture;
@@ -689,7 +736,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     renderer.setRenderTarget(overlayTarget);
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, true, true);
-    if (emitter) renderer.render(fireScene, camera);
+    renderer.render(fireScene, camera);
     renderer.setRenderTarget(null);
     composer.render(dt);
   };
@@ -702,6 +749,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     controls.current = null;
     canvas.removeEventListener("pointerdown", placeImpact);
     emitter?.dispose();
+    pixelEmitter?.dispose();
     impact?.dispose();
     phantasmal?.dispose();
     bless?.dispose();
@@ -736,6 +784,7 @@ export function VfxDebugPanel() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const runtimeRef = useRef<PreviewControls | null>(null);
   const [settings, setSettings] = useState(DEFAULT_FIRE_EMITTER);
+  const [pixelSettings, setPixelSettings] = useState<PixelElementSettings>(() => pixelDefaults("frost"));
   const [impactSettings, setImpactSettings] = useState(DEFAULT_IMPACT_SETTINGS);
   const [phantasmalSettings, setPhantasmalSettings] = useState(() => getActivePhantasmalForceSettings());
   const [blessSettings, setBlessSettings] = useState(() => getActiveBlessVfxSettings());
@@ -748,10 +797,12 @@ export function VfxDebugPanel() {
   const [playing, setPlaying] = useState(true);
   const [looping, setLooping] = useState(true);
   const [bloomEnabled, setBloomEnabled] = useState(false);
-  const stateRef = useRef<PreviewState>({ settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, burningHandsV3Settings, varreduraSettings, mode, playing, looping, bloomEnabled });
-  stateRef.current = { settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, burningHandsV3Settings, varreduraSettings, mode, playing, looping, bloomEnabled };
+  const stateRef = useRef<PreviewState>({ settings, pixelSettings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, burningHandsV3Settings, varreduraSettings, mode, playing, looping, bloomEnabled });
+  stateRef.current = { settings, pixelSettings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, burningHandsV3Settings, varreduraSettings, mode, playing, looping, bloomEnabled };
 
   const switchMode = (next: PreviewMode) => {
+    const element = pixelModeElement(next);
+    if (element) { const defaults = pixelDefaults(element, pixelModeVersion(next)); stateRef.current.pixelSettings = defaults; setPixelSettings(defaults); }
     stateRef.current.mode = next;
     stateRef.current.playing = true;
     setMode(next);
@@ -861,6 +912,7 @@ export function VfxDebugPanel() {
           <span className="text-muted">Efeito</span>
           <select aria-label="Selecionar efeito VFX" value={mode} onChange={(event) => switchMode(event.target.value as PreviewMode)} className="min-h-11 rounded-md border border-border bg-bg px-3 py-2 font-display text-lg text-fg focus:border-accent focus:outline-none">
             <option value="flame">Emissor de fogo estacionário</option>
+            {PIXEL_ELEMENT_PRESETS.filter((entry) => entry.element !== "fire").map((entry) => <option key={entry.id} value={`pixel-${entry.version === 2 ? "v2-" : ""}${entry.element}`}>{entry.label} · estacionário</option>)}
             <option value="impact">Explosão de impacto Fireball · original</option>
             <option value="phantasmal">Força Fantasmal · 3D compressão espectral</option>
             <option value="bless">Bless · onda dourada 3D e luz real</option>
@@ -872,7 +924,7 @@ export function VfxDebugPanel() {
             <option value="cleave-sweep-v2">Cleave · varredura da lança 3D</option>
           </select>
         </label>
-        <p className="text-sm text-muted mt-1">{mode === "flame" ? "Chama contínua ancorada em um hex de batalha." : mode === "phantasmal" ? "Força 3D que envolve o alvo, comprime energia espectral para dentro e libera uma onda real no espaço. Clique no hex para reposicionar." : mode === "bless" ? "Bless reúne energia no conjurador, propaga a onda por três hexes e envolve cada aliado na ordem em que ela chega. A luz real e o bônus são os mesmos usados no combate." : mode === "magic-missile-v2" ? "Um projétil arcano 3D se forma junto ao conjurador, ilumina o campo, percorre uma curva visível e colapsa no alvo. Cada disparo da magia recebe seu próprio efeito. Clique no tabuleiro para trocar o alvo." : mode === "web-of-dreams" ? "Fios volumétricos crescem ao redor do alvo, ligam nós de energia e se contraem ao prendê-lo. Teste profundidade, geometria e luzes dinâmicas reais abaixo." : mode === "burning-hands-v2" ? "As mãos acendem, comprimem o fogo e liberam um leque largo de línguas volumétricas. As luzes reais percorrem o cone; o efeito usa os hexes já resolvidos pelo combate." : mode === "burning-hands-v3" ? "Preview V3 separado no FX Lab; não altera o efeito de batalha V2." : mode === "varredura-v2" ? "Uma frente de choque circular se expande em 360° a partir do centro e ilumina os alvos quando os alcança. Clique no chão para reposicionar o centro." : mode === "cleave-sweep-v2" ? "Um golpe direcional de lança varre a área de Cleave, com fragmentos e impactos iluminados em sequência. Ajuste geometria e luzes abaixo; clique no chão para reposicionar." : "Clique no hex para posicionar e repetir a explosão original. Câmera fixa; sem projétil ou AOE. Ajustes salvos automaticamente neste navegador e aplicados às próximas conjurações de Fireball."}</p>
+        <p className="text-sm text-muted mt-1">{mode === "flame" ? "Chama contínua ancorada em um hex de batalha." : pixelModeElement(mode) ? "Emissor elemental de 16 quadros, fragmentos instanciados e luz real no terreno. Os ajustes também podem ser usados no editor de mapas." : mode === "phantasmal" ? "Força 3D que envolve o alvo, comprime energia espectral para dentro e libera uma onda real no espaço. Clique no hex para reposicionar." : mode === "bless" ? "Bless reúne energia no conjurador, propaga a onda por três hexes e envolve cada aliado na ordem em que ela chega. A luz real e o bônus são os mesmos usados no combate." : mode === "magic-missile-v2" ? "Um projétil arcano 3D se forma junto ao conjurador, ilumina o campo, percorre uma curva visível e colapsa no alvo. Cada disparo da magia recebe seu próprio efeito. Clique no tabuleiro para trocar o alvo." : mode === "web-of-dreams" ? "Fios volumétricos crescem ao redor do alvo, ligam nós de energia e se contraem ao prendê-lo. Teste profundidade, geometria e luzes dinâmicas reais abaixo." : mode === "burning-hands-v2" ? "As mãos acendem, comprimem o fogo e liberam um leque largo de línguas volumétricas. As luzes reais percorrem o cone; o efeito usa os hexes já resolvidos pelo combate." : mode === "burning-hands-v3" ? "Preview V3 separado no FX Lab; não altera o efeito de batalha V2." : mode === "varredura-v2" ? "Uma frente de choque circular se expande em 360° a partir do centro e ilumina os alvos quando os alcança. Clique no chão para reposicionar o centro." : mode === "cleave-sweep-v2" ? "Um golpe direcional de lança varre a área de Cleave, com fragmentos e impactos iluminados em sequência. Ajuste geometria e luzes abaixo; clique no chão para reposicionar." : "Clique no hex para posicionar e repetir a explosão original. Câmera fixa; sem projétil ou AOE. Ajustes salvos automaticamente neste navegador e aplicados às próximas conjurações de Fireball."}</p>
       </div>
       <canvas ref={canvasRef} onPointerDown={() => { if (mode !== "flame") { stateRef.current.playing = true; setPlaying(true); } }} className={`w-full h-80 rounded-lg border border-border bg-black/40 ${mode !== "flame" ? "cursor-crosshair" : ""}`} aria-label="3D spell effect preview" />
       <div className="grid grid-cols-2 gap-2">
@@ -892,6 +944,26 @@ export function VfxDebugPanel() {
           ))}
         </div>
         <button type="button" onClick={() => { const defaults = { ...DEFAULT_FIRE_EMITTER }; setSettings(defaults); stateRef.current.settings = defaults; restart(); }} className="min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Restaurar valores padrão</button>
+      </> : pixelModeElement(mode) ? <>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {([
+            ["scale","Escala",0.4,2.5,0.05],["intensity","Intensidade",0.2,2.5,0.05],["particleCount","Fragmentos",12,96,1],
+            ["density","Densidade",0.25,2.5,0.05],["spawnRate","Taxa de emissão",0.25,2.5,0.05],
+            ["lifetime","Vida",0.4,5,0.1],["velocity","Velocidade",0.1,2,0.05],["spread","Abertura",0.1,1.2,0.05],
+            ["turbulence","Turbulência",0,1.5,0.05],["emissive","Emissão HDR",0,5,0.1],
+            ["lightIntensity","Luz real",0,3,0.05],["lightRadius","Raio da luz",0.3,5,0.1],
+            ["flickerAmount","Oscilação",0,1,0.05],["animationSpeed","Velocidade da animação",0.2,3,0.05],
+            ["seed","Semente",1,999999,1]
+          ] as [keyof PixelElementSettings,string,number,number,number][]).map(([key,label,min,max,step]) =>
+            <label key={key} className="flex flex-col gap-1 rounded-md border border-border px-3 py-2">
+              <span className="flex items-center justify-between gap-2 text-sm"><span>{label}</span><output>{pixelSettings[key]}</output></span>
+              <input aria-label={label} type="range" min={min} max={max} step={step} value={pixelSettings[key] as number} onChange={(event) => { const next={...stateRef.current.pixelSettings,[key]:Number(event.target.value)}; stateRef.current.pixelSettings=next; setPixelSettings(next); }} />
+            </label>)}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => { const next={...pixelSettings,visualsEnabled:!pixelSettings.visualsEnabled,lightEnabled:true};stateRef.current.pixelSettings=next;setPixelSettings(next); }} className="min-h-11 rounded-md border border-border px-3 py-2">{pixelSettings.visualsEnabled ? "Teste: só luz real" : "Mostrar emissor"}</button>
+          <button type="button" onClick={() => { const element=pixelModeElement(mode); if(!element)return; const defaults=pixelDefaults(element,pixelModeVersion(mode));stateRef.current.pixelSettings=defaults;setPixelSettings(defaults);restart(); }} className="min-h-11 rounded-md border border-border px-3 py-2">Restaurar valores padrão</button>
+        </div>
       </> : mode === "impact" ? <>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => { const next = { ...stateRef.current.impactSettings, seed: Math.floor(Math.random() * 999999) + 1 }; stateRef.current.impactSettings = next; setImpactSettings(next); setActiveImpactSettings(next); restart(); }} className="min-h-11 rounded-md border border-accent bg-accent/10 px-3 py-2 hover:bg-accent/20">Sortear semente · {impactSettings.seed}</button>
@@ -1033,7 +1105,7 @@ export function VfxDebugPanel() {
         </div>
       </> : null}
       {mode !== "bless" && mode !== "magic-missile-v2" && mode !== "burning-hands-v2" && mode !== "burning-hands-v3" && <label className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>Bloom de pós-processamento</span><input type="checkbox" checked={bloomEnabled} onChange={(event) => { stateRef.current.bloomEnabled = event.target.checked; setBloomEnabled(event.target.checked); }} /></label>}
-      <p className="text-xs leading-relaxed text-muted">{mode === "flame" ? "Flipbook com 16 quadros · partículas instanciadas · suavização por profundidade · luz real no terreno" : mode === "phantasmal" ? "Tendril meshes com profundidade real · partículas instanciadas · PointLight violeta com sombras · semente determinística; ajustes persistem e valem no combate" : mode === "bless" ? "Onda radius-3 · chegada sincronizada por aliado · PointLights reais no caster e na equipe · as configurações persistem e também regem conjurações de combate" : mode === "magic-missile-v2" ? "Charge prolongado · projétil de escala mundial · spline 3D e trail procedural · luzes pontuais reais com sombras no caster, em voo e no impacto · uma ocorrência por disparo" : mode === "burning-hands-v2" ? "V2 continua disponível exatamente no seu slot de batalha." : mode === "burning-hands-v3" ? "Entrada de preview independente no FX Lab; V2 e o combate permanecem intactos." : mode === "varredura-v2" ? "Frente circular 3D completa · expansão radial uniforme · luzes e impactos em torno de todo o perímetro" : mode === "cleave-sweep-v2" ? "Golpe direcional 3D · fragmentos no rastro · impactos iluminados na ordem dos alvos · parâmetros visuais persistem" : "Timeline de impacto original · partículas em um draw call · mesma semente reproduz o mesmo padrão · bloom começa desligado para avaliar a estrutura"}</p>
+      <p className="text-xs leading-relaxed text-muted">{mode === "flame" ? "Flipbook com 16 quadros · partículas instanciadas · suavização por profundidade · luz real no terreno" : pixelModeElement(mode) ? "Flipbook elemental com 16 quadros · fragmentos instanciados · luz real no terreno" : mode === "phantasmal" ? "Tendril meshes com profundidade real · partículas instanciadas · PointLight violeta com sombras · semente determinística; ajustes persistem e valem no combate" : mode === "bless" ? "Onda radius-3 · chegada sincronizada por aliado · PointLights reais no caster e na equipe · as configurações persistem e também regem conjurações de combate" : mode === "magic-missile-v2" ? "Charge prolongado · projétil de escala mundial · spline 3D e trail procedural · luzes pontuais reais com sombras no caster, em voo e no impacto · uma ocorrência por disparo" : mode === "burning-hands-v2" ? "V2 continua disponível exatamente no seu slot de batalha." : mode === "burning-hands-v3" ? "Entrada de preview independente no FX Lab; V2 e o combate permanecem intactos." : mode === "varredura-v2" ? "Frente circular 3D completa · expansão radial uniforme · luzes e impactos em torno de todo o perímetro" : mode === "cleave-sweep-v2" ? "Golpe direcional 3D · fragmentos no rastro · impactos iluminados na ordem dos alvos · parâmetros visuais persistem" : "Timeline de impacto original · partículas em um draw call · mesma semente reproduz o mesmo padrão · bloom começa desligado para avaliar a estrutura"}</p>
     </section>
   );
 }

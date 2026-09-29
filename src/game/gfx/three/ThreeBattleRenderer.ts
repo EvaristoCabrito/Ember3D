@@ -525,6 +525,7 @@ export class ThreeBattleRenderer {
   private webOfDreamsVfx: WebOfDreamsVFX | null = null;
   private readonly burningHandsVfx: BurningHandsV2VFX[] = [];
   private readonly pixelElementEmitters: { placement: ElementalFxPlacement; emitter: ProceduralElementEmitter }[] = [];
+  private pixelFxClock = 0;
   private readonly varreduraVfx: VarreduraVFX[] = [];
   private readonly cleaveVfx: CleaveSweepVFX[] = [];
   /** Keep one complete hero-missile effect per queued Magic Missile target. */
@@ -1813,6 +1814,7 @@ export class ThreeBattleRenderer {
   /** Persistent pixel emitters use one shared instanced-particle implementation. Prioritize
    * real PointLights near the current view; every placement keeps its emissive particles. */
   private syncPixelElementEmitters(tile: number, cssW: number, cssH: number, dt: number): void {
+    this.pixelFxClock += dt;
     const centerX = this.engine.camX + cssW / 2;
     const centerY = this.engine.camY + cssH / 2;
     const visible = this.pixelElementEmitters.map((entry) => {
@@ -1825,7 +1827,7 @@ export class ThreeBattleRenderer {
     for (const entry of visible) {
       entry.emitter.group.visible = entry.seen;
       entry.emitter.setLightPriority(lightWinners.has(entry.placement.id));
-      entry.emitter.update(dt, tile, this.engine.time, entry.x, entry.y);
+      entry.emitter.update(dt, tile, this.pixelFxClock, entry.x, entry.y);
     }
   }
 

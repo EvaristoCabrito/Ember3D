@@ -98,7 +98,10 @@ export class ParticleEmitter {
     sceneFar: number;
     viewport: THREE.Vector2;
     intensity: number;
-  }) {
+  }, curves?: Partial<VfxParticleCurves>) {
+    // The default curve set is the established stationary flame. Other atlas elements may
+    // supply a tint while keeping the same particle, size, opacity, emissive, and motion curves.
+    if (curves) Object.assign(this.curves, curves);
     const quad = new THREE.PlaneGeometry(1, 1);
     const geometry = new THREE.InstancedBufferGeometry();
     geometry.index = quad.index;

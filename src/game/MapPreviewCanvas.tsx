@@ -1,10 +1,9 @@
 import { type PointerEvent, useEffect, useRef, useState } from "react";
-import * as THREE from "three";
 import { placedFootprint, TERRAIN, TILE_CHAR } from "./data";
 import { tileVariantName } from "./assets";
 import { BattleEngine, ZOOM_RADII } from "./engine";
 import { EffectsRenderer } from "./gfx/EffectsRenderer";
-import { pixelPreset, ProceduralElementEmitter, type PixelElement } from "./gfx/three/ProceduralElementEmitter";
+import { ThreeBattleRenderer } from "./gfx/three/ThreeBattleRenderer";
 import { WebGL2DRenderer } from "./gfx/WebGL2DRenderer";
 import type { GameArt, Mission, TerrainId } from "./types";
 
@@ -180,30 +179,15 @@ export function MapPreviewCanvas({
       }
     }
     const pixelFxCanvas = pixelFxCanvasRef.current;
-    let pixelRenderer: THREE.WebGLRenderer | null = null;
-    let pixelScene: THREE.Scene | null = null;
-    let pixelCamera: THREE.OrthographicCamera | null = null;
-    const pixelEmitters: { placement: NonNullable<Mission["elementalFx"]>[number]; emitter: ProceduralElementEmitter }[] = [];
+    // The procedural family needs the same lit terrain, props and point-light pool as battle.
+    // Render that battle scene in the preview when a procedural placement is present.
+    let pixelRenderer: ThreeBattleRenderer | null = null;
     const pixelPlacements = engine.elementalFxPlacements.filter((placement) => placement.family === "procedural_pixel" && placement.element);
     if (pixelFxCanvas && pixelPlacements.length) {
       try {
-        pixelRenderer = new THREE.WebGLRenderer({ canvas: pixelFxCanvas, alpha: true, antialias: true, premultipliedAlpha: true });
-        pixelRenderer.setClearColor(0x000000, 0);
-        pixelRenderer.outputColorSpace = THREE.SRGBColorSpace;
-        pixelRenderer.toneMapping = THREE.NoToneMapping;
-        pixelScene = new THREE.Scene();
-        pixelScene.add(new THREE.AmbientLight(0xffffff, 1.4));
-        pixelCamera = new THREE.OrthographicCamera(0, 1, 0, 1, 0.1, 1000);
-        pixelCamera.position.z = 100;
-        for (const placement of pixelPlacements) {
-          const emitter = new ProceduralElementEmitter(pixelScene, pixelPreset(placement.element as PixelElement, placement.preset), placement.parameters);
-          pixelEmitters.push({ placement, emitter });
-        }
-      } catch {
-        pixelRenderer?.dispose();
-        pixelRenderer = null;
-        pixelScene = null;
-        pixelCamera = null;
+        pixelRenderer = new ThreeBattleRenderer(pixelFxCanvas, engine);
+      } catch (error) {
+        console.error("Procedural Pixel preview could not start", error);
       }
     }
     let lastFrame = performance.now();
@@ -240,7 +224,15 @@ export function MapPreviewCanvas({
           unitsCtx.clear();
           unitsCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
           unitsCtx.clearRect(0, 0, renderW, renderH);
-          engine.renderUnitsAndOverlays(unitsCtx, renderW, renderH);
+          const drawDecorationsOverFx = !!pixelRenderer && !!fx?.hasEffects();
+          engine.renderUnitsAndOverlays(
+            unitsCtx, renderW, renderH, undefined,
+            !!pixelRenderer && !drawDecorationsOverFx,
+            !!pixelRenderer && !drawDecorationsOverFx,
+            !!pixelRenderer && !drawDecorationsOverFx,
+            !!pixelRenderer,
+            !!pixelRenderer && !drawDecorationsOverFx,
+          );
         }
       };
       drawGroundAndUnits();
@@ -272,25 +264,14 @@ export function MapPreviewCanvas({
       const highlightCtx = unitsCtx ?? ctx;
       if (selectedPlacedDecoration) engine.drawDecorationHighlight(highlightCtx, selectedPlacedDecoration.id, selectedPlacedDecoration);
       else if (selectedDecorationId) engine.drawDecorationHighlight(highlightCtx, selectedDecorationId);
-      if (pixelFxCanvas && pixelRenderer && pixelCamera && pixelScene) {
-        pixelFxCanvas.width = Math.max(1, Math.floor(renderW * dpr));
-        pixelFxCanvas.height = Math.max(1, Math.floor(renderH * dpr));
+      if (pixelFxCanvas && pixelRenderer) {
         pixelFxCanvas.style.width = `${w}px`;
         pixelFxCanvas.style.height = `${h}px`;
         pixelFxCanvas.style.display = "block";
-        pixelRenderer.setPixelRatio(dpr);
-        pixelRenderer.setSize(renderW, renderH, false);
-        pixelCamera.left = 0;
-        pixelCamera.right = renderW;
-        pixelCamera.top = renderH;
-        pixelCamera.bottom = 0;
-        pixelCamera.position.set(renderW / 2, -renderH / 2, 100);
-        pixelCamera.updateProjectionMatrix();
-        for (const entry of pixelEmitters) {
-          const anchor = engine.effectAnchor(entry.placement.x, entry.placement.y);
-          entry.emitter.update(dt, anchor.tile, engine.time + now / 1000, anchor.x, anchor.y);
-        }
-        pixelRenderer.render(pixelScene, pixelCamera);
+        pixelRenderer.setSize(renderW, renderH, dpr);
+        const drawDecorationsOverFx = !!fx?.hasEffects();
+        pixelRenderer.setSpritesAndDecorationsVisible(!drawDecorationsOverFx, !drawDecorationsOverFx);
+        pixelRenderer.render(renderW, renderH);
       } else if (pixelFxCanvas) pixelFxCanvas.style.display = "none";
       if (fx && fxCanvas) {
         if (fx.hasEffects()) {
@@ -312,11 +293,11 @@ export function MapPreviewCanvas({
     // draw() call once fx.hasEffects() goes false, and stops itself right after.
     let fxRaf = 0;
     const animateFx = () => {
-      if (!fx?.hasEffects() && !(pixelRenderer && pixelEmitters.length > 0)) return;
+      if (!fx?.hasEffects() && !(pixelRenderer && pixelPlacements.length > 0)) return;
       draw();
       fxRaf = requestAnimationFrame(animateFx);
     };
-    if (fx?.hasEffects() || (pixelRenderer && pixelEmitters.length > 0)) fxRaf = requestAnimationFrame(animateFx);
+    if (fx?.hasEffects() || (pixelRenderer && pixelPlacements.length > 0)) fxRaf = requestAnimationFrame(animateFx);
     if (!verticalScrollInitializedRef.current) {
       requestAnimationFrame(() => {
         const centeredTop = Math.round(Math.max(0, viewport.scrollHeight - viewport.clientHeight) / 2);
@@ -334,7 +315,6 @@ export function MapPreviewCanvas({
       ro.disconnect();
       if (fxRaf) cancelAnimationFrame(fxRaf);
       fx?.dispose();
-      for (const entry of pixelEmitters) entry.emitter.dispose();
       pixelRenderer?.dispose();
       const camera = engine.cameraPosition();
       const scale = renderScaleRef.current;
@@ -638,8 +618,8 @@ export function MapPreviewCanvas({
           <div className="sticky left-0 top-0 w-max">
             <div className="relative">
               <canvas ref={canvasRef} className="block" />
-              <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block" style={{ display: "none" }} />
               <canvas ref={pixelFxCanvasRef} className="pointer-events-none absolute inset-0 block" style={{ display: "none" }} />
+              <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block" style={{ display: "none" }} />
               <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block" />
             </div>
           </div>

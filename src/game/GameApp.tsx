@@ -5831,7 +5831,7 @@ function MapEditorScreen({
                 <button key={entry.element} type="button" onClick={() => {
                   const element = entry.element as PixelElement;
                   setPixelFxBrush(element);
-                  setPixelFxSettings(pixelDefaults(element));
+                  setPixelFxSettings(pixelDefaults(element, 2));
                   setPixelFxPresetId(pixelPresetsFor(element)[0]?.id ?? entry.id);
                 }} className={`text-xs px-2 py-1 rounded-md border ${pixelFxBrush === entry.element ? "border-accent bg-accent/15" : "border-border"}`}>{entry.label.replace("Procedural Pixel ", "")}</button>
               ))}

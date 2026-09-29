@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } from "../params";
 import { DEFAULT_FIRE_EMITTER, loadFireFlipbook, ParticleEmitter, type FireEmitterSettings } from "./ThreeVfxSystem";
+import { loadElementFlipbook, type FlipbookElement, type FlipbookLayer } from "./ElementFlipbookAtlas";
 import type { EnvLight } from "../../lighting";
 
-export type PixelElement = "fire" | "frost" | "lightning" | "poison" | "arcane" | "holy" | "shadow" | "ember";
+export type PixelElement = "fire" | FlipbookElement;
 export type PixelElementSettings = {
   scale: number; intensity: number; density: number; spawnRate: number; particleCount: number;
   lifetime: number; duration: number; velocity: number; verticalForce: number; spread: number;
@@ -13,28 +14,31 @@ export type PixelElementSettings = {
   visualsEnabled: boolean;
 };
 export type PixelElementPreset = {
-  id: `procedural_pixel_${PixelElement}`; family: "procedural_pixel"; element: PixelElement;
+  id: string; family: "procedural_pixel"; element: PixelElement; version: 1 | 2;
   label: string; color: number; light: number; radius: number; flicker: number;
   motion: "fire" | "frost" | "electric" | "poison" | "arcane" | "holy" | "shadow" | "ember";
 };
 
 const pixelEntries: PixelElementPreset[] = [
-  { id:"procedural_pixel_fire",family:"procedural_pixel",element:"fire",label:"Procedural Pixel Fire",color:0xff7624,light:1,radius:3.2,flicker:0.36,motion:"fire" },
-  { id:"procedural_pixel_frost",family:"procedural_pixel",element:"frost",label:"Procedural Pixel Frost",color:0x79e7ff,light:1.35,radius:2.1,flicker:0.1,motion:"frost" },
-  { id:"procedural_pixel_lightning",family:"procedural_pixel",element:"lightning",label:"Procedural Pixel Lightning",color:0x9ccaff,light:2.3,radius:2.7,flicker:0.75,motion:"electric" },
-  { id:"procedural_pixel_poison",family:"procedural_pixel",element:"poison",label:"Procedural Pixel Poison",color:0xa4ef39,light:0.7,radius:1.8,flicker:0.18,motion:"poison" },
-  { id:"procedural_pixel_arcane",family:"procedural_pixel",element:"arcane",label:"Procedural Pixel Arcane",color:0xbd7aff,light:1.8,radius:2.25,flicker:0.26,motion:"arcane" },
-  { id:"procedural_pixel_holy",family:"procedural_pixel",element:"holy",label:"Procedural Pixel Holy",color:0xffd875,light:1.8,radius:2.25,flicker:0.08,motion:"holy" },
-  { id:"procedural_pixel_shadow",family:"procedural_pixel",element:"shadow",label:"Procedural Pixel Shadow",color:0x9b66cb,light:0.55,radius:1.8,flicker:0.2,motion:"shadow" },
-  { id:"procedural_pixel_ember",family:"procedural_pixel",element:"ember",label:"Procedural Pixel Ember",color:0xf23943,light:0.9,radius:1.65,flicker:0.3,motion:"ember" },
+  { id:"procedural_pixel_fire",family:"procedural_pixel",element:"fire",version:1,label:"Procedural Pixel Fire",color:0xff7624,light:1,radius:3.2,flicker:0.36,motion:"fire" },
+  { id:"procedural_pixel_frost",family:"procedural_pixel",element:"frost",version:1,label:"Procedural Pixel Frost",color:0x79e7ff,light:1.35,radius:2.1,flicker:0.1,motion:"frost" },
+  { id:"procedural_pixel_lightning",family:"procedural_pixel",element:"lightning",version:1,label:"Procedural Pixel Lightning",color:0x9ccaff,light:2.3,radius:2.7,flicker:0.75,motion:"electric" },
+  { id:"procedural_pixel_poison",family:"procedural_pixel",element:"poison",version:1,label:"Procedural Pixel Poison",color:0xa4ef39,light:0.7,radius:1.8,flicker:0.18,motion:"poison" },
+  { id:"procedural_pixel_arcane",family:"procedural_pixel",element:"arcane",version:1,label:"Procedural Pixel Arcane",color:0xbd7aff,light:1.8,radius:2.25,flicker:0.26,motion:"arcane" },
+  { id:"procedural_pixel_holy",family:"procedural_pixel",element:"holy",version:1,label:"Procedural Pixel Holy",color:0xffd875,light:1.8,radius:2.25,flicker:0.08,motion:"holy" },
+  { id:"procedural_pixel_shadow",family:"procedural_pixel",element:"shadow",version:1,label:"Procedural Pixel Shadow",color:0x9b66cb,light:0.55,radius:1.8,flicker:0.2,motion:"shadow" },
+  { id:"procedural_pixel_ember",family:"procedural_pixel",element:"ember",version:1,label:"Procedural Pixel Ember",color:0xf23943,light:0.9,radius:1.65,flicker:0.3,motion:"ember" },
 ];
+const pixelV2Entries = pixelEntries.filter((entry) => entry.element !== "fire").map((entry): PixelElementPreset => ({
+  ...entry, id:`procedural_pixel_v2_${entry.element}`, version:2, label:`${entry.label} V2`,
+}));
 
 export const PIXEL_ELEMENT_IDS = pixelEntries.map((entry) => entry.element) as readonly PixelElement[];
-export const PIXEL_ELEMENT_PRESETS: readonly PixelElementPreset[] = Object.freeze(pixelEntries);
-export const pixelPresetsFor = (element: PixelElement): readonly PixelElementPreset[] => PIXEL_ELEMENT_PRESETS.filter((entry) => entry.element === element);
+export const PIXEL_ELEMENT_PRESETS: readonly PixelElementPreset[] = Object.freeze([...pixelEntries, ...pixelV2Entries]);
+export const pixelPresetsFor = (element: PixelElement): readonly PixelElementPreset[] => PIXEL_ELEMENT_PRESETS.filter((entry) => entry.element === element).sort((a,b) => b.version-a.version);
 export const pixelPreset = (element: PixelElement, presetId?: string): PixelElementPreset =>
   PIXEL_ELEMENT_PRESETS.find((entry) => entry.element === element && (!presetId || entry.id === presetId)) ??
-  PIXEL_ELEMENT_PRESETS.find((entry) => entry.element === element)!;
+  PIXEL_ELEMENT_PRESETS.find((entry) => entry.element === element && entry.version === 1)!;
 
 export const DEFAULT_PIXEL_SETTINGS: PixelElementSettings = {
   scale:1,intensity:1,density:1,spawnRate:1,particleCount:40,lifetime:1.8,duration:0,
@@ -44,18 +48,22 @@ export const DEFAULT_PIXEL_SETTINGS: PixelElementSettings = {
 };
 
 const PIXEL_DEFAULTS: Record<PixelElement, Partial<PixelElementSettings>> = {
-  // Match the first stationary FX Lab fire emitter. Its geometry, flipbook and curve are shared
-  // directly below; these defaults mirror DEFAULT_FIRE_EMITTER rather than inventing a new fire.
+  // Fire keeps its existing settings and rendering path. The other values tune the shared flame
+  // particle simulation for the silhouettes and pacing in each supplied atlas.
   fire: { particleCount:26, lifetime:1, velocity:1.02, verticalForce:0.12, spread:1, drag:1.25, turbulence:0.65, emissive:1.15, lightIntensity:1, lightRadius:1, flickerAmount:0.36, flickerSpeed:23 },
-  frost: { particleCount:36, lifetime:2.4, velocity:0.28, verticalForce:0.05, spread:0.58, turbulence:0.2, emissive:1.7, lightIntensity:1.2, lightRadius:1, flickerAmount:0.1, flickerSpeed:1.8 },
-  lightning: { particleCount:24, lifetime:0.24, velocity:1.5, verticalForce:0.02, spread:0.66, turbulence:1.15, emissive:2.8, lightIntensity:1.6, lightRadius:1, flickerAmount:0.88, flickerSpeed:38 },
-  poison: { particleCount:34, lifetime:2.7, velocity:0.24, verticalForce:0.08, spread:0.5, turbulence:0.38, emissive:1.15, lightIntensity:0.7, lightRadius:0.9, flickerAmount:0.18, flickerSpeed:4 },
-  arcane: { particleCount:32, lifetime:2.2, velocity:0.62, verticalForce:0.1, spread:0.52, turbulence:0.28, emissive:2.0, lightIntensity:1.3, lightRadius:1, flickerAmount:0.26, flickerSpeed:3 },
-  holy: { particleCount:30, lifetime:2.2, velocity:0.38, verticalForce:0.15, spread:0.46, turbulence:0.12, emissive:1.8, lightIntensity:1.2, lightRadius:1, flickerAmount:0.08, flickerSpeed:2.2 },
-  shadow: { particleCount:32, lifetime:2.0, velocity:0.46, verticalForce:0.08, spread:0.62, turbulence:0.26, emissive:0.95, lightIntensity:0.55, lightRadius:0.8, flickerAmount:0.2, flickerSpeed:4.5 },
-  ember: { particleCount:26, lifetime:2.8, velocity:0.2, verticalForce:0.06, spread:0.58, turbulence:0.42, emissive:1.35, lightIntensity:0.72, lightRadius:0.75, flickerAmount:0.3, flickerSpeed:6 },
+  frost: { particleCount:28, lifetime:1.8, velocity:0.78, verticalForce:0.02, spread:0.66, turbulence:0.22, emissive:1.35, lightIntensity:1.2, lightRadius:1, flickerAmount:0.1, flickerSpeed:3 },
+  lightning: { particleCount:20, lifetime:0.44, velocity:1.15, verticalForce:0.02, spread:0.58, turbulence:1.0, emissive:1.9, lightIntensity:1.5, lightRadius:1, flickerAmount:0.65, flickerSpeed:28 },
+  poison: { particleCount:25, lifetime:2.0, velocity:0.5, verticalForce:0.08, spread:0.58, turbulence:0.2, emissive:1.2, lightIntensity:0.7, lightRadius:0.9, flickerAmount:0.14, flickerSpeed:4 },
+  arcane: { particleCount:26, lifetime:1.8, velocity:0.68, verticalForce:0.06, spread:0.52, turbulence:0.3, emissive:1.65, lightIntensity:1.3, lightRadius:1, flickerAmount:0.2, flickerSpeed:4 },
+  holy: { particleCount:24, lifetime:1.8, velocity:0.62, verticalForce:0.09, spread:0.5, turbulence:0.16, emissive:1.5, lightIntensity:1.2, lightRadius:1, flickerAmount:0.08, flickerSpeed:2 },
+  shadow: { particleCount:26, lifetime:1.9, velocity:0.54, verticalForce:0.04, spread:0.62, turbulence:0.25, emissive:0.92, lightIntensity:0.55, lightRadius:0.8, flickerAmount:0.18, flickerSpeed:4 },
+  ember: { particleCount:24, lifetime:2.1, velocity:0.58, verticalForce:0.1, spread:0.6, turbulence:0.4, emissive:1.25, lightIntensity:0.72, lightRadius:0.75, flickerAmount:0.26, flickerSpeed:7 },
 };
-export const pixelDefaults = (element: PixelElement): PixelElementSettings => ({ ...DEFAULT_PIXEL_SETTINGS, ...PIXEL_DEFAULTS[element] });
+const PIXEL_V2_DEFAULTS: Partial<Record<PixelElement, Partial<PixelElementSettings>>> = {
+  // Holy V2 is a compact, steady light column rooted at its halo seal; it should not billow like smoke.
+  holy: { particleCount:12, lifetime:0.72, velocity:0.16, verticalForce:0.02, spread:0.08, drag:1.4, turbulence:0.02, emissive:1.05, opacity:0.7, animationSpeed:0.8 },
+};
+export const pixelDefaults = (element: PixelElement, version: 1 | 2 = 1): PixelElementSettings => ({ ...DEFAULT_PIXEL_SETTINGS, ...PIXEL_DEFAULTS[element], ...(version === 2 ? PIXEL_V2_DEFAULTS[element] : {}) });
 
 /** Registry drives the editor's family, element and preset selectors. Old placements have no
  * family field and remain on their original EffectsRenderer path. */
@@ -64,29 +72,33 @@ export const ELEMENT_FX_REGISTRY = Object.freeze([
   ...pixelEntries.map((entry) => ({ ...entry, factory:"ProceduralElementEmitter" as const, defaults:pixelDefaults(entry.element) })),
 ]);
 
-const sharedCube = new THREE.BoxGeometry(0.095, 0.095, 0.095);
-const sharedCrystal = new THREE.OctahedronGeometry(0.075, 0);
-const sharedSpark = new THREE.BoxGeometry(0.12, 0.025, 0.025);
+const ELEMENT_TINTS: Record<FlipbookElement, readonly [number, number, number]> = {
+  frost: [0.84, 0.96, 1],
+  lightning: [0.84, 0.92, 1],
+  poison: [0.9, 1, 0.82],
+  arcane: [0.94, 0.86, 1],
+  holy: [1, 0.96, 0.84],
+  shadow: [0.9, 0.84, 1],
+  ember: [1, 0.9, 0.84],
+};
 
-/** One common deterministic emitter for the pixel family. Pixel Fire delegates to the exact
- * stationary fire flipbook emitter used by the first FX Lab preset; other elements share one
- * instanced-particle renderer with preset-specific geometry, motion and color. */
+/** Atlas elements reuse the flame particle system, except Holy V2, which composes its same three
+ * flipbooks as floor-anchored beam, halo, and star sprites to keep the seal rooted in place. */
 export class ProceduralElementEmitter {
   readonly group = new THREE.Group();
-  private readonly mesh: THREE.InstancedMesh | null;
-  private readonly material: THREE.MeshStandardMaterial | null;
   private readonly preset: PixelElementPreset;
   private settings: PixelElementSettings;
-  private readonly particles: { phase:number; orbit:number; height:number; speed:number; size:number; seed:number }[] = [];
-  private readonly dummy = new THREE.Object3D();
-  private readonly tint = new THREE.Color();
-  private readonly highlight = new THREE.Color(0xffffff);
   private time = 0;
   private seed: number;
   private lightPriority = true;
   private lightActivity = 0;
   private active = true;
   private disposed = false;
+  private particleEmitter: ParticleEmitter | null = null;
+  private particleSettings: FireEmitterSettings | null = null;
+  private readonly elementEmitters: ParticleEmitter[] = [];
+  private readonly holyV2Sprites: { sprite: THREE.Sprite; texture: THREE.Texture; phase: number; opacity: number; rotation: number }[] = [];
+  private elementLayerSettings: FireEmitterSettings[] = [];
   private fireEmitter: ParticleEmitter | null = null;
   private fireTexture: THREE.Texture | null = null;
   private fireSettings: FireEmitterSettings | null = null;
@@ -94,13 +106,11 @@ export class ProceduralElementEmitter {
 
   constructor(private readonly scene:THREE.Scene, preset:PixelElementPreset, settings:Partial<PixelElementSettings>={}) {
     this.preset = preset;
-    this.settings = { ...pixelDefaults(preset.element), ...settings };
+    this.settings = { ...pixelDefaults(preset.element, preset.version), ...settings };
     this.seed = this.settings.seed >>> 0 || 1;
+    this.group.scale.setScalar(this.settings.scale);
+    this.scene.add(this.group);
     if (preset.element === "fire") {
-      this.mesh = null;
-      this.material = null;
-      this.group.scale.setScalar(this.settings.scale);
-      this.scene.add(this.group);
       void loadFireFlipbook().then((texture) => {
         if (this.disposed) { texture.dispose(); return; }
         this.fireTexture = texture;
@@ -114,19 +124,42 @@ export class ProceduralElementEmitter {
       }).catch(() => { /* Keep the rest of the family available if the fire atlas cannot load. */ });
       return;
     }
-    this.group.scale.setScalar(this.settings.scale);
-    const geometry = preset.motion === "frost" ? sharedCrystal : preset.motion === "electric" ? sharedSpark : sharedCube;
-    this.material = new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,emissiveIntensity:this.settings.emissive,roughness:0.55,metalness:0.05,transparent:this.settings.opacity<1,opacity:this.settings.opacity,toneMapped:false});
-    const count = Math.max(12, Math.min(160, Math.round(this.settings.particleCount*this.settings.density)));
-    this.mesh = new THREE.InstancedMesh(geometry, this.material, count);
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.mesh.count = count;
-    this.mesh.castShadow = false;
-    this.mesh.receiveShadow = false;
-    for (let i=0;i<count;i++) this.particles.push({phase:this.random()*Math.PI*2,orbit:this.random()*Math.PI*2,height:this.random(),speed:0.45+this.random()*0.8,size:0.55+this.random()*1.1,seed:this.random()*10});
-    this.group.add(this.mesh);
-    this.scene.add(this.group);
-    this.update(0,1,0);
+    const element = preset.element as FlipbookElement;
+    const layers: FlipbookLayer[] = ["main", "secondary", "particles"];
+    void Promise.all(layers.map((layer) => loadElementFlipbook(element, layer, preset.version))).then((textures) => {
+      if (this.disposed) return;
+      const [r, g, b] = ELEMENT_TINTS[element];
+      if (preset.version === 2 && element === "holy") {
+        this.createHolyV2Sprites(textures);
+        return;
+      }
+      this.elementEmitters.push(...textures.map((texture, index) => {
+        const layerCurves = index === 0 ? {
+          opacity: (age: number) => Math.min(1, age * 7) * Math.pow(1 - age, 0.8) * this.settings.opacity,
+          color: (_age: number, color: THREE.Color) => color.setRGB(r, g, b),
+        } : index === 1 ? {
+          size: (age: number) => (0.42 + Math.sin(Math.PI * (0.12 + age * 0.76)) * 0.48) * 0.82,
+          opacity: (age: number) => Math.min(1, age * 5) * Math.pow(1 - age, 0.9) * this.settings.opacity * 0.46,
+          emissive: (age: number) => (1.7 - age * 0.85) * 0.78,
+          color: (_age: number, color: THREE.Color) => color.setRGB(r, g, b),
+        } : {
+          size: (age: number) => (0.42 + Math.sin(Math.PI * (0.12 + age * 0.76)) * 0.48) * 0.46,
+          opacity: (age: number) => Math.min(1, age * 8) * Math.pow(1 - age, 1.35) * this.settings.opacity * 0.85,
+          emissive: (age: number) => (1.7 - age * 0.85) * 1.2,
+          velocity: (age: number) => 1.18 - age * 0.6,
+          color: (_age: number, color: THREE.Color) => color.setRGB(r, g, b),
+        };
+        const emitter = new ParticleEmitter(texture, null, {
+          sceneNear:0.1, sceneFar:2000, viewport:new THREE.Vector2(1,1), intensity:this.settings.emissive*this.settings.intensity,
+        }, layerCurves);
+        emitter.light.color.setHex(preset.color);
+        emitter.setSeed((this.seed + index * 7919) >>> 0);
+        this.group.add(emitter.mesh);
+        return emitter;
+      }));
+      this.particleEmitter = this.elementEmitters[0] ?? null;
+      this.refreshElementLayers(true);
+    }).catch((error) => console.error(`Element flipbook failed to load: ${preset.element}`, error));
   }
 
   setSettings(settings:Partial<PixelElementSettings>):void {
@@ -141,12 +174,9 @@ export class ProceduralElementEmitter {
       }
       this.fireSettings = nextFireSettings;
       this.fireEmitter.material.uniforms.uIntensity!.value = this.settings.emissive * this.settings.intensity;
+      return;
     }
-    if (this.material) {
-      this.material.emissiveIntensity = this.settings.emissive*this.settings.intensity;
-      this.material.opacity = this.settings.opacity;
-      this.material.transparent = this.settings.opacity < 1;
-    }
+    if (this.particleEmitter) this.refreshElementLayers();
   }
 
   update(dt:number,tile:number,time:number,x=0,y=0):void {
@@ -160,90 +190,44 @@ export class ProceduralElementEmitter {
     if (this.preset.element === "fire") {
       this.fireDt += Math.max(0,Math.min(dt,0.08));
       if (this.fireEmitter && this.fireSettings) {
-        this.fireEmitter.mesh.position.set(0,0,tile*0.035);
+        this.fireEmitter.mesh.position.set(0,0,0.035);
         // The containing group already scales the FX Lab's unit-space particles to one hex.
         this.fireEmitter.mesh.visible=active&&s.visualsEnabled;
         this.fireEmitter.light.visible=false;
-        this.fireEmitter.update(dt,this.toFireSettings(),s.loop&&active);
+        this.fireEmitter.update(dt,this.toFireSettings(tile),s.loop&&active);
         this.lightActivity=active&&s.lightEnabled&&this.lightPriority?this.fireEmitter.light.intensity:0;
       } else this.lightActivity=0;
       return;
     }
-    const mesh=this.mesh;
-    if (!mesh || !this.material) return;
-    mesh.visible=active&&s.visualsEnabled;
-    const age=this.time;
-    const count=mesh.count;
-    for(let i=0;i<count;i++){
-      const p=this.particles[i]!;
-      const lifePhase=((age*s.spawnRate+p.phase/(Math.PI*2)*s.lifetime)%s.lifetime)/s.lifetime;
-      const phase=p.phase+age*p.speed*s.velocity;
-      const wob=Math.sin(phase*2.1+p.seed)*s.turbulence*0.12;
-      let px=0,py=0,pz=0;
-      switch(this.preset.motion){
-        case "electric": {
-          const snap=Math.floor(age*(9+s.spawnRate*5)+p.seed*3);
-          const irregular=Math.sin(snap*91.7+p.seed*17.0);
-          px=Math.sin(phase*4+p.seed)*s.spread*0.48+irregular*s.turbulence*0.16;
-          py=Math.cos(phase*5+p.seed)*s.spread*0.42;
-          pz=0.08+((phase*1.6+p.height)%1)*0.68;
-          break;
-        }
-        case "frost": {
-          const grow=Math.sin(Math.PI*lifePhase);
-          const a=p.orbit+age*(p.speed*0.18);
-          const radius=s.spread*(0.2+grow*0.8);
-          px=Math.cos(a)*radius+wob; py=Math.sin(a)*radius-lifePhase*s.verticalForce*0.55;
-          pz=0.12+Math.sin(a*2+p.seed)*0.17; break;
-        }
-        case "poison": {
-          const swell=0.65+0.45*Math.sin(Math.PI*lifePhase);
-          const a=p.orbit+age*0.3;
-          px=Math.cos(a)*s.spread*0.36+wob; py=Math.sin(a)*s.spread*0.32-lifePhase*s.verticalForce;
-          pz=(0.15+lifePhase*0.46)*swell; break;
-        }
-        case "arcane": {
-          const orbitTime=lifePhase<0.45?lifePhase/0.45:1-(lifePhase-0.45)/0.55;
-          const radius=s.spread*(lifePhase<0.45?0.2+orbitTime*0.8:0.1+orbitTime*0.9);
-          const a=p.orbit+age*(0.8+p.speed*0.65);
-          px=Math.cos(a)*radius; py=Math.sin(a)*radius-lifePhase*s.verticalForce*0.35;
-          pz=0.2+Math.sin(a*1.7+p.seed)*0.2; break;
-        }
-        case "holy": {
-          const a=p.orbit+age*0.55;
-          const r=s.spread*(0.18+lifePhase*0.62);
-          px=Math.cos(a)*r; py=Math.sin(a)*r-lifePhase*s.verticalForce;
-          pz=0.08+Math.sin(a*1.7+p.seed)*0.14; break;
-        }
-        case "shadow": {
-          const r=s.spread*(0.85-lifePhase*0.7);
-          const a=p.orbit+age*0.28;
-          px=Math.cos(a)*r; py=Math.sin(a)*r-lifePhase*s.verticalForce*0.45;
-          pz=0.06+lifePhase*0.48; break;
-        }
-        case "ember": {
-          const a=p.orbit+phase*0.2;
-          px=Math.cos(a)*s.spread*0.55+wob; py=Math.sin(a)*s.spread*0.5-lifePhase*s.verticalForce*0.65;
-          pz=0.12+Math.sin(phase*0.7)*0.08; break;
-        }
+    if (this.holyV2Sprites.length) {
+      const frame = Math.floor(this.time * 12) % 16;
+      for (const layer of this.holyV2Sprites) {
+        const currentFrame = (frame + layer.phase) % 16;
+        layer.texture.offset.set((currentFrame % 4) * 0.25, 1 - (Math.floor(currentFrame / 4) + 1) * 0.25);
+        layer.sprite.material.opacity = layer.opacity * s.opacity;
+        layer.sprite.material.color.setScalar(s.emissive * s.intensity);
+        layer.sprite.rotation.z = layer.rotation + Math.sin(this.time * 1.8 + layer.phase) * 0.035;
+        layer.sprite.visible = active && s.visualsEnabled;
       }
-      const lifeEnvelope=Math.sin(Math.PI*lifePhase);
-      const pulse=0.64+0.36*Math.sin(phase*1.6+p.seed);
-      const size=0.075*p.size*(0.55+0.45*pulse)*s.intensity*Math.max(0.12,lifeEnvelope);
-      this.dummy.position.set(px,py,pz);
-      this.dummy.scale.setScalar(Math.max(0.008,size));
-      if(this.preset.motion==="electric") this.dummy.scale.set(size*2.2,size*0.24,size*0.24);
-      this.dummy.rotation.set(phase*0.5*s.rotation,phase*0.8*s.rotation,phase*0.37*s.rotation);
-      this.dummy.updateMatrix(); mesh.setMatrixAt(i,this.dummy.matrix);
-      const brightness=this.preset.motion==="shadow"?0.12+0.2*pulse:0.28+0.62*(0.5+0.5*Math.sin(phase*1.2+p.seed));
-      this.tint.set(this.preset.color).lerp(this.highlight,brightness);
-      mesh.setColorAt(i,this.tint);
+      this.lightActivity=active&&s.lightEnabled&&this.lightPriority?5.5*s.lightIntensity*s.intensity:0;
+      return;
     }
-    mesh.instanceMatrix.needsUpdate=true;
-    if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
-    const flicker=1-s.flickerAmount*0.5+s.flickerAmount*(0.5+0.5*Math.sin(age*(this.preset.motion==="electric"?38:s.flickerSpeed)+this.settings.seed));
-    const activity=this.preset.motion==="electric"?(0.18+0.82*Math.pow(Math.max(0,Math.sin(age*38+this.settings.seed)),6)):(0.58+0.42*Math.sin(age*1.7+this.settings.seed)*Math.sin(age*1.7+this.settings.seed));
-    this.lightActivity=active&&s.lightEnabled&&this.lightPriority?s.lightIntensity*this.preset.light*flicker*activity*Math.max(0.1,s.intensity):0;
+    if (!this.particleEmitter) { this.lightActivity=0; return; }
+    const baseSettings = this.toElementSettings(tile);
+    const layerSettings = [
+      baseSettings,
+      { ...baseSettings, particleCount:Math.max(8,Math.round(baseSettings.particleCount*0.58)), particleScale:baseSettings.particleScale*0.68, velocity:baseSettings.velocity*0.76, spread:(baseSettings.spread ?? 1)*1.25, turbulence:baseSettings.turbulence*1.18, lifetimeScale:baseSettings.lifetimeScale!*1.12 },
+      { ...baseSettings, particleCount:Math.max(8,Math.round(baseSettings.particleCount*0.38)), particleScale:baseSettings.particleScale*0.36, velocity:baseSettings.velocity*1.28, spread:(baseSettings.spread ?? 1)*1.5, turbulence:baseSettings.turbulence*1.4, lifetimeScale:baseSettings.lifetimeScale!*0.68 },
+    ];
+    this.elementEmitters.forEach((emitter, index) => {
+      emitter.mesh.position.set(0,0,0.035 + index * 0.002);
+      emitter.mesh.visible=active&&s.visualsEnabled;
+      emitter.light.visible=false;
+      emitter.update(dt,layerSettings[index]!,s.loop&&active);
+    });
+    this.elementLayerSettings = layerSettings;
+    this.particleSettings = layerSettings[0]!;
+    this.lightActivity=active&&s.lightEnabled&&this.lightPriority?this.particleEmitter.light.intensity:0;
   }
 
   getLightSample(x:number,y:number,tile:number):EnvLight|null {
@@ -261,15 +245,24 @@ export class ProceduralElementEmitter {
     this.fireEmitter?.material.dispose();
     this.fireEmitter?.light.removeFromParent();
     this.fireTexture?.dispose();
-    this.material?.dispose();
+    this.particleEmitter?.geometry.dispose();
+    this.particleEmitter?.material.dispose();
+    for (const emitter of this.elementEmitters.slice(1)) {
+      emitter.geometry.dispose();
+      emitter.material.dispose();
+    }
+    for (const layer of this.holyV2Sprites) {
+      layer.sprite.material.dispose();
+      layer.texture.dispose();
+    }
   }
   setLightPriority(enabled:boolean):void{this.lightPriority=enabled;}
 
-  private toFireSettings():FireEmitterSettings {
+  private toFireSettings(tile=1):FireEmitterSettings {
     const s=this.settings;
     return {
       particleCount:Math.max(12,Math.min(96,Math.round(s.particleCount*s.density*s.spawnRate))),
-      particleScale:s.scale*DEFAULT_FIRE_EMITTER.particleScale,velocity:s.velocity,
+      particleScale:s.scale*tile*DEFAULT_FIRE_EMITTER.particleScale,velocity:s.velocity,
       drag:s.drag,turbulence:s.turbulence,gravity:DEFAULT_FIRE_EMITTER.gravity,
       flipbookFps:DEFAULT_FIRE_EMITTER.flipbookFps*s.animationSpeed,
       coreIntensity:s.emissive,lightIntensity:DEFAULT_FIRE_EMITTER.lightIntensity*s.lightIntensity*s.intensity,
@@ -277,10 +270,59 @@ export class ProceduralElementEmitter {
     };
   }
 
-  private random():number {
-    let x=this.seed;
-    x^=x<<13; x^=x>>>17; x^=x<<5;
-    this.seed=x>>>0;
-    return this.seed/4294967296;
+  private toElementSettings(tile=1):FireEmitterSettings {
+    return { ...this.toFireSettings(tile), gravity:Math.max(0,DEFAULT_FIRE_EMITTER.gravity-this.settings.verticalForce) };
+  }
+
+  private refreshElementLayers(forceReset = false):void {
+    const nextSeed = this.settings.seed >>> 0 || 1;
+    const base = this.toElementSettings();
+    const nextLayers = [
+      base,
+      { ...base, particleCount:Math.max(8,Math.round(base.particleCount*0.58)), particleScale:base.particleScale*0.68, velocity:base.velocity*0.76, spread:(base.spread ?? 1)*1.25, turbulence:base.turbulence*1.18, lifetimeScale:base.lifetimeScale!*1.12 },
+      { ...base, particleCount:Math.max(8,Math.round(base.particleCount*0.38)), particleScale:base.particleScale*0.36, velocity:base.velocity*1.28, spread:(base.spread ?? 1)*1.5, turbulence:base.turbulence*1.4, lifetimeScale:base.lifetimeScale!*0.68 },
+    ];
+    const reset = forceReset || this.particleSettings?.particleCount !== base.particleCount || this.particleSettings?.lifetimeScale !== base.lifetimeScale || nextSeed !== this.seed;
+    if (nextSeed !== this.seed) this.seed = nextSeed;
+    this.elementEmitters.forEach((emitter, index) => {
+      if (reset) {
+        emitter.setSeed((this.seed + index * 7919) >>> 0);
+        emitter.reset(nextLayers[index]!, true);
+      }
+      emitter.material.uniforms.uIntensity!.value = this.settings.emissive * this.settings.intensity;
+    });
+    this.elementLayerSettings = nextLayers;
+    this.particleSettings = base;
+  }
+
+  /** Holy V2 is authored as a floor-rooted beam, a ground halo and independent star motes.
+   * Render its three flipbooks as anchored billboards so the seal stays on the floor instead of
+   * scattering repeated full-beam frames through the generic smoke-particle simulation. */
+  private createHolyV2Sprites(textures: THREE.Texture[]):void {
+    const add = (source: THREE.Texture, x:number, y:number, z:number, width:number, height:number, phase:number, opacity:number, rotation=0, floorAnchored=false) => {
+      const texture=source.clone();
+      texture.repeat.set(0.25,0.25);
+      texture.offset.set((phase%4)*0.25,1-(Math.floor(phase/4)+1)*0.25);
+      texture.needsUpdate=true;
+      const material=new THREE.SpriteMaterial({ map:texture, color:0xffffff, transparent:true, opacity, alphaTest:0.02, depthWrite:false, blending:THREE.AdditiveBlending, toneMapped:false });
+      const sprite=new THREE.Sprite(material);
+      sprite.center.set(0.5,floorAnchored?0:0.5);
+      sprite.scale.set(width,height,1);
+      sprite.position.set(x,y,z);
+      sprite.rotation.z=rotation;
+      this.group.add(sprite);
+      this.holyV2Sprites.push({sprite,texture,phase,opacity,rotation});
+    };
+    // Main 4x4 atlas: upright light beam with its seal on the sprite's bottom edge.
+    // The authored ring sits slightly above the image edge, so lower the billboard until its
+    // drawn seal meets the ground halo (sprite.center anchors the image's bottom edge).
+    add(textures[0]!,0,-0.23,0.035,1.0,1.28,0,0.88,0,true);
+    // Secondary 4x4 atlas: a flat halo held at ground height.
+    add(textures[1]!,0,0.025,0.04,0.96,0.34,3,0.74);
+    // Particle 4x4 atlas: four small star motes float around the beam.
+    add(textures[2]!,-0.28,0.32,0.045,0.15,0.15,1,0.9,0.15);
+    add(textures[2]!,0.28,0.48,0.046,0.13,0.13,5,0.82,-0.12);
+    add(textures[2]!,-0.2,0.73,0.047,0.12,0.12,9,0.76,0.08);
+    add(textures[2]!,0.23,0.88,0.048,0.1,0.1,13,0.7,-0.08);
   }
 }
