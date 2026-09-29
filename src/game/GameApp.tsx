@@ -16,7 +16,7 @@ import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
 import { LIGHT_DEFS } from "./lighting";
 import { DialogEditor } from "./DialogEditor";
-import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
+import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
 import { BattleEngine, heroSpriteFor } from "./engine";
 import { MapPreviewCanvas, type PreviewDecorationSelection, type PreviewUnitSelection } from "./MapPreviewCanvas";
 import { WorldMapScreen } from "./WorldMapScreen";
@@ -420,7 +420,7 @@ function classSpells(classId: ClassId, level = Number.POSITIVE_INFINITY): SpellK
         // PHANTASMAL_FORCE_UNLOCK_LEVEL — it shares tier 1's pool with summonFamiliar but
         // isn't selectable/castable until level 2); summonFamiliar2 (Familiar Maior) is the
         // same deal at tier 2 (shares that tier's pool of uses with webOfDreams).
-        return ["summonFamiliar", "phantasmalForce", "webOfDreams", "summonFamiliar2", "summonFamiliar3"];
+        return ["summonFamiliar", "phantasmalForce", "webOfDreams", "summonFamiliar2", "summonFamiliar4", "summonFamiliar3"];
       case "familiar":
         // Familiar's own hotbar, once summoned — Magic Missile is its only action beyond a
         // plain attack (see FAMILIAR_SPELL/familiarMagicMissileCharges).
@@ -429,6 +429,9 @@ function classSpells(classId: ClassId, level = Number.POSITIVE_INFINITY): SpellK
         // Familiar Maior's own hotbar — Magic Missile plus its own second spell, Toque
         // Vampírico (see LIFE_DRAIN/familiarLifeDrainCharges), each with an independent
         // charge pool.
+        return ["magicMissile", "lifeDrain"];
+      case "familiar4":
+        // Familiar Radiante carries Familiar Maior's kit.
         return ["magicMissile", "lifeDrain"];
       case "familiar3":
         // The Big Guy's own hotbar, once summoned — its only action beyond a plain attack.
@@ -524,6 +527,8 @@ function slotIcon(action: SlotAction): string {
       return spellIcon("summon-familiar2");
     case "summonFamiliar3":
       return spellIcon("summon-familiar3");
+    case "summonFamiliar4":
+      return spellIcon("summon-familiar4");
     case "webOfDreams":
       return spellIcon("web-of-dreams");
     // Familiar Maior's own second spell — no dedicated art; reuses the cure icon since it's
@@ -608,6 +613,8 @@ function slotLabel(action: SlotAction): string {
       return SUMMON_FAMILIAR2.name;
     case "summonFamiliar3":
       return SUMMON_FAMILIAR3.name;
+    case "summonFamiliar4":
+      return SUMMON_FAMILIAR4.name;
     case "webOfDreams":
       return WEB_OF_DREAMS.name;
     case "lifeDrain":
@@ -657,7 +664,7 @@ function slotCount(action: SlotAction, unit: UnitPublic): number {
   // Familiar Maior's own second spell — its own dedicated lifeDrainCharges pool, never the
   // FAMILIAR_SPELL/spellCharges pair above (that's reserved for the one own-spell every other
   // familiar tier has) — see the lifeDrain guard in BattleEngine.startLifeDrain.
-  if (action.spell === "lifeDrain" && unit.classId === "familiar2") return unit.lifeDrainCharges ?? 0;
+  if (action.spell === "lifeDrain" && (unit.classId === "familiar2" || unit.classId === "familiar4")) return unit.lifeDrainCharges ?? 0;
   // Both share their tier's pool of uses with another tier-1/2 spell, but each unlocks later
   // than that shared pool itself does (PHANTASMAL_FORCE_UNLOCK_LEVEL/SUMMON_FAMILIAR2_UNLOCK_
   // LEVEL) — showing the raw tier count here would read as castable before it actually is,
@@ -2513,6 +2520,7 @@ const SKILL_CLASS: Partial<Record<SpellKind, ClassId>> = {
   summonFamiliar: "conjurer",
   summonFamiliar2: "conjurer",
   summonFamiliar3: "conjurer",
+  summonFamiliar4: "conjurer",
   webOfDreams: "conjurer",
   longShot: "archer",
   piercing: "archer",
@@ -2556,6 +2564,7 @@ const SKILL_DAMAGE_ROWS: { name: string; cls: ClassId; tier: SpellTier; formula:
   { name: PIERCING_THRUST.name, cls: SKILL_CLASS.piercingThrust!, tier: spellTier("piercingThrust")!, formula: `dano de arma, −${Math.round(PIERCING_THRUST.armorIgnore * 100)}% armadura`, note: "Acerta em linha; o segundo alvo recebe metade." },
   { name: SUMMON_FAMILIAR.name, cls: SKILL_CLASS.summonFamiliar!, tier: spellTier("summonFamiliar")!, formula: "—", note: `Invoca aliado com ${Math.round(SUMMON_FAMILIAR.statScale * 100)}% dos atributos atuais — pode lançar Míssil Mágico por conta própria.` },
   { name: SUMMON_FAMILIAR2.name, cls: SKILL_CLASS.summonFamiliar2!, tier: spellTier("summonFamiliar2")!, formula: "—", note: `Invoca aliado maior, com ${Math.round(SUMMON_FAMILIAR2.statScale * 100)}% dos atributos atuais — pode lançar Míssil Mágico ou Dreno de Vida por conta própria.` },
+  { name: SUMMON_FAMILIAR4.name, cls: SKILL_CLASS.summonFamiliar4!, tier: spellTier("summonFamiliar4")!, formula: "—", note: `Invoca aliado radiante, com ${Math.round(SUMMON_FAMILIAR4.statScale * 100)}% dos atributos atuais — pode lançar Míssil Mágico ou Dreno de Vida por conta própria.` },
   { name: SUMMON_FAMILIAR3.name, cls: SKILL_CLASS.summonFamiliar3!, tier: spellTier("summonFamiliar3")!, formula: "—", note: `Invoca aliado com ${Math.round(SUMMON_FAMILIAR3.statScale * 100)}% dos atributos atuais — pode lançar Bola de Fogo por conta própria.` },
   {
     name: LIGHTNING.name,
@@ -7124,6 +7133,9 @@ function BattleScreen({
       case "summonFamiliar3":
         engine.startSummonFamiliar3();
         break;
+      case "summonFamiliar4":
+        engine.startSummonFamiliar4();
+        break;
       case "webOfDreams":
         engine.startWebOfDreams();
         break;
@@ -8078,6 +8090,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
   const familiar1 = unit.classId === "familiar";
   const familiar2 = unit.classId === "familiar2";
   const familiar3 = unit.classId === "familiar3";
+  const familiar4 = unit.classId === "familiar4";
   const condition = characterCondition(unit);
 
   return (
@@ -8249,7 +8262,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
           ))}
         </div>
 
-        {unit.side === "player" && (swordsman || mage || conjurer || archer || healer || lancer || familiar1 || familiar2 || familiar3) && (
+        {unit.side === "player" && (swordsman || mage || conjurer || archer || healer || lancer || familiar1 || familiar2 || familiar3 || familiar4) && (
           <>
             <p className="text-xs uppercase tracking-[0.18em] text-muted mb-2">Magias e habilidades</p>
             <div className="grid grid-cols-1 gap-1.5">
@@ -8346,6 +8359,12 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
+                        <img src={spellIcon("summon-familiar4")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
+                        <p className="text-xs truncate">
+                          {SUMMON_FAMILIAR4.name} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("summonFamiliar4")!)]}</span>
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("summon-familiar3")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs truncate">
                           {SUMMON_FAMILIAR3.name} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("summonFamiliar3")!)]}</span>
@@ -8353,7 +8372,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                       </div>
                     </>
                   )}
-                  {(familiar1 || familiar2) && (
+                  {(familiar1 || familiar2 || familiar4) && (
                     <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                       <img src={spellIcon("magic-missile")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                       <p className="text-xs leading-snug">
@@ -8362,7 +8381,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                       </p>
                     </div>
                   )}
-                  {familiar2 && (
+                  {(familiar2 || familiar4) && (
                     <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                       <img src={spellIcon("cure-wounds")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                       <p className="text-xs leading-snug">
