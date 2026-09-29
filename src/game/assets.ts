@@ -202,7 +202,7 @@ export async function loadGameArt(): Promise<GameArt> {
   const attacks: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   await Promise.all(
     SPRITES.map(async (id) => {
-      const n = id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
+      const n = id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "ancient-golem" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
       const cacheBust = id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : "";
       sprites[id] = await Promise.all(
         Array.from({ length: n }, (_, i) =>
@@ -239,7 +239,7 @@ export async function loadGameArt(): Promise<GameArt> {
     // Familiar 2 — the crouch/lunge strike cut from reference video (see CAST_FRAMES and
     // WALK_FRAMES below for its casting and walk cuts).
     familiar2: { n: 12, bust: "" },
-    "ancient-golem": { n: 8, bust: "" },
+    "ancient-golem": { n: 32, bust: "" },
     "morvenian-wolf": { n: 6, bust: "" },
     // Mordavian Wolf — the bigger cousin, sliced from its own reference sheet; the row
     // labeled "8 frames" only actually has 7 distinct poses (two columns share the "07" tag,
@@ -370,7 +370,7 @@ export async function loadGameArt(): Promise<GameArt> {
     // every other sprite's own walk pool). A plain CSS mirror-on-left-only treatment (as if
     // this were right-facing footage) used to read as walking backwards in BOTH directions.
     neera: { n: 36, bust: "" },
-    "ancient-golem": { n: 8, bust: "" },
+    "ancient-golem": { n: 32, bust: "" },
     aldric: { n: 36, bust: "?v=aldric-final-001" },
     defaultLancer: { n: 6, bust: "?v=sheet2" },
     lancer: { n: 6, bust: "?v=3" },
