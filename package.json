@@ -98,7 +98,7 @@
     "typescript-eslint": "^8.56.1",
     "vite": "^8.2.0"
   },
-  "version": "0.336.0",
+  "version": "0.336.1",
   "description": "Ember — táticas em cinzas",
   "author": "Ember"
 }

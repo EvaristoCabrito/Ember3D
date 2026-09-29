@@ -6,7 +6,7 @@ import type { GameArt, SpriteId, TerrainId } from "./types";
 // different variant in Mission.tileVariants — keep it as the tile that's safe
 // for existing maps.
 export const TILE_VARIANT_COUNT: Record<TerrainId, number> = {
-  plains: 39,
+  plains: 38,
   woods: 9,
   ruins: 7,
   water: 22,
@@ -33,12 +33,10 @@ export function tileVariantName(id: TerrainId, variant: number): string {
     if (variant === 0) return "plains016";
     if (variant === 1) return "plains015";
     if (variant === 2) return "plains001";
-    if (variant === 15) return "plains017";
-    if (variant === 16) return "plains018";
-    // 17-21 are the five existing ground variants; 22-38 are the City tiles.
-    // These ranges continue the numbered art files at plains019, avoiding the older
-    // plains017/plains018 files already used by variants 15 and 16.
-    if (variant >= 17 && variant <= 38) return `plains${String(variant + 2).padStart(3, "0")}`;
+    if (variant === 15) return "plains018";
+    // 16-20 are the five existing ground variants; 21-37 are the City tiles.
+    // These ranges continue the numbered art files at plains019.
+    if (variant >= 16 && variant <= 37) return `plains${String(variant + 3).padStart(3, "0")}`;
     return `plains${String(variant).padStart(3, "0")}`;
   }
   if (id === "water" && variant === 0) return "water023";
@@ -93,7 +91,7 @@ export function portraitFor(sprite: SpriteId): { src: string; framed: boolean; p
 }
 
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
-const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "morvenian-wolf", "mordavian-wolf", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "familiar", "familiar2", "familiar3", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
+const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "troll2", "morvenian-wolf", "mordavian-wolf", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
 
 const LOAD_POOL = 8;
 let loadActive = 0;
@@ -204,7 +202,7 @@ export async function loadGameArt(): Promise<GameArt> {
   const attacks: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   await Promise.all(
     SPRITES.map(async (id) => {
-      const n = id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : HERO_IDLE.has(id) ? 12 : 4;
+      const n = id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
       const cacheBust = id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : "";
       sprites[id] = await Promise.all(
         Array.from({ length: n }, (_, i) =>
@@ -249,6 +247,10 @@ export async function loadGameArt(): Promise<GameArt> {
     "mordavian-wolf": { n: 7, bust: "" },
     birolho: { n: 4, bust: "" },
     birolho2: { n: 4, bust: "" },
+    // BirolhoLegs has no ATT footage of its own — atk-*.png is a copy of its cast cut.
+    BirolhoLegs: { n: 32, bust: "" },
+    BirolhoLegs2: { n: 32, bust: "" },
+    troll2: { n: 32, bust: "" },
     punisher: { n: 4, bust: "" },
     // The Butcher — real 36-frame axe swing, a distinct unit/sprite from punisher/Carrasco
     // above (see WALK_FRAMES.theButcher below for the matching walk cut).
@@ -275,6 +277,8 @@ export async function loadGameArt(): Promise<GameArt> {
     birolho: { n: 3, bust: "" },
     birolho2: { n: 3, bust: "" },
     birolho3: { n: 18, bust: "" },
+    BirolhoLegs: { n: 32, bust: "" },
+    BirolhoLegs2: { n: 32, bust: "" },
     // Neera's supplied Special cut plays for spell-type archer skills; physical attacks
     // stay on her dedicated ATT cut above.
     neera: { n: 36, bust: "" },
@@ -383,6 +387,12 @@ export async function loadGameArt(): Promise<GameArt> {
     // direction — see the walksLeft.malrec comment below for why.
     malrec: { n: 36, bust: "?v=malrec-walk-002" },
     birolho3: { n: 12, bust: "" },
+    // Walk Left footage only; move-*.png is its mirror, and the renderer mirrors this pool
+    // for left-facing movement like any sprite with one authored direction.
+    BirolhoLegs: { n: 32, bust: "" },
+    BirolhoLegs2: { n: 32, bust: "" },
+    // Walk Left footage only; move-*.png is its mirror, same as BirolhoLegs above.
+    troll2: { n: 32, bust: "" },
     // Right-facing cut; see the dedicated walksLeft.theButcher load below for its own
     // authored left-facing cut (not the CSS mirror every other sprite here falls back to).
     theButcher: { n: 36, bust: "?v=the-butcher-001" },

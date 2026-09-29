@@ -54,6 +54,7 @@ export type ClassId =
   | "pikeman"
   | "wardog"
   | "troll"
+  | "troll2"
   | "morvenianWolf"
   | "mordavianWolf"
   | "punisher"
@@ -61,6 +62,8 @@ export type ClassId =
   | "birolho"
   | "birolho2"
   | "birolho3"
+  | "birolhoLegs"
+  | "birolhoLegs2"
   | "swampBlueCalf"
   // Weak, killable flavor civilians (see SpriteId's own note) — random encounters and regular
   // maps, deliberately not the (not yet built) city hubs, where a civilian instance would carry
@@ -112,7 +115,7 @@ export type ClassId =
   // the conjurer's current attributes, not a fraction like familiar/familiar2) that can also
   // cast its own Fireball a few times a battle — see familiarSpellCharges/Unit.spellCharges.
   | "familiar3";
-export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "troll" | "morvenian-wolf" | "mordavian-wolf" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "familiar" | "familiar2" | "familiar3" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
+export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "troll" | "troll2" | "morvenian-wolf" | "mordavian-wolf" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
   // Generic-enemy "alter" sprites, split off so a plain Archer/Mage/Healer enemy (and their
   // own promotions) never renders as literally the same SpriteId as Neera/Voss/Salazar the
   // MCs — see HERO_SPRITE_BY_NAME/CLASSES in engine.ts/data.ts. Each starts as a straight

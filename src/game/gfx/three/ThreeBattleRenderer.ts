@@ -302,6 +302,7 @@ const CONTACT_SHADOW_FORWARD = 0.2;
  * the light count into every lit shader); unused ones sit at intensity 0. No castShadow yet —
  * shadows are a separate, later decision. */
 const POINT_LIGHT_POOL = 8;
+const HEALING_SPELL_GLOW_KINDS = new Set(["holyMinor", "holyMedium", "disease", "food"]);
 /** Rim-glow canvas size relative to the sprite (room for the blur to spread). */
 const GLOW_PAD = 1.7;
 /** How much brighter than its own art a sprite (character or decoration, light props included)
@@ -559,6 +560,9 @@ export class ThreeBattleRenderer {
   private fogMask = new FogMask();
   /** Real point lights for map light sources (see POINT_LIGHT_POOL / syncLights). */
   private pointLights: THREE.PointLight[] = [];
+  /** One real spell light follows the active holy-heal target; the approved holy-light art
+   * remains on the units canvas unchanged. */
+  private healingSpellLight = new THREE.PointLight(0xfff4d2, 0, 1, LIGHT_DECAY);
   /** Shared proxy geometry: unit box and a Z-up unit cylinder, scaled per object. */
   private proxyBox = new THREE.BoxGeometry(1, 1, 1);
   private proxyCylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 16).rotateX(Math.PI / 2);
@@ -775,8 +779,8 @@ export class ThreeBattleRenderer {
     this.scene.add(this.unitGroup);
     this.scene.add(this.fogMask.mesh);
     for (const placement of engine.elementalFxPlacements) {
-      if (placement.family !== "procedural_pixel" || !placement.element || placement.element === "fire") continue;
-      const emitter = new ProceduralElementEmitter(this.scene, pixelPreset(placement.element as Exclude<PixelElement, "fire">), placement.parameters);
+      if (placement.family !== "procedural_pixel" || !placement.element) continue;
+      const emitter = new ProceduralElementEmitter(this.scene, pixelPreset(placement.element as PixelElement, placement.preset), placement.parameters);
       this.pixelElementEmitters.push({ placement, emitter });
     }
     // Sized to cover every light the map carries, so no torch goes dark just because the
@@ -788,7 +792,8 @@ export class ThreeBattleRenderer {
     // Familiar lights are created after the renderer when a Conjurer summons them. Reserve
     // room now for all three tiers (one + one + the Titan's six footprint lights).
     const futureFamiliarLights = engine.units.filter((u) => u.classId === "conjurer").length * 8;
-    const mapLights = engine.decorations.filter((p) => LIGHT_DEFS[p.id]).length + mapUnitLights + futureFamiliarLights;
+    const mapPixelLights = engine.elementalFxPlacements.filter((p) => p.family === "procedural_pixel" && p.parameters?.lightEnabled !== false).length;
+    const mapLights = engine.decorations.filter((p) => LIGHT_DEFS[p.id]).length + mapUnitLights + futureFamiliarLights + mapPixelLights;
     const poolSize = Math.max(POINT_LIGHT_POOL, mapLights);
     for (let i = 0; i < poolSize; i++) {
       const pl = new THREE.PointLight(0xffffff, 0, 1, LIGHT_DECAY);
@@ -802,6 +807,7 @@ export class ThreeBattleRenderer {
       this.pointLights.push(pl);
       this.scene.add(pl);
     }
+    this.scene.add(this.healingSpellLight);
     this.scene.add(this.atmosphere.group);
     // Construct synchronously: every live Fireball impact particle is procedural, so no image
     // request can leave the spell without its flight or explosion when cast immediately.
@@ -1755,7 +1761,14 @@ export class ThreeBattleRenderer {
     this.ensureDecorBuilt(tile);
     this.syncGroundAO(tile);
     this.syncFog(tile);
+    // Emitter simulation produces its current flicker value, then this same shared light pool
+    // applies it to terrain, props and units in the same frame.
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - this.lastFrameTime) / 1000);
+    this.lastFrameTime = now;
+    this.syncPixelElementEmitters(tile, cssW, cssH, dt);
     this.syncLights(tile, cssW, cssH);
+    this.syncHealingSpellLight(tile);
     this.syncSpriteExposure();
     this.syncDecorVisibility();
     this.syncOverlay(tile);
@@ -1765,10 +1778,6 @@ export class ThreeBattleRenderer {
     // MILESTONE 3 — dt derived locally (render() itself only ever receives cssW/cssH, see this
     // method's own comment) since the mist noise drift and particle GPU animation are the only
     // things in this file that need real elapsed time rather than per-frame engine state.
-    const now = performance.now();
-    const dt = Math.min(0.1, (now - this.lastFrameTime) / 1000);
-    this.lastFrameTime = now;
-    this.syncPixelElementEmitters(tile, cssW, cssH, dt);
     // The camera moves; the tiles never do — see module comment. This is the one line that
     // has to run every frame for panning/zooming to work. Y is `-camY - cssH` to match the
     // mesh placement's own Y-negation (see module comment) — verified numerically to
@@ -1812,7 +1821,7 @@ export class ThreeBattleRenderer {
       return { ...entry, x: pos.wx, y: pos.wy, distance: (pos.wx-centerX)**2+(pos.wy-centerY)**2, seen };
     });
     const lights = visible.filter((entry) => entry.seen && entry.placement.parameters?.lightEnabled !== false).sort((a,b)=>a.distance-b.distance);
-    const lightWinners = new Set(lights.slice(0, 8).map((entry)=>entry.placement.id));
+    const lightWinners = new Set(lights.slice(0, this.pointLights.length).map((entry)=>entry.placement.id));
     for (const entry of visible) {
       entry.emitter.group.visible = entry.seen;
       entry.emitter.setLightPriority(lightWinners.has(entry.placement.id));
@@ -2033,7 +2042,10 @@ export class ThreeBattleRenderer {
       length,
       width: halfWidth * 2,
       worldScale: tile,
-      settings: getActiveBurningHandsV2Settings(),
+      // Burning Hands must keep its primary fire visible in combat; flame-only diagnostic
+      // modes in the FX Lab must never leave the actual spell visually disabled.
+      settings: { ...getActiveBurningHandsV2Settings(), visuals: true },
+      targetPositions: cells.map((cell) => new THREE.Vector3(cell.worldX, -cell.worldY, origin.z + tile * 0.12)),
       onRelease: () => this.engine.burningHandsV2VfxEvents.push({ id: request.id, phase: "release" }),
       onComplete: () => this.engine.burningHandsV2VfxEvents.push({ id: request.id, phase: "complete" }),
     });
@@ -2053,10 +2065,12 @@ export class ThreeBattleRenderer {
     const casterVisual = this.engine.unitVisual(caster, tile);
     const casterGroundY = casterAnchor.worldY + casterVisual.footY;
     const casterCenterY = (casterVisual.footOffset - casterVisual.h * 0.38) * casterVisual.scaleY;
+    // This spell is a foreground combat effect: keep it readable over actors along its path.
+    const missileDepth = DEPTH_Z_FRONT - 0.1;
     const origin = new THREE.Vector3(
       casterAnchor.worldX + casterVisual.sway,
       -(casterGroundY + casterVisual.bob - casterVisual.lift + casterCenterY),
-      spriteDepthZ(casterGroundY, tile) + UNIT_DEPTH_TIE + tile * 0.08,
+      missileDepth,
     );
     const targetAnchor = this.engine.unitAnchor(target);
     const targetVisual = this.engine.unitVisual(target, tile);
@@ -2065,7 +2079,7 @@ export class ThreeBattleRenderer {
     const destination = new THREE.Vector3(
       targetAnchor.worldX + targetVisual.sway,
       -(targetGroundY + targetVisual.bob - targetVisual.lift + targetCenterY),
-      spriteDepthZ(targetGroundY, tile) + UNIT_DEPTH_TIE + tile * 0.08,
+      missileDepth,
     );
     system.castSpell({
       id: request.id,
@@ -2309,6 +2323,13 @@ export class ThreeBattleRenderer {
           out.push({ x: a.worldX, y: a.worldY, h: tile, r: def.radius * tile, rgb });
         }
       }
+      // Procedural Pixel emitters feed the same pooled PointLights as map props and units.
+      // Their model is never rendered as a separate light, avoiding duplicate bright spots.
+      for (const entry of this.pixelElementEmitters) {
+        const anchor = engine.effectAnchor(entry.placement.x, entry.placement.y);
+        const sample = entry.emitter.getLightSample(anchor.worldX, anchor.worldY, tile);
+        if (sample) out.push(sample);
+      }
       // Nearest the view first: they win the pool.
       const cx = engine.camX + cssW / 2;
       const cy = engine.camY + cssH / 2;
@@ -2327,12 +2348,32 @@ export class ThreeBattleRenderer {
       const peak = Math.max(L.rgb[0], L.rgb[1], L.rgb[2], 1e-6);
       pl.color.setRGB(L.rgb[0] / peak, L.rgb[1] / peak, L.rgb[2] / peak);
       pl.intensity = peak * GROUND_BASE_IRRADIANCE * Math.pow(tile, LIGHT_DECAY);
+      pl.decay = L.decay ?? LIGHT_DECAY;
       pl.position.set(L.x, -L.y, Math.max(L.h, tile * 0.35));
       // Range is measured in 3D from the flame, so it has to include the flame's height to still
       // reach L.r out along the ground. (Three also sets the point-shadow camera's far plane to
       // this distance — ground past it would read as shadowed.)
       pl.distance = Math.hypot(L.r, pl.position.z) * 1.05;
     });
+  }
+
+  /** Adds real world illumination to healing spells without changing their existing 2D art. */
+  private syncHealingSpellLight(tile: number): void {
+    const engine = this.engine;
+    const target = engine.units
+      .filter((u) => u.alive && u.healGlow > 0 && HEALING_SPELL_GLOW_KINDS.has(u.healGlowKind) && !engine.unitHidden(u))
+      .sort((a, b) => b.healGlow - a.healGlow)[0];
+    const light = this.healingSpellLight;
+    if (!target) {
+      light.intensity = 0;
+      return;
+    }
+    const anchor = engine.unitAnchor(target);
+    const [r, g, b] = engine.healHaloRgb(target.healGlowKind).core.split(",").map((channel) => Number(channel) / 255);
+    light.color.setRGB(r!, g!, b!, THREE.SRGBColorSpace);
+    light.position.set(anchor.worldX, -(anchor.worldY - tile * 0.8), tile * 0.35);
+    light.distance = tile * 1.8;
+    light.intensity = 0.42 * target.healGlow * GROUND_BASE_IRRADIANCE * Math.pow(tile, LIGHT_DECAY);
   }
 
   /** The board cell (row-major index) a tile-normalized world point (hexWorld units, y-down)

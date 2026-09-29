@@ -7,6 +7,8 @@
 import type { ElementKind } from "./params";
 
 export interface FxParticle {
+  /** Position and velocity are in emitter-radius units, not screen pixels. This keeps a
+   * particle attached to its map effect as the camera pans or zooms. */
   x: number;
   y: number;
   vx: number;
@@ -25,47 +27,47 @@ export class ParticleEmitter {
 
   constructor(private kind: Extract<ElementKind, "fire" | "holy">) {}
 
-  update(dt: number, anchorX: number, anchorY: number, radiusPx: number, color: [number, number, number], rate = 10): void {
+  update(dt: number, radiusPx: number, color: [number, number, number], rate = 10): void {
     this.spawnAccum += dt * rate;
     while (this.spawnAccum >= 1 && this.particles.length < MAX_PARTICLES_PER_EMITTER) {
       this.spawnAccum -= 1;
-      this.spawn(anchorX, anchorY, radiusPx, color);
+      this.spawn(Math.max(1, radiusPx), color);
     }
     for (const p of this.particles) {
       p.age += dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      if (this.kind === "fire") p.vy -= 6 * dt; // embers accelerate upward slightly
+      if (this.kind === "fire") p.vy -= (6 / Math.max(1, radiusPx)) * dt; // embers accelerate upward slightly
     }
     this.particles = this.particles.filter((p) => p.age < p.life);
   }
 
-  private spawn(anchorX: number, anchorY: number, radiusPx: number, color: [number, number, number]): void {
-    const spread = radiusPx * 0.6;
+  private spawn(radiusPx: number, color: [number, number, number]): void {
+    const spread = 0.6;
     const angle = Math.random() * Math.PI * 2;
     const r = Math.random() * spread;
-    const x = anchorX + Math.cos(angle) * r;
-    const y = anchorY + Math.sin(angle) * r * 0.5;
+    const x = Math.cos(angle) * r;
+    const y = Math.sin(angle) * r * 0.5;
     if (this.kind === "fire") {
       this.particles.push({
         x,
         y,
-        vx: (Math.random() - 0.5) * 24,
-        vy: -40 - Math.random() * 50,
+        vx: ((Math.random() - 0.5) * 24) / radiusPx,
+        vy: (-40 - Math.random() * 50) / radiusPx,
         age: 0,
         life: 0.6 + Math.random() * 0.5,
-        size: radiusPx * (0.08 + Math.random() * 0.08),
+        size: 0.08 + Math.random() * 0.08,
         color,
       });
     } else {
       this.particles.push({
-        x: anchorX + (Math.random() - 0.5) * radiusPx * 0.8,
-        y: anchorY + radiusPx * (0.4 + Math.random() * 0.4),
-        vx: (Math.random() - 0.5) * 6,
-        vy: -18 - Math.random() * 14,
+        x: (Math.random() - 0.5) * 0.8,
+        y: 0.4 + Math.random() * 0.4,
+        vx: ((Math.random() - 0.5) * 6) / radiusPx,
+        vy: (-18 - Math.random() * 14) / radiusPx,
         age: 0,
         life: 1.4 + Math.random() * 0.8,
-        size: radiusPx * (0.05 + Math.random() * 0.05),
+        size: 0.05 + Math.random() * 0.05,
         color,
       });
     }

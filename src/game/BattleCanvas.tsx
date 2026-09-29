@@ -280,16 +280,13 @@ export function BattleCanvas({
           wrap.clientWidth,
           wrap.clientHeight,
           fx ? (px: number, py: number) => fx.lightBoostAt(px, py, fxAnchor) : undefined,
-          // Three normally owns its decorations. During active elemental FX, they are redrawn
-          // here after that FX canvas; the same pass redraws sprites and then ordinary/front
-          // decorations, keeping characters above FX but behind scenery (except explicit
-          // behind-layer props).
+          // Three normally owns its decorations. During active elemental FX, this pass redraws
+          // the row-sorted ordinary scenery with sprites above the FX canvas.
           !!rendererThree && !drawDecorationsOverFx,
           !!rendererThree && !drawDecorationsOverFx,
           !!rendererThree && !drawDecorationsOverFx,
           !!rendererThree,
           !!rendererThree && !drawDecorationsOverFx,
-          drawDecorationsOverFx,
         );
       }
       const hud = engine.getHud();

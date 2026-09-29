@@ -87,6 +87,8 @@ export interface EnvLight {
   h: number;
   /** Reach, world pixels. */
   r: number;
+  /** Optional Three.js attenuation exponent; defaults to the map lighting standard. */
+  decay?: number;
   /** color x intensity x flicker. */
   rgb: [number, number, number];
 }

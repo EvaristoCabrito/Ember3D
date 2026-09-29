@@ -5,7 +5,7 @@ import { loadGameArt, portraitFor, TILE_VARIANT_COUNT, tileVariantName, tileVari
 import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { BattleCanvas } from "./BattleCanvas";
 import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } from "./gfx/params";
-import { DEFAULT_PIXEL_SETTINGS, PIXEL_ELEMENT_IDS, type PixelElement, type PixelElementSettings } from "./gfx/three/ProceduralElementEmitter";
+import { ELEMENT_FX_REGISTRY, pixelDefaults, pixelPresetsFor, type PixelElement, type PixelElementSettings } from "./gfx/three/ProceduralElementEmitter";
 import { DEFAULT_AMBIENT_INTENSITY, DEFAULT_BLOOM_INTENSITY, DEFAULT_SUN_INTENSITY, TIME_OF_DAY_LIGHT } from "./gfx/three/ThreeBattleRenderer";
 import { getDevGfx, setDevGfx, subscribeDevGfx, type DevGfxSettings } from "./gfx/three/devGfx";
 import { DevGfxPreview } from "./gfx/three/DevGfxPreview";
@@ -3371,9 +3371,9 @@ const BUILDER_TERRAIN: TerrainId[] = [
 
 /** Variants removed from the editor's "Versões" picker, per direct request. Hidden rather
  * than deleted: variant indices are positional, so dropping one would shift every later
- * variant and repaint saved maps. plains 15 = "Lama", 16 = "Trilha de Terra". */
+ * variant and repaint saved maps. plains 15 = "Trilha de Terra". */
 const HIDDEN_VARIANTS: Partial<Record<TerrainId, number[]>> = {
-  plains: [15, 16, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38],
+  plains: [15, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37],
   // Keep these saved-map indices intact while removing them from the water picker.
   water: [3, 7],
 };
@@ -3381,7 +3381,7 @@ const HIDDEN_VARIANTS: Partial<Record<TerrainId, number[]>> = {
 const VARIANT_LABEL: Partial<Record<TerrainId, string[]>> = {
   plains: [
     "Planície sombria", "Planície florida", "Planície original", "Antiga", "Terra", "Pedra", "Cinza", "Pedras",
-    "Clareira", "Rochas", "Lajedo", "Pedregulho", "Prado", "Flores silvestres", "Relva", "Lama", "Trilha de Terra",
+    "Clareira", "Rochas", "Lajedo", "Pedregulho", "Prado", "Flores silvestres", "Relva", "Trilha de Terra",
     "Terra com pedregulhos", "Lama com pegadas", "Grama viçosa", "Grama com trevos", "Grama com arbustos",
     "Rua de cascalho", "Caminho de terra", "Calçamento de pedras", "Rua em ruínas",
     "Calçamento destruído", "Trilha de pedras", "Pedregulho antigo", "Trilha lamacenta",
@@ -3505,6 +3505,7 @@ function MapEditorScreen({
   // spawn's level) would be wasted work it can't even show — debounce to the pause after a
   // real edit instead.
   const [previewMission, setPreviewMission] = useState<Mission | null>(null);
+  const immediateFxPreviewDraftRef = useRef<MapDraft | null>(null);
   /** Which DialogTree the DialogEditor modal is currently open for, if any — the mission's
    * own intro/outro, or one neutral spawn's own conversation. */
   const [dialogEditorTarget, setDialogEditorTarget] = useState<{ kind: "intro" } | { kind: "outro" } | { kind: "spawn"; index: number } | null>(null);
@@ -3594,8 +3595,9 @@ function MapEditorScreen({
   const [decoSection, setDecoSection] = useState("Todas");
   const [fxBrush, setFxBrush] = useState<PlaceableElementKind>("fire");
   const [fxFamily, setFxFamily] = useState<"regular" | "procedural_pixel">("regular");
-  const [pixelFxBrush, setPixelFxBrush] = useState<PixelElement>("frost");
-  const [pixelFxSettings, setPixelFxSettings] = useState<PixelElementSettings>({ ...DEFAULT_PIXEL_SETTINGS });
+  const [pixelFxBrush, setPixelFxBrush] = useState<PixelElement>("fire");
+  const [pixelFxPresetId, setPixelFxPresetId] = useState("procedural_pixel_fire");
+  const [pixelFxSettings, setPixelFxSettings] = useState<PixelElementSettings>(() => pixelDefaults("fire"));
   const [mode, setMode] = useState<"paint" | "player" | "enemy" | "npc" | "summon" | "decoration" | "elementalFx">("paint");
   // Which summon class the "Invocação" brush drops. Summons live in playerSpawns alongside
   // the heroes — the class itself says which of the two a spawn is (isSummonClass), so
@@ -3625,6 +3627,10 @@ function MapEditorScreen({
 
   useEffect(() => {
     if (!showPreview) return;
+    if (immediateFxPreviewDraftRef.current === draft) {
+      immediateFxPreviewDraftRef.current = null;
+      return;
+    }
     const t = window.setTimeout(() => setPreviewMission(draftToMission(draft)), 400);
     return () => window.clearTimeout(t);
   }, [draft, showPreview]);
@@ -4336,21 +4342,29 @@ function MapEditorScreen({
     });
   };
   const toggleElementalFx = (x: number, y: number) => {
-    setDraft((d) => {
-      const list = d.elementalFx ?? [];
-      const hit = list.find((p) => p.x === x && p.y === y);
-      if (hit) {
-        setNote(`${hit.family === "procedural_pixel" ? hit.element : ELEMENT_LABELS[hit.kind]} FX removido de ${x},${y}.`);
-        return { ...d, elementalFx: list.filter((p) => p !== hit) };
-      }
-      const pixelKinds: Record<PixelElement, PlaceableElementKind> = { frost:"ice",lightning:"lightning",poison:"acid",arcane:"darkness",holy:"holy",shadow:"darkness",ember:"fire" };
+    const list = draft.elementalFx ?? [];
+    const hit = list.find((p) => p.x === x && p.y === y);
+    let next: MapDraft;
+    if (hit) {
+      setNote(`${hit.family === "procedural_pixel" ? hit.element : ELEMENT_LABELS[hit.kind]} FX removido de ${x},${y}.`);
+      next = { ...draft, elementalFx: list.filter((p) => p !== hit) };
+    } else {
+      const pixelKinds: Record<PixelElement, PlaceableElementKind> = { fire:"fire",frost:"ice",lightning:"lightning",poison:"acid",arcane:"darkness",holy:"holy",shadow:"darkness",ember:"fire" };
       const kind = fxFamily === "procedural_pixel" ? pixelKinds[pixelFxBrush] : fxBrush;
       const placed: ElementalFxPlacement = fxFamily === "procedural_pixel"
-        ? { id: `fx-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`, kind, x, y, family: "procedural_pixel", element: pixelFxBrush, preset: `procedural_pixel_${pixelFxBrush}`, parameters: { ...pixelFxSettings } }
+        ? { id: `fx-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`, kind, x, y, family: "procedural_pixel", element: pixelFxBrush, preset: pixelFxPresetId, parameters: { ...pixelFxSettings } }
         : { id: `fx-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`, kind, x, y, family: "regular" };
-      setNote(`${fxFamily === "procedural_pixel" ? pixelFxBrush : ELEMENT_LABELS[fxBrush]} FX colocado em ${x},${y}. Clique de novo pra remover.`);
-      return { ...d, elementalFx: [...list, placed] };
-    });
+      setNote(`${fxFamily === "procedural_pixel" ? pixelFxBrush : ELEMENT_LABELS[fxBrush]} FX colocado em ${x},${y}.`);
+      next = { ...draft, elementalFx: [...list, placed] };
+    }
+    setDraft(next);
+    // Unlike terrain painting, a placed emitter must be visible at once so the author can
+    // tell that the chosen FX was put on this exact hex. Keep the normal draft debounce for
+    // other edits, but don't hide elemental placement behind it.
+    if (showPreview) {
+      immediateFxPreviewDraftRef.current = next;
+      setPreviewMission(draftToMission(next));
+    }
   };
 
   const onCellClick = (x: number, y: number) => {
@@ -5436,7 +5450,7 @@ function MapEditorScreen({
                   label: TERRAIN[terrain].name,
                   tileVariant: 0,
                 })),
-                { key: "city" as const, terrain: "plains" as const, label: "City", tileVariant: 22 },
+                { key: "city" as const, terrain: "plains" as const, label: "City", tileVariant: 21 },
               ]
                 .sort((a, b) => byName(a.label, b.label))
                 .map(({ key, terrain, label, tileVariant }) => {
@@ -5445,15 +5459,15 @@ function MapEditorScreen({
                     <button
                       key={key}
                       type="button"
-                      title={key === "city" ? `City · ${terrainHint("plains", 22)}` : terrainHint(terrain, brush === terrain ? variant : 0)}
+                      title={key === "city" ? `City · ${terrainHint("plains", 21)}` : terrainHint(terrain, brush === terrain ? variant : 0)}
                       onClick={() => {
                         setBrush(terrain);
                         if (key === "city") {
                           setCityMode(true);
-                          setVariant((v) => (v >= 22 && v <= 38 ? v : 22));
+                          setVariant((v) => (v >= 21 && v <= 37 ? v : 21));
                         } else {
                           setCityMode(false);
-                          setVariant((v) => (terrain === "plains" && v >= 22 && v <= 38 ? 0 : Math.min(v, (TILE_VARIANT_COUNT[terrain] ?? 1) - 1)));
+                          setVariant((v) => (terrain === "plains" && v >= 21 && v <= 37 ? 0 : Math.min(v, (TILE_VARIANT_COUNT[terrain] ?? 1) - 1)));
                         }
                       }}
                       className={`text-xs px-1.5 py-1 rounded-md border flex items-center gap-1.5 ${selected ? "border-accent" : "border-border"}`}
@@ -5514,7 +5528,7 @@ function MapEditorScreen({
                         original variant index i (art file, saved-map value), so re-sorting
                         this list can never relabel or repaint an existing tile. */}
                     {Array.from({ length: TILE_VARIANT_COUNT[brush] ?? 1 }, (_, i) => i)
-                      .filter((i) => cityMode && brush === "plains" ? i >= 22 && i <= 38 : !HIDDEN_VARIANTS[brush]?.includes(i))
+                      .filter((i) => cityMode && brush === "plains" ? i >= 21 && i <= 37 : !HIDDEN_VARIANTS[brush]?.includes(i))
                       .sort((a, b) => byName(VARIANT_LABEL[brush]?.[a] ?? String(a + 1).padStart(3, "0"), VARIANT_LABEL[brush]?.[b] ?? String(b + 1).padStart(3, "0")))
                       .map((i) => (
                   <button
@@ -5752,10 +5766,10 @@ function MapEditorScreen({
             <Button
               size="sm"
               variant={mode === "elementalFx" ? "primary" : "quiet"}
-              title="Coloca efeitos elementais (WebGL) permanentes no mapa — fogo, gelo, água, raio, ácido, sagrado, trevas"
+              title="Ativar modo de colocação de FX elementais: escolha um emissor e clique num hex da prévia"
               onClick={() => setMode((m) => (m === "elementalFx" ? "paint" : "elementalFx"))}
             >
-              FX
+              FX do mapa
             </Button>
             <Button
               size="sm"
@@ -5813,11 +5827,21 @@ function MapEditorScreen({
                 >
                   {ELEMENT_LABELS[k]}
                 </button>
-              )) : PIXEL_ELEMENT_IDS.map((element) => (
-                <button key={element} type="button" onClick={() => setPixelFxBrush(element)} className={`text-xs px-2 py-1 rounded-md border ${pixelFxBrush === element ? "border-accent bg-accent/15" : "border-border"}`}>{element[0]!.toUpperCase() + element.slice(1)}</button>
+              )) : ELEMENT_FX_REGISTRY.filter((entry) => entry.family === "procedural_pixel").map((entry) => (
+                <button key={entry.element} type="button" onClick={() => {
+                  const element = entry.element as PixelElement;
+                  setPixelFxBrush(element);
+                  setPixelFxSettings(pixelDefaults(element));
+                  setPixelFxPresetId(pixelPresetsFor(element)[0]?.id ?? entry.id);
+                }} className={`text-xs px-2 py-1 rounded-md border ${pixelFxBrush === entry.element ? "border-accent bg-accent/15" : "border-border"}`}>{entry.label.replace("Procedural Pixel ", "")}</button>
               ))}
             </div>
             {fxFamily === "procedural_pixel" && <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 rounded border border-border px-2 py-1.5 text-xs sm:col-span-2"><span>Preset</span><select aria-label="Preset de FX" value={pixelFxPresetId} onChange={(event) => setPixelFxPresetId(event.target.value)} className="min-h-9 rounded border border-border bg-bg px-2 text-sm text-fg">{pixelPresetsFor(pixelFxBrush).map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</select></label>
+              <div className="flex flex-wrap gap-2 rounded border border-border p-2 sm:col-span-2">
+                <button type="button" className={`rounded border px-2 py-1 text-xs ${pixelFxSettings.visualsEnabled ? "border-accent bg-accent/15" : "border-border"}`} onClick={() => setPixelFxSettings((settings) => ({ ...settings, visualsEnabled: true }))}>Mostrar emissor</button>
+                <button type="button" className={`rounded border px-2 py-1 text-xs ${!pixelFxSettings.visualsEnabled && pixelFxSettings.lightEnabled ? "border-accent bg-accent/15" : "border-border"}`} onClick={() => setPixelFxSettings((settings) => ({ ...settings, visualsEnabled: false, lightEnabled: true }))}>Teste: só luz real</button>
+              </div>
               {([
                 ["scale","Escala",0.4,2.5,0.05],["intensity","Intensidade",0.2,2.5,0.05],["particleCount","Partículas",12,160,1],["density","Densidade",0.25,2.5,0.05],["spawnRate","Taxa de emissão",0.25,2.5,0.05],["lifetime","Duração de partícula",0.4,5,0.1],["duration","Duração total",0,60,0.5],["velocity","Velocidade",0.1,2,0.05],["verticalForce","Força vertical",0.01,0.5,0.01],["spread","Abertura",0.1,1.2,0.05],["drag","Arrasto",0,1.5,0.05],["turbulence","Turbulência",0,1.5,0.05],["rotation","Rotação",0,3,0.05],["emissive","Emissão HDR",0,5,0.1],["opacity","Opacidade",0.1,1,0.05],["lightIntensity","Luz real",0,3,0.05],["lightRadius","Raio da luz",0.3,5,0.1],["lightDecay","Decaimento da luz",0.5,3,0.1],["flickerAmount","Oscilação da luz",0,1,0.05],["flickerSpeed","Velocidade da oscilação",0.2,30,0.2],["animationSpeed","Velocidade da animação",0.2,3,0.05],["seed","Semente",1,999999,1]
               ] as [keyof PixelElementSettings,string,number,number,number][]).map(([key,label,min,max,step]) => <label key={key} className="flex flex-col gap-1 rounded border border-border px-2 py-1.5 text-xs"><span className="flex justify-between gap-2"><span>{label}</span><output>{pixelFxSettings[key]}</output></span><input aria-label={label} type="range" min={min} max={max} step={step} value={pixelFxSettings[key] as number} onChange={(event) => setPixelFxSettings((settings) => ({ ...settings, [key]: Number(event.target.value) }))} /></label>)}
@@ -6931,9 +6955,11 @@ function BattleScreen({
   const prevInspectedIdRef = useRef<string | null>(null);
   useEffect(() => {
     const id = hud.inspected?.id ?? null;
-    if (id && id !== prevInspectedIdRef.current && (!hud.selected && !hud.pendingFoe || hud.inspected?.side === "player")) {
+    if (id && id !== prevInspectedIdRef.current) {
       setShowStatus(true);
-      setBrowseId(hud.inspected?.side === "player" ? id : null);
+      // While a unit is selected, the sheet would otherwise keep showing the selected unit —
+      // browse straight to whoever was clicked instead.
+      setBrowseId(hud.inspected?.side === "player" || hud.selected || hud.pendingFoe ? id : null);
     }
     prevInspectedIdRef.current = id;
   }, [hud.inspected?.id, hud.selected, hud.pendingFoe]);
@@ -7738,7 +7764,10 @@ function BattleScreen({
           unspentStatPoints={unspentStatusPoints}
           onAdjustStatPoint={adjustStatusPoint}
           bagIcon={pouchIcon(equippedPouchId(liveSave.equipment, statusUnit.name))}
-          onClose={() => setShowStatus(false)}
+          onClose={() => {
+            setShowStatus(false);
+            if (hud.selected && hud.inspected) engine.dismissInspect();
+          }}
           onCycle={
             hud.turnQueue.length > 1
               ? (dir: 1 | -1) => {

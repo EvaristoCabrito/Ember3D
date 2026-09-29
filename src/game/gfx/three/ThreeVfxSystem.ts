@@ -19,6 +19,13 @@ export interface FireEmitterSettings {
   coreIntensity: number;
   lightIntensity: number;
   lightRadius: number;
+  /** Optional family controls; omitted values preserve the FX Lab's original fire. */
+  lifetimeScale?: number;
+  spread?: number;
+  /** Optional steady jet flow. Defaults to the original ambient fire motion. */
+  flowDirection?: [number, number, number];
+  flowSpeed?: number;
+  flowSpread?: number;
 }
 
 export const DEFAULT_FIRE_EMITTER: FireEmitterSettings = {
@@ -75,6 +82,16 @@ export class ParticleEmitter {
   };
   private clock = 0;
   private random = Math.random;
+
+  setSeed(seed: number): void {
+    let state = seed >>> 0 || 1;
+    this.random = () => {
+      state ^= state << 13;
+      state ^= state >>> 17;
+      state ^= state << 5;
+      return (state >>> 0) / 4294967296;
+    };
+  }
 
   constructor(texture: THREE.Texture, depthTexture: THREE.DepthTexture | null, uniforms: {
     sceneNear: number;
@@ -212,8 +229,8 @@ export class ParticleEmitter {
       const t = Math.min(1, p.age / p.life);
       const drag = Math.exp(-settings.drag * dt);
       p.velocity.multiplyScalar(drag);
-      p.velocity.y += (p.riseSpeed * this.curves.velocity(t) - p.velocity.y) * Math.min(1, dt * 3.2);
       const wiggle = settings.turbulence * dt;
+      p.velocity.y += (p.riseSpeed * this.curves.velocity(t) - p.velocity.y) * Math.min(1, dt * 3.2);
       p.velocity.x += (this.random() - 0.5) * wiggle * 3.4;
       p.velocity.z += (this.random() - 0.5) * wiggle * 3.4;
       p.velocity.y -= settings.gravity * dt;
@@ -237,18 +254,26 @@ export class ParticleEmitter {
 
   private spawn(p: Particle, settings: FireEmitterSettings, initialAge: number): void {
     const r = this.random;
-    p.life = 0.62 + r() * 0.5;
+    const spread = settings.spread ?? 1;
+    p.life = (0.62 + r() * 0.5) * (settings.lifetimeScale ?? 1);
     p.age = initialAge * p.life;
     p.phase = r() * 16;
     // Store a unitless size so pooled emitters can change scale with the camera at any time.
     p.size = 0.35 + r() * 0.33;
     p.rotation = r() * Math.PI * 2;
     p.spin = (r() - 0.5) * 1.4;
-    p.position.set((r() - 0.5) * 0.28, 0.12 + r() * 0.22, (r() - 0.5) * 0.28);
+    p.position.set((r() - 0.5) * 0.28 * spread, 0.12 + r() * 0.22, (r() - 0.5) * 0.28 * spread);
     const angle = r() * Math.PI * 2;
-    const radial = r() * 0.16;
+    const radial = r() * 0.16 * spread;
     p.riseSpeed = settings.velocity * (0.7 + r() * 0.55);
-    p.velocity.set(Math.cos(angle) * radial, p.riseSpeed, Math.sin(angle) * radial);
+    const flow = settings.flowDirection;
+    const flowAngle = flow ? Math.atan2(flow[1], flow[0]) + (r() - 0.5) * (settings.flowSpread ?? 0) : 0;
+    const flowSpeed = flow ? (settings.flowSpeed ?? 0) : 0;
+    p.velocity.set(
+      Math.cos(angle) * radial + (flow ? Math.cos(flowAngle) * flowSpeed : 0),
+      p.riseSpeed + (flow ? Math.sin(flowAngle) * flowSpeed : 0),
+      Math.sin(angle) * radial + (flow?.[2] ?? 0) * flowSpeed,
+    );
     p.position.addScaledVector(p.velocity, p.age);
   }
 

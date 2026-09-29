@@ -11,9 +11,10 @@ import { BlessVFX, DEFAULT_BLESS_VFX_SETTINGS, getActiveBlessVfxSettings, setAct
 import { DEFAULT_MAGIC_MISSILE_V2_SETTINGS, getActiveMagicMissileV2Settings, MagicMissileV2VFX, setActiveMagicMissileV2Settings, type MagicMissileV2Settings } from "./MagicMissileV2VFX";
 import { DEFAULT_WEB_OF_DREAMS_VFX_SETTINGS, getActiveWebOfDreamsVfxSettings, setActiveWebOfDreamsVfxSettings, WebOfDreamsVFX, type WebOfDreamsVfxSettings } from "./WebOfDreamsVFX";
 import { BurningHandsV2VFX, DEFAULT_BURNING_HANDS_V2_SETTINGS, getActiveBurningHandsV2Settings, setActiveBurningHandsV2Settings, type BurningHandsV2Settings } from "./BurningHandsV2VFX";
+import { BurningHandsV3VFX, DEFAULT_BURNING_HANDS_V3_SETTINGS, getActiveBurningHandsV3Settings, setActiveBurningHandsV3Settings, type BurningHandsV3Settings } from "./BurningHandsV3VFX";
 import { CleaveSweepVFX, DEFAULT_VARREDURA_SETTINGS, getActiveVarreduraSettings, setActiveVarreduraSettings, VarreduraVFX, type VarreduraSettings } from "./VarreduraVFX";
 
-type PreviewMode = "flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "varredura-v2" | "cleave-sweep-v2";
+type PreviewMode = "flame" | "impact" | "phantasmal" | "bless" | "magic-missile-v2" | "web-of-dreams" | "burning-hands-v2" | "burning-hands-v3" | "varredura-v2" | "cleave-sweep-v2";
 
 type PreviewState = {
   settings: FireEmitterSettings;
@@ -23,6 +24,7 @@ type PreviewState = {
   magicMissileV2Settings: MagicMissileV2Settings;
   webDreamSettings: WebOfDreamsVfxSettings;
   burningHandsSettings: BurningHandsV2Settings;
+  burningHandsV3Settings: BurningHandsV3Settings;
   varreduraSettings: VarreduraSettings;
   mode: PreviewMode;
   playing: boolean;
@@ -38,6 +40,7 @@ type PreviewControls = {
   setMagicMissileV2Settings: (settings: MagicMissileV2Settings) => void;
   setWebDreamSettings: (settings: WebOfDreamsVfxSettings) => void;
   setBurningHandsSettings: (settings: BurningHandsV2Settings) => void;
+  setBurningHandsV3Settings: (settings: BurningHandsV3Settings) => void;
   setVarreduraSettings: (settings: VarreduraSettings) => void;
   releaseWebDreamPreview: () => void;
 };
@@ -212,6 +215,7 @@ const WEB_DREAM_SLIDERS: { key: WebDreamNumericKey; label: string; min: number; 
 
 type BurningHandsNumericKey = { [K in keyof BurningHandsV2Settings]: BurningHandsV2Settings[K] extends number ? K : never }[keyof BurningHandsV2Settings];
 type BurningHandsToggleKey = { [K in keyof BurningHandsV2Settings]: BurningHandsV2Settings[K] extends boolean ? K : never }[keyof BurningHandsV2Settings];
+type BurningHandsV3ToggleKey = { [K in keyof BurningHandsV3Settings]: BurningHandsV3Settings[K] extends boolean ? K : never }[keyof BurningHandsV3Settings];
 type VarreduraNumericKey = { [K in keyof VarreduraSettings]: VarreduraSettings[K] extends number ? K : never }[keyof VarreduraSettings];
 type VarreduraToggleKey = { [K in keyof VarreduraSettings]: VarreduraSettings[K] extends boolean ? K : never }[keyof VarreduraSettings];
 const VARREDURA_SLIDERS: { key: VarreduraNumericKey; label: string; min: number; max: number; step: number; integer?: boolean }[] = [
@@ -237,10 +241,10 @@ const VARREDURA_SLIDERS: { key: VarreduraNumericKey; label: string; min: number;
   { key: "seed", label: "Semente procedural", min: 1, max: 999999, step: 1, integer: true },
 ];
 const BURNING_HANDS_SLIDERS: { key: BurningHandsNumericKey; label: string; min: number; max: number; step: number; integer?: boolean }[] = [
-  { key: "tongueCount", label: "Línguas volumétricas", min: 8, max: 16, step: 1, integer: true },
-  { key: "flameLength", label: "Comprimento da língua", min: 0.6, max: 1.5, step: 0.05 },
-  { key: "flameWidth", label: "Abertura do cone", min: 0.65, max: 1.4, step: 0.05 },
-  { key: "turbulence", label: "Turbulência 3D", min: 0, max: 0.45, step: 0.01 },
+  { key: "tongueCount", label: "Densidade de chamas", min: 8, max: 16, step: 1, integer: true },
+  { key: "flameLength", label: "Alcance do jato", min: 0.6, max: 1.5, step: 0.05 },
+  { key: "flameWidth", label: "Abertura da labareda", min: 0.65, max: 1.4, step: 0.05 },
+  { key: "turbulence", label: "Turbulência orgânica", min: 0, max: 0.45, step: 0.01 },
   { key: "lightIntensity", label: "Intensidade das luzes", min: 0, max: 30, step: 0.5 },
   { key: "lightRadius", label: "Alcance das luzes", min: 1, max: 9, step: 0.1 },
 ];
@@ -257,6 +261,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
   let magicMissileV2: MagicMissileV2VFX | null = null;
   let webOfDreams: WebOfDreamsVFX | null = null;
   let burningHands: BurningHandsV2VFX | null = null;
+  let burningHandsV3: BurningHandsV3VFX | null = null;
   let varredura: VarreduraVFX | null = null;
   let cleaveSweep: CleaveSweepVFX | null = null;
   let varreduraLayer: THREE.Group | null = null;
@@ -377,7 +382,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     burningHands?.dispose();
     burningHands = new BurningHandsV2VFX(baseScene, {
       id: "burning-hands-v2-preview",
-      origin: new THREE.Vector3(-0.08, 0.23, 0.14),
+      origin: new THREE.Vector3(-0.08, 0.23, 0),
       direction: new THREE.Vector2(0.34, 0.94).normalize(),
       length: 1.9,
       width: 1.55,
@@ -389,6 +394,26 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
         else state.current.playing = false;
       },
     });
+    // The battle renderer uses XY as the map plane with Z as height; the FX Lab stage uses XZ with Y up.
+    burningHands.group.rotation.x = -Math.PI / 2;
+  };
+  const previewBurningHandsV3 = () => {
+    burningHandsV3?.dispose();
+    burningHandsV3 = new BurningHandsV3VFX(baseScene, {
+      id: "burning-hands-v3-preview",
+      origin: new THREE.Vector3(-0.08, 0.23, 0),
+      direction: new THREE.Vector2(0.34, 0.94).normalize(),
+      length: 1.9,
+      width: 1.55,
+      worldScale: 1,
+      settings: state.current.burningHandsV3Settings,
+      onRelease: () => {},
+      onComplete: () => {
+        if (state.current.looping) previewBurningHandsV3();
+        else state.current.playing = false;
+      },
+    });
+    burningHandsV3.group.rotation.x = -Math.PI / 2;
   };
   const ensureVarreduraLayer = () => {
     if (varreduraLayer) return varreduraLayer;
@@ -472,6 +497,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       if (state.current.mode === "magic-missile-v2") { previewMagicMissileV2(); return; }
       if (state.current.mode === "web-of-dreams") { previewWebOfDreams(); return; }
       if (state.current.mode === "burning-hands-v2") { previewBurningHandsV2(); return; }
+      if (state.current.mode === "burning-hands-v3") { previewBurningHandsV3(); return; }
       if (state.current.mode === "varredura-v2") { previewVarredura(); return; }
       if (state.current.mode === "cleave-sweep-v2") { previewCleaveSweep(); return; }
       if (state.current.mode === "impact" && impact) { impact.restart(state.current.impactSettings); return; }
@@ -485,6 +511,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       if (state.current.mode === "magic-missile-v2" && magicMissileV2) { magicMissileV2.update(1 / 24); return; }
       if (state.current.mode === "web-of-dreams") { webOfDreams?.previewAt(new THREE.Vector3(0, 0.8, 0), 1, 1.9, [{ id: "preview-target", position: new THREE.Vector3(0, 0.78, 0) }], 1 / 24); return; }
       if (state.current.mode === "burning-hands-v2") { burningHands?.update(1 / 24); return; }
+      if (state.current.mode === "burning-hands-v3") { burningHandsV3?.update(1 / 24); return; }
       if (state.current.mode === "varredura-v2") { varredura?.update(1 / 24); return; }
       if (state.current.mode === "cleave-sweep-v2") { cleaveSweep?.update(1 / 24); return; }
       if (state.current.mode === "impact" && impact) { impact.update(1 / Math.max(1, state.current.impactSettings.flipbookFps), state.current.impactSettings, state.current.looping, camera); return; }
@@ -499,6 +526,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     setMagicMissileV2Settings: (next) => magicMissileV2?.setSettings(next),
     setWebDreamSettings: (next) => webOfDreams?.setSettings(next),
     setBurningHandsSettings: (next) => burningHands?.setSettings(next),
+    setBurningHandsV3Settings: (next) => burningHandsV3?.setSettings(next),
     setVarreduraSettings: (next) => { state.current.varreduraSettings = next; if (state.current.mode === "cleave-sweep-v2") previewCleaveSweep(); },
     releaseWebDreamPreview: () => webOfDreams?.releasePreview(),
   };
@@ -598,7 +626,7 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
       camera.position.set(2.25, 2.75, 3.35);
       camera.lookAt(0, 0.48, 0);
     }
-    bloomPass.enabled = state.current.mode === "bless" ? state.current.blessSettings.bloom : state.current.mode === "magic-missile-v2" ? state.current.magicMissileV2Settings.bloom : state.current.mode === "burning-hands-v2" ? state.current.burningHandsSettings.bloom : state.current.bloomEnabled;
+    bloomPass.enabled = state.current.mode === "bless" ? state.current.blessSettings.bloom : state.current.mode === "magic-missile-v2" ? state.current.magicMissileV2Settings.bloom : state.current.mode === "burning-hands-v2" ? state.current.burningHandsSettings.bloom : state.current.mode === "burning-hands-v3" ? state.current.burningHandsV3Settings.bloom : state.current.bloomEnabled;
     if (state.current.mode !== "phantasmal") phantasmal?.hide();
     else if (phantasmal && state.current.playing) phantasmal.update(dt);
     if (state.current.mode !== "bless") bless?.hide();
@@ -612,6 +640,8 @@ function mountVfxPreview(canvas: HTMLCanvasElement, state: MutableRefObject<Prev
     );
     if (state.current.mode !== "burning-hands-v2") burningHands?.dispose();
     else if (burningHands && state.current.playing) burningHands.update(dt);
+    if (state.current.mode !== "burning-hands-v3") burningHandsV3?.dispose();
+    else if (burningHandsV3 && state.current.playing) burningHandsV3.update(dt);
     if (state.current.mode !== "varredura-v2") { varredura?.dispose(); varredura = null; }
     else if (varredura && state.current.playing) { varredura.update(dt); if (varredura.finished) { if (state.current.looping) previewVarredura(); else state.current.playing=false; } }
     if (state.current.mode !== "cleave-sweep-v2") { cleaveSweep?.dispose(); cleaveSweep = null; }
@@ -712,13 +742,14 @@ export function VfxDebugPanel() {
   const [magicMissileV2Settings, setMagicMissileV2Settings] = useState(() => getActiveMagicMissileV2Settings());
   const [webDreamSettings, setWebDreamSettings] = useState(() => getActiveWebOfDreamsVfxSettings());
   const [burningHandsSettings, setBurningHandsSettings] = useState(() => getActiveBurningHandsV2Settings());
+  const [burningHandsV3Settings, setBurningHandsV3Settings] = useState(() => getActiveBurningHandsV3Settings());
   const [varreduraSettings, setVarreduraSettings] = useState(() => getActiveVarreduraSettings());
   const [mode, setMode] = useState<PreviewMode>("flame");
   const [playing, setPlaying] = useState(true);
   const [looping, setLooping] = useState(true);
   const [bloomEnabled, setBloomEnabled] = useState(false);
-  const stateRef = useRef<PreviewState>({ settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, varreduraSettings, mode, playing, looping, bloomEnabled });
-  stateRef.current = { settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, varreduraSettings, mode, playing, looping, bloomEnabled };
+  const stateRef = useRef<PreviewState>({ settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, burningHandsV3Settings, varreduraSettings, mode, playing, looping, bloomEnabled });
+  stateRef.current = { settings, impactSettings, phantasmalSettings, blessSettings, magicMissileV2Settings, webDreamSettings, burningHandsSettings, burningHandsV3Settings, varreduraSettings, mode, playing, looping, bloomEnabled };
 
   const switchMode = (next: PreviewMode) => {
     stateRef.current.mode = next;
@@ -778,6 +809,14 @@ export function VfxDebugPanel() {
     setBurningHandsSettings(next);
   };
 
+  const updateBurningHandsV3Setting = <K extends keyof BurningHandsV3Settings>(key: K, value: BurningHandsV3Settings[K]) => {
+    const next = { ...stateRef.current.burningHandsV3Settings, [key]: value };
+    stateRef.current.burningHandsV3Settings = next;
+    setActiveBurningHandsV3Settings(next);
+    runtimeRef.current?.setBurningHandsV3Settings(next);
+    setBurningHandsV3Settings(next);
+  };
+
   const updateVarreduraSetting = <K extends keyof VarreduraSettings>(key:K,value:VarreduraSettings[K])=>{
     const next={...stateRef.current.varreduraSettings,[key]:value};stateRef.current.varreduraSettings=next;setActiveVarreduraSettings(next);setVarreduraSettings(next);runtimeRef.current?.setVarreduraSettings(next);
   };
@@ -793,6 +832,7 @@ export function VfxDebugPanel() {
     const savedMagicMissileV2Settings = getActiveMagicMissileV2Settings();
     const savedWebDreamSettings = getActiveWebOfDreamsVfxSettings();
     const savedBurningHandsSettings = getActiveBurningHandsV2Settings();
+    const savedBurningHandsV3Settings = getActiveBurningHandsV3Settings();
     const savedVarreduraSettings = getActiveVarreduraSettings();
     stateRef.current.impactSettings = savedImpactSettings;
     stateRef.current.phantasmalSettings = savedPhantasmalSettings;
@@ -800,6 +840,7 @@ export function VfxDebugPanel() {
     stateRef.current.magicMissileV2Settings = savedMagicMissileV2Settings;
     stateRef.current.webDreamSettings = savedWebDreamSettings;
     stateRef.current.burningHandsSettings = savedBurningHandsSettings;
+    stateRef.current.burningHandsV3Settings = savedBurningHandsV3Settings;
     stateRef.current.varreduraSettings = savedVarreduraSettings;
     setImpactSettings(savedImpactSettings);
     setPhantasmalSettings(savedPhantasmalSettings);
@@ -807,6 +848,7 @@ export function VfxDebugPanel() {
     setMagicMissileV2Settings(savedMagicMissileV2Settings);
     setWebDreamSettings(savedWebDreamSettings);
     setBurningHandsSettings(savedBurningHandsSettings);
+    setBurningHandsV3Settings(savedBurningHandsV3Settings);
     setVarreduraSettings(savedVarreduraSettings);
     return mountVfxPreview(canvas, stateRef, runtimeRef);
   }, []);
@@ -814,7 +856,7 @@ export function VfxDebugPanel() {
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-bg/40 p-4" aria-label="VFX debug editor">
       <div>
-        <p className="text-sm uppercase tracking-[0.14em] text-muted">Laboratório VFX · etapa {mode === "flame" ? "01" : mode === "phantasmal" ? "03" : mode === "bless" ? "04" : mode === "magic-missile-v2" ? "05" : mode === "web-of-dreams" ? "06" : mode === "burning-hands-v2" ? "07" : mode === "varredura-v2" ? "08" : mode === "cleave-sweep-v2" ? "09" : "02"}</p>
+        <p className="text-sm uppercase tracking-[0.14em] text-muted">Laboratório VFX · etapa {mode === "flame" ? "01" : mode === "phantasmal" ? "03" : mode === "bless" ? "04" : mode === "magic-missile-v2" ? "05" : mode === "web-of-dreams" ? "06" : mode === "burning-hands-v2" || mode === "burning-hands-v3" ? "07" : mode === "varredura-v2" ? "08" : mode === "cleave-sweep-v2" ? "09" : "02"}</p>
         <label className="mt-2 flex flex-col gap-1 text-sm">
           <span className="text-muted">Efeito</span>
           <select aria-label="Selecionar efeito VFX" value={mode} onChange={(event) => switchMode(event.target.value as PreviewMode)} className="min-h-11 rounded-md border border-border bg-bg px-3 py-2 font-display text-lg text-fg focus:border-accent focus:outline-none">
@@ -825,11 +867,12 @@ export function VfxDebugPanel() {
           <option value="magic-missile-v2">Míssil Mágico V2 · projétil arcano 3D</option>
             <option value="web-of-dreams">Web of Dreams · rede 3D persistente</option>
             <option value="burning-hands-v2">Burning Hands V2 · leque de fogo 3D</option>
+            <option value="burning-hands-v3">Burning Hands V3 · leque de fogo 3D</option>
             <option value="varredura-v2">Varredura V2 · onda de choque circular</option>
             <option value="cleave-sweep-v2">Cleave · varredura da lança 3D</option>
           </select>
         </label>
-        <p className="text-sm text-muted mt-1">{mode === "flame" ? "Chama contínua ancorada em um hex de batalha." : mode === "phantasmal" ? "Força 3D que envolve o alvo, comprime energia espectral para dentro e libera uma onda real no espaço. Clique no hex para reposicionar." : mode === "bless" ? "Bless reúne energia no conjurador, propaga a onda por três hexes e envolve cada aliado na ordem em que ela chega. A luz real e o bônus são os mesmos usados no combate." : mode === "magic-missile-v2" ? "Um projétil arcano 3D se forma junto ao conjurador, ilumina o campo, percorre uma curva visível e colapsa no alvo. Cada disparo da magia recebe seu próprio efeito. Clique no tabuleiro para trocar o alvo." : mode === "web-of-dreams" ? "Fios volumétricos crescem ao redor do alvo, ligam nós de energia e se contraem ao prendê-lo. Teste profundidade, geometria e luzes dinâmicas reais abaixo." : mode === "burning-hands-v2" ? "As mãos acendem, comprimem o fogo e liberam um leque largo de línguas volumétricas. As luzes reais percorrem o cone; o efeito usa os hexes já resolvidos pelo combate." : mode === "varredura-v2" ? "Uma frente de choque circular se expande em 360° a partir do centro e ilumina os alvos quando os alcança. Clique no chão para reposicionar o centro." : mode === "cleave-sweep-v2" ? "Um golpe direcional de lança varre a área de Cleave, com fragmentos e impactos iluminados em sequência. Ajuste geometria e luzes abaixo; clique no chão para reposicionar." : "Clique no hex para posicionar e repetir a explosão original. Câmera fixa; sem projétil ou AOE. Ajustes salvos automaticamente neste navegador e aplicados às próximas conjurações de Fireball."}</p>
+        <p className="text-sm text-muted mt-1">{mode === "flame" ? "Chama contínua ancorada em um hex de batalha." : mode === "phantasmal" ? "Força 3D que envolve o alvo, comprime energia espectral para dentro e libera uma onda real no espaço. Clique no hex para reposicionar." : mode === "bless" ? "Bless reúne energia no conjurador, propaga a onda por três hexes e envolve cada aliado na ordem em que ela chega. A luz real e o bônus são os mesmos usados no combate." : mode === "magic-missile-v2" ? "Um projétil arcano 3D se forma junto ao conjurador, ilumina o campo, percorre uma curva visível e colapsa no alvo. Cada disparo da magia recebe seu próprio efeito. Clique no tabuleiro para trocar o alvo." : mode === "web-of-dreams" ? "Fios volumétricos crescem ao redor do alvo, ligam nós de energia e se contraem ao prendê-lo. Teste profundidade, geometria e luzes dinâmicas reais abaixo." : mode === "burning-hands-v2" ? "As mãos acendem, comprimem o fogo e liberam um leque largo de línguas volumétricas. As luzes reais percorrem o cone; o efeito usa os hexes já resolvidos pelo combate." : mode === "burning-hands-v3" ? "Preview V3 separado no FX Lab; não altera o efeito de batalha V2." : mode === "varredura-v2" ? "Uma frente de choque circular se expande em 360° a partir do centro e ilumina os alvos quando os alcança. Clique no chão para reposicionar o centro." : mode === "cleave-sweep-v2" ? "Um golpe direcional de lança varre a área de Cleave, com fragmentos e impactos iluminados em sequência. Ajuste geometria e luzes abaixo; clique no chão para reposicionar." : "Clique no hex para posicionar e repetir a explosão original. Câmera fixa; sem projétil ou AOE. Ajustes salvos automaticamente neste navegador e aplicados às próximas conjurações de Fireball."}</p>
       </div>
       <canvas ref={canvasRef} onPointerDown={() => { if (mode !== "flame") { stateRef.current.playing = true; setPlaying(true); } }} className={`w-full h-80 rounded-lg border border-border bg-black/40 ${mode !== "flame" ? "cursor-crosshair" : ""}`} aria-label="3D spell effect preview" />
       <div className="grid grid-cols-2 gap-2">
@@ -934,8 +977,8 @@ export function VfxDebugPanel() {
         </div>
       </> : mode === "burning-hands-v2" ? <>
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => { updateBurningHandsSetting("geometry", false); updateBurningHandsSetting("particles", false); updateBurningHandsSetting("distortion", false); updateBurningHandsSetting("emissive", false); updateBurningHandsSetting("lights", true); }} className="col-span-2 min-h-11 rounded-md border border-accent bg-accent/10 px-3 py-2 hover:bg-accent/20">Teste: apenas luzes dinâmicas reais</button>
-          <button type="button" onClick={() => { updateBurningHandsSetting("geometry", true); updateBurningHandsSetting("particles", true); updateBurningHandsSetting("distortion", true); updateBurningHandsSetting("emissive", true); updateBurningHandsSetting("lights", false); }} className="col-span-2 min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Teste: geometria sem luz dinâmica</button>
+          <button type="button" onClick={() => { updateBurningHandsSetting("visuals", false); updateBurningHandsSetting("distortion", false); updateBurningHandsSetting("emissive", false); updateBurningHandsSetting("lights", true); updateBurningHandsSetting("bloom", false); }} className="col-span-2 min-h-11 rounded-md border border-accent bg-accent/10 px-3 py-2 hover:bg-accent/20">Teste: somente luz dinâmica real</button>
+          <button type="button" onClick={() => { updateBurningHandsSetting("visuals", true); updateBurningHandsSetting("distortion", true); updateBurningHandsSetting("emissive", true); updateBurningHandsSetting("lights", false); updateBurningHandsSetting("bloom", false); }} className="col-span-2 min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Teste: fogo sem luzes nem bloom</button>
           <button type="button" onClick={() => { const defaults = { ...DEFAULT_BURNING_HANDS_V2_SETTINGS }; stateRef.current.burningHandsSettings = defaults; setActiveBurningHandsV2Settings(defaults); runtimeRef.current?.setBurningHandsSettings(defaults); setBurningHandsSettings(defaults); restart(); }} className="col-span-2 min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Restaurar valores padrão</button>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -947,8 +990,25 @@ export function VfxDebugPanel() {
           ))}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {([["geometry", "Línguas de fogo 3D"], ["particles", "Faíscas e brasas"], ["distortion", "Ondulação de calor"], ["emissive", "Emissão HDR"], ["lights", "Luzes dinâmicas reais"], ["bloom", "Bloom"]] as [BurningHandsToggleKey, string][]).map(([key, label]) => (
+          {([["visuals", "Fogo flipbook 3D"], ["distortion", "Turbulência do fogo"], ["emissive", "Emissão HDR"], ["lights", "Luzes dinâmicas reais"], ["bloom", "Bloom"]] as [BurningHandsToggleKey, string][]).map(([key, label]) => (
             <label key={key} className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>{label}</span><input type="checkbox" checked={burningHandsSettings[key]} onChange={(event) => updateBurningHandsSetting(key, event.target.checked)} /></label>
+          ))}
+        </div>
+      </> : mode === "burning-hands-v3" ? <>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => { const defaults = { ...DEFAULT_BURNING_HANDS_V3_SETTINGS }; stateRef.current.burningHandsV3Settings = defaults; setActiveBurningHandsV3Settings(defaults); runtimeRef.current?.setBurningHandsV3Settings(defaults); setBurningHandsV3Settings(defaults); restart(); }} className="col-span-2 min-h-11 rounded-md border border-border px-3 py-2 hover:border-accent">Restaurar valores padrão do V3</button>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {BURNING_HANDS_SLIDERS.map(({ key, label, min, max, step, integer }) => (
+            <label key={key} className="flex flex-col gap-1 rounded-md border border-border px-3 py-2">
+              <span className="flex items-center justify-between gap-2 text-sm"><span>{label}</span><output className="tabular-nums text-muted">{integer ? Math.round(burningHandsV3Settings[key]) : burningHandsV3Settings[key].toFixed(2)}</output></span>
+              <input aria-label={label} type="range" min={min} max={max} step={step} value={burningHandsV3Settings[key]} onChange={(event) => updateBurningHandsV3Setting(key, Number(event.target.value))} />
+            </label>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {([ ["visuals", "Fogo flipbook 3D"], ["distortion", "Turbulência do fogo"], ["emissive", "Emissão HDR"], ["lights", "Luzes dinâmicas reais"], ["bloom", "Bloom"] ] as [BurningHandsV3ToggleKey, string][]).map(([key, label]) => (
+            <label key={key} className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>{label}</span><input type="checkbox" checked={burningHandsV3Settings[key]} onChange={(event) => updateBurningHandsV3Setting(key, event.target.checked)} /></label>
           ))}
         </div>
       </> : mode === "cleave-sweep-v2" ? <>
@@ -972,8 +1032,8 @@ export function VfxDebugPanel() {
           ))}
         </div>
       </> : null}
-      {mode !== "bless" && mode !== "magic-missile-v2" && mode !== "burning-hands-v2" && <label className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>Bloom de pós-processamento</span><input type="checkbox" checked={bloomEnabled} onChange={(event) => { stateRef.current.bloomEnabled = event.target.checked; setBloomEnabled(event.target.checked); }} /></label>}
-      <p className="text-xs leading-relaxed text-muted">{mode === "flame" ? "Flipbook com 16 quadros · partículas instanciadas · suavização por profundidade · luz real no terreno" : mode === "phantasmal" ? "Tendril meshes com profundidade real · partículas instanciadas · PointLight violeta com sombras · semente determinística; ajustes persistem e valem no combate" : mode === "bless" ? "Onda radius-3 · chegada sincronizada por aliado · PointLights reais no caster e na equipe · as configurações persistem e também regem conjurações de combate" : mode === "magic-missile-v2" ? "Charge prolongado · projétil de escala mundial · spline 3D e trail procedural · luzes pontuais reais com sombras no caster, em voo e no impacto · uma ocorrência por disparo" : mode === "burning-hands-v2" ? "Leque de malhas 3D deformadas · fogo branco-dourado sobre núcleo âmbar · quatro luzes reais móveis · brilho e ondulação locais · sem modelo placeholder" : mode === "varredura-v2" ? "Frente circular 3D completa · expansão radial uniforme · luzes e impactos em torno de todo o perímetro" : mode === "cleave-sweep-v2" ? "Golpe direcional 3D · fragmentos no rastro · impactos iluminados na ordem dos alvos · parâmetros visuais persistem" : "Timeline de impacto original · partículas em um draw call · mesma semente reproduz o mesmo padrão · bloom começa desligado para avaliar a estrutura"}</p>
+      {mode !== "bless" && mode !== "magic-missile-v2" && mode !== "burning-hands-v2" && mode !== "burning-hands-v3" && <label className="flex min-h-11 items-center justify-between rounded-md border border-border px-3 py-2 text-sm"><span>Bloom de pós-processamento</span><input type="checkbox" checked={bloomEnabled} onChange={(event) => { stateRef.current.bloomEnabled = event.target.checked; setBloomEnabled(event.target.checked); }} /></label>}
+      <p className="text-xs leading-relaxed text-muted">{mode === "flame" ? "Flipbook com 16 quadros · partículas instanciadas · suavização por profundidade · luz real no terreno" : mode === "phantasmal" ? "Tendril meshes com profundidade real · partículas instanciadas · PointLight violeta com sombras · semente determinística; ajustes persistem e valem no combate" : mode === "bless" ? "Onda radius-3 · chegada sincronizada por aliado · PointLights reais no caster e na equipe · as configurações persistem e também regem conjurações de combate" : mode === "magic-missile-v2" ? "Charge prolongado · projétil de escala mundial · spline 3D e trail procedural · luzes pontuais reais com sombras no caster, em voo e no impacto · uma ocorrência por disparo" : mode === "burning-hands-v2" ? "V2 continua disponível exatamente no seu slot de batalha." : mode === "burning-hands-v3" ? "Entrada de preview independente no FX Lab; V2 e o combate permanecem intactos." : mode === "varredura-v2" ? "Frente circular 3D completa · expansão radial uniforme · luzes e impactos em torno de todo o perímetro" : mode === "cleave-sweep-v2" ? "Golpe direcional 3D · fragmentos no rastro · impactos iluminados na ordem dos alvos · parâmetros visuais persistem" : "Timeline de impacto original · partículas em um draw call · mesma semente reproduz o mesmo padrão · bloom começa desligado para avaliar a estrutura"}</p>
     </section>
   );
 }

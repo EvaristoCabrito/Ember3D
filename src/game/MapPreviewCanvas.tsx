@@ -1,9 +1,12 @@
 import { type PointerEvent, useEffect, useRef, useState } from "react";
-import { placedFootprint } from "./data";
+import * as THREE from "three";
+import { placedFootprint, TERRAIN, TILE_CHAR } from "./data";
+import { tileVariantName } from "./assets";
 import { BattleEngine, ZOOM_RADII } from "./engine";
 import { EffectsRenderer } from "./gfx/EffectsRenderer";
+import { pixelPreset, ProceduralElementEmitter, type PixelElement } from "./gfx/three/ProceduralElementEmitter";
 import { WebGL2DRenderer } from "./gfx/WebGL2DRenderer";
-import type { GameArt, Mission } from "./types";
+import type { GameArt, Mission, TerrainId } from "./types";
 
 export type PreviewUnitSelection = {
   side: "playerSpawns" | "enemySpawns" | "neutralSpawns";
@@ -19,6 +22,7 @@ const PREVIEW_ZOOM_MIN = 0.75;
 // CODER-ONLY: DO NOT MESS WITH CONTROLS. Preserve left-button hold for 0.5 seconds,
 // then show the grabbing hand and pan on drag. Never display this warning in the UI.
 const PREVIEW_PAN_HOLD_MS = 500;
+const TERRAIN_BY_CHAR = Object.fromEntries(Object.entries(TILE_CHAR).map(([id, ch]) => [ch, id])) as Record<string, TerrainId>;
 
 /** A read-only window onto the map exactly as the real battle would render it — same tile
  * art, same decoration art, same unit sprites — instead of the paint grid's flat color
@@ -53,7 +57,10 @@ export function MapPreviewCanvas({
   onDecorationPlace?: (decoration: PreviewDecorationSelection, x: number, y: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const onCellClickRef = useRef(onCellClick);
+  onCellClickRef.current = onCellClick;
   const fxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const pixelFxCanvasRef = useRef<HTMLCanvasElement>(null);
   const unitsCanvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<BattleEngine | null>(null);
@@ -76,6 +83,8 @@ export function MapPreviewCanvas({
   const [zoom, setZoom] = useState(PREVIEW_ZOOM_MIN);
   const [isPanning, setIsPanning] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  // Hover readout: the painted tile under the cursor (terrain name + art file). Display only.
+  const [hoverTile, setHoverTile] = useState<{ key: string; label: string; left: number; top: number } | null>(null);
   // Map the percentage control to an actual rendered tile size relative to the game's 34px
   // default. The engine renders at its nearest supported radius; the canvas scale supplies
   // the exact percentage between those discrete sizes.
@@ -170,6 +179,33 @@ export function MapPreviewCanvas({
         fx = null;
       }
     }
+    const pixelFxCanvas = pixelFxCanvasRef.current;
+    let pixelRenderer: THREE.WebGLRenderer | null = null;
+    let pixelScene: THREE.Scene | null = null;
+    let pixelCamera: THREE.OrthographicCamera | null = null;
+    const pixelEmitters: { placement: NonNullable<Mission["elementalFx"]>[number]; emitter: ProceduralElementEmitter }[] = [];
+    const pixelPlacements = engine.elementalFxPlacements.filter((placement) => placement.family === "procedural_pixel" && placement.element);
+    if (pixelFxCanvas && pixelPlacements.length) {
+      try {
+        pixelRenderer = new THREE.WebGLRenderer({ canvas: pixelFxCanvas, alpha: true, antialias: true, premultipliedAlpha: true });
+        pixelRenderer.setClearColor(0x000000, 0);
+        pixelRenderer.outputColorSpace = THREE.SRGBColorSpace;
+        pixelRenderer.toneMapping = THREE.NoToneMapping;
+        pixelScene = new THREE.Scene();
+        pixelScene.add(new THREE.AmbientLight(0xffffff, 1.4));
+        pixelCamera = new THREE.OrthographicCamera(0, 1, 0, 1, 0.1, 1000);
+        pixelCamera.position.z = 100;
+        for (const placement of pixelPlacements) {
+          const emitter = new ProceduralElementEmitter(pixelScene, pixelPreset(placement.element as PixelElement, placement.preset), placement.parameters);
+          pixelEmitters.push({ placement, emitter });
+        }
+      } catch {
+        pixelRenderer?.dispose();
+        pixelRenderer = null;
+        pixelScene = null;
+        pixelCamera = null;
+      }
+    }
     let lastFrame = performance.now();
 
     const draw = () => {
@@ -181,6 +217,9 @@ export function MapPreviewCanvas({
       // rendered at the engine's nearest tile size, then scaled to the exact selected zoom.
       const renderW = Math.ceil(w / previewRenderScale);
       const renderH = Math.ceil(h / previewRenderScale);
+      const now = performance.now();
+      const dt = Math.min(0.08, Math.max(0, (now - lastFrame) / 1000));
+      lastFrame = now;
       renderScaleRef.current = previewRenderScale;
       canvas.width = Math.max(1, Math.floor(renderW * dpr));
       canvas.height = Math.max(1, Math.floor(renderH * dpr));
@@ -233,10 +272,27 @@ export function MapPreviewCanvas({
       const highlightCtx = unitsCtx ?? ctx;
       if (selectedPlacedDecoration) engine.drawDecorationHighlight(highlightCtx, selectedPlacedDecoration.id, selectedPlacedDecoration);
       else if (selectedDecorationId) engine.drawDecorationHighlight(highlightCtx, selectedDecorationId);
+      if (pixelFxCanvas && pixelRenderer && pixelCamera && pixelScene) {
+        pixelFxCanvas.width = Math.max(1, Math.floor(renderW * dpr));
+        pixelFxCanvas.height = Math.max(1, Math.floor(renderH * dpr));
+        pixelFxCanvas.style.width = `${w}px`;
+        pixelFxCanvas.style.height = `${h}px`;
+        pixelFxCanvas.style.display = "block";
+        pixelRenderer.setPixelRatio(dpr);
+        pixelRenderer.setSize(renderW, renderH, false);
+        pixelCamera.left = 0;
+        pixelCamera.right = renderW;
+        pixelCamera.top = renderH;
+        pixelCamera.bottom = 0;
+        pixelCamera.position.set(renderW / 2, -renderH / 2, 100);
+        pixelCamera.updateProjectionMatrix();
+        for (const entry of pixelEmitters) {
+          const anchor = engine.effectAnchor(entry.placement.x, entry.placement.y);
+          entry.emitter.update(dt, anchor.tile, engine.time + now / 1000, anchor.x, anchor.y);
+        }
+        pixelRenderer.render(pixelScene, pixelCamera);
+      } else if (pixelFxCanvas) pixelFxCanvas.style.display = "none";
       if (fx && fxCanvas) {
-        const now = performance.now();
-        const dt = Math.min(0.05, (now - lastFrame) / 1000);
-        lastFrame = now;
         if (fx.hasEffects()) {
           fxCanvas.style.width = `${w}px`;
           fxCanvas.style.height = `${h}px`;
@@ -256,11 +312,11 @@ export function MapPreviewCanvas({
     // draw() call once fx.hasEffects() goes false, and stops itself right after.
     let fxRaf = 0;
     const animateFx = () => {
-      if (!fx?.hasEffects()) return;
+      if (!fx?.hasEffects() && !(pixelRenderer && pixelEmitters.length > 0)) return;
       draw();
       fxRaf = requestAnimationFrame(animateFx);
     };
-    if (fx?.hasEffects()) fxRaf = requestAnimationFrame(animateFx);
+    if (fx?.hasEffects() || (pixelRenderer && pixelEmitters.length > 0)) fxRaf = requestAnimationFrame(animateFx);
     if (!verticalScrollInitializedRef.current) {
       requestAnimationFrame(() => {
         const centeredTop = Math.round(Math.max(0, viewport.scrollHeight - viewport.clientHeight) / 2);
@@ -278,6 +334,8 @@ export function MapPreviewCanvas({
       ro.disconnect();
       if (fxRaf) cancelAnimationFrame(fxRaf);
       fx?.dispose();
+      for (const entry of pixelEmitters) entry.emitter.dispose();
+      pixelRenderer?.dispose();
       const camera = engine.cameraPosition();
       const scale = renderScaleRef.current;
       cameraRef.current = {
@@ -290,7 +348,7 @@ export function MapPreviewCanvas({
       if (engineRef.current === engine) engineRef.current = null;
       if (redrawRef.current === draw) redrawRef.current = null;
     };
-  }, [mission, art, onCellClick, selectedDecorationId, selectedPlacedDecoration, zoom]);
+  }, [mission, art, selectedDecorationId, selectedPlacedDecoration, zoom]);
 
   useEffect(() => {
     const deleteHeldUnit = (event: KeyboardEvent) => {
@@ -381,7 +439,30 @@ export function MapPreviewCanvas({
       setIsPanning(true);
     }, PREVIEW_PAN_HOLD_MS);
   };
+  const updateHoverTile = (event: PointerEvent<HTMLDivElement>) => {
+    const canvas = canvasRef.current;
+    const engine = engineRef.current;
+    const outer = viewportRef.current?.parentElement;
+    if (!canvas || !engine || !outer) return;
+    const rect = canvas.getBoundingClientRect();
+    const scale = renderScaleRef.current;
+    const cell = engine.cellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
+    const terrain = cell ? TERRAIN_BY_CHAR[mission.layout[cell.y]?.[cell.x] ?? ""] : undefined;
+    if (!cell || !terrain) {
+      setHoverTile(null);
+      return;
+    }
+    const variant = mission.tileVariants?.[cell.y * mission.cols + cell.x] ?? 0;
+    const outerRect = outer.getBoundingClientRect();
+    setHoverTile({
+      key: `${cell.x},${cell.y}`,
+      label: `${TERRAIN[terrain].name} — ${tileVariantName(terrain, variant)}`,
+      left: event.clientX - outerRect.left + 14,
+      top: event.clientY - outerRect.top + 16,
+    });
+  };
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    updateHoverTile(event);
     const unitDrag = unitDragRef.current;
     if (unitDrag?.pointerId === event.pointerId) {
       // Same 6px threshold as the pan gesture below: past it, this is a deliberate drag to a
@@ -487,7 +568,7 @@ export function MapPreviewCanvas({
         const rect = canvas.getBoundingClientRect();
         const scale = renderScaleRef.current;
         const cell = engine.cellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
-        if (cell) onCellClick?.(cell.x, cell.y);
+        if (cell) onCellClickRef.current?.(cell.x, cell.y);
       }
     }
     if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
@@ -549,6 +630,7 @@ export function MapPreviewCanvas({
         onPointerUp={endDrag}
         onPointerCancel={(event) => endDrag(event, true)}
         onLostPointerCapture={(event) => endDrag(event, true)}
+        onPointerLeave={() => setHoverTile(null)}
         onContextMenu={(event) => event.preventDefault()}
         onScroll={onViewportScroll}
       >
@@ -557,11 +639,20 @@ export function MapPreviewCanvas({
             <div className="relative">
               <canvas ref={canvasRef} className="block" />
               <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block" style={{ display: "none" }} />
+              <canvas ref={pixelFxCanvasRef} className="pointer-events-none absolute inset-0 block" style={{ display: "none" }} />
               <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block" />
             </div>
           </div>
         </div>
       </div>
+      {hoverTile && (
+        <div
+          className="pointer-events-none absolute z-10 whitespace-nowrap rounded border border-border bg-surface px-2 py-1 text-xs text-fg shadow-md"
+          style={{ left: hoverTile.left, top: hoverTile.top }}
+        >
+          {hoverTile.label}
+        </div>
+      )}
     </div>
   );
 }

@@ -493,8 +493,9 @@ export const HOUSE_DECOR_IDS = new Set(["small-house", "stone-hut", "burning-hou
 export const BIG_HOUSE_DECOR_IDS = new Set<string>();
 
 /** Other house props (drawn at their own size, not the house art scale) that are just as solid:
- * impassable and never faded by fog, same as HOUSE_DECOR_IDS. */
-export const SOLID_HOUSE_DECOR_IDS = new Set(["burning-hamlet"]);
+ * impassable and never faded by fog, same as HOUSE_DECOR_IDS. This also includes the gatehouse
+ * and watchtower: both are solid buildings whose full footprint must stay out of movement range. */
+export const SOLID_HOUSE_DECOR_IDS = new Set(["burning-hamlet", "gatehouse", "watchtower"]);
 
 /** City props that read as a barricade/wall and should block like one — impassable, blocks
  * shots — without repainting the hex underneath to barricade terrain (that would replace
@@ -986,6 +987,40 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     footprintOffsets: FOOTPRINT_TYPE_7,
     init: 6,
   },
+  birolhoLegs: {
+    id: "birolhoLegs",
+    name: "BirolhoLegs",
+    role: "Abominação",
+    hp: 78,
+    atk: 12,
+    mag: 0,
+    def: 4,
+    res: 4,
+    mov: 5,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "BirolhoLegs",
+    size: 4,
+    footprintOffsets: FOOTPRINT_TYPE_7,
+    init: 6,
+  },
+  birolhoLegs2: {
+    id: "birolhoLegs2",
+    name: "BirolhoLegs2",
+    role: "Abominação",
+    hp: 78,
+    atk: 12,
+    mag: 0,
+    def: 4,
+    res: 4,
+    mov: 5,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "BirolhoLegs2",
+    size: 4,
+    footprintOffsets: FOOTPRINT_TYPE_7,
+    init: 6,
+  },
   cultist: {
     id: "cultist",
     name: "Feiticeiro",
@@ -1103,6 +1138,23 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     sprite: "troll",
     size: 4,
     footprintOffsets: FOOTPRINT_TYPE_8,
+    init: 8,
+  },
+  troll2: {
+    id: "troll2",
+    name: "Troll da caverna 2",
+    role: "Bruto",
+    hp: 88,
+    atk: 12,
+    mag: 0,
+    def: 9,
+    res: 3,
+    mov: 5,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "troll2",
+    size: 4,
+    footprintOffsets: FOOTPRINT_TYPE_7,
     init: 8,
   },
   swampBlueCalf: {
@@ -1776,11 +1828,14 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   birolho: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
   birolho2: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
   birolho3: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
+  birolhoLegs: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
+  birolhoLegs2: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
   cultist: { hp: 3, atk: 0, mag: 2, def: 1, res: 2 },
   cultistV2: { hp: 3, atk: 0, mag: 2, def: 1, res: 2 },
   horror: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
   asherah: { hp: 5, atk: 2, mag: 0, def: 2, res: 2 },
   troll: { hp: 5, atk: 2, mag: 0, def: 2, res: 1 },
+  troll2: { hp: 5, atk: 2, mag: 0, def: 2, res: 1 },
   // The troll's growth times 1.4, rounded — see CLASSES.ancientGolem. res can't scale: 40%
   // of 1 rounds back to 1.
   ancientGolem: { hp: 7, atk: 3, mag: 0, def: 3, res: 1 },
@@ -2924,6 +2979,8 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   birolho: 9,
   birolho2: 9,
   birolho3: 9,
+  birolhoLegs: 9,
+  birolhoLegs2: 9,
   swampBlueCalf: 2,
   cultist: 4,
   cultistV2: 4,
@@ -2931,6 +2988,7 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   horror: 10,
   asherah: 12,
   troll: 8,
+  troll2: 8,
 };
 
 export function emberForKill(classId: ClassId): number {
@@ -3648,6 +3706,8 @@ const ENEMY_MAGE_IDS: ReadonlySet<ClassId> = new Set([
   "birolho",
   "birolho2",
   "birolho3",
+  "birolhoLegs",
+  "birolhoLegs2",
 ]);
 
 export function isEnemyMageClass(id: ClassId): boolean {
@@ -3657,7 +3717,7 @@ export function isEnemyMageClass(id: ClassId): boolean {
 /** Choque charges spawned on an enemy mage. Birolho (and Birolho2) get 3; every other mage
  * gets 2. */
 export function shockChargesFor(classId: ClassId): number {
-  if (classId === "birolho" || classId === "birolho2" || classId === "birolho3") return 3;
+  if (classId === "birolho" || classId === "birolho2" || classId === "birolho3" || classId === "birolhoLegs" || classId === "birolhoLegs2") return 3;
   if (isEnemyMageClass(classId)) return 2;
   return 0;
 }

@@ -439,9 +439,9 @@ export function footprintCost(
     if (!inBounds(p.x, p.y, cols, rows)) return null;
     const terr = hexDef(tiles, cols, p.x, p.y, overlay);
     if (!terr.passable) {
-      if (!(terr.id === "barricade" && self.classId === "troll")) return null;
+      if (!(terr.id === "barricade" && (self.classId === "troll" || self.classId === "troll2"))) return null;
     }
-    const costHere = terr.id === "barricade" && self.classId === "troll" ? 2 : terr.moveCost;
+    const costHere = terr.id === "barricade" && (self.classId === "troll" || self.classId === "troll2") ? 2 : terr.moveCost;
     if (costHere > cost) cost = costHere;
     const who = occ.get(key(p.x, p.y));
     if (!who || who.id === self.id) continue;

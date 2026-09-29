@@ -480,15 +480,28 @@ export class EffectsRenderer {
       const anchor = getAnchor(fx.col, fx.row);
       const radius = anchor.tile * fx.radiusTiles;
       const params = EFFECT_PARAMS[fx.kind];
-      emitter.update(dt, anchor.x, anchor.y, radius, params.color, fx.kind === "fire" ? 14 : 6);
+      emitter.update(dt, radius, params.color, fx.kind === "fire" ? 14 : 6);
       for (const p of emitter.particles) {
         const life = p.age / p.life;
         const speed = Math.hypot(p.vx, p.vy) || 1;
         const rot = Math.atan2(-p.vy, p.vx);
         gl.uniform3f(this.uParticle.u_color, p.color[0], p.color[1], p.color[2]);
         gl.uniform1f(this.uParticle.u_alpha, (1 - life) * params.intensity);
-        const stretch = 1 + Math.min(2, speed / 40);
-        this.drawQuad(this.progParticle, this.uParticle, this.effectsFbo.w, this.effectsFbo.h, p.x, p.y, p.size * stretch, p.size, rot);
+        const stretch = 1 + Math.min(2, (speed * radius) / 40);
+        // Particles are simulated relative to their map-anchored emitter. Reconstruct screen
+        // positions from this frame's camera-adjusted anchor so panning cannot leave the ember
+        // trail behind in screen space (or make it appear to fly with the camera).
+        this.drawQuad(
+          this.progParticle,
+          this.uParticle,
+          this.effectsFbo.w,
+          this.effectsFbo.h,
+          anchor.x + p.x * radius,
+          anchor.y + p.y * radius,
+          p.size * radius * stretch,
+          p.size * radius,
+          rot,
+        );
       }
     }
 

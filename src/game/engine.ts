@@ -113,7 +113,6 @@ const SPELL_ELEMENT_FX: Partial<Record<SpellKind, { kind: ElementKind; duration:
   // of the older, plain 2D bolt/spark cue (see emitLightningFx, still called separately for
   // all three in stepSpell) — that older cue is the only lightning FX any of them get now.
   divineWrath: { kind: "holy", duration: 0.9 },
-  burningHands: { kind: "fire", duration: 0.7 },
 };
 
 /** Seconds one step of a walk animation takes. Shared by the position and the
@@ -875,7 +874,7 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
           ? cultistSpellUses(level).magicMissile
           : cls.id === "brigand"
             ? brigandSpellUses(level).longShot
-            : cls.id === "birolho" || cls.id === "birolho2" || cls.id === "birolho3"
+            : cls.id === "birolho" || cls.id === "birolho2" || cls.id === "birolho3" || cls.id === "birolhoLegs" || cls.id === "birolhoLegs2"
               ? birolhoSpellUses(level).magicMissile
               : remainingTier(cls.id, 1, "tier1", level, side, roster, spawn.name),
       tier2:
@@ -883,12 +882,12 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
           ? cultistSpellUses(level).lightning
           : cls.id === "brigand"
             ? brigandSpellUses(level).piercing
-            : cls.id === "birolho" || cls.id === "birolho2" || cls.id === "birolho3"
+            : cls.id === "birolho" || cls.id === "birolho2" || cls.id === "birolho3" || cls.id === "birolhoLegs" || cls.id === "birolhoLegs2"
               ? birolhoSpellUses(level).lightning
               : remainingTier(cls.id, 2, "tier2", level, side, roster, spawn.name),
       tier3: remainingTier(cls.id, 3, "tier3", level, side, roster, spawn.name),
       tier4:
-        cls.id === "birolho" || cls.id === "birolho2" || cls.id === "birolho3"
+        cls.id === "birolho" || cls.id === "birolho2" || cls.id === "birolho3" || cls.id === "birolhoLegs" || cls.id === "birolhoLegs2"
           ? birolhoSpellUses(level).causticVenom
           : remainingTier(cls.id, 4, "tier4", level, side, roster, spawn.name),
       tier5: remainingTier(cls.id, 5, "tier5", level, side, roster, spawn.name),
@@ -3004,7 +3003,7 @@ export class BattleEngine {
         this.emitFireballBurstFx(a.tiles, a.spellKind);
       }
       const elementFx = a.spellKind ? SPELL_ELEMENT_FX[a.spellKind] : undefined;
-      if (elementFx) this.queueElementalFx(elementFx.kind, a.tiles, elementFx.duration);
+      if (elementFx && !(a.spellKind === "burningHands" && syncBurningHandsVfx)) this.queueElementalFx(elementFx.kind, a.tiles, elementFx.duration);
       if (((a.spellKind === "cleave" && !a.cleaveVfxQueued) || a.spellKind === "shoulderSmash") && a.tiles.length > 0) {
         const { a0, a1 } = this.arcSweepAngles({ x: att.x, y: att.y }, a.tiles);
         this.emitBladeFx("arc", att.x, att.y, { a0, a1, warm: a.spellKind === "shoulderSmash" });
@@ -3346,7 +3345,7 @@ export class BattleEngine {
   }
 
   private smashBarricades(unit: Unit): void {
-    if (unit.classId !== "troll" || !unit.alive) return;
+    if ((unit.classId !== "troll" && unit.classId !== "troll2") || !unit.alive) return;
     const fill: TerrainId = this.tiles.includes("nave") ? "nave" : "plains";
     const seen = new Set<string>();
     let n = 0;
@@ -3738,7 +3737,7 @@ export class BattleEngine {
 
   /** Only spellcasting classes use the distinct basic-attack arcane bolt. */
   private isArcaneCaster(unit: Unit): boolean {
-    return unit.classId === "mage" || unit.classId === "voss" || unit.classId === "elementalist" || unit.classId === "warlock" || unit.classId === "cultist" || unit.classId === "cultistV2" || unit.classId === "birolho" || unit.classId === "birolho2" || unit.classId === "birolho3";
+    return unit.classId === "mage" || unit.classId === "voss" || unit.classId === "elementalist" || unit.classId === "warlock" || unit.classId === "cultist" || unit.classId === "cultistV2" || unit.classId === "birolho" || unit.classId === "birolho2" || unit.classId === "birolho3" || unit.classId === "birolhoLegs" || unit.classId === "birolhoLegs2";
   }
 
   /** One glowing bolt per target, hex-to-hex — see MissileFx. */
@@ -4116,6 +4115,14 @@ export class BattleEngine {
     return pub(u, this.isWebCell(u.x, u.y), this.movLeft(u));
   }
 
+  /** Drops the current inspection without touching the selection, so the same unit can be
+   * clicked open again after its status sheet is closed. */
+  dismissInspect(): void {
+    this.inspectedId = null;
+    this.threat = [];
+    this.tip = null;
+  }
+
   private inspect(unit: Unit): void {
     this.inspectedId = unit.id;
     this.threat = computeThreat(unit, this.tiles, this.cols, this.rows, this.units, this.decorOverlay);
@@ -4124,7 +4131,7 @@ export class BattleEngine {
     this.tip = `${unit.name} · HP ${unit.hp}/${unit.maxHp} · Alc ${unit.minRange === max ? max : `${unit.minRange}–${max}`}${
       tile.height ? " · alto +10% atq" : ""
     }${tile.id === "barricade" ? " · barricada bloqueia projéteis" : ""}${
-      unit.classId === "troll" ? " · parte barricadas" : ""
+      unit.classId === "troll" || unit.classId === "troll2" ? " · parte barricadas" : ""
     }${
       unit.shock ? ` · Relâmpago ${diceFormula(unit.shock.dice, unit.shock.faces, unit.shock.bonus)} − RES no turno` : ""
     }${unit.diseased ? " · Doente (−10% em todos os stats)" : ""}${unit.poisoned ? " · Envenenado (1D4 dano por turno)" : ""}`;
@@ -6463,6 +6470,7 @@ export class BattleEngine {
       actor.x = Math.round(actor.drawX);
       actor.y = Math.round(actor.drawY);
       this.tip = `${def.name} · ${target.name} curado(a) da doença.`;
+      this.pushLog(`${actor.name} usou ${potionLabel(kind)} em ${target.name} e curou a doença.`);
       this.emitHolyFx(target.x, target.y, "potion", target.id);
       sfxPlay.ui();
       this.bleedOnItemUse(actor);
@@ -6502,6 +6510,7 @@ export class BattleEngine {
         frame: 0,
       });
       this.tip = `${def.name} · +${restored} usos de magia (${target.name})`;
+      this.pushLog(`${actor.name} usou ${potionLabel(kind)} em ${target.name} e restaurou ${restored} usos de magia.`);
       this.emitHolyFx(target.x, target.y, "potion", target.id);
       sfxPlay.ui();
       this.bleedOnItemUse(actor);
@@ -6534,6 +6543,7 @@ export class BattleEngine {
       frame: 0,
     });
     this.tip = `${potionLabel(kind)} · +${gained} HP (${target.name})`;
+    this.pushLog(`${actor.name} usou ${potionLabel(kind)} em ${target.name} e recuperou ${gained} HP.`);
     this.emitHolyFx(target.x, target.y, "potion", target.id);
     sfxPlay.ui();
     this.bleedOnItemUse(actor);
@@ -7176,7 +7186,7 @@ export class BattleEngine {
     }
 
     // Birolho (and Birolho2) — Relâmpago outranks Caustic Venom outranks Choque outranks Magic Missile.
-    if ((next.classId === "birolho" || next.classId === "birolho2" || next.classId === "birolho3") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.spells.tier4 > 0 || next.shockCharges > 0)) {
+    if ((next.classId === "birolho" || next.classId === "birolho2" || next.classId === "birolho3" || next.classId === "birolhoLegs" || next.classId === "birolhoLegs2") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.spells.tier4 > 0 || next.shockCharges > 0)) {
       if (next.spells.tier2 > 0) {
         let bestBolt: { foe: Unit; from: Point; score: number } | null = null;
         for (const cell of reach.values()) {
@@ -7306,6 +7316,8 @@ export class BattleEngine {
       next.classId !== "birolho" &&
       next.classId !== "birolho2" &&
       next.classId !== "birolho3" &&
+      next.classId !== "birolhoLegs" &&
+      next.classId !== "birolhoLegs2" &&
       this.tryAiShock(next, reach, walkReach, players)
     ) {
       return;
@@ -7510,6 +7522,12 @@ export class BattleEngine {
     }
 
     if (here && here.side === "player" && here.alive && this.phase === "player") {
+      // Clicking a different unit while one is selected only views its status — the selected
+      // unit stays selected, nothing else happens.
+      if (selected && here.id !== selected.id && !this.mission.explore) {
+        this.inspect(here);
+        return;
+      }
       if (selected && this.mode === "awaitAction") {
         if (here.id === selected.id) return;
         this.deselect();
@@ -7550,20 +7568,9 @@ export class BattleEngine {
         this.inspect(here);
         return;
       }
-      if (selected && !selected.acted && (this.mode === "awaitAttack" || this.mode === "awaitAction" || this.mode === "selected")) {
-        if (this.mode === "selected") {
-          const from = this.attackFrom.get(here.id);
-          if (from && (from.x !== selected.x || from.y !== selected.y)) {
-            this.commitMove(selected, from, () => {
-              const u = this.units.find((x) => x.id === selected.id);
-              const f = this.units.find((x) => x.id === here.id);
-              if (u && f && u.alive && f.alive && canHitFrom(u, u, f, this.tiles, this.cols, this.decorOverlay)) {
-                this.commitAttack(u, f, { x: u.x, y: u.y });
-              }
-            });
-            return;
-          }
-        }
+      // A plain click on an enemy only views its status; attacking by click needs the Attack
+      // button's targeting mode (awaitAttack) first.
+      if (selected && !selected.acted && this.mode === "awaitAttack") {
         if (canHitFrom(selected, selected, here, this.tiles, this.cols, this.decorOverlay)) {
           this.commitAttack(selected, here, { x: selected.x, y: selected.y });
           return;
@@ -8120,6 +8127,7 @@ export class BattleEngine {
     cssW: number,
     cssH: number,
     layer: "ground" | "behind" | "front" = "ground",
+    depthRange?: { after: number; through: number },
   ): void {
     const SQRT3 = Math.sqrt(3);
     // Higher-priority near-side scenery paints last, while equal priorities preserve placement
@@ -8140,6 +8148,10 @@ export class BattleEngine {
       }
       const decorLayer = def?.unitLayer ?? (def?.foreground ? "front" : "ground");
       if (!def || !img || decorLayer !== layer) continue;
+      if (depthRange && layer === "ground") {
+        const frontDepth = Math.max(...placedFootprint(p).map(({ dx, dy }) => this.effectAnchor(p.x + dx, p.y + dy).worldY));
+        if (frontDepth <= depthRange.after || frontDepth > depthRange.through) continue;
+      }
       // Props are part of the ground, so they follow the terrain rule: remembered once
       // walked past, hidden while never seen. One explored cell shows the whole prop —
       // a five-hex parapet half-drawn at a fog edge would read as broken art.
@@ -8723,6 +8735,15 @@ export class BattleEngine {
     // Titan V2 is a wide 16:9 creature frame, so give Familiar 3 its natural
     // horizontal footprint rather than squeezing the silhouette into the old square box.
     const familiar3WidthScale = u.classId === "familiar3" ? 1.9 : 1;
+    // BirolhoLegs/BirolhoLegs2 ship on wide padded canvases (906x647 / 1280x705, creature
+    // ~75% of canvas height) instead of birolho3's tight crop — these bring the creature to
+    // birolho3's on-screen height and keep the canvas's own aspect instead of squeezing it.
+    const birolhoLegsHeightScale = u.sprite === "BirolhoLegs" ? 1.32 : u.sprite === "BirolhoLegs2" ? 1.29 : 1;
+    const birolhoLegsWidthScale = u.sprite === "BirolhoLegs" ? 2.17 : u.sprite === "BirolhoLegs2" ? 2.75 : 1;
+    // troll2 (472x360 canvas, figure ~94% of its height): the troll's on-screen height, with
+    // the canvas's own aspect kept instead of squeezed into the tall creature box.
+    const troll2HeightScale = u.sprite === "troll2" ? 1.03 : 1;
+    const troll2WidthScale = u.sprite === "troll2" ? 1.59 : 1;
     const h =
       cell *
       (s >= 4 ? 3.35 : s === 2 ? 1.72 : boss ? 1.44 : 1.42) *
@@ -8736,6 +8757,8 @@ export class BattleEngine {
       cultistV2WalkScale *
       familiar3Scale *
       familiar2WalkScale *
+      birolhoLegsHeightScale *
+      troll2HeightScale *
       kaelFinalAtkScale *
       neeraAtkScale *
       neeraCastScale;
@@ -8755,6 +8778,8 @@ export class BattleEngine {
       cultistV2WalkScale *
       familiar3Scale *
       familiar3WidthScale *
+      birolhoLegsWidthScale *
+      troll2WidthScale *
       kaelFinalAtkScale *
       neeraAtkScale *
       neeraCastScale;
@@ -9442,10 +9467,6 @@ export class BattleEngine {
     // Fog 2's requested stacking is decorations → fog → units. When Three owns decorations,
     // foreground props must skip this top canvas too or they would leap above both fog and units.
     skipFrontDecor?: boolean,
-    // The elemental-FX overlay sits below this canvas. In that composition, ordinary
-    // decorations need to occlude character sprites; explicit "behind" props still draw in
-    // the early pass so characters remain on top of those special cases.
-    groundDecorAboveUnits?: boolean,
   ): void {
     const tile = ZOOM_RADII[this.zoom]!;
     const sqrt3 = Math.sqrt(3);
@@ -9456,10 +9477,8 @@ export class BattleEngine {
     }
 
     if (!skipGroundDecor) {
-      // Ground decorations (trees, houses, rocks...) draw here, above the WebGL elemental FX
-      // canvas but below character sprites — the same relative order as when this used to
-      // happen in renderGround, just moved onto this (topmost) canvas so FX never covers them.
-      if (!groundDecorAboveUnits) this.drawDecorations(ctx, tile, cssW, cssH);
+      // Ordinary ground props are interleaved with characters by row depth below. Explicit
+      // rear props stay under every character; foreground props remain the final pass.
       // A rear parapet must remain visible over the ground and tactical highlights, while
       // character sprites still pass in front of it.
       this.drawDecorations(ctx, tile, cssW, cssH, "behind");
@@ -9524,13 +9543,19 @@ export class BattleEngine {
     const shadowDirX = 0.6;
     const shadowDirY = 0.8;
     const shadowOffset = cell * 0.16;
-    const sorted = [...this.units].sort((a, b) => a.drawY - b.drawY || a.drawX - b.drawX);
+    const sorted = [...this.units].sort((a, b) => this.unitAnchor(a).worldY - this.unitAnchor(b).worldY || a.drawX - b.drawX);
+    let lastGroundDecorDepth = -Infinity;
     for (const u of sorted) {
       if (u.fade <= 0) continue;
       // Out of sight, off the board. Unlike terrain there is no remembered version of a
       // body: a unit the party cannot see is simply not drawn, because a ghost left at
       // the last place it was seen would be read as where it is now.
       if (this.unitHidden(u)) continue;
+      const unitDepth = this.unitAnchor(u).worldY;
+      if (!skipGroundDecor) {
+        this.drawDecorations(ctx, tile, cssW, cssH, "ground", { after: lastGroundDecorDepth, through: unitDepth });
+        lastGroundDecorDepth = unitDepth;
+      }
       const s = unitSize(u);
       const boss = isBossClass(u.classId);
       const { cx: px, cy: py } = this.unitPixel(u);
@@ -10284,11 +10309,9 @@ export class BattleEngine {
     this.drawHolyFx(ctx, tile);
     this.drawBladeFx(ctx, tile);
 
-    // Foreground parapets are the nearest scenery: no unit, HP bar, projectile, or spell
-    // effect that is physically behind their artwork may show through.
-    // In the upper FX composition, ordinary props are deliberately painter-last so their art
-    // occludes the characters. The explicit "behind" layer above remains the opt-in exception.
-    if (groundDecorAboveUnits && !skipGroundDecor) this.drawDecorations(ctx, tile, cssW, cssH);
+    // Finish the ordinary ground props after the last character row, so nearer characters
+    // remain in front while props closer to the camera hide characters behind them.
+    if (!skipGroundDecor) this.drawDecorations(ctx, tile, cssW, cssH, "ground", { after: lastGroundDecorDepth, through: Infinity });
     if (!skipFrontDecor) this.drawDecorations(ctx, tile, cssW, cssH, "front");
 
     if (shake) ctx.restore();
@@ -10994,18 +11017,6 @@ export class BattleEngine {
     ctx.beginPath();
     ctx.arc(cx, chestY, bloomR, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.lineCap = "round";
-    for (let i = 0; i < fx.rays.length; i++) {
-      const ang = fx.rays[i]! + Math.sin(this.time * 2.4 + i) * 0.04;
-      const len = tile * (medium ? 1.15 : disease ? 0.95 : 0.62) * (0.75 + (i % 3) * 0.12);
-      ctx.strokeStyle = `hsla(${h}, ${s}%, ${disease ? 78 : 88}%, ${(medium ? 0.55 : 0.32) * fade})`;
-      ctx.lineWidth = Math.max(1.2, tile * (medium ? 0.045 : 0.028));
-      ctx.beginPath();
-      ctx.moveTo(cx, chestY);
-      ctx.lineTo(cx + Math.cos(ang) * len, chestY + Math.sin(ang) * len * 0.62);
-      ctx.stroke();
-    }
 
     const groundR = tile * (medium ? 0.85 : 0.55) * (0.7 + k * 0.35);
     const ground = ctx.createRadialGradient(cx, cy, 0, cx, cy, groundR);
