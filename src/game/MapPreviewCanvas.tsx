@@ -279,7 +279,10 @@ export function MapPreviewCanvas({
           fxCanvas.style.height = `${h}px`;
           fx.resize(renderW, renderH, dpr);
           fxCanvas.style.display = "block";
-          fx.render(canvas, dt, (col, row) => engine.effectAnchor(col, row));
+          // When a procedural-pixel placement is present, ThreeBattleRenderer owns the visible
+          // ground canvas. Composite regular 2D FX over that rendered scene; using the base
+          // Canvas2D map here would cover the pixel layer with a stale copy of the map.
+          fx.render(pixelRenderer && pixelFxCanvas ? pixelFxCanvas : canvas, dt, (col, row) => engine.effectAnchor(col, row));
         } else {
           fxCanvas.style.display = "none";
         }
