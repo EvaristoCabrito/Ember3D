@@ -8570,6 +8570,9 @@ export class BattleEngine {
       const castFrames = this.art.casts[u.sprite] ?? this.art.attacks[u.sprite];
       if (!castFrames || castFrames.length < 3) return null;
       const n = castFrames.length;
+      // Familiar Titã goes back to his idle loop once his cast sheet has played, instead of
+      // holding its last frame while the spell flies.
+      if (a.held && u.sprite === "familiar3" && this.heldDone(a)) return null;
       if (a.held) return this.heldFrame(a, n);
       if (n === 4) {
         if (animationT < 0.12) return 0;
@@ -9527,6 +9530,9 @@ export class BattleEngine {
     // Fog 2's requested stacking is decorations → fog → units. When Three owns decorations,
     // foreground props must skip this top canvas too or they would leap above both fog and units.
     skipFrontDecor?: boolean,
+    // ThreeBattleRenderer draws summoning portals as a ground layer beneath units (see its
+    // syncPortalFx), so this overlay — which sits above Three's units — skips them.
+    skipPortalFx?: boolean,
   ): void {
     const tile = ZOOM_RADII[this.zoom]!;
     const sqrt3 = Math.sqrt(3);
@@ -9543,7 +9549,7 @@ export class BattleEngine {
       // character sprites still pass in front of it.
       this.drawDecorations(ctx, tile, cssW, cssH, "behind");
     }
-    this.drawPortalFx(ctx, tile);
+    if (!skipPortalFx) this.drawPortalFx(ctx, tile);
 
     // The mouse-selection hex outline is drawn here, on this (topmost) canvas rather than
     // in renderGround, so it always reads above the WebGL water FX layer stacked in between
@@ -10493,6 +10499,41 @@ export class BattleEngine {
    * familiar visibly steps out of it as its own fade-in ramps up (see castSummonFamiliar /
    * the `else if (u.alive && u.fade < 1)` tick branch) instead of just popping in next to an
    * unrelated puff of particles. */
+  /** Whether any summoning portal is open — see ThreeBattleRenderer.syncPortalFx. */
+  portalFxActive(): boolean {
+    return this.portalFxLive > 0;
+  }
+
+  /** Paints the open portals (screen-space, same as the 2D overlay) onto `ctx`. Used by
+   * ThreeBattleRenderer to show them as a ground layer beneath units. */
+  drawPortalFxLayer(ctx: any): void {
+    this.drawPortalFx(ctx, ZOOM_RADII[this.zoom]!);
+  }
+
+  /** Screen-space box around every open portal (circle, glow, rising motes, light column),
+   * so ThreeBattleRenderer only repaints/uploads that area instead of the whole viewport. */
+  portalFxBounds(): { x0: number; y0: number; x1: number; y1: number } | null {
+    if (!this.portalFxLive) return null;
+    const tile = ZOOM_RADII[this.zoom]!;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of this.portalFx) {
+      if (!p.live) continue;
+      let cx: number, cy: number, maxR = tile * 0.95;
+      if (p.body) {
+        const cells = footprint({ x: p.x, y: p.y, size: 4, footprintOffsets: p.body }).map((c) => this.hexCenter(c.x, c.y));
+        cx = cells.reduce((s, c) => s + c.cx, 0) / cells.length;
+        cy = cells.reduce((s, c) => s + c.cy, 0) / cells.length;
+        maxR = Math.max(maxR, Math.max(...cells.map((c) => Math.abs(c.cx - cx))) + tile * 0.95);
+      } else ({ cx, cy } = this.hexCenter(p.x, p.y));
+      const big = maxR / (tile * 0.95);
+      const rx = maxR * 1.3 + tile * 0.4;
+      const up = Math.max(maxR * 0.8, tile * (1.6 + big * 0.9), tile * (0.9 + big * 0.4)) + tile * 0.4;
+      x0 = Math.min(x0, cx - rx); x1 = Math.max(x1, cx + rx);
+      y0 = Math.min(y0, cy - up); y1 = Math.max(y1, cy + maxR * 0.8 + tile * 0.4);
+    }
+    return x1 > x0 ? { x0, y0, x1, y1 } : null;
+  }
+
   private drawPortalFx(ctx: any, tile: number): void {
     if (!this.portalFxLive) return;
     const ease = (x: number) => 1 - (1 - Math.min(1, Math.max(0, x))) ** 3;

@@ -289,6 +289,7 @@ export function BattleCanvas({
           !!rendererThree && !drawDecorationsOverFx,
           !!rendererThree,
           !!rendererThree && !drawDecorationsOverFx,
+          !!rendererThree,
         );
       }
       const hud = engine.getHud();

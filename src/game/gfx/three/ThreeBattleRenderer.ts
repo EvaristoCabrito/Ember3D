@@ -638,6 +638,12 @@ export class ThreeBattleRenderer {
   // entirely and just uses each layer's flat fill alpha (see boardOverlayLayers' own comment on
   // why that's the part that matters, not the canvas-only shadowBlur halo).
   private overlayGroup = new THREE.Group();
+  /** Summoning portals (BattleEngine.drawPortalFxLayer), painted each frame they're open onto
+   * a portal-sized canvas (see portalFxBounds) and shown as a ground layer at z=0.55 — above the board overlay,
+   * below decorations and units — so a familiar stepping out stands in front of its portal. */
+  private portalCanvas: HTMLCanvasElement | null = null;
+  private portalTexture: THREE.CanvasTexture | null = null;
+  private portalMesh: THREE.Mesh | null = null;
   /** Dreaming Web's floor patch (engine.webZones) — the webfloor photo on each covered hex,
    * same as Canvas2D renderGround draws it (which this renderer replaces). Pooled meshes. */
   private webGroup = new THREE.Group();
@@ -1751,6 +1757,50 @@ export class ThreeBattleRenderer {
     for (; glowIdx < this.overlayGlowPool.length; glowIdx++) this.overlayGlowPool[glowIdx]!.visible = false;
   }
 
+  private syncPortalFx(): void {
+    const engine = this.engine;
+    const b = engine.portalFxBounds();
+    if (!b) {
+      if (this.portalMesh) this.portalMesh.visible = false;
+      return;
+    }
+    if (!this.portalCanvas) {
+      this.portalCanvas = document.createElement("canvas");
+      this.portalTexture = new THREE.CanvasTexture(this.portalCanvas);
+      this.portalTexture.colorSpace = THREE.SRGBColorSpace;
+      // The overlay drew this with "lighter" (additive), so it adds light here too.
+      const mat = new THREE.MeshBasicMaterial({ map: this.portalTexture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+      this.portalMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+      this.scene.add(this.portalMesh);
+    }
+    // Only the portal's own box is repainted and uploaded each frame — never the whole viewport.
+    const bw = Math.max(1, Math.ceil(b.x1 - b.x0));
+    const bh = Math.max(1, Math.ceil(b.y1 - b.y0));
+    const canvas = this.portalCanvas;
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
+      // A resized canvas needs a fresh GPU texture of the new size.
+      this.portalTexture!.dispose();
+      this.portalTexture = new THREE.CanvasTexture(canvas);
+      this.portalTexture.colorSpace = THREE.SRGBColorSpace;
+      const mat = this.portalMesh!.material as THREE.MeshBasicMaterial;
+      mat.map = this.portalTexture;
+      mat.needsUpdate = true;
+    }
+    const ctx = canvas.getContext("2d")!;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, bw, bh);
+    ctx.setTransform(1, 0, 0, 1, -b.x0, -b.y0);
+    engine.drawPortalFxLayer(ctx);
+    this.portalTexture!.needsUpdate = true;
+    // Screen pixel (sx, sy) sits at world (camX + sx, -camY - sy) — see render()'s camera line.
+    const mesh = this.portalMesh!;
+    mesh.visible = true;
+    mesh.scale.set(bw, bh, 1);
+    mesh.position.set(engine.camX + b.x0 + bw / 2, -engine.camY - b.y0 - bh / 2, 0.55);
+  }
+
   /** Call once per frame in place of BattleEngine.renderGround — updateCameraLayout runs the
    * exact same camera/visibility bookkeeping renderGround always did (see that method's own
    * comment), just without drawing through the Canvas2D shim afterward. */
@@ -1773,6 +1823,7 @@ export class ThreeBattleRenderer {
     this.syncSpriteExposure();
     this.syncDecorVisibility();
     this.syncOverlay(tile);
+    this.syncPortalFx();
     this.syncUnits(tile);
     this.syncSky();
     this.applyDevGfx();
