@@ -91,7 +91,7 @@ export function portraitFor(sprite: SpriteId): { src: string; framed: boolean; p
 }
 
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
-const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "troll2", "morvenian-wolf", "mordavian-wolf", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
+const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "troll2", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
 
 const LOAD_POOL = 8;
 let loadActive = 0;
@@ -202,7 +202,7 @@ export async function loadGameArt(): Promise<GameArt> {
   const attacks: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   await Promise.all(
     SPRITES.map(async (id) => {
-      const n = id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "ancient-golem" || id === "familiar4" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
+      const n = id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
       const cacheBust = id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : "";
       sprites[id] = await Promise.all(
         Array.from({ length: n }, (_, i) =>
@@ -252,6 +252,7 @@ export async function loadGameArt(): Promise<GameArt> {
     BirolhoLegs2: { n: 32, bust: "" },
     troll2: { n: 32, bust: "" },
     familiar4: { n: 32, bust: "" },
+    "mordavian-wolf-final": { n: 32, bust: "" },
     punisher: { n: 4, bust: "" },
     // The Butcher — real 36-frame axe swing, a distinct unit/sprite from punisher/Carrasco
     // above (see WALK_FRAMES.theButcher below for the matching walk cut).
@@ -278,7 +279,9 @@ export async function loadGameArt(): Promise<GameArt> {
     birolho: { n: 3, bust: "" },
     birolho2: { n: 3, bust: "" },
     birolho3: { n: 18, bust: "" },
-    BirolhoLegs: { n: 32, bust: "" },
+    // 32 authored cast frames + 12 closing frames (the unfurl played in reverse) so he folds
+    // his arms back in after the charge, the same way his ATT ends.
+    BirolhoLegs: { n: 44, bust: "" },
     BirolhoLegs2: { n: 32, bust: "" },
     // Neera's supplied Special cut plays for spell-type archer skills; physical attacks
     // stay on her dedicated ATT cut above.
@@ -396,6 +399,9 @@ export async function loadGameArt(): Promise<GameArt> {
     troll2: { n: 32, bust: "" },
     // Right-facing dash (the video has no walk loop); the renderer mirrors it for leftward travel.
     familiar4: { n: 32, bust: "" },
+    // Mordavian Wolf Final: right-facing walk (mirrored from the Walk Left footage); the
+    // renderer mirrors it back for leftward travel.
+    "mordavian-wolf-final": { n: 32, bust: "" },
     // Right-facing cut; see the dedicated walksLeft.theButcher load below for its own
     // authored left-facing cut (not the CSS mirror every other sprite here falls back to).
     theButcher: { n: 36, bust: "?v=the-butcher-001" },
@@ -516,6 +522,8 @@ export async function loadGameArt(): Promise<GameArt> {
   // for the other direction.
   const WALK_UP_DOWN_FRAMES: Partial<Record<SpriteId, { up?: number; down?: number; bust: string }>> = {
     BirolhoLegs: { up: 32, down: 32, bust: "" },
+    "mordavian-wolf-final": { up: 32, down: 32, bust: "" },
+    troll2: { up: 32, down: 32, bust: "" },
   };
   const walksUp: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   const walksDown: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
@@ -524,6 +532,19 @@ export async function loadGameArt(): Promise<GameArt> {
       const { up, down, bust } = WALK_UP_DOWN_FRAMES[id]!;
       if (up) walksUp[id] = await Promise.all(Array.from({ length: up }, (_, i) => loadImage(spriteFrameSrc(id, `move-up-${i + 1}`, bust))));
       if (down) walksDown[id] = await Promise.all(Array.from({ length: down }, (_, i) => loadImage(spriteFrameSrc(id, `move-down-${i + 1}`, bust))));
+    }),
+  );
+  // Cosmetic alternate walk (see GameArt.walks2): its own right- and left-facing cuts.
+  const WALK2_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
+    familiar3: { n: 36, bust: "" },
+  };
+  const walks2: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
+  const walksLeft2: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
+  await Promise.all(
+    (Object.keys(WALK2_FRAMES) as SpriteId[]).map(async (id) => {
+      const { n, bust } = WALK2_FRAMES[id]!;
+      walks2[id] = await Promise.all(Array.from({ length: n }, (_, i) => loadImage(spriteFrameSrc(id, `move2-${i + 1}`, bust))));
+      walksLeft2[id] = await Promise.all(Array.from({ length: n }, (_, i) => loadImage(spriteFrameSrc(id, `move2-left-${i + 1}`, bust))));
     }),
   );
   const walkDirs: GameArt["walkDirs"] = {
@@ -556,5 +577,5 @@ export async function loadGameArt(): Promise<GameArt> {
     // priority over them while moving (see the render loop's img lookup), leaving that
     // animation dead code.
   };
-  return { tiles, decorations, sprites, attacks, attacks2, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, walksUp, walksDown, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
+  return { tiles, decorations, sprites, attacks, attacks2, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, walksUp, walksDown, walks2, walksLeft2, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
 }

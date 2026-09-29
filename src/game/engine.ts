@@ -2099,6 +2099,7 @@ export class BattleEngine {
         u.sprite !== "familiar3" &&
         u.sprite !== "morvenian-wolf" &&
         u.sprite !== "mordavian-wolf" &&
+        u.sprite !== "mordavian-wolf-final" &&
         u.sprite !== "neera")
     )
       return;
@@ -8444,6 +8445,19 @@ export class BattleEngine {
     return Math.floor(steps * framesPerHex) % n;
   }
 
+  /** Whether this move plays the cosmetic alternate walk (see GameArt.walks2). Decided once
+   * per queued move and remembered for it, so the cycle never flips mid-walk. Visual only —
+   * Math.random, never the seeded battle rng, so it can't change any gameplay roll. */
+  private readonly walkAlt = new WeakMap<object, boolean>();
+  private walkAltFor(move: object): boolean {
+    let alt = this.walkAlt.get(move);
+    if (alt === undefined) {
+      alt = Math.random() < 1 / 3;
+      this.walkAlt.set(move, alt);
+    }
+    return alt;
+  }
+
   private idleFrame(u: Unit, n: number): number {
     if (n <= 1) return 0;
     const moving = this.active?.type === "move" && this.active.id === u.id;
@@ -8680,7 +8694,11 @@ export class BattleEngine {
     // pool answers which facing, walk only, per direct report. Cultist V2's own walk
     // "backwards" complaint has a different cause: see dirActionWalk below.
     const useWalkLeft = u.sprite === "lancer" ? faceRight : !faceRight;
-    const sideWalkPool = useWalkLeft ? (this.art.walksLeft[u.sprite] ?? this.art.walks[u.sprite]) : this.art.walks[u.sprite];
+    // Cosmetic alternate walk (GameArt.walks2), picked once per move, about one move in three.
+    const altWalk = moving && !!this.art.walks2[u.sprite] && this.walkAltFor(this.active!);
+    const sideWalkPool = altWalk
+      ? (useWalkLeft ? (this.art.walksLeft2[u.sprite] ?? this.art.walks2[u.sprite]) : this.art.walks2[u.sprite])
+      : useWalkLeft ? (this.art.walksLeft[u.sprite] ?? this.art.walks[u.sprite]) : this.art.walks[u.sprite];
     // Moving up the map (walkPose "back") or down it ("front") plays that direction's own
     // cycle for sprites that have one (GameArt.walksUp/walksDown); everyone else keeps the
     // side walk in every direction.
@@ -8776,6 +8794,9 @@ export class BattleEngine {
     // height, with the wide canvas's own aspect kept.
     const familiar4HeightScale = u.sprite === "familiar4" ? 0.97 : 1;
     const familiar4WidthScale = u.sprite === "familiar4" ? 2.61 : 1;
+    // Mordavian Wolf Final: same 3:2 sheet and figure fill as the old wolf, but drawn at the
+    // sheet's own aspect instead of squeezed into the size-2 box (1.5 / 1.0756).
+    const wolfFinalWidthScale = u.sprite === "mordavian-wolf-final" ? 1.395 : 1;
     const h =
       cell *
       (s >= 4 ? 3.35 : s === 2 ? 1.72 : boss ? 1.44 : 1.42) *
@@ -8814,6 +8835,7 @@ export class BattleEngine {
       birolhoLegsWidthScale *
       troll2WidthScale *
       familiar4WidthScale *
+      wolfFinalWidthScale *
       kaelFinalAtkScale *
       neeraAtkScale *
       neeraCastScale;

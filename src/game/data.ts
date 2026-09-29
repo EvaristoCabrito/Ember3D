@@ -896,6 +896,23 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     footprintOffsets: FOOTPRINT_TYPE_2,
     init: 7,
   },
+  mordavianWolfFinal: {
+    id: "mordavianWolfFinal",
+    name: "Mordavian Wolf Final",
+    role: "Fera",
+    hp: 44,
+    atk: 13,
+    mag: 0,
+    def: 3,
+    res: 2,
+    mov: 6,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "mordavian-wolf-final",
+    size: 2,
+    footprintOffsets: FOOTPRINT_TYPE_2,
+    init: 7,
+  },
   // Stats are a first pass — placeholder numbers to get it on the board, to be balanced later.
   punisher: {
     id: "punisher",
@@ -1840,6 +1857,7 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   wardog: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   morvenianWolf: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   mordavianWolf: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
+  mordavianWolfFinal: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   punisher: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   // Boss-tier growth (matches sandoval below) — high stats scale up like an elite's, not
   // a rank-and-file enemy's, if he's ever spawned at a later mission index.
@@ -2994,6 +3012,7 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   wardog: 2,
   morvenianWolf: 3,
   mordavianWolf: 5,
+  mordavianWolfFinal: 5,
   punisher: 5,
   // Matches CLASSES.theButcher's stat boost — a tougher kill is worth more.
   theButcher: 9,
