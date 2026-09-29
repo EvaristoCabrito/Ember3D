@@ -180,7 +180,7 @@ export type SpellKind =
   | "shieldBash"
   | "burningHands"
   | "createFoodAndWater";
-export type ScreenId = "boot" | "title" | "campaign" | "mapChoice" | "vauIntro" | "worldMap" | "overworldMap" | "briefing" | "cutscene" | "epilogue" | "battle" | "victory" | "defeat" | "inn" | "testMenu" | "mapEditor" | "devControls";
+export type ScreenId = "boot" | "title" | "campaign" | "mapChoice" | "vauIntro" | "wispForestIntro" | "innArrivalIntro" | "worldMap" | "overworldMap" | "briefing" | "cutscene" | "epilogue" | "battle" | "victory" | "defeat" | "inn" | "testMenu" | "mapEditor" | "devControls";
 export type Phase = "player" | "enemy";
 export type InputMode = "idle" | "selected" | "awaitAction" | "awaitAttack" | "awaitOffHand" | "awaitSpell" | "awaitPotion" | "locked";
 
@@ -1179,6 +1179,10 @@ export interface SaveData {
   /** The movement/hunger explainer, shown once the first time the RPG overworld map
    * screen opens for this party. Absent reads as not yet seen. */
   seenOverworldIntro?: boolean;
+  /** Wisp Forest's entrance cinematic has played for this campaign. */
+  seenWispForestIntro?: boolean;
+  /** The party's first arrival at the Inn cinematic has played for this campaign. */
+  seenInnArrivalIntro?: boolean;
   /** The campaign's chosen map/travel style. Test mode never persists this choice. */
   mapMode?: "classic" | "rpg";
   /** RPG map only: current hex position and day count. Unused by the classic map. */

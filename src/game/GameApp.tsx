@@ -745,6 +745,7 @@ export function GameApp() {
   const [art, setArt] = useState<GameArt | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [missionId, setMissionId] = useState<string | null>(null);
+  const [wispForestNextMissionId, setWispForestNextMissionId] = useState<string | null>(null);
   const [engine, setEngine] = useState<BattleEngine | null>(null);
   /** Which Inn menu an NPC in the walkable Inn opened, while it's showing — leaving it goes
    * back to the walkable Inn (same engine, same spot) instead of out to the map. */
@@ -1250,9 +1251,44 @@ export function GameApp() {
 
   const openMission = (id: string) => {
     bootAudio();
+    const wispForest = campaignLocations.find((location) => location.id === "wisp-forest");
+    const enteringWispForest = Boolean(
+      wispForest &&
+        !testMode &&
+        !save.seenWispForestIntro &&
+        wispForest.missionIds.includes(id) &&
+        !wispForest.missionIds.some((mission) => save.completed.includes(mission)),
+    );
+    if (enteringWispForest) {
+      setWispForestNextMissionId(id);
+      setScreen("wispForestIntro");
+      return;
+    }
+    setWispForestNextMissionId(null);
     setCustomMission(null);
     setMissionId(id);
     setScreen("briefing");
+  };
+
+  const finishWispForestIntro = () => {
+    const nextMissionId = wispForestNextMissionId;
+    setWispForestNextMissionId(null);
+    persistCurrent({ ...save, seenWispForestIntro: true, pendingMission: null, battle: null });
+    if (!nextMissionId) {
+      setScreen("overworldMap");
+      return;
+    }
+    setCustomMission(null);
+    setMissionId(nextMissionId);
+    setScreen("briefing");
+  };
+
+  const finishInnArrivalIntro = () => {
+    const completed = save.completed.includes("estalagem") ? save.completed : [...save.completed, "estalagem"];
+    if (!testMode) {
+      persistCurrent({ ...save, completed, seenInnArrivalIntro: true, pendingMission: null, battle: null });
+    }
+    setScreen("inn");
   };
 
   const beginMission = () => {
@@ -1267,13 +1303,17 @@ export function GameApp() {
     // Only the actual inn opens the InnScreen. A user-authored map may retain an old hub flag.
     // It must still launch its own battle when selected from the campaign.
     if (missionId === "estalagem") {
-      // The walkable Inn; Brue's tavern and Vargan's smith open from talking to them. Its
-      // visit is recorded on the way out (see onQuit): startBattle saves its own copy of the
-      // record right here, which would drop a completion written just before it.
       if (missionById(missionId)?.explore) {
         startBattle(missionId);
         return;
       }
+      if (!testMode && !save.seenInnArrivalIntro) {
+        setScreen("innArrivalIntro");
+        return;
+      }
+      // The walkable Inn; Brue's tavern and Vargan's smith open from talking to them. Its
+      // visit is recorded on the way out (see onQuit): startBattle saves its own copy of the
+      // record right here, which would drop a completion written just before it.
       const completed = save.completed.includes(missionId) ? save.completed : [...save.completed, missionId];
       if (!testMode) persistCurrent({ ...save, completed, pendingMission: null, battle: null });
       setScreen("inn");
@@ -1287,7 +1327,7 @@ export function GameApp() {
       stopMusic();
       return;
     }
-    if (screen === "boot" || screen === "cutscene" || screen === "epilogue" || screen === "vauIntro") {
+    if (screen === "boot" || screen === "cutscene" || screen === "epilogue" || screen === "vauIntro" || screen === "wispForestIntro" || screen === "innArrivalIntro") {
       stopMusic();
       return;
     }
@@ -1659,6 +1699,14 @@ export function GameApp() {
             setScreen("briefing");
           }}
         />
+      )}
+
+      {screen === "wispForestIntro" && (
+        <CutsceneScreen src="/game/wisp-entrance.mp4" onSkip={finishWispForestIntro} />
+      )}
+
+      {screen === "innArrivalIntro" && (
+        <CutsceneScreen src="/game/inn-arrival.mp4" onSkip={finishInnArrivalIntro} />
       )}
 
       {screen === "mapEditor" && art && (
