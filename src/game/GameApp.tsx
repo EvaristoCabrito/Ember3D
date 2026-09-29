@@ -4400,7 +4400,15 @@ function MapEditorScreen({
   };
   const toggleElementalFx = (x: number, y: number) => {
     const list = draft.elementalFx ?? [];
-    const hit = list.find((p) => p.x === x && p.y === y);
+    // A tile can hold several independent FX. Toggle only the selected family and element so
+    // placing the 2D elemental layer does not remove a pixel flipbook on the same hex (or vice versa).
+    const hit = list.find((p) =>
+      p.x === x && p.y === y && (
+        fxFamily === "procedural_pixel"
+          ? p.family === "procedural_pixel" && p.element === pixelFxBrush
+          : p.family !== "procedural_pixel" && p.kind === fxBrush
+      )
+    );
     let next: MapDraft;
     if (hit) {
       setNote(`${hit.family === "procedural_pixel" ? hit.element : ELEMENT_LABELS[hit.kind]} FX removido de ${x},${y}.`);
@@ -5870,7 +5878,8 @@ function MapEditorScreen({
           <div className="flex flex-col gap-2 border border-border rounded-md p-2 bg-bg/40">
             <p className="text-xs text-muted flex-1 min-w-[12rem]">
               Efeito permanente do mapa (WebGL) — fogo de lava, brilho de gelo, runa sagrada... Clique numa casa na
-              prévia abaixo pra colocar o elemento escolhido; clique de novo na mesma casa pra remover. Toca sozinho
+              prévia abaixo pra colocar o elemento escolhido; clique de novo pra remover só esse FX. Efeitos regulares
+              2D e pixel podem coexistir na mesma casa. Toca sozinho
               assim que a batalha carrega, e continua a batalha inteira.
             </p>
             <label className="flex flex-col gap-1 text-xs text-muted sm:max-w-xs"><span>Família de FX</span><select aria-label="Família de FX" value={fxFamily} onChange={(event) => setFxFamily(event.target.value as "regular" | "procedural_pixel")} className="min-h-9 rounded border border-border bg-bg px-2 text-sm text-fg"><option value="regular">Regular</option><option value="procedural_pixel">Procedural Pixel</option></select></label>
