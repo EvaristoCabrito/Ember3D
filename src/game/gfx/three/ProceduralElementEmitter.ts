@@ -29,7 +29,7 @@ const pixelEntries: PixelElementPreset[] = [
   { id:"procedural_pixel_shadow",family:"procedural_pixel",element:"shadow",version:1,label:"Procedural Pixel Shadow",color:0x9b66cb,light:0.55,radius:1.8,flicker:0.2,motion:"shadow" },
   { id:"procedural_pixel_ember",family:"procedural_pixel",element:"ember",version:1,label:"Procedural Pixel Ember",color:0xf23943,light:0.9,radius:1.65,flicker:0.3,motion:"ember" },
 ];
-const pixelV2Entries = pixelEntries.filter((entry) => entry.element !== "fire").map((entry): PixelElementPreset => ({
+const pixelV2Entries = pixelEntries.map((entry): PixelElementPreset => ({
   ...entry, id:`procedural_pixel_v2_${entry.element}`, version:2, label:`${entry.label} V2`,
 }));
 
@@ -62,6 +62,7 @@ const PIXEL_DEFAULTS: Record<PixelElement, Partial<PixelElementSettings>> = {
 const PIXEL_V2_DEFAULTS: Partial<Record<PixelElement, Partial<PixelElementSettings>>> = {
   // Holy V2 is a compact, steady light column rooted at its halo seal; it should not billow like smoke.
   holy: { particleCount:12, lifetime:0.72, velocity:0.16, verticalForce:0.02, spread:0.08, drag:1.4, turbulence:0.02, emissive:1.05, opacity:0.7, animationSpeed:0.8 },
+  fire: { particleCount:12, lifetime:0.8, velocity:0.18, verticalForce:0.02, spread:0.08, drag:1.35, turbulence:0.03, emissive:1.15, opacity:0.9, animationSpeed:0.95 },
 };
 export const pixelDefaults = (element: PixelElement, version: 1 | 2 = 1): PixelElementSettings => ({ ...DEFAULT_PIXEL_SETTINGS, ...PIXEL_DEFAULTS[element], ...(version === 2 ? PIXEL_V2_DEFAULTS[element] : {}) });
 
@@ -73,6 +74,7 @@ export const ELEMENT_FX_REGISTRY = Object.freeze([
 ]);
 
 const ELEMENT_TINTS: Record<FlipbookElement, readonly [number, number, number]> = {
+  fire: [1, 0.84, 0.66],
   frost: [0.84, 0.96, 1],
   lightning: [0.84, 0.92, 1],
   poison: [0.9, 1, 0.82],
@@ -110,7 +112,7 @@ export class ProceduralElementEmitter {
     this.seed = this.settings.seed >>> 0 || 1;
     this.group.scale.setScalar(this.settings.scale);
     this.scene.add(this.group);
-    if (preset.element === "fire") {
+    if (preset.element === "fire" && preset.version === 1) {
       void loadFireFlipbook().then((texture) => {
         if (this.disposed) { texture.dispose(); return; }
         this.fireTexture = texture;
@@ -164,7 +166,7 @@ export class ProceduralElementEmitter {
 
   setSettings(settings:Partial<PixelElementSettings>):void {
     this.settings = { ...this.settings, ...settings };
-    if (this.preset.element === "fire" && this.fireEmitter) {
+    if (this.preset.element === "fire" && this.preset.version === 1 && this.fireEmitter) {
       const nextSeed = this.settings.seed >>> 0 || 1;
       const nextFireSettings = this.toFireSettings();
       if (this.fireSettings?.particleCount !== nextFireSettings.particleCount || this.fireSettings?.lifetimeScale !== nextFireSettings.lifetimeScale || nextSeed !== this.seed) {
@@ -187,7 +189,7 @@ export class ProceduralElementEmitter {
     this.active=active;
     this.group.position.set(x,-y,0);
     this.group.scale.setScalar(Math.max(1,tile)*s.scale);
-    if (this.preset.element === "fire") {
+    if (this.preset.element === "fire" && this.preset.version === 1) {
       this.fireDt += Math.max(0,Math.min(dt,0.08));
       if (this.fireEmitter && this.fireSettings) {
         this.fireEmitter.mesh.position.set(0,0,0.035);
@@ -299,6 +301,7 @@ export class ProceduralElementEmitter {
    * several independent motes. The complete main frames no longer get scattered as smoke. */
   private createElementV2Sprites(element: FlipbookElement, textures: THREE.Texture[]):void {
     const profiles: Record<FlipbookElement, { width:number; height:number; groundWidth:number; groundHeight:number; mainY:number; motes:readonly [number,number,number,number][] }> = {
+      fire: { width:0.98,height:1.22,groundWidth:0.96,groundHeight:0.3,mainY:-0.02,motes:[[-0.3,0.32,0.15,1],[0.28,0.49,0.14,5],[-0.2,0.72,0.12,9],[0.22,0.91,0.1,13]] },
       frost: { width:0.92,height:1.2,groundWidth:1.02,groundHeight:0.32,mainY:-0.08,motes:[[-0.3,0.33,0.16,1],[0.29,0.49,0.14,5],[-0.2,0.72,0.12,9],[0.22,0.91,0.1,13]] },
       lightning: { width:0.82,height:1.32,groundWidth:0.9,groundHeight:0.28,mainY:-0.02,motes:[[-0.26,0.4,0.14,1],[0.24,0.58,0.12,5],[-0.18,0.8,0.1,9],[0.2,1.02,0.1,13]] },
       poison: { width:1.02,height:1.16,groundWidth:1.08,groundHeight:0.36,mainY:-0.05,motes:[[-0.32,0.3,0.15,1],[0.3,0.45,0.15,5],[-0.2,0.67,0.13,9],[0.23,0.88,0.12,13]] },

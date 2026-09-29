@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-export type FlipbookElement = "frost" | "lightning" | "poison" | "arcane" | "holy" | "shadow" | "ember";
+export type FlipbookElement = "fire" | "frost" | "lightning" | "poison" | "arcane" | "holy" | "shadow" | "ember";
 export type FlipbookLayer = "main" | "secondary" | "particles";
 export type FlipbookVersion = 1 | 2;
 
