@@ -1,5 +1,6 @@
 import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
+import { placedBlockingFootprint } from "./data";
 import { canCounter, makeForecast, mulberry32, powerOf, protOf, rollDamage, rollDamageCustom } from "./combat";
 import {
   attackableEnemies,
@@ -42,6 +43,7 @@ import { buildDecorOverlay, hexDef, type DecorOverlay } from "./hexprops";
 import { ACTION_HUNGER_COST, drainHunger, fullness } from "./hunger";
 import { HUNGER_PENALTY_MAX } from "./overworld";
 import { sfxPlay } from "./audio";
+import { NOTORIOUS_LEVEL_BONUS } from "./quests";
 // Shadows the DOM global of the same name: the WebGL2DRenderer used for the battle canvas
 // (see BattleCanvas.tsx) implements this instead of a real Path2D, and every `new Path2D()`
 // below (the blade-sweep crescent) needs to build one it understands.
@@ -693,6 +695,8 @@ interface Roster {
   /** Defeated spawn ids in a previously visited crossing dungeon. The original spawn
    * indexes are retained while filtering so ids stay stable across later incursions. */
   crossingDefeatedSpawns?: string[];
+  /** Inn-quest pickups lying on this map right now (see quests.ts activePickupsFor). */
+  questPickups?: { key: string; name: string; x: number; y: number }[];
   /** Every weapon id already in the player's save — chest and kill-drop loot rolls exclude
    * these so a drop never announces a weapon the player already has. */
   ownedWeaponIds?: string[];
@@ -781,7 +785,7 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
   const cls = CLASSES[classId];
   const level =
     side === "enemy"
-      ? (roster?.enemyLevels?.[i] ?? enemyLevel)
+      ? (roster?.enemyLevels?.[i] ?? enemyLevel + (NOTORIOUS_LEVEL_BONUS[spawn.name] ?? 0))
       : side === "neutral"
         ? (roster?.neutralLevels?.[i] ?? enemyLevel)
         : (roster?.levels[spawn.name] ?? 1);
@@ -1191,6 +1195,10 @@ export class BattleEngine {
   /** Rations found in chests opened mid-battle (see useLockpick's 40% roll); folded into
    * the save's rations stock on victory, same as lootEmber. */
   lootRations = 0;
+  /** Inn-quest pickups still lying on the map, and the keys collected so far this battle
+   * (folded into save.questItems on victory, see GameApp's persistVictory). */
+  questPickups: { key: string; name: string; x: number; y: number }[] = [];
+  questFound: string[] = [];
   /** Weapon ids found in chests or off an enemy kill mid-battle; folded into the save's
    * weapon stash on victory. */
   /** Targets picked so far for a multi-missile Magic Missile, one per missile. Cleared
@@ -1412,6 +1420,7 @@ export class BattleEngine {
     this.refreshDecorOverlay();
     this.rng = mulberry32(seed + mission.index * 97);
     const defeatedCrossingSpawns = new Set(roster.crossingDefeatedSpawns ?? []);
+    this.questPickups = (roster.questPickups ?? []).map((p) => ({ ...p }));
     this.units = [
       ...mission.playerSpawns.filter((s) => !heroUnconscious(s.name, roster)).map((s, i) => spawnUnit(s, "player", i, roster)),
       ...mission.enemySpawns.flatMap((s, i) => {
@@ -1791,6 +1800,7 @@ export class BattleEngine {
       selectedId: this.selectedId,
       lootEmber: this.lootEmber,
       lootRations: this.lootRations,
+      questFound: [...this.questFound],
       lootWeapons: [...this.lootWeapons],
       lootEquipment: [...this.lootEquipment],
       ownedWeapons: [...this.ownedWeapons],
@@ -1838,6 +1848,8 @@ export class BattleEngine {
     }
     this.lootEmber = snap.lootEmber;
     this.lootRations = snap.lootRations ?? 0;
+    this.questFound = [...(snap.questFound ?? [])];
+    this.questPickups = this.questPickups.filter((p) => !this.questFound.includes(p.key));
     this.lootWeapons = [...snap.lootWeapons];
     this.lootEquipment = [...snap.lootEquipment];
     this.ownedWeapons = new Set(snap.ownedWeapons);
@@ -3127,10 +3139,11 @@ export class BattleEngine {
     if (a.t >= 0.5) this.finishCombat(att);
   }
 
-  /** 20% chance for a wardog's bite to inflict disease on a surviving target. */
+  /** A wardog's bite (20%) or a zombie's hit (30%) can inflict disease on a surviving target. */
   private maybeInflictDisease(actor: Unit, target: Unit): void {
-    if (actor.classId !== "wardog" || !target.alive || target.diseased) return;
-    if (this.rng() >= DISEASE.biteChance) return;
+    const chance = actor.classId === "wardog" ? DISEASE.biteChance : actor.classId === "zombie" ? DISEASE.zombieChance : 0;
+    if (chance <= 0 || !target.alive || target.diseased) return;
+    if (this.rng() >= chance) return;
     target.diseased = true;
     target.diseaseBase = { atk: target.atk, mag: target.mag, def: target.def, res: target.res, mov: target.mov };
     const pen = (n: number) => Math.round(n * (1 - DISEASE.statPenalty));
@@ -4000,8 +4013,24 @@ export class BattleEngine {
     this.evaluateEnd();
   }
 
+  /** Inn-quest pickups: a living player unit standing on one picks it up. Checked from
+   * evaluateEnd, which already runs after every walk finishes. */
+  private collectQuestPickups(): void {
+    if (this.questPickups.length === 0) return;
+    for (const pickup of [...this.questPickups]) {
+      const finder = this.units.find((u) => u.side === "player" && u.alive && u.x === pickup.x && u.y === pickup.y);
+      if (!finder) continue;
+      this.questPickups = this.questPickups.filter((p) => p.key !== pickup.key);
+      this.questFound.push(pickup.key);
+      this.tip = `${finder.name} encontrou: ${pickup.name}.`;
+      this.pushLog(this.tip);
+      sfxPlay.chest();
+    }
+  }
+
   private evaluateEnd(): void {
     if (this.result) return;
+    this.collectQuestPickups();
     // A free-roam map has nothing to win or lose; the player leaves it through the HUD.
     if (this.mission.explore) {
       this.winAvailable = false;
@@ -5451,7 +5480,7 @@ export class BattleEngine {
 
   /** Refold the decoration switches. Call after anything adds or removes a prop. */
   private refreshDecorOverlay(): void {
-    this.decorOverlay = buildDecorOverlay(this.decorations, this.cols, this.rows, placedFootprint);
+    this.decorOverlay = buildDecorOverlay(this.decorations, this.cols, this.rows, placedBlockingFootprint);
   }
 
   /** Who stands where, rebuilt only when the layout actually moved. See `occCache`. */
@@ -8235,8 +8264,8 @@ export class BattleEngine {
       const log = p.id === "fallen-log";
       const wall = p.id === "barricade";
       const waypoint = !!def.exitKind;
-      // Small single-building houses and the one big-house mansion share the same 3x
-      // "house" art scale (per user request); only their footprints (3 hexes vs 5) differ.
+      // Single-building houses share the "house" art scale (per user request), and their
+      // movement-blocking footprint covers the full ground base beneath that art.
       const house = HOUSE_DECOR_IDS.has(p.id);
       const bigHouse = BIG_HOUSE_DECOR_IDS.has(p.id);
       const anyHouse = house || bigHouse;
@@ -8826,6 +8855,10 @@ export class BattleEngine {
     // Mordavian Wolf Final: same 3:2 sheet and figure fill as the old wolf, but drawn at the
     // sheet's own aspect instead of squeezed into the size-2 box (1.5 / 1.0756).
     const wolfFinalWidthScale = u.sprite === "mordavian-wolf-final" ? 1.395 : 1;
+    // Zombie (480x360 canvas, figure ~95% of its height, same fill as the plain human sheets):
+    // height stays the human box, width follows the canvas aspect (1.333 / 0.782) so the wide
+    // lunge frames aren't squeezed. Idle, walk and ATT share this one canvas, so nothing shrinks.
+    const zombieWidthScale = u.sprite === "zombie" ? 1.705 : 1;
     const h =
       cell *
       (s >= 4 ? 3.35 : s === 2 ? 1.72 : boss ? 1.44 : 1.42) *
@@ -8865,6 +8898,7 @@ export class BattleEngine {
       troll2WidthScale *
       familiar4WidthScale *
       wolfFinalWidthScale *
+      zombieWidthScale *
       kaelFinalAtkScale *
       neeraAtkScale *
       neeraCastScale;
@@ -9456,7 +9490,11 @@ export class BattleEngine {
     if (this.mode === "selected" || this.mode === "awaitAttack" || this.mode === "awaitAction") {
       // Free roam reaches the whole floor; tinting all of it would just wash the map blue.
       if (this.mode === "selected" && !this.mission.explore) {
-        const reachable = [...this.reach.values()];
+        // computeReachable always keeps the unit's starting cell so it can build paths out
+        // of that cell, even if the unit was placed on an impassable prop. That start cell
+        // is not a valid movement destination, so don't paint the movement grid beneath a
+        // house (or any other solid prop) just because the selected unit is standing there.
+        const reachable = [...this.reach.values()].filter((cell) => this.hexAt(cell.x, cell.y).passable);
         const inWeb = reachable.filter((c) => this.isWebCell(c.x, c.y));
         const clear = inWeb.length ? reachable.filter((c) => !this.isWebCell(c.x, c.y)) : reachable;
         push(clear, "rgba(140,200,245,0.5)");
@@ -9515,6 +9553,30 @@ export class BattleEngine {
    * drawn on top of renderGround's output. Re-applies this frame's screen-shake offset (see
    * frameShakeDx/Dy) independently rather than sharing one still-open ctx.save() with
    * renderGround, since the two may be drawing onto two different canvases. */
+  /** Inn-quest pickups lying on the ground: a small pulsing gold glint (not a hex outline),
+   * hidden under fog of war until the hex has been explored. */
+  private drawQuestPickups(ctx: any, tile: number): void {
+    if (this.questPickups.length === 0) return;
+    const pulse = this.reducedMotion ? 1 : 0.75 + Math.sin(this.time * 3.4) * 0.25;
+    for (const pickup of this.questPickups) {
+      if (!this.explored(pickup.x, pickup.y)) continue;
+      const { cx, cy } = this.hexCenter(pickup.x, pickup.y);
+      const r = tile * 0.2;
+      ctx.save();
+      ctx.shadowColor = `rgba(255,208,96,${(0.85 * pulse).toFixed(3)})`;
+      ctx.shadowBlur = tile * 0.45 * pulse;
+      ctx.fillStyle = "rgba(255,226,140,0.95)";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - r);
+      ctx.lineTo(cx + r * 0.7, cy);
+      ctx.lineTo(cx, cy + r);
+      ctx.lineTo(cx - r * 0.7, cy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
   /** getLightAt, when given, answers "how much extra light falls on this screen point right
    * now?" from actually-active spell casts (fire/acid/holy/darkness/webShot) — see
    * EffectsRenderer.lightBoostAt, which BattleCanvas wires this to. Positive brightens a unit
@@ -9576,6 +9638,7 @@ export class BattleEngine {
       this.drawDecorations(ctx, tile, cssW, cssH, "behind");
     }
     if (!skipPortalFx) this.drawPortalFx(ctx, tile);
+    this.drawQuestPickups(ctx, tile);
 
     // The mouse-selection hex outline is drawn here, on this (topmost) canvas rather than
     // in renderGround, so it always reads above the WebGL water FX layer stacked in between

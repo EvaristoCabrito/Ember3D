@@ -41,6 +41,12 @@ const LATE_HERO_BASE_CLASS: Record<string, ClassId> = {
   Malrec: "conjurer",
 };
 
+/** Inn-quest lists (accepted/done/picked-up/kills): plain string ids, deduplicated. */
+function cleanQuestList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 80))].slice(0, 200);
+}
+
 function clampInt(value: unknown, min: number, max: number): number {
   const n = Math.floor(Number(value));
   if (!Number.isFinite(n)) return min;
@@ -442,6 +448,7 @@ function cleanBattle(raw: unknown, pendingMission: string | null): BattleSnapsho
     selectedId: typeof b.selectedId === "string" ? b.selectedId : null,
     lootEmber: clampInt(b.lootEmber, 0, 9999),
     lootRations: clampInt(b.lootRations, 0, 9999),
+    questFound: cleanQuestList(b.questFound),
     lootWeapons: Array.isArray(b.lootWeapons) ? (b.lootWeapons as unknown[]).filter((id): id is string => typeof id === "string" && !!WEAPONS[id]) : [],
     lootEquipment: Array.isArray(b.lootEquipment) ? (b.lootEquipment as unknown[]).filter((id): id is string => typeof id === "string" && !!EQUIPMENT[id]) : [],
     ownedWeapons: Array.isArray(b.ownedWeapons) ? (b.ownedWeapons as unknown[]).filter((id): id is string => typeof id === "string") : [],
@@ -633,6 +640,14 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     version: SAVE_VERSION,
     completed,
     crossingDefeatedSpawns,
+    questsActive: cleanQuestList(raw.questsActive),
+    questsDone: cleanQuestList(raw.questsDone),
+    questsDiscovered: cleanQuestList(raw.questsDiscovered),
+    chapter: clampInt(raw.chapter ?? 1, 1, 99),
+    flags: cleanQuestList(raw.flags),
+    npcTalked: cleanQuestList(raw.npcTalked),
+    questItems: cleanQuestList(raw.questItems),
+    questKills: cleanQuestList(raw.questKills),
     unitHp: cleanHp(raw.unitHp),
     levels,
     xp: cleanXp(raw.xp),

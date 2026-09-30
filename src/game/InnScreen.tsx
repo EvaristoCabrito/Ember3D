@@ -8,6 +8,7 @@ import { GoldAmount } from "./GoldAmount";
 import { playTheme, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { fullness, INN_MEAL_PRICE } from "./hunger";
 import { HungerBar } from "./HungerBar";
+import { questProgress, questStatus, questsFor } from "./quests";
 
 const BAG_ICON = pouchIcon(null);
 
@@ -87,8 +88,22 @@ export function InnScreen({
   onUpgradeWeapon,
   onSellWeapon,
   onSeenSmithIntro,
+  onAcceptQuest,
+  onTurnInQuest,
+  onTalkToNpc,
+  questOffered,
   startInSmith = false,
 }: {
+  /** Inn quests (see quests.ts): accept an offered quest / hand in a finished one for its
+   * Gold reward. Each returns whether it actually applied. */
+  onAcceptQuest?: (questId: string) => boolean;
+  onTurnInQuest?: (questId: string) => boolean;
+  /** Called whenever an NPC is opened, so progression can note who has been talked to and
+   * which of their quests have been learned of (see progression.ts). */
+  onTalkToNpc?: (npcId: string) => void;
+  /** Whether a not-yet-accepted quest is on offer right now (its own availability condition).
+   * Omitted means every quest is offered. */
+  questOffered?: (questId: string) => boolean;
   /** Opened by talking to Vargan in the walkable Inn: goes straight to the smith (intro
    * video first, if not seen yet), and leaving the smith leaves this screen entirely. */
   startInSmith?: boolean;
@@ -132,6 +147,10 @@ export function InnScreen({
   const [smithIntro, setSmithIntro] = useState(startInSmith && !save.seenSmithIntro);
   const [npc, setNpc] = useState<(typeof NPCS)[number]>(NPCS[0]);
   const [hero, setHero] = useState<string>("Kael");
+  useEffect(() => {
+    onTalkToNpc?.(npc.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [npc.id]);
   const [cart, setCart] = useState<Record<PotionId, number>>({ ...EMPTY_CART });
   const [lockpickQty, setLockpickQty] = useState(0);
   const [rationsQty, setRationsQty] = useState(0);
@@ -333,6 +352,52 @@ export function InnScreen({
             <p className="mt-1 text-sm leading-relaxed text-fg/90">{npc.talk}</p>
           </div>
         </div>
+        {questsFor(npc.id).map((quest) => {
+          const status = questStatus(save, quest);
+          if (status === "available" && questOffered && !questOffered(quest.id)) return null;
+          const { have, total } = questProgress(save, quest);
+          return (
+            <div key={quest.id} className="ember-window rounded-xl p-3 flex flex-col gap-2">
+              <p className="text-xs uppercase tracking-[0.16em] text-muted">
+                Missão · {status === "done" ? "concluída" : status === "available" ? "oferecida" : status === "ready" ? "pronta para entregar" : "em andamento"}
+              </p>
+              <p className="text-sm font-medium">{quest.title}</p>
+              <p className="text-sm leading-relaxed text-fg/90">
+                {status === "available" ? quest.offer : status === "active" ? quest.active : status === "ready" ? quest.ready : quest.done}
+              </p>
+              {status !== "done" && <p className="text-xs text-muted">Onde: {quest.place}</p>}
+              {status !== "available" && status !== "done" && (
+                <p className="text-xs text-muted tabular-nums">
+                  {quest.kind === "kill" ? (have >= total ? "Alvo abatido" : "Alvo ainda vivo") : `Encontrados ${have} / ${total}`}
+                </p>
+              )}
+              {status !== "done" && (
+                <p className="text-xs text-muted">
+                  Recompensa: <GoldAmount amount={quest.reward} />
+                  {quest.rewardPotions.map((kind) => ` + ${potionLabel(kind)}`).join("")}
+                </p>
+              )}
+              {status === "available" && (
+                <Button
+                  onClick={() => {
+                    if (onAcceptQuest?.(quest.id)) sfxPlay.ui();
+                  }}
+                >
+                  Aceitar missão
+                </Button>
+              )}
+              {status === "ready" && (
+                <Button
+                  onClick={() => {
+                    if (onTurnInQuest?.(quest.id)) sfxPlay.ui();
+                  }}
+                >
+                  Entregar · {quest.reward} Gold
+                </Button>
+              )}
+            </div>
+          );
+        })}
         {npc.shop && (
           <div className="shop-panel ember-window rounded-xl p-3 flex flex-col gap-2">
             <p className="text-xs uppercase tracking-[0.16em] text-muted">Adega · quem leva</p>

@@ -53,6 +53,7 @@ export type ClassId =
   | "asherah"
   | "pikeman"
   | "wardog"
+  | "zombie"
   | "troll"
   | "troll2"
   | "morvenianWolf"
@@ -119,7 +120,7 @@ export type ClassId =
   // Conjurer tier 3 (Summon Familiar Radiante): Familiar Maior's kit and stat share on a new
   // body — see SUMMON_FAMILIAR4.
   | "familiar4";
-export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "troll" | "troll2" | "morvenian-wolf" | "mordavian-wolf" | "mordavian-wolf-final" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "familiar4" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
+export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "zombie" | "troll" | "troll2" | "morvenian-wolf" | "mordavian-wolf" | "mordavian-wolf-final" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "familiar4" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
   // Generic-enemy "alter" sprites, split off so a plain Archer/Mage/Healer enemy (and their
   // own promotions) never renders as literally the same SpriteId as Neera/Voss/Salazar the
   // MCs — see HERO_SPRITE_BY_NAME/CLASSES in engine.ts/data.ts. Each starts as a straight
@@ -314,6 +315,8 @@ export interface DecorationDef {
   /** Hex offsets from the anchor cell (dx/dy in board coordinates, same convention as
    * Unit.footprintOffsets — {dx:1,dy:0} is always the same-row neighbor). */
   footprint: { dx: number; dy: number }[];
+  /** Optional movement collision area when it must differ from the art's sizing/anchor area. */
+  blockingFootprint?: { dx: number; dy: number }[];
   /** The terrain this prop means, if it means one.
    *
    * Decorations are art: every rule — whether a hex can be walked, shot through or stood
@@ -1113,6 +1116,8 @@ export interface BattleSnapshot {
   lootEmber: number;
   /** Optional for compatibility with battle saves created before ration loot existed. */
   lootRations?: number;
+  /** Inn-quest pickups collected so far this battle, "questId:pickupId". */
+  questFound?: string[];
   lootWeapons: string[];
   lootEquipment: string[];
   ownedWeapons: string[];
@@ -1148,6 +1153,22 @@ export interface SaveData {
   /** Stable enemy/neutral spawn ids already defeated in crossing dungeons. These persist
    * between incursions so a cleared monster stays gone when the party explores again. */
   crossingDefeatedSpawns: Record<string, string[]>;
+  /** Inn quests (see quests.ts). Accepted and unfinished quest ids. Absent reads as none. */
+  questsActive?: string[];
+  /** Quest ids already handed in and paid. */
+  questsDone?: string[];
+  /** Quests the party has learned of (offered by their giver) without accepting yet. */
+  questsDiscovered?: string[];
+  /** Story chapter reached (see progression.ts). Absent reads as chapter 1. */
+  chapter?: number;
+  /** Named story flags set by quests/triggers (see progression.ts). */
+  flags?: string[];
+  /** NPC ids the party has talked to (Inn NPC ids such as "brue"). */
+  npcTalked?: string[];
+  /** Fetch-quest pickups already picked up, as "questId:pickupId". */
+  questItems?: string[];
+  /** Kill-quest target names already killed (recorded even before the quest is accepted). */
+  questKills?: string[];
   unitHp: Record<string, number>;
   levels: Record<string, number>;
   xp: Record<string, number>;

@@ -3,7 +3,7 @@ import { BookOpen, Check, ChevronLeft, Lock, MapPin, SlidersHorizontal, Volume2,
 import { isCrossingDungeon, missionsForLocation } from "./mapstore";
 import type { EquipSlot, Mission, PotionId, SaveData, WorldLocation } from "./types";
 import { PartyInventoryOverlay } from "./InventoryScreens";
-import { CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, heroRecruited, rulesClass, tierUses } from "./data";
+import { CREATE_FOOD_AND_WATER, POTIONS, createFoodAndWaterFormula, createFoodAndWaterPower, heroRecruited, rulesClass, tierUses } from "./data";
 import { fullness } from "./hunger";
 import { GoldAmount } from "./GoldAmount";
 import { getAudioVolumes, setCutsceneVolume, setMusicVolume, setSfxVolume, sfxPlay, unlockAudio } from "./audio";
@@ -11,6 +11,7 @@ import { canStepOverworld, hexToWorld, isOverworldCell, locationExpired, neighbo
 import { HungerBar } from "./HungerBar";
 import { portraitFor } from "./assets";
 import { key } from "./pathfinding";
+import { QUESTS, questProgress, questStatus } from "./quests";
 import { MapLoadingOverlay, useMapLoading } from "./MapLoadingOverlay";
 
 export type LocationStatus = "locked" | "available" | "done";
@@ -50,6 +51,7 @@ export function OverworldMapScreen({
   locations,
   status,
   missionStatus,
+  missionsOf = missionsForLocation,
   ember,
   test,
   muted,
@@ -84,6 +86,9 @@ export function OverworldMapScreen({
   locations: WorldLocation[];
   status: (loc: WorldLocation) => LocationStatus;
   missionStatus: (missionId: string) => LocationStatus;
+  /** The missions of a location that are actually on the map right now (hidden, quest-gated
+   * ones left out — see progression.ts). Defaults to every mission of the location. */
+  missionsOf?: (loc: WorldLocation) => Mission[];
   ember: number;
   test: boolean;
   muted: boolean;
@@ -322,7 +327,7 @@ export function OverworldMapScreen({
       window.setTimeout(() => setFlashId((f) => (f === loc.id ? null : f)), 500);
       return;
     }
-    const missions = missionsForLocation(loc);
+    const missions = missionsOf(loc);
     if (missions.length > 1) {
       setOpen(loc);
       return;
@@ -585,7 +590,7 @@ export function OverworldMapScreen({
           <div className="absolute inset-0">
             {locations.filter(isExplored).map((loc) => {
               const st = status(loc);
-              const missions = missionsForLocation(loc);
+              const missions = missionsOf(loc);
               const multi = missions.length > 1;
               const hex = worldToHex(loc.x, loc.y);
               const walkable = reachable.has(key(hex.x, hex.y));
@@ -777,18 +782,13 @@ export function OverworldMapScreen({
       <MapLoadingOverlay progress={mapLoading.progress} visible={mapLoading.visible} />
 
       {questLogOpen && (
-        <QuestLogPanel
-          locations={locations}
-          missionStatus={missionStatus}
-          test={test}
-          onClose={() => setQuestLogOpen(false)}
-        />
+        <QuestLogPanel save={save} onClose={() => setQuestLogOpen(false)} />
       )}
 
       {open && (
         <LocationPanel
           location={open}
-          missions={missionsForLocation(open)}
+          missions={missionsOf(open)}
           missionStatus={missionStatus}
           test={test}
           onPassThrough={() => setOpen(null)}
@@ -826,22 +826,16 @@ export function OverworldMapScreen({
   );
 }
 
-function QuestLogPanel({
-  locations,
-  missionStatus,
-  test,
-  onClose,
-}: {
-  locations: WorldLocation[];
-  missionStatus: (missionId: string) => LocationStatus;
-  test: boolean;
-  onClose: () => void;
-}) {
-  const quests = locations
-    .map((location) => ({ location, missions: missionsForLocation(location) }))
-    .filter(({ missions }) => missions.length > 0);
-  const doneCount = quests.reduce((total, { missions }) => total + missions.filter((mission) => missionStatus(mission.id) === "done").length, 0);
-  const totalCount = quests.reduce((total, { missions }) => total + missions.length, 0);
+function QuestLogPanel({ save, onClose }: { save: SaveData; onClose: () => void }) {
+  // Only Inn quests are listed here (see quests.ts): accepted ones under "ativas", handed-in
+  // ones under "concluídas". A quest that hasn't been accepted yet doesn't appear at all.
+  const entries = QUESTS.map((quest) => ({ quest, status: questStatus(save, quest) }));
+  const active = entries.filter(({ status }) => status === "active" || status === "ready");
+  const completed = entries.filter(({ status }) => status === "done");
+  const sections = [
+    { title: "Missões ativas", list: active, empty: "Nenhuma missão ativa. Fale com o pessoal da Estalagem." },
+    { title: "Missões concluídas", list: completed, empty: "Nenhuma missão concluída ainda." },
+  ];
 
   return (
     <div
@@ -854,7 +848,7 @@ function QuestLogPanel({
       <section role="dialog" aria-modal="true" aria-labelledby="quest-log-title" className="flex max-h-[82dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
         <header className="flex items-start justify-between gap-3 border-b border-border p-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.16em] text-muted">Campanha · {doneCount}/{totalCount}</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-muted">Estalagem · {completed.length}/{QUESTS.length} concluídas</p>
             <h2 id="quest-log-title" className="mt-1 font-display text-2xl">Registro de missões</h2>
           </div>
           <button type="button" onClick={onClose} className="grid size-9 place-items-center rounded-md border border-border" aria-label="Fechar registro de missões">
@@ -863,20 +857,28 @@ function QuestLogPanel({
         </header>
         <div className="overflow-y-auto p-4">
           <div className="flex flex-col gap-4">
-            {quests.map(({ location, missions }) => (
-              <section key={location.id}>
-                <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-muted">{location.name}</h3>
+            {sections.map(({ title, list, empty }) => (
+              <section key={title}>
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-muted">{title} · {list.length}</h3>
                 <div className="flex flex-col gap-2">
-                  {missions.map((mission) => {
-                    const status = missionStatus(mission.id);
+                  {list.length === 0 && <p className="rounded-lg border border-border bg-bg/60 p-3 text-sm text-muted">{empty}</p>}
+                  {list.map(({ quest, status }) => {
+                    const { have, total } = questProgress(save, quest);
                     return (
-                      <article key={mission.id} className="rounded-lg border border-border bg-bg/60 p-3">
+                      <article key={quest.id} className="rounded-lg border border-border bg-bg/60 p-3">
                         <div className="flex items-center gap-2">
-                          {status === "done" ? <Check className="size-4 shrink-0 text-accent" /> : status === "locked" ? <Lock className="size-4 shrink-0 text-muted" /> : <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-accent" />}
-                          <h4 className="min-w-0 flex-1 font-display text-lg leading-tight">{mission.title}</h4>
-                          <span className="shrink-0 text-xs text-muted">{status === "done" ? "Concluída" : status === "locked" ? "Bloqueada" : "Em aberto"}</span>
+                          {status === "done" ? <Check className="size-4 shrink-0 text-accent" /> : <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-accent" />}
+                          <h4 className="min-w-0 flex-1 font-display text-lg leading-tight">{quest.title}</h4>
+                          <span className="shrink-0 text-xs text-muted">{status === "done" ? "Concluída" : status === "ready" ? "Entregar" : "Em andamento"}</span>
                         </div>
-                        <p className="mt-1 pl-6 text-sm text-muted">{mission.objective}</p>
+                        <p className="mt-1 pl-6 text-sm text-muted">
+                          {quest.kind === "kill" ? `Abater ${quest.targetName}` : `Recolher ${total} itens`} · {quest.place}
+                        </p>
+                        {status !== "done" && (
+                          <p className="mt-1 pl-6 text-xs text-muted tabular-nums">
+                            {quest.kind === "kill" ? (have >= total ? "Alvo abatido — entregar na Estalagem" : "Alvo ainda vivo") : `Encontrados ${have} / ${total}`} · Recompensa {quest.reward} Gold{quest.rewardPotions.map((kind) => ` + ${POTIONS[kind].name}`).join("")}
+                          </p>
+                        )}
                       </article>
                     );
                   })}
@@ -884,7 +886,6 @@ function QuestLogPanel({
               </section>
             ))}
           </div>
-          {test && <p className="mt-4 text-xs text-muted">Modo teste: missões também aparecem como disponíveis.</p>}
         </div>
       </section>
     </div>

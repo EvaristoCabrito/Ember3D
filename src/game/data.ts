@@ -142,9 +142,8 @@ const DECO_ROW_TRIO = [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 }];
 const DECO_ROW_FIVE = [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 }, { dx: 3, dy: 0 }, { dx: 4, dy: 0 }];
 const DECO_QUAD = [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 }, { dx: 3, dy: 0 }];
 const DECO_ONE = [{ dx: 0, dy: 0 }];
-// A compact 5-hex block (a 2-wide front row plus a 3-wide row behind it) rather than a
-// straight line — this is the footprint for the big house/mansion decorations, and a
-// building reads as a building in that squarish arrangement, not as a row of tiles.
+// A compact 5-hex block (a 2-wide front row plus a 3-wide row behind it), used for
+// genuinely broad structures whose ground base spans that many cells.
 const DECO_BLOCK_5 = [
   { dx: 0, dy: 0 },
   { dx: 1, dy: 0 },
@@ -152,6 +151,9 @@ const DECO_BLOCK_5 = [
   { dx: 0, dy: -1 },
   { dx: 1, dy: -1 },
 ];
+// The visible house sits two tiles right of its map anchor. Match its ground area with the
+// established Type 6 body shape, shifted two tiles left; keep it separate from art sizing.
+const HOUSE_BLOCKING_FOOTPRINT = FOOTPRINT_TYPE_6.map(({ dx, dy }) => ({ dx: dx - 2, dy }));
 // A genuine 3x3 block (three rows, three columns) rather than a single row — a linear
 // footprint collapses vertical spread to 0, which stretches a roughly-square image (like a
 // wide ancestral tree) into a flat, deformed strip. Spreading it across both axes keeps the
@@ -424,14 +426,14 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "wooden-barricade-1": { id: "wooden-barricade-1", name: "Barricada de Estacas II", footprint: DECO_ONE },
   "dead-tree": { id: "dead-tree", name: "Árvore morta", footprint: DECO_ONE },
   "fallen-log": { id: "fallen-log", name: "Tronco caído", footprint: DECO_PAIR },
-  "small-house": { id: "small-house", name: "Casa pequena", footprint: DECO_TRIO },
-  "stone-hut": { id: "stone-hut", name: "Cabana de pedra", footprint: DECO_TRIO },
+  "small-house": { id: "small-house", name: "Casa pequena", footprint: DECO_BLOCK_5 },
+  "stone-hut": { id: "stone-hut", name: "Cabana de pedra", footprint: DECO_BLOCK_5 },
   "rocky-outcrop": { id: "rocky-outcrop", name: "Afloramento Rochoso", footprint: DECO_PAIR, tile: "column" },
   "boulder-pile": { id: "boulder-pile", name: "Pilha de Pedras", footprint: DECO_PAIR, tile: "column" },
   "twin-spires": { id: "twin-spires", name: "Torres Gêmeas de Pedra", footprint: DECO_PAIR, tile: "column" },
   "large-boulder": { id: "large-boulder", name: "Pedregulho Grande", footprint: DECO_ONE, tile: "column" },
-  "burning-house": { id: "burning-house", name: "Casa em Chamas", footprint: DECO_TRIO },
-  "burnt-house-ruins": { id: "burnt-house-ruins", name: "Ruínas Queimadas", footprint: DECO_TRIO },
+  "burning-house": { id: "burning-house", name: "Casa em Chamas", footprint: DECO_BLOCK_5 },
+  "burnt-house-ruins": { id: "burnt-house-ruins", name: "Ruínas Queimadas", footprint: DECO_BLOCK_5, blockingFootprint: HOUSE_BLOCKING_FOOTPRINT },
   well: { id: "well", name: "Poço", footprint: DECO_ONE },
   "stone-fountain": { id: "stone-fountain", name: "Fonte de Pedra", footprint: DECO_ONE },
   // These were painted at their intended small prop size; opt out of the global 1.6x decor boost.
@@ -443,7 +445,7 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "mossy-boulder": { id: "mossy-boulder", name: "Pedregulho Musgoso", footprint: DECO_ONE, tile: "column" },
   "mountain-range": { id: "mountain-range", name: "Cadeia de Montanhas", footprint: DECO_TRIO, tile: "hill" },
   "rune-stone": { id: "rune-stone", name: "Menir Rúnico", footprint: DECO_ONE },
-  "burning-hamlet": { id: "burning-hamlet", name: "Vilarejo em Chamas", footprint: DECO_PAIR },
+  "burning-hamlet": { id: "burning-hamlet", name: "Vilarejo em Chamas", footprint: DECO_BLOCK_5 },
   "boulder-mound": { id: "boulder-mound", name: "Monte de Pedras", footprint: DECO_ONE, tile: "column" },
   "wooden-cart": { id: "wooden-cart", name: "Carroça de Madeira", footprint: DECO_PAIR },
   "spike-crown": { id: "spike-crown", name: "Coroa de Espinhos", footprint: DECO_TRIO, tile: "column" },
@@ -484,9 +486,8 @@ export const DECORATIONS: Record<string, DecorationDef> = {
  * "is this a chest" check membership here instead of one hardcoded id. */
 export const CHEST_DECOR_IDS = new Set(["locked-chest", "chest-medium", "chest-large"]);
 
-/** Small single-building house props — a 3-hex footprint (DECO_TRIO), drawn at the shared
- * "house" art scale in BattleEngine.drawDecorations. Kept separate from BIG_HOUSE_DECOR_IDS
- * so the renderer can size the mansion's larger 5-hex footprint on its own. */
+/** Small/wide house artwork uses the five-hex ground base under its visible structure, so
+ * the full building area is impassable. Kept separate from BIG_HOUSE_DECOR_IDS. */
 export const HOUSE_DECOR_IDS = new Set(["small-house", "stone-hut", "burning-house", "burnt-house-ruins"]);
 
 /** Retained empty set for renderer compatibility; the large mansion prop was removed. */
@@ -693,6 +694,13 @@ export function placedFootprint(p: { id: string; x: number; y: number; rot?: num
   const def = DECORATIONS[p.id];
   if (!def) return [];
   return rotateFootprint(def.footprint, p.x, p.y, p.rot ?? 0);
+}
+
+/** Collision cells may cover more ground than the visual sizing footprint. */
+export function placedBlockingFootprint(p: { id: string; x: number; y: number; rot?: number }): { dx: number; dy: number }[] {
+  const def = DECORATIONS[p.id];
+  if (!def) return [];
+  return rotateFootprint(def.blockingFootprint ?? def.footprint, p.x, p.y, p.rot ?? 0);
 }
 
 export function decorationCells(placements: { id: string; x: number; y: number; rot?: number }[]): Set<string> {
@@ -1139,6 +1147,25 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     size: 4,
     footprintOffsets: FOOTPRINT_TYPE_7,
     init: 9,
+  },
+  // Zombie: a human-size, slow, tough melee corpse. Its hit has a 30% chance to sicken the
+  // target (DISEASE.zombieChance, see BattleEngine.maybeInflictDisease). Sprite sheets are
+  // 32-frame long sheets cut from reference video (public/game/sprites/zombie/README.md).
+  zombie: {
+    id: "zombie",
+    name: "Zumbi",
+    role: "Morto-vivo",
+    hp: 38,
+    atk: 9,
+    mag: 0,
+    def: 3,
+    res: 1,
+    mov: 3,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "zombie",
+    size: 1,
+    init: 2,
   },
   troll: {
     id: "troll",
@@ -1855,6 +1882,7 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   brigand: { hp: 3, atk: 2, mag: 0, def: 1, res: 1 },
   captain: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   wardog: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
+  zombie: { hp: 4, atk: 2, mag: 0, def: 1, res: 1 },
   morvenianWolf: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   mordavianWolf: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   mordavianWolfFinal: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
@@ -3010,6 +3038,7 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   brigand: 2,
   pikeman: 3,
   wardog: 2,
+  zombie: 3,
   morvenianWolf: 3,
   mordavianWolf: 5,
   mordavianWolfFinal: 5,
@@ -3773,6 +3802,8 @@ export function shockChargesFor(classId: ClassId): number {
 
 export const DISEASE = {
   biteChance: 0.2,
+  /** A zombie hit sickens a surviving target this often. */
+  zombieChance: 0.3,
   statPenalty: 0.1,
 };
 

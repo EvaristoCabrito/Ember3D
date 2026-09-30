@@ -17,6 +17,8 @@ import { DialogOverlay } from "./DialogOverlay";
 import { LIGHT_DEFS } from "./lighting";
 import { DialogEditor } from "./DialogEditor";
 import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
+import { QUESTS, activePickupsFor, questById, questProgress, questStatus, questsFor } from "./quests";
+import { advanceProgression, evaluate, isGatedMission, missionAccess, type MissionAccess, type ProgressExtras } from "./progression";
 import { BattleEngine, heroSpriteFor } from "./engine";
 import { MapPreviewCanvas, type PreviewDecorationSelection, type PreviewUnitSelection } from "./MapPreviewCanvas";
 import { WorldMapScreen } from "./WorldMapScreen";
@@ -300,13 +302,30 @@ function innUnlocked(completed: string[]): boolean {
   return completed.includes("estalagem");
 }
 
+/** How a mission currently shows on the map (see progression.ts): a gate can hide it, show it
+ * locked, or leave it open. Absent means no gating at all. */
+type MissionAccessFn = (missionId: string) => MissionAccess;
+
+/** What the save alone cannot tell progression conditions: owned gear and who is in the party. */
+function progressionExtras(save: SaveData): ProgressExtras {
+  const items = [
+    ...Object.keys(save.weapons ?? {}),
+    ...Object.keys(save.looseEquipment ?? {}),
+    ...Object.values(save.equipment ?? {}).flatMap((slots) => Object.values(slots).filter((id): id is string => typeof id === "string")),
+  ];
+  const party = ["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"].filter((name) => heroRecruited(name, save.completed));
+  return { items, party };
+}
+
 /** The player advances through a location chapter-by-chapter. A new location becomes
- * available only when every chapter in the prior populated location is complete. */
+ * available only when every chapter in the prior populated location is complete. Missions
+ * governed by a progression gate (progression.json) sit outside that chain: they open through
+ * their own quest/chapter conditions and never block the next location. */
 function previousPopulatedLocation(location: WorldLocation, locations: WorldLocation[]): WorldLocation | null {
   const at = locations.findIndex((candidate) => candidate.id === location.id);
   for (let i = at - 1; i >= 0; i -= 1) {
     const previous = locations[i]!;
-    if (missionsForLocation(previous).length > 0) return previous;
+    if (missionsForLocation(previous).some((mission) => !isGatedMission(mission.id))) return previous;
   }
   return null;
 }
@@ -317,9 +336,11 @@ function lockedMission(
   test: boolean,
   locations: WorldLocation[],
   fallbackOrder: string[],
+  access?: MissionAccessFn,
 ): boolean {
   if (test) return false;
   if (completed.includes(id)) return true;
+  if (access && isGatedMission(id)) return access(id) !== "available";
 
   const location = locations.find((candidate) => candidate.missionIds.includes(id));
   if (!location) {
@@ -327,13 +348,13 @@ function lockedMission(
     return at < 0 || (at > 0 && !fallbackOrder.slice(0, at).every((previousId) => completed.includes(previousId)));
   }
 
-  const ids = missionsForLocation(location).map((mission) => mission.id);
+  const ids = missionsForLocation(location).map((mission) => mission.id).filter((missionId) => !isGatedMission(missionId));
   const at = ids.indexOf(id);
   if (at < 0) return true;
   if (at > 0) return !ids.slice(0, at).every((previousId) => completed.includes(previousId));
 
   const previousLocation = previousPopulatedLocation(location, locations);
-  return previousLocation !== null && !missionsForLocation(previousLocation).every((mission) => completed.includes(mission.id));
+  return previousLocation !== null && !missionsForLocation(previousLocation).filter((mission) => !isGatedMission(mission.id)).every((mission) => completed.includes(mission.id));
 }
 
 function missionStatus(
@@ -342,9 +363,10 @@ function missionStatus(
   test: boolean,
   locations: WorldLocation[],
   fallbackOrder: string[],
+  access?: MissionAccessFn,
 ): "locked" | "available" | "done" {
   if (completed.includes(id)) return "done";
-  return lockedMission(id, completed, test, locations, fallbackOrder) ? "locked" : "available";
+  return lockedMission(id, completed, test, locations, fallbackOrder, access) ? "locked" : "available";
 }
 
 function locationStatus(
@@ -352,11 +374,16 @@ function locationStatus(
   completed: string[],
   test: boolean,
   locations: WorldLocation[],
+  access?: MissionAccessFn,
 ): "locked" | "available" | "done" {
-  const missions = missionsForLocation(location);
-  const next = missions.find((mission) => !completed.includes(mission.id));
-  if (!next) return missions.length > 0 ? "done" : "locked";
-  return missionStatus(next.id, completed, test, locations, missions.map((mission) => mission.id)) === "locked" ? "locked" : "available";
+  // Hidden missions are not on the map, so they never count toward what the location holds.
+  const missions = missionsForLocation(location).filter((mission) => !access || test || access(mission.id) !== "hidden");
+  const pending = missions.filter((mission) => !completed.includes(mission.id));
+  // Debug mode opens every location, including ones with no missions assigned yet (the new
+  // areas); the campaign keeps its chapter gating.
+  if (pending.length === 0) return missions.length > 0 ? "done" : test ? "available" : "locked";
+  const order = missionsForLocation(location).map((mission) => mission.id);
+  return pending.some((mission) => missionStatus(mission.id, completed, test, locations, order, access) !== "locked") ? "available" : "locked";
 }
 
 const BRIEF_ART: Record<string, string> = {
@@ -884,7 +911,8 @@ export function GameApp() {
   };
 
   const persistCurrent = (data: SaveData, slot = bank.lastSlot) => {
-    const next = writeSlot(bank, slot, { ...data, muted });
+    // Every save write settles progression first (chapter triggers, finished-quest effects).
+    const next = writeSlot(bank, slot, { ...advanceProgression(data, progressionExtras(data)), muted });
     applySlot(next);
     return next;
   };
@@ -1053,7 +1081,8 @@ export function GameApp() {
       const heroHunger = testMode ? undefined : save.heroHunger;
       const heroDiseases = testMode ? undefined : save.heroDiseases;
       const crossingDefeatedSpawns = !testMode && isCrossingDungeon(m) ? save.crossingDefeatedSpawns[m.id] ?? [] : [];
-      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, crossingDefeatedSpawns }, Date.now() % 100000, testMode);
+      const questPickups = testMode ? undefined : activePickupsFor(save, m.id);
+      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, crossingDefeatedSpawns, questPickups }, Date.now() % 100000, testMode);
       if (resume && resume.missionId === m.id) battle.applySnapshot(resume);
       if (typeof window !== "undefined" && window.innerWidth < 720) battle.zoom = 0;
       awardedRef.current = null;
@@ -1208,10 +1237,18 @@ export function GameApp() {
         found.push(EQUIPMENT[id]!.name);
       }
       setLastLoot(found);
+      // Inn quests: pickups collected this battle, and any quest target that died. Kills are
+      // recorded whether or not the quest was accepted yet, since a crossing dungeon keeps
+      // its dead monsters dead (see crossingDefeatedSpawns above).
+      const questItems = [...new Set([...(save.questItems ?? []), ...engine.questFound])];
+      const deadEnemyNames = new Set(engine.units.filter((x) => x.side === "enemy" && !x.alive && !x.summoned).map((x) => x.name));
+      const questKills = [...new Set([...(save.questKills ?? []), ...QUESTS.filter((q) => q.kind === "kill" && q.missionId === mission.id && q.targetName && deadEnemyNames.has(q.targetName)).map((q) => q.targetName!)])];
       persistCurrent({
         ...save,
         completed,
         crossingDefeatedSpawns,
+        questItems,
+        questKills,
         unitHp: hp,
         bags,
         heroHunger: { ...save.heroHunger, ...engine.battlePlayerHunger() },
@@ -1471,6 +1508,9 @@ export function GameApp() {
   // `save`/`liveSave` directly; it already isolates test mode through its own dedicated
   // overrides (testEmber, playtest roster building, ...), untouched by this.
   const overworldSave = readMapSave();
+  // Mission gating (progression.ts): what each mission currently shows as on the world map.
+  const missionAccessFor = (id: string): MissionAccess => missionAccess(id, overworldSave, progressionExtras(overworldSave), testMode);
+  const visibleMissionsOf = (loc: WorldLocation) => missionsForLocation(loc).filter((mission) => testMode || missionAccessFor(mission.id) !== "hidden");
   const onOverworldStep = useCallback(
     (col: number, row: number) => {
       const rec = readMapSave();
@@ -1741,8 +1781,9 @@ export function GameApp() {
       {screen === "worldMap" && (
         <WorldMapScreen
           locations={campaignLocations}
-          status={(loc) => locationStatus(loc, save.completed, testMode, campaignLocations)}
-          missionStatus={(id) => missionStatus(id, save.completed, testMode, campaignLocations, campaignMissions.map((mission) => mission.id))}
+          status={(loc) => locationStatus(loc, save.completed, testMode, campaignLocations, missionAccessFor)}
+          missionStatus={(id) => missionStatus(id, save.completed, testMode, campaignLocations, campaignMissions.map((mission) => mission.id), missionAccessFor)}
+          missionsOf={visibleMissionsOf}
           ember={testMode ? testEmber : (save.ember ?? 0)}
           test={testMode}
           muted={muted}
@@ -1761,8 +1802,9 @@ export function GameApp() {
       {screen === "overworldMap" && (
         <OverworldMapScreen
           locations={campaignLocations}
-          status={(loc) => locationStatus(loc, save.completed, testMode, campaignLocations)}
-          missionStatus={(id) => missionStatus(id, save.completed, testMode, campaignLocations, campaignMissions.map((mission) => mission.id))}
+          status={(loc) => locationStatus(loc, save.completed, testMode, campaignLocations, missionAccessFor)}
+          missionStatus={(id) => missionStatus(id, save.completed, testMode, campaignLocations, campaignMissions.map((mission) => mission.id), missionAccessFor)}
+          missionsOf={visibleMissionsOf}
           ember={testMode ? testEmber : (save.ember ?? 0)}
           test={testMode}
           muted={muted}
@@ -1930,6 +1972,50 @@ export function GameApp() {
               emberSeeded: true,
               looseEquipment: { ...rec.looseEquipment, [itemId]: (rec.looseEquipment[itemId] ?? 0) + 1 },
               pendingMission: null,
+            });
+            return true;
+          }}
+          onTalkToNpc={(npcId: string) => {
+            const rec = readMapSave();
+            let next = rec;
+            if (!(rec.npcTalked ?? []).includes(npcId)) next = { ...next, npcTalked: [...(rec.npcTalked ?? []), npcId] };
+            const extras = progressionExtras(next);
+            const offered = questsFor(npcId as "brue" | "mudo" | "porao").filter((quest) => questStatus(next, quest) === "available" && evaluate(quest.availability, next, extras) && !(next.questsDiscovered ?? []).includes(quest.id));
+            if (offered.length > 0) next = { ...next, questsDiscovered: [...(next.questsDiscovered ?? []), ...offered.map((quest) => quest.id)] };
+            if (next !== rec) writeMapSave(next);
+          }}
+          questOffered={(questId: string) => {
+            const quest = questById(questId);
+            return !quest || evaluate(quest.availability, overworldSave, progressionExtras(overworldSave));
+          }}
+          onAcceptQuest={(questId: string) => {
+            const rec = readMapSave();
+            const quest = questById(questId);
+            if (!quest || questStatus(rec, quest) !== "available") return false;
+            writeMapSave({ ...rec, questsActive: [...(rec.questsActive ?? []), questId] });
+            return true;
+          }}
+          onTurnInQuest={(questId: string) => {
+            const rec = readMapSave();
+            const quest = questById(questId);
+            if (!quest || questStatus(rec, quest) !== "ready") return false;
+            if (testMode) setTestEmber(testEmber + quest.reward);
+            // Reward potions go to whichever hero has room (mana potions try the casters
+            // first); a potion nobody has room for is dropped, same as a full-party chest find.
+            const bags = Object.fromEntries(Object.entries(rec.bags).map(([hero, bag]) => [hero, { ...bag }]));
+            for (const kind of quest.rewardPotions) {
+              const heroes = Object.keys(bags);
+              const order = kind === "manaMid" || kind === "manaSmall" || kind === "manaLarge" ? [...heroes].sort((a, b) => Number(b === "Voss" || b === "Salazar") - Number(a === "Voss" || a === "Salazar")) : heroes;
+              const taker = order.find((hero) => (bags[hero]![kind] ?? 0) < POTION_CARRY_MAX[kind]);
+              if (taker) bags[taker]![kind] = (bags[taker]![kind] ?? 0) + 1;
+            }
+            writeMapSave({
+              ...rec,
+              bags,
+              ember: testMode ? rec.ember ?? 0 : (rec.ember ?? 0) + quest.reward,
+              emberSeeded: true,
+              questsActive: (rec.questsActive ?? []).filter((id) => id !== questId),
+              questsDone: [...(rec.questsDone ?? []), questId],
             });
             return true;
           }}
@@ -4248,6 +4334,9 @@ function MapEditorScreen({
           (p.rot ?? 0) === (selectedPlacedDecoration.rot ?? 0),
       )
     : undefined;
+  const selectedPlacementIsSolidHouse = !!selectedPlacement && (
+    HOUSE_DECOR_IDS.has(selectedPlacement.id) || BIG_HOUSE_DECOR_IDS.has(selectedPlacement.id) || SOLID_HOUSE_DECOR_IDS.has(selectedPlacement.id)
+  );
 
   /**
    * Flip one of a placement's rule switches. Off is stored as absent rather than
@@ -5702,8 +5791,8 @@ function MapEditorScreen({
               >
                 <input
                   type="checkbox"
-                  disabled={!selectedPlacement}
-                  checked={!!selectedPlacement?.blocksPath}
+                  disabled={!selectedPlacement || selectedPlacementIsSolidHouse}
+                  checked={!!selectedPlacement?.blocksPath || selectedPlacementIsSolidHouse}
                   onChange={() => toggleDecorationRule("blocksPath")}
                 />
                 <span className="text-muted">Bloquear caminho</span>

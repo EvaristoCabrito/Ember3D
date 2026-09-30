@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { TERRAIN } from "./data.ts";
+import { BIG_HOUSE_DECOR_IDS, FOOTPRINT_TYPE_6, HOUSE_DECOR_IDS, placedBlockingFootprint, SOLID_HOUSE_DECOR_IDS, TERRAIN } from "./data.ts";
 import { HEX_BLOCKED, HEX_HIGH, buildDecorOverlay, hexDef, hexProps } from "./hexprops.ts";
 import type { DecorationPlacement, TerrainId } from "./types.ts";
 
@@ -98,6 +98,24 @@ test("a multi-hex footprint marks every cell it covers", () => {
   assert.equal(hexProps(tiles, COLS, 3, 1, overlay).blocked, true);
   assert.equal(hexProps(tiles, COLS, 4, 1, overlay).blocked, true);
   assert.equal(hexProps(tiles, COLS, 5, 1, overlay).blocked, false);
+});
+
+test("each house blocks its complete ground footprint even when its saved checkbox is off", () => {
+  const tiles = board();
+  const houseIds = [...HOUSE_DECOR_IDS, ...BIG_HOUSE_DECOR_IDS, ...SOLID_HOUSE_DECOR_IDS];
+  assert.ok(houseIds.length > 0);
+  for (const id of houseIds) {
+    const placement = { id, x: 4, y: 3 };
+    const overlay = buildDecorOverlay([placement], COLS, ROWS, placedBlockingFootprint);
+    for (const { dx, dy } of placedBlockingFootprint(placement)) {
+      assert.equal(hexDef(tiles, COLS, placement.x + dx, placement.y + dy, overlay).passable, false, `${id} blocks ${placement.x + dx},${placement.y + dy}`);
+    }
+    if (id === "burnt-house-ruins") {
+      assert.deepEqual(placedBlockingFootprint(placement), FOOTPRINT_TYPE_6.map(({ dx, dy }) => ({ dx: dx - 2, dy })), `${id} uses Type 6 shifted two tiles left`);
+    } else if (HOUSE_DECOR_IDS.has(id) || id === "burning-hamlet") {
+      assert.equal(placedBlockingFootprint(placement).length, 5, `${id} keeps the existing house footprint`);
+    }
+  }
 });
 
 test("two props on one cell contribute both flags", () => {

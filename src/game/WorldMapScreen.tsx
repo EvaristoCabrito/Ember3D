@@ -26,6 +26,7 @@ export function WorldMapScreen({
   locations,
   status,
   missionStatus,
+  missionsOf = missionsForLocation,
   ember,
   test,
   muted,
@@ -39,6 +40,9 @@ export function WorldMapScreen({
   locations: WorldLocation[];
   status: (loc: WorldLocation) => LocationStatus;
   missionStatus: (missionId: string) => LocationStatus;
+  /** The missions of a location that are actually on the map right now (hidden, quest-gated
+   * ones left out — see progression.ts). Defaults to every mission of the location. */
+  missionsOf?: (loc: WorldLocation) => Mission[];
   ember: number;
   test: boolean;
   muted: boolean;
@@ -335,7 +339,7 @@ export function WorldMapScreen({
           <div className="absolute inset-0">
             {locations.map((loc) => {
               const st = status(loc);
-              const missions = missionsForLocation(loc);
+              const missions = missionsOf(loc);
               const multi = missions.length > 1;
               return (
                 <button
@@ -428,7 +432,7 @@ export function WorldMapScreen({
       {open && (
         <LocationPanel
           location={open}
-          missions={missionsForLocation(open)}
+          missions={missionsOf(open)}
           missionStatus={missionStatus}
           test={test}
           onPick={(id) => {

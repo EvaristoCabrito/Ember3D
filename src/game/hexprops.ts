@@ -58,6 +58,8 @@ export function buildDecorOverlay(
     // BARRICADE_LIKE_DECOR is) so it also covers every house already placed on an existing
     // map, not only new placements going forward.
     const isHouse = HOUSE_DECOR_IDS.has(p.id) || BIG_HOUSE_DECOR_IDS.has(p.id) || SOLID_HOUSE_DECOR_IDS.has(p.id);
+    // Houses block every board hex in their authored footprint. The footprint describes
+    // the house's ground base, so movement cannot route through or highlight the structure.
     // A locked chest is solid until picked, same as a house — folded in here rather than
     // stamping "chest" terrain under it (see DECORATIONS.locked-chest's own comment), so
     // the real floor stays untouched and every existing placement is covered for free.
