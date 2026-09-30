@@ -1449,7 +1449,7 @@ export class ThreeBattleRenderer {
       // Same fade-in/out and post-action player-unit dimming as
       // renderUnitsAndOverlays' ctx.globalAlpha — real per-unit opacity, not shared, since
       // entry.material is this unit's own instance (see unitTexCache's comment).
-      entry.material.opacity = u.fade * (u.moved && u.side === "player" && engine.phase === "player" && !engine.isAnimating() ? 0.8 : 1);
+      entry.material.opacity = u.fade * (u.moved && u.side === "player" && engine.phase === "player" && !engine.isAnimating() ? 0.9 : 1);
 
       const anchor = engine.unitAnchor(u);
       // Canvas2D draws the image at local Y in [-h+footOffset, footOffset] (Y-down, relative
@@ -1856,6 +1856,7 @@ export class ThreeBattleRenderer {
       this.hemiLight,
       { cssW, cssH, camX: this.engine.camX, camY: this.engine.camY },
       (x, y) => this.cellAtWorld(x, y),
+      this.unitFeetForMist(),
     );
     // MILESTONE 2 — the sun has to re-aim every frame too, for the same reason the camera does:
     // the shadow-caster boxes are fixed in world space, only the view of them pans.
@@ -2254,6 +2255,18 @@ export class ThreeBattleRenderer {
     const mat = occluderMaterial(tex);
     this.unitOccluderMatCache.set(tex, mat);
     return mat;
+  }
+  /** Where each visible unit's feet are (scene space), for Fog 5's boots-in-mist veil. Read-only
+   * over the unit meshes syncUnits already positioned this frame. */
+  private unitFeetForMist(): { x: number; y: number; halfW: number; band: number }[] {
+    const feet: { x: number; y: number; halfW: number; band: number }[] = [];
+    for (const entry of this.unitEntries.values()) {
+      if (!entry.mesh.visible || !entry.fogCut.visible) continue;
+      const sy = Math.abs(entry.mesh.scale.y);
+      const sx = Math.abs(entry.mesh.scale.x);
+      feet.push({ x: entry.mesh.position.x, y: entry.mesh.position.y - sy * 0.42, halfW: sx * 0.3, band: sy * 0.28 });
+    }
+    return feet;
   }
   private unitFogCutMatCache = new Map<THREE.Texture, THREE.MeshBasicMaterial>();
   /** Depth-only twin of a unit's sprite for its fogCut — same recipe as decorFogCutMaterialFor. */

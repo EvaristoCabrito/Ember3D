@@ -9660,7 +9660,7 @@ export class BattleEngine {
       // A unit only dims after every queued animation has completed. Marking it as moved
       // happens when the action starts, so dimming immediately would make a Multi-Shot
       // archer translucent before its last arrow has landed.
-      ctx.globalAlpha = u.fade * (u.moved && u.side === "player" && this.phase === "player" && !this.active ? 0.8 : 1);
+      ctx.globalAlpha = u.fade * (u.moved && u.side === "player" && this.phase === "player" && !this.active ? 0.9 : 1);
       if (!skipUnitShadow) {
         // A soft cast shadow instead of a flat dark puddle: a radial gradient (center dark,
         // fading fully transparent at the edge) offset toward shadowDir so it reads as light
@@ -9923,8 +9923,8 @@ export class BattleEngine {
         const { cx, cy } = this.hexCenter(burst.x, burst.y);
         const k = burst.t / burst.max;
         const fade = Math.max(0, 1 - k);
-        const radius = tile * (0.34 + k * 0.72);
         const venom = burst.kind === "causticVenom";
+        const radius = tile * (0.34 + k * 0.72);
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
         const glow = ctx.createRadialGradient(cx, cy - tile * 0.1, 0, cx, cy - tile * 0.1, radius);
