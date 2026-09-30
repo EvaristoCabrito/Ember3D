@@ -1005,6 +1005,27 @@
         "x": 22,
         "y": 4,
         "level": 11
+      },
+      {
+        "name": "Zumbi",
+        "classId": "zombie",
+        "x": 14,
+        "y": 19,
+        "level": 11
+      },
+      {
+        "name": "Zumbi",
+        "classId": "zombie",
+        "x": 24,
+        "y": 20,
+        "level": 11
+      },
+      {
+        "name": "Zumbi",
+        "classId": "zombie",
+        "x": 19,
+        "y": 13,
+        "level": 11
       }
     ],
     "neutralSpawns": [

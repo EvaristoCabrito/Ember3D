@@ -93,6 +93,26 @@ export function portraitFor(sprite: SpriteId): { src: string; framed: boolean; p
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
 const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "troll2", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
 
+// Real load progress for the title screen's loading bar: every image request counts once when it
+// is asked for and once when it settles (loaded or failed). Batches are requested as earlier
+// ones resolve, so the raw ratio can dip; the title screen keeps the bar monotonic.
+let artRequested = 0;
+let artSettled = 0;
+const artListeners = new Set<() => void>();
+function artChanged(): void {
+  for (const listener of artListeners) listener();
+}
+export function subscribeArtProgress(listener: () => void): () => void {
+  artListeners.add(listener);
+  return () => {
+    artListeners.delete(listener);
+  };
+}
+/** 0..1 share of the image requests made so far that have settled. */
+export function artProgress(): number {
+  return artRequested === 0 ? 0 : artSettled / artRequested;
+}
+
 const LOAD_POOL = 8;
 let loadActive = 0;
 const loadWait: (() => void)[] = [];
@@ -120,6 +140,8 @@ function spriteFrameSrc(id: SpriteId, frame: string, cacheBust = ""): string {
   return `/game/sprites/${directory}/${frame}.png${cacheBust}`;
 }
 function loadImage(src: string): Promise<HTMLImageElement> {
+  artRequested++;
+  artChanged();
   return acquireLoad().then(
     () =>
       new Promise<HTMLImageElement>((resolve, reject) => {
@@ -133,6 +155,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         const done = () => {
           window.clearTimeout(t);
           releaseLoad();
+          artSettled++;
+          artChanged();
         };
         img.onload = () => {
           done();
@@ -400,8 +424,9 @@ export async function loadGameArt(): Promise<GameArt> {
     BirolhoLegs2: { n: 32, bust: "" },
     // Walk Left footage only; move-*.png is its mirror, same as BirolhoLegs above.
     troll2: { n: 32, bust: "" },
-    // Zombie: Walk Left footage (video 1, 3-5 s); move-*.png is its mirror and the renderer
-    // mirrors it back for left-facing movement, like troll2.
+    // Zombie: side-on walk from video 2 (2.05-3.9 s, two real strides), 32 frames like every
+    // other long sheet; move-*.png is its mirror and the renderer mirrors it back for
+    // left-facing movement.
     zombie: { n: 32, bust: "" },
     zombie2: { n: 12, bust: "" },
     // Right-facing dash (the video has no walk loop); the renderer mirrors it for leftward travel.

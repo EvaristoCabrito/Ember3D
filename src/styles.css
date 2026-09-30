@@ -443,3 +443,186 @@
 ::-webkit-scrollbar-corner {
   background: #100d0c;
 }
+
+/* Title screen loading bar — dark fantasy. Its own classes; title-hero / title-veil above stay
+   untouched. Fill width is driven by real art-loading progress (see TitleLoader in GameApp). */
+.title-loader {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  bottom: max(1.75rem, calc(env(safe-area-inset-bottom) + 1.25rem));
+  width: min(26rem, calc(100% - 3rem));
+  transform: translateX(-50%);
+  transition: opacity 900ms ease, transform 900ms ease;
+}
+.title-loader.is-leaving {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+}
+.title-loader-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.55rem;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #b89a70;
+  text-shadow: 0 0 10px rgba(255, 110, 40, 0.22), 0 1px 2px #000;
+  transition: color 500ms ease;
+}
+.title-loader-pct {
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+  color: #dfbf8e;
+}
+.title-loader.is-ready .title-loader-label {
+  color: #e8c79a;
+}
+.title-loader-frame {
+  position: relative;
+  padding: 3px;
+  background: linear-gradient(180deg, #2a231c 0%, #0c0a08 55%, #211a14 100%);
+  border: 1px solid rgba(190, 150, 95, 0.5);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px #000, inset 0 0 0 1px rgba(255, 220, 160, 0.07), inset 0 0 10px rgba(0, 0, 0, 0.95), 0 8px 26px rgba(0, 0, 0, 0.8);
+}
+.title-loader-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  background: #060504;
+  box-shadow: inset 0 2px 6px #000, inset 0 -1px 0 rgba(255, 210, 150, 0.05);
+}
+.title-loader-fill {
+  position: relative;
+  height: 100%;
+  min-width: 2px;
+  /* Steady gradient across whatever length is filled, brightest at the leading edge, so the
+     fill always reads as exactly its real width; the motion comes from the sheen below. */
+  background: linear-gradient(90deg, #4a1408 0%, #a33210 45%, #e2681e 85%, #ffbe55 100%);
+  box-shadow: 0 0 14px rgba(255, 110, 30, 0.6), inset 0 1px 0 rgba(255, 225, 160, 0.55), inset 0 -3px 5px rgba(60, 10, 0, 0.65);
+  transition: width 420ms cubic-bezier(0.3, 0.7, 0.2, 1), filter 600ms ease;
+}
+/* A slow molten sheen sliding along the fill. */
+.title-loader-fill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 225, 160, 0.38) 50%, transparent 100%);
+  background-size: 45% 100%;
+  background-repeat: no-repeat;
+  animation: title-loader-sheen 2.4s ease-in-out infinite;
+}
+/* Cracked, ridged look: dark diagonal strata drifting along the molten fill. */
+.title-loader-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(115deg, rgba(0, 0, 0, 0.3) 0 5px, transparent 5px 13px);
+  background-size: 26px 100%;
+  animation: title-loader-strata 1.8s linear infinite;
+  mix-blend-mode: multiply;
+}
+.title-loader.is-ready .title-loader-fill {
+  filter: brightness(1.2) saturate(1.1);
+}
+.title-loader-spark {
+  position: absolute;
+  z-index: 1;
+  right: -10px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translateY(-50%);
+  background: radial-gradient(circle, #fff4cf 0%, #ffb04a 34%, rgba(255, 90, 20, 0) 70%);
+  animation: title-loader-flicker 0.7s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.title-loader-cap {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(135deg, #e0c08c, #4f3a26);
+  border: 1px solid #000;
+  box-shadow: 0 0 7px rgba(0, 0, 0, 0.9), inset 0 0 2px rgba(255, 235, 190, 0.6);
+}
+.title-loader-cap-l {
+  left: -7px;
+  transform: translateY(-50%) rotate(45deg);
+}
+.title-loader-cap-r {
+  right: -7px;
+  transform: translateY(-50%) rotate(45deg);
+}
+.title-loader-embers {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% - 2px);
+  height: 30px;
+  pointer-events: none;
+}
+.title-loader-embers i {
+  position: absolute;
+  bottom: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #ffb04a;
+  box-shadow: 0 0 6px 1px rgba(255, 120, 30, 0.9);
+  opacity: 0;
+  animation: title-loader-rise linear infinite;
+}
+@keyframes title-loader-sheen {
+  from {
+    background-position: -60% 0;
+  }
+  to {
+    background-position: 160% 0;
+  }
+}
+@keyframes title-loader-strata {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 26px 0;
+  }
+}
+@keyframes title-loader-flicker {
+  from {
+    opacity: 0.65;
+    transform: translateY(-50%) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.15);
+  }
+}
+@keyframes title-loader-rise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(1);
+  }
+  15% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(7px, -30px) scale(0.3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .title-loader-fill::before,
+  .title-loader-fill::after,
+  .title-loader-spark,
+  .title-loader-embers i {
+    animation: none;
+  }
+  .title-loader-embers i {
+    opacity: 0;
+  }
+}

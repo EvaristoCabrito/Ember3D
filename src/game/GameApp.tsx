@@ -1,7 +1,7 @@
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, ChevronLeft, ChevronUp, Dices, Grip, ListOrdered, Pencil, RotateCcw, Shuffle, SlidersHorizontal, Swords, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { loadGameArt, portraitFor, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
+import { artProgress, loadGameArt, portraitFor, subscribeArtProgress, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
 import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { BattleCanvas } from "./BattleCanvas";
 import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } from "./gfx/params";
@@ -2552,6 +2552,7 @@ function TitleScreen({
   onContinue: () => void;
   onTest: () => void;
 }) {
+  const progress = useArtLoadProgress(ready);
   return (
     <section className="relative min-h-dvh flex flex-col overflow-hidden">
       <div className="title-hero absolute inset-0" aria-hidden />
@@ -2576,7 +2577,9 @@ function TitleScreen({
       >
         Modo teste
       </button>
-      <div className="relative z-10 flex flex-1 flex-col justify-end px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] max-w-xl mx-auto w-full">
+      {/* Menu column lifted to leave room for the loading bar underneath it; the tiny "Modo teste"
+          button stays where it was, bottom-left. */}
+      <div className="relative z-10 flex flex-1 flex-col justify-end px-5 pb-[max(6.5rem,calc(env(safe-area-inset-bottom)+5.5rem))] max-w-xl mx-auto w-full">
         <p className="text-sm tracking-[0.28em] uppercase text-muted mb-3">Táticas em cinzas</p>
         <h1 className="font-display text-5xl sm:text-7xl font-medium tracking-tight leading-none mb-4">Ember</h1>
         <p className="text-[11px] tracking-[0.18em] uppercase text-muted -mt-3 mb-4">Version {DISPLAY_VERSION}</p>
@@ -2598,8 +2601,70 @@ function TitleScreen({
         </div>
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}
       </div>
+      <TitleLoader progress={progress} ready={ready} />
       {help && <HelpModal onClose={onHelp} />}
     </section>
+  );
+}
+
+/** Real art-loading progress for the title screen, kept monotonic (the raw ratio can dip when a
+ * later batch of images is requested) and never shown as 100% before loading has truly finished. */
+function useArtLoadProgress(ready: boolean): number {
+  const raw = useSyncExternalStore(subscribeArtProgress, artProgress, () => 0);
+  const peak = useRef(0);
+  peak.current = Math.max(peak.current, ready ? 1 : Math.min(raw, 0.97));
+  return peak.current;
+}
+
+const LOADER_EMBERS = [
+  { x: 8, d: 0, t: 3.4 },
+  { x: 19, d: 1.1, t: 4.1 },
+  { x: 31, d: 2.2, t: 3.7 },
+  { x: 44, d: 0.5, t: 4.4 },
+  { x: 57, d: 1.7, t: 3.5 },
+  { x: 68, d: 2.9, t: 4.0 },
+  { x: 79, d: 0.9, t: 3.8 },
+  { x: 90, d: 2.4, t: 4.3 },
+];
+
+/** Dark-fantasy loading bar under the title menu: a gothic-framed trough filled with molten
+ * ember, a flickering spark at the leading edge and embers drifting off it. Fades away a moment
+ * after loading finishes. */
+function TitleLoader({ progress, ready }: { progress: number; ready: boolean }) {
+  const [leaving, setLeaving] = useState(false);
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    const fade = window.setTimeout(() => setLeaving(true), 900);
+    const remove = window.setTimeout(() => setGone(true), 1900);
+    return () => {
+      window.clearTimeout(fade);
+      window.clearTimeout(remove);
+    };
+  }, [ready]);
+  if (gone) return null;
+  const pct = Math.round(progress * 100);
+  return (
+    <div className={`title-loader${ready ? " is-ready" : ""}${leaving ? " is-leaving" : ""}`} role="progressbar" aria-label="Carregando" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+      <div className="title-loader-label">
+        <span>{ready ? "As cinzas despertaram" : "Despertando as cinzas"}</span>
+        <span className="title-loader-pct">{pct}%</span>
+      </div>
+      <div className="title-loader-frame">
+        <div className="title-loader-track">
+          <div className="title-loader-fill" style={{ width: `${pct}%` }}>
+            <span className="title-loader-spark" />
+          </div>
+        </div>
+        <span className="title-loader-cap title-loader-cap-l" aria-hidden />
+        <span className="title-loader-cap title-loader-cap-r" aria-hidden />
+        <div className="title-loader-embers" aria-hidden>
+          {LOADER_EMBERS.map((e, i) => (
+            <i key={i} style={{ left: `${Math.min(e.x, Math.max(2, pct))}%`, animationDelay: `${e.d}s`, animationDuration: `${e.t}s` }} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

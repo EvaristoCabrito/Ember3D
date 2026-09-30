@@ -4466,6 +4466,41 @@
         "y": 19,
         "level": 12,
         "guaranteedDrop": true
+      },
+      {
+        "name": "Zumbi",
+        "classId": "zombie",
+        "x": 43,
+        "y": 47,
+        "level": 10
+      },
+      {
+        "name": "Zumbi",
+        "classId": "zombie",
+        "x": 14,
+        "y": 39,
+        "level": 10
+      },
+      {
+        "name": "Zumbi",
+        "classId": "zombie",
+        "x": 32,
+        "y": 31,
+        "level": 10
+      },
+      {
+        "name": "Zumbi",
+        "classId": "zombie",
+        "x": 59,
+        "y": 45,
+        "level": 10
+      },
+      {
+        "name": "Zumbi",
+        "classId": "zombie",
+        "x": 10,
+        "y": 0,
+        "level": 10
       }
     ],
     "neutralSpawns": [
