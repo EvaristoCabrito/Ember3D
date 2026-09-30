@@ -447,7 +447,12 @@ export function loadLocaisLocal(): LocaisLocal | null {
 export function saveLocaisLocal(next: LocaisLocal): boolean {
   try {
     const stamped: LocaisLocal = { ...next, knownMissionIds: ALL_LOCATIONS.flatMap((l) => l.missionIds) };
-    window.localStorage.setItem(LOCAIS_LOCAL_KEY, JSON.stringify(stamped));
+    const serialized = JSON.stringify(stamped);
+    window.localStorage.setItem(LOCAIS_LOCAL_KEY, serialized);
+    if (window.localStorage.getItem(LOCAIS_LOCAL_KEY) !== serialized) return false;
+    window.dispatchEvent(new CustomEvent("ember:locations-saved", {
+      detail: { missionOrder: stamped.order, locationOrder: stamped.locationOrder, submaps: stamped.submaps, knownMissionIds: stamped.knownMissionIds },
+    }));
     return true;
   } catch {
     return false;
@@ -590,7 +595,9 @@ export const ALL_LOCATIONS: WorldLocation[] = (() => {
   }
   const out = WORLD_LOCATIONS.map((l) => ({
     ...l,
-    missionIds: l.missionIds.filter((id) => (moved.has(id) ? moved.get(id) === l.id : true)),
+    missionIds: ORDER[l.id] !== undefined
+      ? [...ORDER[l.id]!]
+      : l.missionIds.filter((id) => (moved.has(id) ? moved.get(id) === l.id : true)),
   }));
   for (const [missionId, locationId] of moved) {
     const target = out.find((l) => l.id === locationId);

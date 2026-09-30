@@ -46,6 +46,7 @@ import {
   loadActiveDrafts,
   loadActiveVersions,
   loadLocaisLocal,
+  LOCAIS_LOCAL_KEY,
   loadVersionStore,
   locationFill,
   locationForMission,
@@ -804,28 +805,21 @@ export function GameApp() {
   });
   const [campaignMissionRevision, setCampaignMissionRevision] = useState(0);
   useEffect(() => {
-    const applySavedLocations = (event: Event) => {
-      const detail = (event as CustomEvent<unknown>).detail;
-      if (!detail || typeof detail !== "object" || Array.isArray(detail)) return;
-      const rec = detail as Record<string, unknown>;
-      const nested = rec.missionOrder;
-      const missionOrder: Record<string, string[]> | null =
-        nested && typeof nested === "object" && !Array.isArray(nested)
-          ? (nested as Record<string, string[]>)
-          : !("missionOrder" in rec) && !("locationOrder" in rec)
-            ? (rec as Record<string, string[]>)
-            : null;
-      const locationOrder = Array.isArray(rec.locationOrder) ? (rec.locationOrder as string[]) : undefined;
-      const submapsDetail =
-        rec.submaps && typeof rec.submaps === "object" && !Array.isArray(rec.submaps)
-          ? (rec.submaps as Record<string, { missionId: string; floor: number }[]>)
-          : undefined;
-      const knownMissionIds = Array.isArray(rec.knownMissionIds) ? (rec.knownMissionIds as string[]) : undefined;
-      if (missionOrder) setCampaignLocations(locationsForOrder(missionOrder, locationOrder, submapsDetail, knownMissionIds));
+    const refreshLocations = () => {
+      const local = loadLocaisLocal();
+      setCampaignLocations(local ? locationsForOrder(local.order, local.locationOrder, local.submaps, local.knownMissionIds) : ALL_LOCATIONS);
     };
-    window.addEventListener("ember:locations-saved", applySavedLocations);
-    return () => window.removeEventListener("ember:locations-saved", applySavedLocations);
-  }, []);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === LOCAIS_LOCAL_KEY || event.key === null) refreshLocations();
+    };
+    refreshLocations();
+    window.addEventListener("ember:locations-saved", refreshLocations);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("ember:locations-saved", refreshLocations);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [ALL_LOCATIONS]);
   useEffect(() => {
     const refreshMissions = () => setCampaignMissionRevision((revision) => revision + 1);
     window.addEventListener("ember:missions-saved", refreshMissions);
@@ -3854,7 +3848,9 @@ function MapEditorScreen({
   // Play order per location, keyed by location id. Seeded from what ALL_LOCATIONS resolved
   // to, so a location with no stored order still lists its missions in the order they play.
   const [order, setOrder] = useState<Record<string, string[]>>(
-    () => locaisLocal?.order ?? Object.fromEntries(ALL_LOCATIONS.map((l) => [l.id, [...l.missionIds]])),
+    () => Object.fromEntries((locaisLocal
+      ? locationsForOrder(locaisLocal.order, locaisLocal.locationOrder, locaisLocal.submaps, locaisLocal.knownMissionIds)
+      : ALL_LOCATIONS).map((l) => [l.id, [...l.missionIds]])),
   );
   // This is the chapter order between world-map markers. It is independent from the
   // missions listed inside each location and does not move the markers visually.
@@ -3866,34 +3862,33 @@ function MapEditorScreen({
   // guaranteed local save below is the only copy.
   const [submaps, setSubmaps] = useState<Record<string, { missionId: string; floor: number }[]>>(() => locaisLocal?.submaps ?? {});
 
-  /** Writes src/game/map-order.json through the dev server. Config, not a version — a new
-   * order replaces the old one rather than adding a serial. */
-  const saveOrder = async (next: Record<string, string[]>) => {
+  // Serialize repo writes so rapid arrow presses cannot let an older request win.
+  const orderWrites = useRef<Promise<void>>(Promise.resolve());
+  const saveOrder = (next: Record<string, string[]>, nextLocations = locationOrder): Promise<void> => {
     setOrder(next);
-    // The guaranteed save — see saveLocaisLocal's doc comment in mapstore.ts. Written and
-    // confirmed before the repo write is even attempted, so a missing/unreachable dev server
-    // never costs the author their change, only the bonus copy in src/game/map-order.json.
-    const localOk = saveLocaisLocal({ order: next, slots, locationOrder, submaps });
-    window.dispatchEvent(
-      new CustomEvent("ember:locations-saved", {
-        detail: { missionOrder: next, locationOrder, submaps, knownMissionIds: ALL_LOCATIONS.flatMap((l) => l.missionIds) },
-      }),
-    );
-    try {
-      const res = await fetch("/__map-order", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(next),
-      });
-      const body = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !body.ok) {
-        setNote(localOk ? "Ordem salva neste navegador." : `Não deu pra gravar a ordem: ${body.error ?? `HTTP ${res.status}`}`);
-        return;
-      }
-      setNote("Ordem das missões atualizada em src/game/map-order.json.");
-    } catch {
-      setNote(localOk ? "Ordem salva neste navegador (sem servidor de dev pro repositório)." : "NÃO SALVOU: nem localmente, nem no repositório.");
+    setLocationOrder(nextLocations);
+    const localOk = saveLocaisLocal({ order: next, slots, locationOrder: nextLocations, submaps });
+    if (!localOk) {
+      setNote("NÃO SALVOU: o navegador recusou gravar a ordem.");
+      return Promise.resolve();
     }
+    setNote("Ordem salva neste navegador e aplicada à campanha.");
+    const write = async () => {
+      try {
+        for (const [route, payload] of [["/__map-order", next], ["/__location-order", nextLocations]] as const) {
+          const res = await fetch(route, {
+            method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
+          });
+          const body = await res.json() as { ok?: boolean; error?: string };
+          if (!res.ok || !body.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+        }
+        setNote("Ordem das missões e dos Locais salva no navegador e no repositório.");
+      } catch {
+        setNote("Ordem salva neste navegador e aplicada à campanha (sem cópia no repositório).");
+      }
+    };
+    orderWrites.current = orderWrites.current.then(write, write);
+    return orderWrites.current;
   };
 
   /** Sends a mission to another location. It leaves every other list and joins the end of
@@ -3902,7 +3897,7 @@ function MapEditorScreen({
     const next: Record<string, string[]> = {};
     for (const [locId, ids] of Object.entries(order)) {
       const kept = ids.filter((id) => id !== missionId);
-      if (kept.length > 0) next[locId] = kept;
+      next[locId] = kept;
     }
     next[toLocationId] = [...(next[toLocationId] ?? []), missionId];
     void saveOrder(next);
@@ -3934,14 +3929,12 @@ function MapEditorScreen({
   };
 
   const moveLocationInOrder = (locationId: string, dir: -1 | 1) => {
-    setLocationOrder((current) => {
-      const next = [...current];
-      const i = next.indexOf(locationId);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= next.length) return current;
-      [next[i], next[j]] = [next[j]!, next[i]!];
-      return next;
-    });
+    const next = [...locationOrder];
+    const i = next.indexOf(locationId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j]!, next[i]!];
+    void saveOrder(order, next);
   };
 
   const versions = versionStore[draft.id] ?? [];
@@ -4153,11 +4146,24 @@ function MapEditorScreen({
   const refreshLocaisState = () => {
     const fresh = loadLocaisLocal();
     if (!fresh) return;
-    setOrder(fresh.order);
+    setOrder(Object.fromEntries(locationsForOrder(fresh.order, fresh.locationOrder, fresh.submaps, fresh.knownMissionIds).map((l) => [l.id, [...l.missionIds]])));
     setSlots(fresh.slots);
     setLocationOrder(fresh.locationOrder);
     setSubmaps(fresh.submaps ?? {});
   };
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== LOCAIS_LOCAL_KEY && event.key !== null) return;
+      const fresh = loadLocaisLocal();
+      if (!fresh) return;
+      setOrder(Object.fromEntries(locationsForOrder(fresh.order, fresh.locationOrder, fresh.submaps, fresh.knownMissionIds).map((l) => [l.id, [...l.missionIds]])));
+      setSlots(fresh.slots);
+      setLocationOrder(fresh.locationOrder);
+      setSubmaps(fresh.submaps ?? {});
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
   /** Writes the Locais configuration — which missions each location holds, in what order,
    * and how many it is meant to hold. The local save (see saveLocaisLocal in mapstore.ts) is
    * the one this promises: it always works, needs no dev server, and is what every other
@@ -4167,12 +4173,8 @@ function MapEditorScreen({
    * between "saved" and "NÃO SALVOU" the way it used to be. */
   const saveScenarios = async () => {
     setBigNote(null);
+    await orderWrites.current;
     const localOk = saveLocaisLocal({ order, slots, locationOrder, submaps });
-    window.dispatchEvent(
-      new CustomEvent("ember:locations-saved", {
-        detail: { missionOrder: order, locationOrder, submaps, knownMissionIds: ALL_LOCATIONS.flatMap((l) => l.missionIds) },
-      }),
-    );
     if (!localOk) {
       setBigNote({
         ok: false,
