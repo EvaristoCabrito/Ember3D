@@ -201,6 +201,8 @@ export interface FireballVfxRequest {
   tiles: Point[];
 }
 export type FireballVfxEvent = { id: string; phase: "launch" | "impact" | "complete" };
+export type CausticVenomVfxRequest = FireballVfxRequest;
+export type CausticVenomVfxEvent = FireballVfxEvent;
 export interface PhantasmalForceVfxRequest { id: string; target: Point; targetUnitId: string }
 export type PhantasmalForceVfxEvent = { id: string; phase: "impact" | "complete" };
 export interface BlessVfxRequest { id: string; center: Point; allies: { id: string; x: number; y: number; distanceHexes: number }[] }
@@ -505,6 +507,9 @@ interface SpellAnim {
   fireballVfxLaunched?: boolean;
   fireballImpact?: boolean;
   fireballComplete?: boolean;
+  causticVenomVfxId?: string;
+  causticVenomImpact?: boolean;
+  causticVenomComplete?: boolean;
   phantasmalVfxId?: string;
   phantasmalImpact?: boolean;
   phantasmalComplete?: boolean;
@@ -1297,6 +1302,10 @@ export class BattleEngine {
   readonly fireballVfxEvents: FireballVfxEvent[] = [];
   fireballVfxAvailable = false;
   private fireballVfxSequence = 0;
+  readonly causticVenomVfxRequests: CausticVenomVfxRequest[] = [];
+  readonly causticVenomVfxEvents: CausticVenomVfxEvent[] = [];
+  causticVenomVfxAvailable = false;
+  private causticVenomVfxSequence = 0;
   readonly phantasmalForceVfxRequests: PhantasmalForceVfxRequest[] = [];
   readonly phantasmalForceVfxEvents: PhantasmalForceVfxEvent[] = [];
   phantasmalForceVfxAvailable = false;
@@ -2737,6 +2746,7 @@ export class BattleEngine {
       return;
     }
     const syncFireballVfx = a.spellKind === "fireball" && this.fireballVfxAvailable && !this.reducedMotion && !!a.projectileTo;
+    const syncCausticVenomVfx = a.spellKind === "causticVenom" && this.causticVenomVfxAvailable && !this.reducedMotion && !!a.projectileTo;
     const syncPhantasmalVfx = a.spellKind === "phantasmalForce" && this.phantasmalForceVfxAvailable && !this.reducedMotion;
     const syncBurningHandsVfx = a.spellKind === "burningHands" && this.burningHandsV2VfxAvailable && !this.reducedMotion;
     if (a.spellKind === "cleave" && !a.cleaveVfxQueued && a.t >= 0.18 && !this.reducedMotion) {
@@ -2781,6 +2791,23 @@ export class BattleEngine {
         } else if (event.phase === "impact") a.fireballImpact = true;
         else if (event.phase === "complete") a.fireballComplete = true;
       }
+    }
+    if (syncCausticVenomVfx) {
+      if (!a.causticVenomVfxId) {
+        const id = `caustic-venom-${++this.causticVenomVfxSequence}`;
+        a.causticVenomVfxId = id;
+        this.causticVenomVfxRequests.push({ id, casterId: att.id, target: { ...a.projectileTo! }, tiles: a.tiles.map((tile) => ({ ...tile })) });
+      }
+      for (let index = this.causticVenomVfxEvents.length - 1; index >= 0; index--) {
+        const event = this.causticVenomVfxEvents[index]!;
+        if (event.id !== a.causticVenomVfxId) continue;
+        this.causticVenomVfxEvents.splice(index, 1);
+        if (event.phase === "impact") a.causticVenomImpact = true;
+        else if (event.phase === "complete") a.causticVenomComplete = true;
+      }
+      // If the 3D renderer is interrupted mid-cast, combat still resolves on schedule.
+      if (!a.causticVenomImpact && a.t >= SPELL_TRAVEL + 0.38) a.causticVenomImpact = true;
+      if (!a.causticVenomComplete && a.t >= SPELL_TRAVEL + 2.3) a.causticVenomComplete = true;
     }
     if (syncPhantasmalVfx) {
       if (!a.phantasmalVfxId) {
@@ -2831,7 +2858,7 @@ export class BattleEngine {
     // reach (bow shots, Cleave, Sweep, the two charge skills) are not magic — only the actual
     // spellcasters' kinds get the casting cue below.
     const meleeSkill = a.spellKind === "cleave" || a.spellKind === "sweep" || a.spellKind === "shoulderSmash" || a.spellKind === "stampede";
-    if (!a.hit && (syncFireballVfx ? a.fireballImpact === true : syncPhantasmalVfx ? a.phantasmalImpact === true : syncMagicMissileV2Vfx ? a.magicMissileV2Impact === true : syncBurningHandsVfx ? a.burningHandsReleased === true : a.t >= hitAt)) {
+    if (!a.hit && (syncFireballVfx ? a.fireballImpact === true : syncCausticVenomVfx ? a.causticVenomImpact === true : syncPhantasmalVfx ? a.phantasmalImpact === true : syncMagicMissileV2Vfx ? a.magicMissileV2Impact === true : syncBurningHandsVfx ? a.burningHandsReleased === true : a.t >= hitAt)) {
       a.hit = true;
       if (a.spellKind === "webOfDreams") sfxPlay.dreamingWeb();
       else if (att.sprite === "cultist-v2") sfxPlay.cultistV2Spellcast();
@@ -3000,11 +3027,8 @@ export class BattleEngine {
           }
         }
       }
-      if (a.spellKind === "causticVenom") {
-        this.emitFireballBurstFx(a.tiles, a.spellKind);
-      }
       const elementFx = a.spellKind ? SPELL_ELEMENT_FX[a.spellKind] : undefined;
-      if (elementFx && !(a.spellKind === "burningHands" && syncBurningHandsVfx)) this.queueElementalFx(elementFx.kind, a.tiles, elementFx.duration);
+      if (elementFx && !(a.spellKind === "burningHands" && syncBurningHandsVfx) && !(a.spellKind === "causticVenom" && syncCausticVenomVfx)) this.queueElementalFx(elementFx.kind, a.tiles, elementFx.duration);
       if (((a.spellKind === "cleave" && !a.cleaveVfxQueued) || a.spellKind === "shoulderSmash") && a.tiles.length > 0) {
         const { a0, a1 } = this.arcSweepAngles({ x: att.x, y: att.y }, a.tiles);
         this.emitBladeFx("arc", att.x, att.y, { a0, a1, warm: a.spellKind === "shoulderSmash" });
@@ -3022,10 +3046,12 @@ export class BattleEngine {
     // The slower spell bolts (SPELL_TRAVEL) need the step to outlast their flight, impact and
     // trail afterglow.
     const boltSpell = a.spellKind === "magicMissile" || a.spellKind === "magicMissileV2" || a.spellKind === "fireball" || a.spellKind === "causticVenom" || a.spellKind === "fantomForce";
-    const spellEnd = Math.max(att.sprite === "conjurer" ? 0.72 : 0.55, boltSpell ? SPELL_TRAVEL + MISSILE_AFTERGLOW + 0.15 : 0, syncPhantasmalVfx ? 1.5 : 0);
+    const spellEnd = Math.max(att.sprite === "conjurer" ? 0.72 : 0.55, boltSpell ? SPELL_TRAVEL + MISSILE_AFTERGLOW + 0.15 : 0, syncPhantasmalVfx ? 1.5 : 0, syncCausticVenomVfx ? SPELL_TRAVEL + 2.3 : 0);
     if (syncMagicMissileV2Vfx && a.magicMissileV2VfxId === "" && a.t >= spellEnd) a.magicMissileV2Complete = true;
     if (syncFireballVfx) {
       if (a.fireballComplete && this.heldDone(a)) this.finishCombat(att);
+    } else if (syncCausticVenomVfx) {
+      if (a.causticVenomComplete && this.heldDone(a)) this.finishCombat(att);
     } else if (syncPhantasmalVfx) {
       if (a.phantasmalComplete && this.heldDone(a)) this.finishCombat(att);
     } else if (syncMagicMissileV2Vfx) {
@@ -9956,6 +9982,7 @@ export class BattleEngine {
         // The integrated Three.js fireball is the only projectile visual when its renderer is
         // active; never layer the legacy Canvas sprite over the original 3D tavern fireball.
         if (m.kind === "fireball" && this.fireballVfxAvailable && !this.reducedMotion) continue;
+        if (m.kind === "causticVenom" && this.causticVenomVfxAvailable && !this.reducedMotion) continue;
         const from = this.hexCenter(m.fromX, m.fromY);
         const to = this.hexCenter(m.toX, m.toY);
         const dxT = to.cx - from.cx;

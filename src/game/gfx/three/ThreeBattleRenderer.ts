@@ -53,6 +53,7 @@ import { LIGHT_DECAY, LIGHT_DEFS, LIGHT_RADIUS_MUL, UNIT_LIGHT_DEFS, flickerAt, 
 import { ThreeAtmosphere } from "./ThreeAtmosphere";
 import { decorationAnchor } from "../decorationAnchor";
 import { FireballVFX } from "./FireballVFX";
+import { CausticVenomVFX } from "./CausticVenomVFX";
 import { getActivePhantasmalForceSettings, PhantasmalForceVFX } from "./PhantasmalForceVFX";
 import { BlessVFX, getActiveBlessVfxSettings } from "./BlessVFX";
 import { getActiveMagicMissileV2Settings, MagicMissileV2VFX } from "./MagicMissileV2VFX";
@@ -519,6 +520,7 @@ export class ThreeBattleRenderer {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private fireballVfx: FireballVFX | null = null;
+  private causticVenomVfx: CausticVenomVFX | null = null;
   private phantasmalForceVfx: PhantasmalForceVFX | null = null;
   private blessVfx: BlessVFX | null = null;
   private magicMissileV2Vfx: MagicMissileV2VFX | null = null;
@@ -820,6 +822,8 @@ export class ThreeBattleRenderer {
     // request can leave the spell without its flight or explosion when cast immediately.
     this.fireballVfx = new FireballVFX(this.scene, this.camera, this.tavernFireball);
     this.engine.fireballVfxAvailable = true;
+    this.causticVenomVfx = new CausticVenomVFX(this.scene);
+    this.engine.causticVenomVfxAvailable = true;
     this.phantasmalForceVfx = new PhantasmalForceVFX(this.scene);
     this.phantasmalForceVfx.setSettings(getActivePhantasmalForceSettings());
     this.engine.phantasmalForceVfxAvailable = true;
@@ -1836,6 +1840,7 @@ export class ThreeBattleRenderer {
     // reproduce BattleEngine's cx/cy screen-pixel formula exactly.
     this.camera.position.set(this.engine.camX, -this.engine.camY - cssH, 100);
     this.syncFireballVfx(dt, cssW, cssH, tile);
+    this.syncCausticVenomVfx(dt, tile);
     this.syncPhantasmalForceVfx(dt, tile);
     this.syncBlessVfx(dt, tile);
     this.syncMagicMissileV2Vfx(dt, tile);
@@ -1971,6 +1976,56 @@ export class ThreeBattleRenderer {
     if (requests.length) system.update(0, width, height, tile);
     void cssW;
     void cssH;
+  }
+
+  private syncCausticVenomVfx(dt: number, tile: number): void {
+    const system = this.causticVenomVfx;
+    if (!system) return;
+    const requests = this.engine.causticVenomVfxRequests.splice(0);
+    if (!requests.length) system.update(dt);
+    for (const request of requests) {
+      const caster = this.engine.units.find((unit) => unit.id === request.casterId && unit.alive);
+      const destination = this.engine.effectAnchor(request.target.x, request.target.y);
+      if (!caster || (this.engine.fogged && !this.engine.visible(request.target.x, request.target.y)) || (this.engine.fogged && !this.engine.visible(caster.x, caster.y))) {
+        this.engine.causticVenomVfxEvents.push({ id: request.id, phase: "impact" }, { id: request.id, phase: "complete" });
+        continue;
+      }
+      const visual = this.engine.unitVisual(caster, tile);
+      const anchor = this.engine.unitAnchor(caster);
+      const direction = caster.facing < 0 ? -1 : 1;
+      const handY = anchor.worldY + visual.footY + visual.bob - visual.lift + (visual.footOffset - visual.h * 0.44) * visual.scaleY;
+      const origin = new THREE.Vector3(
+        anchor.worldX + visual.sway + direction * visual.w * visual.scaleX * 0.27,
+        -handY,
+        1.1 + (handY / tile) * 0.004 + tile * 0.01,
+      );
+      const impactHexes = request.tiles.map((cell) => {
+        const cellAnchor = this.engine.effectAnchor(cell.x, cell.y);
+        const elevation = this.engine.hexElevated(cell.x, cell.y) ? cellAnchor.tile * 0.18 : 0;
+        return new THREE.Vector3(
+          cellAnchor.worldX,
+          -(cellAnchor.worldY - elevation),
+          1.08 + (cellAnchor.worldY / tile) * 0.004 + tile * 0.012,
+        );
+      });
+      const elevation = this.engine.hexElevated(request.target.x, request.target.y) ? destination.tile * 0.18 : 0;
+      const target = new THREE.Vector3(
+        destination.worldX,
+        -(destination.worldY - elevation),
+        1.08 + (destination.worldY / tile) * 0.004 + tile * 0.012,
+      );
+      system.cast({
+        id: request.id,
+        origin,
+        target,
+        worldScale: tile,
+        impactHexes,
+        onLaunch: () => undefined,
+        onImpact: () => this.engine.causticVenomVfxEvents.push({ id: request.id, phase: "impact" }),
+        onComplete: () => this.engine.causticVenomVfxEvents.push({ id: request.id, phase: "complete" }),
+      });
+      system.update(0);
+    }
   }
 
   private syncPhantasmalForceVfx(dt: number, tile: number): void {
@@ -2495,12 +2550,15 @@ export class ThreeBattleRenderer {
     this.pendingMagicMissileV2VfxRequests.length = 0;
     this.activeMagicMissileV2VfxRequestId = null;
     this.engine.fireballVfxAvailable = false;
+    this.engine.causticVenomVfxAvailable = false;
     this.engine.phantasmalForceVfxAvailable = false;
     this.engine.blessVfxAvailable = false;
     this.engine.magicMissileV2VfxAvailable = false;
     this.engine.burningHandsV2VfxAvailable = false;
     this.fireballVfx?.dispose();
     this.fireballVfx = null;
+    this.causticVenomVfx?.dispose();
+    this.causticVenomVfx = null;
     this.phantasmalForceVfx?.dispose();
     this.phantasmalForceVfx = null;
     this.blessVfx?.dispose();
