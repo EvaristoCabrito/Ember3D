@@ -109,8 +109,21 @@ const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
 const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "troll2", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
 
 // Real load progress for the title screen's loading bar: every image request counts once when it
-// is asked for and once when it settles (loaded or failed). Batches are requested as earlier
-// ones resolve, so the raw ratio can dip; the title screen keeps the bar monotonic.
+// is asked for and once when it settles (loaded or failed). loadGameArt requests its batches one
+// after another, so "requested so far" alone would reach ~100% after the first batch; the ratio is
+// taken against the whole expected total instead — the count the last full load actually made
+// (remembered in localStorage), or ART_TOTAL_FALLBACK (measured) on a first-ever visit.
+const ART_TOTAL_KEY = "ember.artLoadTotal";
+const ART_TOTAL_FALLBACK = 3453;
+function rememberedArtTotal(): number {
+  try {
+    const n = Number(localStorage.getItem(ART_TOTAL_KEY));
+    return Number.isFinite(n) && n > 0 ? n : ART_TOTAL_FALLBACK;
+  } catch {
+    return ART_TOTAL_FALLBACK;
+  }
+}
+const artExpected = rememberedArtTotal();
 let artRequested = 0;
 let artSettled = 0;
 const artListeners = new Set<() => void>();
@@ -123,9 +136,9 @@ export function subscribeArtProgress(listener: () => void): () => void {
     artListeners.delete(listener);
   };
 }
-/** 0..1 share of the image requests made so far that have settled. */
+/** 0..1 share of the whole expected image load that has settled so far. */
 export function artProgress(): number {
-  return artRequested === 0 ? 0 : artSettled / artRequested;
+  return artSettled / Math.max(artRequested, artExpected);
 }
 
 const LOAD_POOL = 8;
@@ -638,5 +651,10 @@ export async function loadGameArt(): Promise<GameArt> {
     // priority over them while moving (see the render loop's img lookup), leaving that
     // animation dead code.
   };
+  try {
+    localStorage.setItem(ART_TOTAL_KEY, String(artRequested));
+  } catch {
+    // No storage: the next load just falls back to ART_TOTAL_FALLBACK.
+  }
   return { tiles, decorations, sprites, attacks, attacks2, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, walksUp, walksDown, walks2, walksLeft2, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
 }
