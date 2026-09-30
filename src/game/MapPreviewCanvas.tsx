@@ -62,6 +62,7 @@ export function MapPreviewCanvas({
   const pixelFxCanvasRef = useRef<HTMLCanvasElement>(null);
   const unitsCanvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const scrollContentRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<BattleEngine | null>(null);
   const redrawRef = useRef<(() => void) | null>(null);
   const armTimerRef = useRef<number | null>(null);
@@ -95,13 +96,6 @@ export function MapPreviewCanvas({
   const previewBoardWidth = Math.ceil(previewTileRadius * Math.sqrt(3) * (mission.cols + 0.5) * previewRenderScale);
   // Keep this in step with BattleEngine.boardSize, including vertical breathing room.
   const previewBoardHeight = Math.ceil(previewTileRadius * (1.5 * (mission.rows - 1) + 4.4) * previewRenderScale);
-  // Scrolling only moves the camera at PREVIEW_SCROLL_PAN_RATE of the raw scroll delta (a
-  // deliberately gentler feel than the technical grid's native scroll), so the scrollable
-  // range has to be inflated by the same factor — otherwise dragging the scrollbar all the
-  // way to an edge still pans the camera only a fraction of the way to the board's real edge,
-  // and the far side of any map bigger than a couple of screens is simply unreachable.
-  const previewScrollWidth = Math.ceil(previewBoardWidth / PREVIEW_SCROLL_PAN_RATE);
-  const previewScrollHeight = Math.ceil(previewBoardHeight / PREVIEW_SCROLL_PAN_RATE);
   const unitAt = (x: number, y: number): PreviewUnitSelection | null => {
     const groups = [
       { side: "playerSpawns" as const, units: mission.playerSpawns },
@@ -197,6 +191,18 @@ export function MapPreviewCanvas({
       const w = Math.max(1, Math.floor(viewport.clientWidth));
       const h = Math.max(1, Math.floor(viewport.clientHeight));
       if (w <= 0 || h <= 0) return;
+      // The camera can travel from one three-hex margin to the other, with the map itself
+      // between them. Convert that full camera range into native-scroll distance while
+      // preserving the preview's deliberately gentler scroll feel. Including the viewport
+      // size matters: without it the thumb reaches its end before the camera reaches the
+      // far edge on large maps, and small maps cannot expose their allowed edge margin.
+      const edgeMargin = 3 * targetTileRadius;
+      if (scrollContentRef.current) {
+        const horizontalCameraRange = Math.max(0, previewBoardWidth - w) + edgeMargin * 2;
+        const verticalCameraRange = Math.max(0, previewBoardHeight - h) + edgeMargin * 2;
+        scrollContentRef.current.style.width = `${Math.ceil(w + horizontalCameraRange / PREVIEW_SCROLL_PAN_RATE)}px`;
+        scrollContentRef.current.style.height = `${Math.ceil(h + verticalCameraRange / PREVIEW_SCROLL_PAN_RATE)}px`;
+      }
       // Keep the requested zoom percentage independent of map dimensions. The canvas is
       // rendered at the engine's nearest tile size, then scaled to the exact selected zoom.
       const renderW = Math.ceil(w / previewRenderScale);
@@ -477,8 +483,8 @@ export function MapPreviewCanvas({
       engineRef.current?.panBy(panX, panY);
       // Keep the scrollbar thumb in step with pointer panning. Updating the refs first means
       // the resulting scroll event won't apply the same camera movement a second time.
-      const scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + panX));
-      const scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + panY));
+      const scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + panX * scale / PREVIEW_SCROLL_PAN_RATE));
+      const scrollTop = Math.max(0, Math.min(viewport.scrollHeight - viewport.clientHeight, viewport.scrollTop + panY * scale / PREVIEW_SCROLL_PAN_RATE));
       horizontalScrollLeftRef.current = scrollLeft;
       verticalScrollTopRef.current = scrollTop;
       viewport.scrollLeft = scrollLeft;
@@ -617,7 +623,7 @@ export function MapPreviewCanvas({
         onContextMenu={(event) => event.preventDefault()}
         onScroll={onViewportScroll}
       >
-        <div style={{ width: `max(100%, ${previewScrollWidth}px)`, minHeight: `max(100%, ${previewScrollHeight}px)` }}>
+        <div ref={scrollContentRef} style={{ width: "100%", minHeight: "100%" }}>
           <div className="sticky left-0 top-0 w-max">
             <div className="relative">
               <canvas ref={canvasRef} className="block" />

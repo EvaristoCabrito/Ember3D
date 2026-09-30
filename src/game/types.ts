@@ -338,6 +338,8 @@ export interface DecorationDef {
   repeatGroup?: string;
   /** Optional vertical presentation multiplier for tall isometric scenery. */
   heightScale?: number;
+  /** Mirror alternating placements horizontally to add visual variety to repeated props. */
+  mirrorAlternate?: boolean;
   /** Visual multiplier applied to both dimensions without changing the footprint or rules. */
   artScale?: number;
   /** Normalized horizontal artwork offset from its measured base anchor. */

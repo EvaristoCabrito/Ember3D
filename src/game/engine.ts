@@ -2100,9 +2100,9 @@ export class BattleEngine {
   /** Point a directional sprite (conjurer / lancer) at a column so walk and attack
    * play the matching left/right cut instead of a mirrored idle. Other sprites keep
    * the historical "facing = 1 shows the sheet as drawn" convention — EXCEPT familiar3,
-   * morvenian-wolf and mordavian-wolf, whose facing drives render()'s ordinary CSS mirror
-   * (dirAction is false for them, same as every other non-directional sprite) rather than
-   * an asset pick, but which were never in this update path at all: outside faceSpriteToward, u.facing only
+   * familiar4, morvenian-wolf and mordavian-wolf, whose facing drives render()'s ordinary CSS
+   * mirror (dirAction is false for them, same as every other non-directional sprite) rather than
+   * an asset pick. Outside faceSpriteToward, u.facing only
    * ever changes from actually walking (see the stepMove branch that sets it), so a unit
    * that attacked without moving, or moved one way and then got attacked from the other
    * side, kept whatever stale facing its last step left behind instead of turning to face
@@ -2119,6 +2119,7 @@ export class BattleEngine {
         u.sprite !== "conjurer" &&
         u.sprite !== "malrec" &&
         u.sprite !== "familiar3" &&
+        u.sprite !== "familiar4" &&
         u.sprite !== "morvenian-wolf" &&
         u.sprite !== "mordavian-wolf" &&
         u.sprite !== "mordavian-wolf-final" &&
@@ -8324,7 +8325,13 @@ export class BattleEngine {
       // Facing art if the prop has it, the way isometric games do it: a drawing per facing,
       // mirrored to cover the opposite one. Only when a facing has no drawing do we fall
       // back to turning the bitmap, which tilts rather than faces and is a placeholder.
-      const facing = decorationFacing(p.id, p.rot ?? 0, (file) => this.decorArtReady(file));
+      const alternateMirror = !!def.mirrorAlternate && p.x >= this.cols / 2;
+      // Paired posts on opposite halves of the map face as mirror images across its vertical
+      // centerline. Select the baked side-4 sprite instead of flipping at render time; props
+      // without the dedicated file keep the normal facing fallback.
+      const facingRot = ((p.rot ?? 0) + (alternateMirror ? 3 : 0)) % 6;
+      const facing = decorationFacing(p.id, facingRot, (file) => this.decorArtReady(file));
+      const facingMirror = facing.mirror;
       const art = facing.own ? (this.art.decorations[facing.file] ?? img) : img;
       const anchor = decorationAnchor(art);
       let anchorDx = (anchor ? (0.5 - (anchor.u0 + anchor.u1) / 2) : 0) * w + (def.artOffsetX ?? 0) * w;
@@ -8335,7 +8342,7 @@ export class BattleEngine {
       } else if (facing.own) {
         ctx.save();
         ctx.translate(cx, cy + dy);
-        if (facing.mirror) { ctx.scale(-1, 1); anchorDx = -anchorDx; }
+        if (facingMirror) { ctx.scale(-1, 1); anchorDx = -anchorDx; }
         ctx.translate(anchorDx, anchorDy);
         ctx.drawImageLit(art, -w / 2, -h / 2, w, h);
         ctx.restore();

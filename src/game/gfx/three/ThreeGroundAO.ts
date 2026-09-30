@@ -58,6 +58,8 @@ export class GroundAO {
     groundAoSize: { value: new THREE.Vector2(1, 1) },
     groundAoStrength: { value: GROUND_AO_STRENGTH },
     groundAoDirect: { value: GROUND_AO_DIRECT },
+    /** Prevent local point lights from making individual hexes read as bright decals. */
+    groundLightCap: { value: 10 },
   };
   private texture: THREE.DataTexture | null = null;
   private key = "";
@@ -79,7 +81,11 @@ export class GroundAO {
       shader.fragmentShader = shader.fragmentShader
         .replace(
           "#include <common>",
-          "#include <common>\nvarying vec2 vGroundAoWorld;\nuniform sampler2D groundAoMap;\nuniform vec2 groundAoSize;\nuniform float groundAoStrength;\nuniform float groundAoDirect;",
+          "#include <common>\nvarying vec2 vGroundAoWorld;\nuniform sampler2D groundAoMap;\nuniform vec2 groundAoSize;\nuniform float groundAoStrength;\nuniform float groundAoDirect;\nuniform float groundLightCap;",
+        )
+        .replace(
+          "#include <output_fragment>",
+          "outgoingLight = min(outgoingLight, sampledDiffuseColor.rgb * groundLightCap);\n#include <output_fragment>",
         )
         .replace(
           "#include <aomap_fragment>",

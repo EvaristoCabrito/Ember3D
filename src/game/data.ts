@@ -481,6 +481,24 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   },
 };
 
+// Thin posts and signposts read too small against the enlarged map scenery. Keep their width
+// and gameplay footprint unchanged, but double their visible height and mirror alternating
+// placements so rows of the same prop do not look stamped from one cutout.
+const TALL_POST_DECOR_IDS = [
+  "wilds-lantern-post",
+  "wilds-weathered-signpost",
+  "wilds-lantern-signpost",
+  "city-banner-post",
+  "city-lantern-post",
+  "city-signpost",
+  "city-notice-post",
+  "lamppost",
+];
+for (const id of TALL_POST_DECOR_IDS) {
+  const def = DECORATIONS[id];
+  if (def) DECORATIONS[id] = { ...def, heightScale: 2, mirrorAlternate: true };
+}
+
 /** Every lockable-chest decoration id. Both size variants block/open the same way
  * (BattleEngine.useLockpick/adjacentLock, hexprops.buildDecorOverlay) — callers that need
  * "is this a chest" check membership here instead of one hardcoded id. */
@@ -581,8 +599,12 @@ const DECORATION_ALPHA_CLEAN = new Set([
 
 function decorationImagePath(id: string, ext: "png" | "webp"): string {
   const file = DECORATION_ALPHA_CLEAN.has(id) ? `${id}-alpha-001` : id;
+  // Both the replacement originals and their newly added side-4 files need a fresh URL:
+  // browsers may have cached the previous low-res image or even the old side-4 404.
+  const baseId = id.replace(/-side\d+$/, "");
+  const cacheVersion = TALL_POST_DECOR_IDS.includes(baseId) ? "?v=post-hd-20260930-2" : "";
   return `/game/decorations/${file}.${ext}${
-    id === "locked-chest"
+    cacheVersion || (id === "locked-chest"
       ? "?v=4"
       : id === "dead-tree" ||
           id === "fallen-log" ||
@@ -590,7 +612,7 @@ function decorationImagePath(id: string, ext: "png" | "webp"): string {
           id === "small-house" ||
           id === "stone-hut"
         ? "?v=4"
-        : ""
+        : "")
   }`;
 }
 

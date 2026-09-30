@@ -1217,7 +1217,12 @@ class RevealFog {
       },
     });
     this.mesh = new THREE.Mesh(this.geometry, this.material);
-    this.mesh.renderOrder = 11;
+    // This layer is the atmosphere that softens the game's completely opaque unseen fill.
+    // ThreeFogMask draws at order 100; placing Fog 01 behind it made the shader technically
+    // correct but entirely invisible over every unrevealed hex. Draw above that mask so the
+    // fog reads over undiscovered terrain/background, while the reveal texture still keeps
+    // every explored or visible hex completely clear.
+    this.mesh.renderOrder = 101;
     this.group.add(this.mesh);
   }
 

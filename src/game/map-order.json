@@ -6,11 +6,13 @@
     "thebridge"
   ],
   "wisp-forest": [
-    "wisp-forest-crossing",
-    "wisp-forest-2"
+    "wisp-forest-crossing"
   ],
   "estalagem": [
     "estalagem"
+  ],
+  "cemetery": [
+    "cemiterio-esquecidos"
   ],
   "ruins": [
     "muralha",
@@ -22,9 +24,6 @@
     "colina",
     "passagem",
     "profundezas"
-  ],
-  "cemetery": [
-    "cemiterio-esquecidos"
   ],
   "misty-cave": [
     "vertente",

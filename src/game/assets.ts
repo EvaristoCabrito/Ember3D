@@ -1,4 +1,4 @@
-import { DECORATIONS, decorationImage, decorationImageWebp } from "./data";
+import { DECORATIONS, decorationImage, decorationImageWebp, decorationSideFile } from "./data";
 import type { GameArt, SpriteId, TerrainId } from "./types";
 
 // Number of art variants available per terrain, e.g. plains001.png / plains002.png.
@@ -34,7 +34,9 @@ export function tileVariantName(id: TerrainId, variant: number): string {
     if (variant === 1) return "plains015";
     if (variant === 2) return "plains001";
     if (variant === 15) return "plains018";
-    // 16-20 are the five existing ground variants; 21-37 are the City tiles.
+    // Keep the old saved-map index valid while retiring that City tile.
+    if (variant === 22) return "plains024";
+    // 16-20 are the five existing ground variants; 21-37 are the City indices, with 22 retired.
     // These ranges continue the numbered art files at plains019.
     if (variant >= 16 && variant <= 37) return `plains${String(variant + 3).padStart(3, "0")}`;
     return `plains${String(variant).padStart(3, "0")}`;
@@ -248,6 +250,22 @@ export async function loadGameArt(): Promise<GameArt> {
           placeholder.height = 1;
           return placeholder;
         });
+    }),
+  );
+  // Side-specific art is optional for most props. Explicitly preload the baked mirrored
+  // variants for the tall posts so ThreeBattleRenderer can select them on its first build;
+  // otherwise a lazy image could finish after the decor mesh cache had already settled on
+  // the base-facing sprite.
+  const mirroredPostIds = Object.keys(DECORATIONS).filter((id) => DECORATIONS[id]?.mirrorAlternate);
+  await Promise.all(
+    mirroredPostIds.map(async (id) => {
+      const fileId = decorationSideFile(id, 3);
+      decorations[fileId] = await loadImage(decorationImage(fileId)).catch(() => {
+        const placeholder = new Image();
+        placeholder.width = 1;
+        placeholder.height = 1;
+        return placeholder;
+      });
     }),
   );
   const sprites = {} as Record<SpriteId, HTMLImageElement[]>;

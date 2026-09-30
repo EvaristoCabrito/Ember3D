@@ -589,6 +589,9 @@ export class ThreeBattleRenderer {
   private proxyMaterial = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
   /** Every lit sprite material (decorations + unit billboards) — see syncSpriteExposure. */
   private litSpriteMats = new Set<THREE.MeshLambertMaterial>();
+  /** Local lamp light gets a much higher sprite ceiling after daylight fades, so it can light
+   * nearby scenery and units instead of brightening only the ground beneath the source. */
+  private currentSpriteLightCap = SPRITE_LIGHT_CAP;
   private hexGeo = buildHexGeometry();
   private focusBorderGeo = buildHexBorder(0.47);
   private builtCols = -1;
@@ -791,11 +794,11 @@ export class ThreeBattleRenderer {
     // camera is looking elsewhere; POINT_LIGHT_POOL stays the floor.
     const mapUnitLights = engine.units.reduce((count, u) => {
       if (!UNIT_LIGHT_DEFS[u.classId]) return count;
-      return count + (u.classId === "familiar3" ? footprint(u).length : 1);
+      return count + (u.classId === "familiar3" ? footprint(u).length : u.classId === "familiar4" ? 3 : 1);
     }, 0);
     // Familiar lights are created after the renderer when a Conjurer summons them. Reserve
-    // room now for all three tiers (one + one + the Titan's six footprint lights).
-    const futureFamiliarLights = engine.units.filter((u) => u.classId === "conjurer").length * 8;
+    // room now for every tier (one + one + Radiante's three + the Titan's six footprint lights).
+    const futureFamiliarLights = engine.units.filter((u) => u.classId === "conjurer").length * 11;
     const mapPixelLights = engine.elementalFxPlacements.filter((p) => p.family === "procedural_pixel" && p.parameters?.lightEnabled !== false).length;
     const mapLights = engine.decorations.filter((p) => LIGHT_DEFS[p.id]).length + mapUnitLights + futureFamiliarLights + mapPixelLights;
     const poolSize = Math.max(POINT_LIGHT_POOL, mapLights);
@@ -1148,7 +1151,14 @@ export class ThreeBattleRenderer {
    * move onto this renderer and a real depth order between the two exists. */
   private ensureDecorBuilt(tile: number): void {
     const engine = this.engine;
-    const key = `${engine.mission.id}:${engine.decorations.length}:${tile}`;
+    // Props can move or change visual treatment without changing the mission id/count
+    // (editor previews and hot-reloaded DecorationDefs both do this). Include placement and
+    // render-only scale/mirror settings so the mesh cache cannot keep the old-sized art.
+    const placementKey = engine.decorations.map((p) => {
+      const def = DECORATIONS[p.id];
+      return `${p.id}@${p.x},${p.y},${p.rot ?? 0},${def?.heightScale ?? 1},${def?.artScale ?? 1},${def?.mirrorAlternate ? 1 : 0}`;
+    }).join(";");
+    const key = `${engine.mission.id}:${tile}:${placementKey}`;
     if (key === this.builtDecorKey) return;
     for (const entry of this.decorEntries) {
       this.decorGroup.remove(entry.mesh);
@@ -1168,7 +1178,12 @@ export class ThreeBattleRenderer {
       // belong in this same Three layer too; keeping them on the top 2D unit canvas would make
       // them unavoidably render over the fog regardless of their world Z.
 
-      const facing = decorationFacing(p.id, p.rot ?? 0, (file) => this.decorImageReady(file) !== null);
+      const alternateMirror = !!def.mirrorAlternate && p.x >= engine.cols / 2;
+      // Posts on opposite halves of the map use baked mirrored sprites, so paired props read
+      // symmetrically across the vertical centerline. Other facings retain decorationFacing's fallback.
+      const facingRot = ((p.rot ?? 0) + (alternateMirror ? 3 : 0)) % 6;
+      const facing = decorationFacing(p.id, facingRot, (file) => this.decorImageReady(file) !== null);
+      const facingMirror = facing.mirror;
       const fileId = facing.own ? facing.file : p.id;
       const img = this.decorImageReady(fileId);
       if (!img) continue; // art still loading — picked up on the next ensureDecorBuilt (see decorImageReady)
@@ -1190,7 +1205,7 @@ export class ThreeBattleRenderer {
       const alphaBase = artBase(img);
       let offsetX = (alphaBase ? (0.5 - (alphaBase.u0 + alphaBase.u1) / 2) : 0) * w + (def.artOffsetX ?? 0) * w;
       let offsetY = alphaBase ? (1 - alphaBase.v) * h : 0;
-      if (facing.own && facing.mirror) offsetX = -offsetX;
+      if (facingMirror) offsetX = -offsetX;
       else if (!facing.own && facing.step) {
         const angle = (facing.step * Math.PI) / 3;
         [offsetX, offsetY] = [offsetX * Math.cos(angle) - offsetY * Math.sin(angle), offsetX * Math.sin(angle) + offsetY * Math.cos(angle)];
@@ -1222,12 +1237,12 @@ export class ThreeBattleRenderer {
         // decorationFacing's own comment for why (a mirrored drawing still faces outward
         // correctly; a rotated one would tilt the art instead of turning which side faces
         // the viewer).
-        mesh.scale.set(facing.mirror ? -w : w, h, 1);
+        mesh.scale.set(facingMirror ? -w : w, h, 1);
       } else {
         // No dedicated side art: fall back to spinning the bitmap (a placeholder, same as
         // Canvas2D's own fallback) — negated for the same reason tile rotation is (see
         // ensureBuilt's comment).
-        mesh.scale.set(w, h, 1);
+          mesh.scale.set(w, h, 1);
         mesh.rotation.z = (-facing.step * Math.PI) / 3;
       }
       this.decorGroup.add(mesh);
@@ -1257,7 +1272,7 @@ export class ThreeBattleRenderer {
           shadowMesh.scale.set(w, elevation + DECOR_SHADOW_GROUND_INSET, 1);
         } else if (facing.own) {
           shadowMesh.rotation.x = Math.PI / 2;
-          shadowMesh.scale.set(facing.mirror ? -w : w, elevation + DECOR_SHADOW_GROUND_INSET, 1);
+          shadowMesh.scale.set(facingMirror ? -w : w, elevation + DECOR_SHADOW_GROUND_INSET, 1);
         } else {
           shadowMesh.rotation.set(Math.PI / 2, 0, (-facing.step * Math.PI) / 3);
           shadowMesh.scale.set(w, elevation + DECOR_SHADOW_GROUND_INSET, 1);
@@ -1271,7 +1286,7 @@ export class ThreeBattleRenderer {
       let contactMesh: THREE.Mesh | null = null;
       const base = facing.step !== 0 && !facing.own ? null : artBase(img);
       if (base) {
-        const sign = facing.own && facing.mirror ? -1 : 1;
+        const sign = facingMirror ? -1 : 1;
         const cw = (base.u1 - base.u0) * w * CONTACT_SHADOW_W;
         contactMesh = new THREE.Mesh(this.quadGeo, this.decorContactMaterial);
         const ch = Math.min(cw * CONTACT_SHADOW_H, tile * CONTACT_SHADOW_MAX_H);
@@ -1285,7 +1300,7 @@ export class ThreeBattleRenderer {
       let light: DecorMeshEntry["light"] = null;
       if (lightDef) {
         const f = artFlame(img);
-        const sign = facing.own && facing.mirror ? -1 : 1;
+        const sign = facingMirror ? -1 : 1;
         const flameY = wy + offsetY - h / 2 + f.v * h;
         light = { x: wx + offsetX + sign * (f.u - 0.5) * w, y: groundWy + offsetY, h: Math.max(0, groundWy + offsetY - flameY), def: lightDef, seed: (p.x * 7.31 + p.y * 3.17) % 6.28 };
       }
@@ -1476,7 +1491,7 @@ export class ThreeBattleRenderer {
       // the 2.2 power.
       const flashMul = u.flash > 0 ? Math.pow(1.8 + u.flash, 2.2) : 1;
       if (u.flash > 0) entry.material.color.multiplyScalar(flashMul);
-      entry.lightCap.value = SPRITE_LIGHT_CAP * flashMul;
+      entry.lightCap.value = this.currentSpriteLightCap * flashMul;
       // Level-up / heal rim glow (Canvas2D: a shadowBlur pass of the sprite in the glow color).
       let glowRgb: string | null = null;
       let glowK = 0;
@@ -2351,6 +2366,26 @@ export class ThreeBattleRenderer {
    * PointLight it receives that light on top, computed by Three. Recomputed every frame since
    * sun/sky intensities are mission- and atmosphere-driven. */
   private syncSpriteExposure(): void {
+    this.currentSpriteLightCap =
+      this.timeOfDay === "dawn" || this.timeOfDay === "dusk"
+        ? 4.5
+        : this.timeOfDay === "brightNight"
+          ? 7.5
+          : this.timeOfDay === "darkNight"
+            ? 9.5
+            : SPRITE_LIGHT_CAP;
+    DECOR_LIGHT_CAP.value = this.currentSpriteLightCap;
+    // Keep the actual tile surface from saturating into a hex-shaped hotspot. Nearby scenery
+    // and units have the higher sprite cap above, so the same real point lights read as light
+    // reaching the environment instead of a bright decal painted on the source tile.
+    this.groundAO.uniforms.groundLightCap.value =
+      this.timeOfDay === "dawn" || this.timeOfDay === "dusk"
+        ? 6
+        : this.timeOfDay === "brightNight"
+          ? 3.5
+          : this.timeOfDay === "darkNight"
+            ? 2.5
+            : 10;
     // Calibrated against the mission's standing daytime sun (default direction and intensity) —
     // not the live values — so night and sun-angle changes reach the sprites as real light.
     const sunNdotL = Math.max(0, -SUN_DIRECTION.z); // camera-facing plane: normal +Z
@@ -2407,6 +2442,23 @@ export class ThreeBattleRenderer {
               y: a.worldY + pos.wy - anchorBase.wy,
               h: tile,
               r: def.radius * tile,
+              rgb,
+            });
+          }
+        } else if (u.classId === "familiar4") {
+          // Familiar Radiante's reversed Type 3 head and tail occupy the two upper neighboring
+          // hexes. Keep a radius-2 pool on each; the offsets follow its interpolated movement.
+          out.push({ x: a.worldX, y: a.worldY, h: tile, r: tile * 3, rgb });
+          const base = hexWorld(u.x, u.y, tile);
+          const upperCells = hexNeighbors(u.x, u.y)
+            .filter((neighbor) => neighbor.y < u.y)
+            .map((cell) => hexWorld(cell.x, cell.y, tile));
+          for (const upperCell of upperCells) {
+            out.push({
+              x: a.worldX + upperCell.wx - base.wx,
+              y: a.worldY + upperCell.wy - base.wy,
+              h: tile,
+              r: tile * 2,
               rgb,
             });
           }

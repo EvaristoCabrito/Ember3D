@@ -3710,7 +3710,8 @@ function MapEditorScreen({
   initialDraft?: MapDraft | null;
   onDraftChange?: (draft: MapDraft) => void;
 }) {
-  const [showPreview, setShowPreview] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
+  const [showTechnicalMap, setShowTechnicalMap] = useState(false);
   // Rebuilding the preview's BattleEngine on every keystroke (typing a title, nudging a
   // spawn's level) would be wasted work it can't even show — debounce to the pause after a
   // real edit instead.
@@ -5694,7 +5695,7 @@ function MapEditorScreen({
                         setBrush(terrain);
                         if (key === "city") {
                           setCityMode(true);
-                          setVariant((v) => (v >= 21 && v <= 37 ? v : 21));
+                          setVariant((v) => (v >= 21 && v <= 37 && v !== 22 ? v : 21));
                         } else {
                           setCityMode(false);
                           setVariant((v) => (terrain === "plains" && v >= 21 && v <= 37 ? 0 : Math.min(v, (TILE_VARIANT_COUNT[terrain] ?? 1) - 1)));
@@ -5758,7 +5759,7 @@ function MapEditorScreen({
                         original variant index i (art file, saved-map value), so re-sorting
                         this list can never relabel or repaint an existing tile. */}
                     {Array.from({ length: TILE_VARIANT_COUNT[brush] ?? 1 }, (_, i) => i)
-                      .filter((i) => cityMode && brush === "plains" ? i >= 21 && i <= 37 : !HIDDEN_VARIANTS[brush]?.includes(i))
+                      .filter((i) => cityMode && brush === "plains" ? i >= 21 && i <= 37 && i !== 22 : !HIDDEN_VARIANTS[brush]?.includes(i))
                       .sort((a, b) => byName(VARIANT_LABEL[brush]?.[a] ?? String(a + 1).padStart(3, "0"), VARIANT_LABEL[brush]?.[b] ?? String(b + 1).padStart(3, "0")))
                       .map((i) => (
                   <button
@@ -6026,9 +6027,11 @@ function MapEditorScreen({
                   <option key={section} value={section}>{section}</option>
                 ))}
               </select>
-            </label>            <Button
+            </label>
+            <Button
               size="sm"
               variant={showPreview ? "quiet" : "ghost"}
+              aria-pressed={showPreview}
               onClick={() => {
                 const next = !showPreview;
                 setShowPreview(next);
@@ -6036,6 +6039,15 @@ function MapEditorScreen({
               }}
             >
               {showPreview ? "Ocultar prévia" : "Mostrar prévia"}
+            </Button>
+            <Button
+              size="sm"
+              variant={showTechnicalMap ? "quiet" : "ghost"}
+              aria-pressed={showTechnicalMap}
+              title="Mostrar ou ocultar a grade técnica de edição do mapa"
+              onClick={() => setShowTechnicalMap((visible) => !visible)}
+            >
+              {showTechnicalMap ? "Ocultar mapa técnico" : "Mostrar mapa técnico"}
             </Button>
           </div>
         </div>
@@ -6109,13 +6121,14 @@ function MapEditorScreen({
           </ResizableEditorPanel>
         )}
 
-        <ResizableEditorPanel
+        {showTechnicalMap && <ResizableEditorPanel
           className="overflow-hidden border border-border rounded-md p-2 bg-black h-[60vh] min-h-[320px] min-w-[280px]"
           contentClassName="ember-scrollbar h-full w-full overflow-auto"
-          title="Arraste esta alça para redimensionar o mapa"
+          title="Mapa técnico de edição — arraste esta alça para redimensionar"
           minHeight={320}
         >
           <div className="grid min-h-full min-w-full w-max place-items-center">
+            <p className="sticky left-0 top-0 z-10 w-full bg-black/90 px-2 py-1 text-xs uppercase tracking-wide text-muted">Mapa técnico de edição</p>
             {gridStyle === "square" ? (
               <div
                 className="grid gap-px w-max"
@@ -6225,7 +6238,7 @@ function MapEditorScreen({
             })()
             )}
           </div>
-        </ResizableEditorPanel>
+        </ResizableEditorPanel>}
 
         {draft.decorations.length > 0 && (
           <div className="flex flex-col gap-1.5">
