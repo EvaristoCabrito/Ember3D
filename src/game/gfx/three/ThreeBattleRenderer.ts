@@ -282,7 +282,8 @@ function decorSize(id: string, def: DecorationDef, tile: number): { w: number; h
                 ? tile * 1.65
                 : tile * (1.5 * (maxDy - minDy) + 2.3);
   const h = baseH * (def.heightScale ?? 1);
-  const dy = waypoint ? 0 : (tree ? -tile * 0.55 : wall ? -tile * 0.12 : anyHouse ? -tile * 0.28 * 3 : item ? tile * 0.08 : 0) - (h - baseH) * 0.42;
+  // Chests use the hex's ground anchor directly; a per-item nudge displaced them off-center.
+  const dy = waypoint ? 0 : (tree ? -tile * 0.55 : wall ? -tile * 0.12 : anyHouse ? -tile * 0.28 * 3 : 0) - (h - baseH) * 0.42;
   // Global art scale (see DECOR_ART_SCALE), grown from the bottom edge so the base stays put.
   const s = waypoint ? 1 : (anyHouse ? HOUSE_ART_SCALE : DECOR_ART_SCALE) * (def.artScale ?? 1);
   return { w: w * s, h: h * s, dy: dy - (h * (s - 1)) / 2 };

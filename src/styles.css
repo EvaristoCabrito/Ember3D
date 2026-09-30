@@ -86,6 +86,15 @@
     background: var(--color-bg);
     color: var(--color-fg);
     overscroll-behavior: none;
+    cursor: url("/game/ui/pointer.png") 0 0, auto;
+  }
+
+  .cursor-default,
+  .cursor-grab,
+  .cursor-grabbing,
+  .cursor-crosshair,
+  .cursor-pointer {
+    cursor: url("/game/ui/pointer.png") 0 0, auto !important;
   }
 
   body {
@@ -107,7 +116,7 @@
 
   button:not(:disabled),
   [role="button"]:not(:disabled) {
-    cursor: pointer;
+    cursor: url("/game/ui/pointer.png") 0 0, auto;
   }
 }
 

@@ -7447,19 +7447,19 @@ function BattleScreen({
           onTileReadout={setHeldTile}
         />
         {hud.turnQueue.length > 0 && (
-          <div className="pointer-events-none absolute left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] flex flex-col items-start gap-2">
+          <div className="pointer-events-none absolute left-2 right-2 top-[max(0.5rem,env(safe-area-inset-top))] flex flex-col items-start gap-1">
             <button type="button" aria-expanded={showTurnOrder} aria-label={showTurnOrder ? "Ocultar ordem de turnos" : "Mostrar ordem de turnos"}
               onClick={() => setShowTurnOrder((open) => !open)}
-              className="pointer-events-auto flex items-center gap-2 rounded-lg border border-white/15 bg-[#111b22]/95 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-[#25313b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#cdd3dc]">
-              <ListOrdered className="size-4" /><span>Ordem</span>
+              className="pointer-events-auto flex items-center gap-1.5 rounded-md border border-white/15 bg-[#111b22]/95 px-2 py-1 text-[10px] leading-none text-slate-300 transition-colors hover:bg-[#25313b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#cdd3dc]">
+              <ListOrdered className="size-3" /><span>Ordem</span>
             </button>
             {showTurnOrder && (
-              <div className="flex max-w-full gap-1.5 overflow-x-auto rounded-lg border border-white/10 bg-[#111b22]/90 p-1.5 text-xs">
+              <div className="flex w-fit max-w-[calc(100vw-1rem)] flex-wrap gap-0.5 rounded-md border border-white/10 bg-[#111b22]/85 p-1 text-[11px] leading-none">
                 {hud.turnQueue.map((q, i) => (
-                  <span key={q.id} className={`flex shrink-0 items-center gap-2 rounded-md border px-2.5 py-1.5 ${q.active ? "border-[#dce2eb]/60 bg-[#dce2eb]/10 text-[#dce2eb]" : q.acted ? "border-transparent text-slate-500" : "border-white/10 text-slate-300"}`}>
-                    <span className="text-[10px] tabular-nums text-slate-500">{String(i + 1).padStart(2, "0")}</span>
-                    <span className={q.acted ? "line-through" : ""}>{q.name}</span>
-                    {q.active && <span className="text-[9px] font-bold uppercase">Agora</span>}
+                  <span key={q.id} title={`${q.name}${q.active ? " · agora" : q.acted ? " · já agiu" : ""}`} aria-label={`${q.name}${q.active ? ", agora" : q.acted ? ", já agiu" : ""}`} className={`flex shrink-0 items-center gap-1 rounded border px-1 py-1 ${q.active ? "border-[#dce2eb]/60 bg-[#dce2eb]/10 text-[#dce2eb]" : q.acted ? "border-transparent text-slate-500" : "border-white/10 text-slate-300"}`}>
+                    <span className="shrink-0 text-[9px] tabular-nums text-slate-500">{i + 1}</span>
+                    <span className="max-w-32 truncate">{q.name}</span>
+                    {q.active && <span className="size-1 shrink-0 rounded-full bg-current" aria-hidden="true" />}
                     {q.side === "enemy" && !q.active && <span className="size-1.5 rounded-full bg-[#e78573]" aria-label="Inimigo" />}
                   </span>
                 ))}
@@ -7495,7 +7495,7 @@ function BattleScreen({
           </div>
         )}
         <div className="pointer-events-none absolute inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-20 flex items-start justify-end gap-1">
-          {!engine.mission.explore && (
+          {showTurnOrder && !engine.mission.explore && (
             <p className="bg-surface/90 border border-border rounded-md px-1.5 py-0.5 text-[10px] tabular-nums text-muted pointer-events-none">
               T{hud.turn} · {hud.playerAlive}/{hud.enemyAlive}
             </p>

@@ -1581,7 +1581,8 @@ export class BattleEngine {
       objective: this.mission.objective,
       missionTitle: this.mission.title,
       playerAlive: this.units.filter((u) => u.side === "player" && u.alive && !u.summoned).length,
-      enemyAlive: this.units.filter((u) => u.side === "enemy" && u.alive).length,
+      // The HUD may only count enemies the party can currently see while fog is active.
+      enemyAlive: this.units.filter((u) => u.side === "enemy" && u.alive && !this.unitHidden(u)).length,
       busy: this.mode === "locked" || !!this.active || this.queue.length > 0,
       result: this.result,
       winAvailable: this.winAvailable,
@@ -8304,7 +8305,8 @@ export class BattleEngine {
       const h0 = baseH * (def.heightScale ?? 1);
       // Taller near-side props rise upward from their ground anchor instead of stretching
       // equally in both directions. That preserves the shallow isometric perspective.
-      const dy0 = waypoint ? 0 : (tree ? -tile * 0.55 : wall ? -tile * 0.12 : anyHouse ? -tile * 0.28 * 3 : item ? tile * 0.08 : 0) - (h0 - baseH) * 0.42;
+      // Chests use the hex's ground anchor directly; a per-item nudge displaced them off-center.
+      const dy0 = waypoint ? 0 : (tree ? -tile * 0.55 : wall ? -tile * 0.12 : anyHouse ? -tile * 0.28 * 3 : 0) - (h0 - baseH) * 0.42;
       // Global art scale (see DECOR_ART_SCALE), grown from the bottom edge — same as
       // ThreeBattleRenderer's decorSize, so both renderers draw props the same size.
       const artScale = waypoint ? 1 : (anyHouse ? HOUSE_ART_SCALE : DECOR_ART_SCALE) * (def.artScale ?? 1);
