@@ -403,7 +403,15 @@ const BRIEF_ART: Record<string, string> = {
   profundezas: "/game/assets/profundezas-bg.jpg?v=2",
   thebridge: "/game/assets/brief-thebridge.jpg?v=2",
   "wisp-forest": "/game/assets/brief-wisp-forest.jpg",
+  "wisp-forest-2": "/game/assets/brief-wisp-forest.jpg",
   "wisp-forest-crossing": "/game/assets/brief-wisp-forest.jpg",
+  // Original file names kept as supplied, so the paths are percent-encoded.
+  "cemiterio-esquecidos": encodeURI("/game/assets/Xemitery Briefing.jpg"),
+  "cemiterio-esquecidos-cripta-2": encodeURI("/game/assets/2Cemitério dos Esquecidos — Câmara Profunda✕.jpg"),
+  "misty-cave-dungeon": encodeURI("/game/assets/As Profundezas EnevoadasBrief.jpg"),
+  "cemiterio-esquecidos-cripta": encodeURI("/game/assets/Andar 3Cemitério dos Esquecidos — Cripta✕.jpg"),
+  "cemiterio-esquecidos-mausoleu": encodeURI("/game/assets/Andar 4Cemitério dos Esquecidos — Mausoléu✕.jpg"),
+  "cemiterio-esquecidos-ruinas": encodeURI("/game/assets/Andar 5Cemitério dos Esquecidos — Ruínas Submersas.jpg"),
   "frozen-tundra-crossing": "/game/assets/brief-frozen-tundra.jpg",
 };
 

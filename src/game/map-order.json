@@ -5,6 +5,10 @@
     "aldeia",
     "thebridge"
   ],
+  "wisp-forest": [
+    "wisp-forest-crossing",
+    "wisp-forest-2"
+  ],
   "estalagem": [
     "estalagem"
   ],
@@ -19,7 +23,12 @@
     "passagem",
     "profundezas"
   ],
-  "wisp-forest": [
-    "wisp-forest-2"
+  "cemetery": [
+    "cemiterio-esquecidos"
+  ],
+  "misty-cave": [
+    "vertente",
+    "portao",
+    "misty-cave-dungeon"
   ]
 }

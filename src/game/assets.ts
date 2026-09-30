@@ -522,7 +522,19 @@ export async function loadGameArt(): Promise<GameArt> {
     profundezas: await loadImage("/game/assets/profundezas-bg.jpg?v=2"),
     thebridge: await loadImage("/game/assets/thebridge-bg.jpg?v=1"),
     "wisp-forest": await loadImage("/game/assets/wisp-forest-bg.jpg"),
+    "wisp-forest-2": await loadImage("/game/assets/wisp-forest-bg.jpg"),
     "wisp-forest-crossing": await loadImage("/game/assets/wisp-forest-bg.jpg"),
+    // Cemitério dos Esquecidos (the grounds): aerial view of the snowed-in graveyard. Files keep
+    // their original names, so the paths are percent-encoded (spaces, accents, the ✕).
+    "cemiterio-esquecidos": await loadImage(encodeURI("/game/assets/CemiteryBackground.jpg")),
+    // Câmara Profunda: the burial vault with the skylight.
+    "cemiterio-esquecidos-cripta-2": await loadImage(encodeURI("/game/assets/2Cemitério dos Esquecidos — Câmara Profunda✕.jpg")),
+    // As Profundezas Enevoadas (Misty Cave dungeon): the torch-lit cavern passage.
+    "misty-cave-dungeon": await loadImage(encodeURI("/game/assets/As Profundezas EnevoadasBackground2.jpg")),
+    // The other floors of the cemetery, each with its own picture (file names say which floor).
+    "cemiterio-esquecidos-cripta": await loadImage(encodeURI("/game/assets/Andar 3Cemitério dos Esquecidos — Cripta✕.jpg")),
+    "cemiterio-esquecidos-mausoleu": await loadImage(encodeURI("/game/assets/Andar 4Cemitério dos Esquecidos — Mausoléu✕.jpg")),
+    "cemiterio-esquecidos-ruinas": await loadImage(encodeURI("/game/assets/Andar 5Cemitério dos Esquecidos — Ruínas Submersas.jpg")),
     "random-encounter-1": await loadImage("/game/assets/random-encounter-1-bg.jpg"),
     "random-encounter-2": await loadImage("/game/assets/random-encounter-2-bg.jpg"),
     "random-encounter-4": await loadImage("/game/assets/random-encounter-4-bg.jpg"),
