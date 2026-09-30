@@ -1,4 +1,4 @@
-import { tacticalGridStyle, GRID_ROUTE, GRID_MOVE } from "../../tacticalGrid";
+import { tacticalGridStyle, GRID_ROUTE, GRID_MOVE, GRID_ENEMY_TARGET } from "../../tacticalGrid";
 /** MILESTONE 1 (done) — terrain, ground/behind-layer decorations, and animated unit sprites all
  * render through a real Three.js scene instead of the Canvas2D-shim WebGL renderer, as the first
  * slice of migrating the battlefield to a genuine spatial rendering environment (see the
@@ -732,11 +732,13 @@ export class ThreeBattleRenderer {
   // so this lands the highlight visually ABOVE terrain but BELOW decorations and units (z=2+)
   // for free, the same depth trick tiles/decor/units already rely on — a blocking house or a
   // unit standing on a highlighted hex always stays legible instead of the highlight's tint
-  // painting over it. Pooled rather than rebuilt (see syncOverlay): the highlighted set rarely
-  // changes frame to frame, only its glow pulse does, well below this — which skips the pulse
-  // entirely and just uses each layer's flat fill alpha (see boardOverlayLayers' own comment on
-  // why that's the part that matters, not the canvas-only shadowBlur halo).
+  // painting over it. The flat fill and its soft radial halo use separate pooled meshes in
+  // syncOverlay, with the halo just behind the cell fill.
   private overlayGroup = new THREE.Group();
+  /** Soft red glow beneath enemy target cells. */
+  private gridGlowGroup = new THREE.Group();
+  private gridGlowMeshes: THREE.Mesh[] = [];
+  private gridGlowMatCache = new Map<string, THREE.MeshBasicMaterial>();
   /** Summoning portals (BattleEngine.drawPortalFxLayer), painted each frame they're open onto
    * a portal-sized canvas (see portalFxBounds) and shown as a ground layer at z=0.55 — above the board overlay,
    * below decorations and units — so a familiar stepping out stands in front of its portal. */
@@ -857,6 +859,7 @@ export class ThreeBattleRenderer {
     this.scene.add(this.tileGroup);
     this.scene.add(this.webGroup);
 
+    this.scene.add(this.gridGlowGroup);
     this.scene.add(this.overlayGroup);
 
     this.scene.add(this.contactShadowGroup);
@@ -1753,6 +1756,27 @@ export class ThreeBattleRenderer {
     return mat;
   }
 
+  /** Radial additive color used as a subtle ground glow beneath a highlighted cell. */
+  private overlayGlowMaterialFor(fill: string): THREE.MeshBasicMaterial {
+    const m = /rgba?\(([^,]+),([^,]+),([^,]+)(?:,([^)]+))?\)/.exec(fill);
+    const rgb = m ? `${m[1]},${m[2]},${m[3]}` : fill;
+    const hit = this.gridGlowMatCache.get(rgb);
+    if (hit) return hit;
+    const r = m ? Number(m[1]) / 255 : 1;
+    const g = m ? Number(m[2]) / 255 : 1;
+    const b = m ? Number(m[3]) / 255 : 1;
+    const mat = new THREE.MeshBasicMaterial({
+      map: this.flameHaloTexture,
+      color: new THREE.Color(r, g, b),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      opacity: 0.14,
+    });
+    this.gridGlowMatCache.set(rgb, mat);
+    return mat;
+  }
+
   /** Mirrors the 2D renderer's `drawImage(..., cover)` plus its 42% black wash. Most scenes
    * remain camera-backed, while O Vau's artwork is pinned to its terrain so the painted river
    * continues the river made from map hexes as the camera pans. */
@@ -1797,6 +1821,23 @@ export class ThreeBattleRenderer {
   private syncOverlay(tile: number): void {
     const engine = this.engine;
     let idx = 0;
+    let glowIdx = 0;
+    const placeGlow = (x: number, y: number, fill: string, fade: number) => {
+      let mesh = this.gridGlowMeshes[glowIdx];
+      if (!mesh) {
+        mesh = new THREE.Mesh(this.quadGeo, this.overlayGlowMaterialFor(fill));
+        this.gridGlowGroup.add(mesh);
+        this.gridGlowMeshes.push(mesh);
+      }
+      mesh.material = this.overlayGlowMaterialFor(fill);
+      mesh.material.opacity = 0.14 * fade;
+      mesh.visible = true;
+      const { wx, wy } = hexWorld(x, y, tile);
+      const size = tile * 2.7;
+      mesh.scale.set(size, size, 1);
+      mesh.position.set(wx, -wy, 0.49);
+      glowIdx++;
+    };
     const place = (x: number, y: number, fill: string, geometry = this.hexGeo, radius = 0.94, z = 0.5) => {
       let mesh = this.overlayMeshPool[idx];
       if (!mesh) {
@@ -1817,7 +1858,7 @@ export class ThreeBattleRenderer {
       const layerFade = layer.fill === GRID_MOVE ? fade : 1;
       const style = tacticalGridStyle(layer.fill);
       for (const c of layer.cells) {
-        // A continuous blue range wash, without drawing the movement lattice.
+        if (layer.glow && layer.fill === GRID_ENEMY_TARGET) placeGlow(c.x, c.y, style.fill, layerFade);
         place(c.x, c.y, fadedFill(style.fill, layerFade), this.hexGeo, 1.0);
       }
     }
@@ -1846,6 +1887,7 @@ export class ThreeBattleRenderer {
       place(cur.x, cur.y, blocked ? "rgba(231,133,115,0.95)" : "rgba(220,226,235,1)", this.focusBorderGeo, 0.94, 0.51);
     }
     for (; idx < this.overlayMeshPool.length; idx++) this.overlayMeshPool[idx]!.visible = false;
+    for (; glowIdx < this.gridGlowMeshes.length; glowIdx++) this.gridGlowMeshes[glowIdx]!.visible = false;
   }
 
   private syncPortalFx(): void {
@@ -2798,6 +2840,7 @@ export class ThreeBattleRenderer {
       entry.contactMaterial.dispose();
     }
     for (const mat of this.overlayMatCache.values()) mat.dispose();
+    for (const mat of this.gridGlowMatCache.values()) mat.dispose();
     this.focusBorderGeo.dispose();
     this.contactShadowTexture.dispose();
     this.decorContactMaterial.dispose();

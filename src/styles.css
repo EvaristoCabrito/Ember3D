@@ -86,7 +86,7 @@
     background: var(--color-bg);
     color: var(--color-fg);
     overscroll-behavior: none;
-    cursor: url("/game/ui/pointer.png") 0 0, auto;
+    cursor: url("/game/ui/pointer-large.svg") 0 0, auto;
   }
 
   .cursor-default,
@@ -94,7 +94,7 @@
   .cursor-grabbing,
   .cursor-crosshair,
   .cursor-pointer {
-    cursor: url("/game/ui/pointer.png") 0 0, auto !important;
+    cursor: url("/game/ui/pointer-large.svg") 0 0, auto !important;
   }
 
   body {
@@ -116,7 +116,7 @@
 
   button:not(:disabled),
   [role="button"]:not(:disabled) {
-    cursor: url("/game/ui/pointer.png") 0 0, auto;
+    cursor: url("/game/ui/pointer-large.svg") 0 0, auto;
   }
 }
 

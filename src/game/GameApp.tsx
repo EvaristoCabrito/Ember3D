@@ -858,6 +858,7 @@ export function GameApp() {
   const combatStartRef = useRef<SaveData | null>(null);
   const resumeBattleRef = useRef<BattleSnapshot | null>(null);
   const [slotMode, setSlotMode] = useState<"new" | "continue" | "save" | "load" | null>(null);
+  const [slotReturnScreen, setSlotReturnScreen] = useState<ScreenId>("title");
   const [overwrite, setOverwrite] = useState<number | null>(null);
 
   useEffect(() => {
@@ -1681,13 +1682,17 @@ export function GameApp() {
             bootAudio();
             setTestMode(false);
             setOverwrite(null);
+            setSlotReturnScreen("title");
             setSlotMode("new");
+            setScreen("saveSlots");
           }}
           onContinue={() => {
             bootAudio();
             setTestMode(false);
             setOverwrite(null);
+            setSlotReturnScreen("title");
             setSlotMode("continue");
+            setScreen("saveSlots");
           }}
           onTest={() => {
             bootAudio();
@@ -2221,11 +2226,15 @@ export function GameApp() {
           }}
           onSave={() => {
             setOverwrite(null);
+            setSlotReturnScreen("battle");
             setSlotMode("save");
+            setScreen("saveSlots");
           }}
           onLoad={() => {
             setOverwrite(null);
+            setSlotReturnScreen("battle");
             setSlotMode("load");
+            setScreen("saveSlots");
           }}
           onQuit={() => {
             setPaused(false);
@@ -2373,7 +2382,7 @@ export function GameApp() {
         />
       )}
 
-      {slotMode && (
+      {screen === "saveSlots" && slotMode && (
         <SlotScreen
           mode={slotMode}
           bank={bank}
@@ -2382,6 +2391,7 @@ export function GameApp() {
           onClose={() => {
             setSlotMode(null);
             setOverwrite(null);
+            setScreen(slotReturnScreen);
           }}
           onPick={(index) => {
             bootAudio();
@@ -2438,6 +2448,7 @@ export function GameApp() {
             setSlotMode(null);
             setOverwrite(null);
             setPaused(false);
+            setScreen(slotReturnScreen);
           }}
         />
       )}
@@ -3236,21 +3247,24 @@ function DevControlsScreen({ onBack }: { onBack: () => void }) {
  * demo relies on — never gets silently swapped out from under it. */
 function MapChoiceScreen({ onBack, onPick }: { onBack: () => void; onPick: (mode: "classic" | "rpg") => void }) {
   return (
-    <section className="h-dvh min-h-0 flex flex-col bg-bg">
-      <header className="flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 border-b border-border">
-        <button type="button" onClick={onBack} className="size-10 grid place-items-center rounded-md border border-border" aria-label="Voltar">
+    <section className="relative h-dvh min-h-0 flex flex-col overflow-hidden bg-[#080a0d] text-fg">
+      <img src="/game/ui/travel-board.png" alt="" className="absolute inset-0 size-full object-cover object-center" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/5 to-black/35" aria-hidden="true" />
+      <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 border-b border-white/10 bg-black/10">
+        <button type="button" onClick={onBack} className="size-10 grid place-items-center rounded-md border border-white/25 bg-black/45" aria-label="Voltar">
           <ChevronLeft className="size-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm uppercase tracking-[0.18em] text-muted">Mapa</p>
-          <h1 className="font-display text-3xl leading-none">Como quer viajar?</h1>
+          <p className="text-sm uppercase tracking-[0.18em] text-slate-300">Mapa</p>
+          <h1 className="font-display text-3xl leading-none text-white">Como quer viajar?</h1>
         </div>
       </header>
-      <div className="flex-1 min-h-0 flex flex-col justify-center gap-3 p-5 max-w-md mx-auto w-full">
+      <div className="relative z-10 flex-1 min-h-0 flex items-end justify-center p-4 sm:p-8 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <div className="grid w-full max-w-5xl grid-cols-1 md:grid-cols-2 gap-3">
         <button
           type="button"
           onClick={() => onPick("classic")}
-          className="text-left rounded-xl border border-border bg-bg/40 px-5 py-4 hover:border-accent"
+          className="text-left rounded-lg border border-white/25 bg-black/45 backdrop-blur-sm px-4 py-3 hover:border-accent sm:px-5 sm:py-4"
         >
           <p className="font-display text-2xl leading-tight">Classic Tactical</p>
           <p className="text-sm text-muted mt-1">O mapa de sempre: escolha qualquer local desbloqueado e vá direto pra missão.</p>
@@ -3258,11 +3272,12 @@ function MapChoiceScreen({ onBack, onPick }: { onBack: () => void; onPick: (mode
         <button
           type="button"
           onClick={() => onPick("rpg")}
-          className="text-left rounded-xl border border-border bg-bg/40 px-5 py-4 hover:border-accent"
+          className="text-left rounded-lg border border-white/25 bg-black/45 backdrop-blur-sm px-4 py-3 hover:border-accent sm:px-5 sm:py-4"
         >
           <p className="font-display text-2xl leading-tight">RPG Map</p>
           <p className="text-sm text-muted mt-1">O grupo viaja hexágono por hexágono; cada passo custa um dia — suprimentos, encontros e recuperação entram em jogo.</p>
         </button>
+        </div>
       </div>
     </section>
   );
@@ -8970,28 +8985,30 @@ function SlotScreen({
   onClose: () => void;
   onPick: (index: number) => void;
 }) {
-  const title = mode === "new" ? "Nova campanha" : mode === "continue" ? "Continuar" : mode === "load" ? "Load" : "Save";
+  const title = mode === "new" ? "Nova campanha" : mode === "save" ? "Salvar jogo" : "Carregar jogo";
   const hint =
     mode === "new"
       ? "Escolha o slot. Um slot ocupado será substituído."
       : mode === "continue" || mode === "load"
-        ? "O último usado vem marcado. Toque para carregar."
-        : "Grava o começo deste combate. O slot anterior permanece se você escolher outro.";
+        ? "O último usado vem marcado. Escolha um jogo para continuar."
+        : "Escolha onde gravar este combate. Um slot ocupado será substituído.";
 
   return (
-    <div className="absolute inset-0 z-40 ember-veil flex items-end sm:items-center justify-center p-4">
-      <div className="w-full max-w-md ember-window rounded-xl p-5 max-h-[90dvh] overflow-y-auto">
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted">Arquivos</p>
-            <h2 className="font-display text-2xl leading-none mt-1">{title}</h2>
-          </div>
-          <button type="button" onClick={onClose} className="size-11 grid place-items-center" aria-label="Fechar">
-            <X className="size-5" />
-          </button>
+    <section className="absolute inset-0 z-40 flex min-h-0 flex-col overflow-hidden bg-[#080a0d] text-fg">
+      <img src="/game/ui/travel-board.png" alt="" className="absolute inset-0 size-full object-cover object-center" />
+      <div className="absolute inset-0 bg-black/20" aria-hidden="true" />
+      <header className="relative z-10 flex shrink-0 items-center gap-3 border-b border-white/10 bg-black/20 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-7">
+        <button type="button" onClick={onClose} className="size-10 shrink-0 grid place-items-center rounded-md border border-white/25 bg-black/40" aria-label="Voltar">
+          <ChevronLeft className="size-5" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Arquivos</p>
+          <h1 className="mt-1 font-display text-2xl leading-none text-white sm:text-3xl">{title}</h1>
+          <p className="mt-1 text-xs text-slate-300 sm:text-sm">{hint}</p>
         </div>
-        <p className="text-sm text-muted mb-4">{hint}</p>
-        <ol className="flex flex-col gap-2">
+      </header>
+      <main className="relative z-10 grid flex-1 min-h-0 place-items-center px-3 py-3 sm:px-6 sm:py-5">
+        <ol className="grid w-full max-w-5xl grid-cols-2 gap-2 md:grid-cols-3 sm:gap-3">
           {Array.from({ length: SLOT_COUNT }, (_, i) => {
             const slot = bank.slots[i] ?? null;
             const empty = isSlotEmpty(slot);
@@ -9000,9 +9017,10 @@ function SlotScreen({
             const disabled = (mode === "continue" || mode === "load") && empty;
             const confirm = overwrite === i;
             return (
-              <li key={i}>
+              <li key={i} className="min-h-0">
                 <button
                   type="button"
+                  aria-label={`${empty ? "Slot vazio" : info.title}, slot ${i + 1}${last ? ", último usado" : ""}`}
                   disabled={disabled}
                   onClick={() => {
                     if ((mode === "new" || mode === "save") && !empty && !confirm) {
@@ -9011,26 +9029,26 @@ function SlotScreen({
                     }
                     onPick(i);
                   }}
-                  className={`w-full text-left rounded-xl border px-4 py-3 disabled:opacity-40 ${
-                    last ? "border-accent bg-bg/70" : "border-border bg-bg/40"
+                  className={`flex min-h-[116px] w-full flex-col justify-center overflow-hidden rounded-lg border px-3 py-2 text-left backdrop-blur-sm disabled:opacity-40 sm:min-h-[128px] sm:px-4 sm:py-3 ${
+                    last ? "border-accent bg-black/55" : "border-white/25 bg-black/40"
                   }`}
                 >
                   <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted">Slot {i + 1}</p>
-                    {last && <p className="text-[10px] uppercase tracking-[0.14em] text-accent">Último usado</p>}
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-slate-300 sm:text-xs">Slot {i + 1}</p>
+                    {last && <p className="truncate text-[9px] uppercase tracking-[0.1em] text-accent sm:text-[10px] sm:tracking-[0.14em]">Último usado</p>}
                   </div>
-                  <p className="font-display text-xl leading-tight">{info.title}</p>
-                  <p className="text-sm text-muted">{info.detail}</p>
+                  <p className="mt-1 truncate font-display text-lg leading-tight text-white sm:text-xl">{info.title}</p>
+                  <p className="line-clamp-2 text-xs leading-snug text-slate-300 sm:text-sm">{info.detail}</p>
                   {slot && !empty && (
-                    <p className="text-xs tabular-nums text-muted mt-1">{formatStamp(slot.updatedAt)}</p>
+                    <p className="mt-1 text-[10px] tabular-nums text-slate-400 sm:text-xs">{formatStamp(slot.updatedAt)}</p>
                   )}
-                  {confirm && <p className="text-xs text-accent mt-2">Toque de novo para substituir este slot.</p>}
+                  {confirm && <p className="mt-1 text-[10px] text-accent sm:text-xs">Toque de novo para substituir.</p>}
                 </button>
               </li>
             );
           })}
         </ol>
-      </div>
-    </div>
+      </main>
+    </section>
   );
 }

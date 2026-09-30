@@ -8,7 +8,7 @@ import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogLine, DialogTr
 /** Fresh parties begin one hex left of Stone Bridge, on the map's west edge. */
 const START_HEX = OVERWORLD_START_HEX;
 
-export const SLOT_COUNT = 5;
+export const SLOT_COUNT = 6;
 export const SAVE_VERSION = 17;
 const BANK_KEY = "ember-save-bank";
 const SAVE_KEY = "ember-save";

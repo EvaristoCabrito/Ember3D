@@ -182,7 +182,7 @@ export type SpellKind =
   | "shieldBash"
   | "burningHands"
   | "createFoodAndWater";
-export type ScreenId = "boot" | "title" | "campaign" | "mapChoice" | "vauIntro" | "wispForestIntro" | "innArrivalIntro" | "worldMap" | "overworldMap" | "briefing" | "cutscene" | "epilogue" | "battle" | "victory" | "defeat" | "inn" | "testMenu" | "mapEditor" | "devControls";
+export type ScreenId = "boot" | "title" | "saveSlots" | "campaign" | "mapChoice" | "vauIntro" | "wispForestIntro" | "innArrivalIntro" | "worldMap" | "overworldMap" | "briefing" | "cutscene" | "epilogue" | "battle" | "victory" | "defeat" | "inn" | "testMenu" | "mapEditor" | "devControls";
 export type Phase = "player" | "enemy";
 export type InputMode = "idle" | "selected" | "awaitAction" | "awaitAttack" | "awaitOffHand" | "awaitSpell" | "awaitPotion" | "locked";
 

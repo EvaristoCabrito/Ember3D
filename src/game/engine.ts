@@ -1,4 +1,4 @@
-import { tacticalGridStyle, GRID_MOVE, GRID_ROUTE, GRID_ALLY, GRID_ENEMY } from "./tacticalGrid";
+import { tacticalGridStyle, GRID_MOVE, GRID_ROUTE, GRID_ALLY, GRID_ENEMY, GRID_ENEMY_TARGET } from "./tacticalGrid";
 import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
 import { placedBlockingFootprint } from "./data";
@@ -9238,11 +9238,12 @@ export class BattleEngine {
       ctx.save();
       ctx.translate(this.frameShakeDx, this.frameShakeDy);
     }
-    const drawLayer = (cells: Point[], fill: string, _glow: boolean) => {
+    const drawLayer = (cells: Point[], fill: string, glow: boolean) => {
       const style = tacticalGridStyle(fill);
       ctx.save();
       ctx.globalAlpha = fill === GRID_MOVE ? this.overlayFade : 1;
-      ctx.shadowBlur = 0;
+      ctx.shadowColor = style.edge;
+      ctx.shadowBlur = glow && fill === GRID_ENEMY_TARGET ? tile * 0.18 : 0;
       ctx.fillStyle = style.fill;
       ctx.strokeStyle = style.edge;
       ctx.lineWidth = Math.max(1, tile * 0.025);
@@ -9314,8 +9315,8 @@ export class BattleEngine {
     const layers: { cells: Point[]; fill: string; glow: boolean }[] = [];
     // `glow` defaults on for every existing caller. Dreaming Web's own persistent floor patch
     // (a separate WebGL layer, see BattleCanvas's webFloorIds sync) already lights a webbed hex
-    // with its own breathing glow — stacking this overlay's full shadowBlur+bright rim on top
-    // of that, on every hex of a zone that can easily be a dozen-plus hexes and sits lit for
+    // with its own breathing glow — stacking this overlay's soft halo on top of that, on every
+    // hex of a zone that can easily be a dozen-plus hexes and sits lit for
     // several whole rounds (unlike a one-shot spell flash that's gone before anyone can really
     // look at it), is what read as the movement highlight suddenly "blowing out" right after
     // casting it. Passing false keeps the flat fill — still marks the hex as walkable — but
@@ -9524,10 +9525,10 @@ export class BattleEngine {
           atkTiles.push(...footprint(foe));
         }
       }
-      push(atkTiles, "rgba(220,226,235,0.55)");
+      push(atkTiles, GRID_ENEMY_TARGET);
       if (this.pendingFoeId) {
         const foe = this.units.find((u) => u.id === this.pendingFoeId);
-        if (foe) push(footprint(foe), "rgba(220,226,235,0.6)");
+        if (foe) push(footprint(foe), GRID_ENEMY_TARGET);
       }
     }
 
