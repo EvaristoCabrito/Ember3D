@@ -77,6 +77,21 @@ const HERO_PORTRAIT: Partial<Record<string, string>> = {
   theButcher: "/game/portraits/the-butcher-portrait-001.jpg?v=1",
   // Familiar Titã uses a direct crop of the player's supplied concept art; no art is generated.
   familiar3: "/game/portraits/familiar3-profile.jpeg?v=3",
+  // Inn and village NPCs. Keyed by SPRITE, so every place a unit or dialog line shows a face
+  // (dialogs, the unit inspect popup, the footer portrait, the map party list) picks the right
+  // portrait from the NPC's sprite automatically; nothing per-NPC has to be wired again.
+  // Files keep the names they were supplied with. Brue, Mudo and A Hóspede use the Adega photos.
+  brue: "/game/portraits/brue.png",
+  mudinho: "/game/portraits/mudo.png",
+  crazyLady: "/game/portraits/porao.png",
+  beberrao: "/game/portraits/c471772d-7d79-46bf-be64-77a6b662b929.jpg", // Regular
+  shadyPatron: "/game/portraits/1beca9c9-789c-4b44-8930-c53b88c982ac.jpg", // O Encapuzado
+  soupLady: "/game/portraits/101b6fe6-9fc2-4416-b8c7-642d3699c4f4.jpg", // A Velha
+  peasant1: "/game/portraits/d8def2e7-59bb-42cc-8a8e-36c7df1c22fb.jpg", // Lavrador
+  breadLady: "/game/portraits/738c99c0-0bfa-472c-ab94-d16b91d2b2d8.jpg", // Padeira
+  oldHealer: "/game/portraits/29ef0f7e-4b87-4c0d-a55f-f16fb5a6a1ea.jpg", // Ancião
+  woodsman: "/game/portraits/9c0b071f-d203-4ef3-9c46-e4dac49dd975.jpg", // Lenhador
+  villagerF1: "/game/portraits/1d7928dc-3fec-4d11-92d3-bd7a2d1637fb.jpg", // Moça
 };
 
 /** The one place the portrait-or-sprite-frame fallback lives — used by the unit inspect
@@ -529,6 +544,8 @@ export async function loadGameArt(): Promise<GameArt> {
     "cemiterio-esquecidos": await loadImage(encodeURI("/game/assets/CemiteryBackground.jpg")),
     // Câmara Profunda: the burial vault with the skylight.
     "cemiterio-esquecidos-cripta-2": await loadImage(encodeURI("/game/assets/2Cemitério dos Esquecidos — Câmara Profunda✕.jpg")),
+    // A Estalagem do Osso Seco (the walkable Inn): the tavern interior behind the board.
+    estalagem: await loadImage("/game/assets/INNbackground.jpg"),
     // As Profundezas Enevoadas (Misty Cave dungeon): the torch-lit cavern passage.
     "misty-cave-dungeon": await loadImage(encodeURI("/game/assets/As Profundezas EnevoadasBackground2.jpg")),
     // The other floors of the cemetery, each with its own picture (file names say which floor).
