@@ -612,7 +612,7 @@ export function MapPreviewCanvas({
       </div>
       <div
         ref={viewportRef}
-        className={`h-full w-full bg-black ember-scrollbar overflow-x-auto overflow-y-scroll ${isDragging || isPanning ? "cursor-grabbing" : "cursor-default"}`}
+        className="h-full w-full bg-black ember-scrollbar overflow-x-auto overflow-y-scroll cursor-default"
         style={{ scrollbarGutter: "stable both-edges" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

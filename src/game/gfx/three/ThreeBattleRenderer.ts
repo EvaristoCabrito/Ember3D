@@ -50,7 +50,7 @@ import { footprint, footprintFrontRow, hexNeighbors, tileAt } from "../../pathfi
 import type { DecorationDef, DecorationPlacement, ElementalFxPlacement, MapTimeOfDay, TerrainId } from "../../types";
 import { GroundAO, type AoOccluder } from "./ThreeGroundAO";
 import { FOG_EXPLORED, FOG_UNSEEN, FOG_VISIBLE, FogMask } from "./ThreeFogMask";
-import { LIGHT_DECAY, LIGHT_DEFS, LIGHT_RADIUS_MUL, UNIT_LIGHT_DEFS, flickerAt, type EnvLight, type LightDef } from "../../lighting";
+import { BOUNCE_FRACTION, BOUNCE_HEIGHT, BOUNCE_RADIUS_MUL, LIGHT_DECAY, LIGHT_DEFS, LIGHT_RADIUS_MUL, MAP_LIGHT_DECAY, MAP_LIGHT_MIN_HEIGHT, UNIT_LIGHT_DEFS, flickerAt, type EnvLight, type LightDef } from "../../lighting";
 import { ThreeAtmosphere } from "./ThreeAtmosphere";
 import { decorationAnchor } from "../decorationAnchor";
 import { FireballVFX } from "./FireballVFX";
@@ -321,6 +321,9 @@ const CONTACT_SHADOW_FORWARD = 0.2;
  * the light count into every lit shader); unused ones sit at intensity 0. No castShadow yet —
  * shadows are a separate, later decision. */
 const POINT_LIGHT_POOL = 8;
+/** Bounce-fill lights (see BOUNCE_FRACTION): a fixed pool given to the map lights nearest the
+ * view, so the per-fragment light count stays bounded however many lamps a map carries. */
+const BOUNCE_LIGHT_POOL = 8;
 const HEALING_SPELL_GLOW_KINDS = new Set(["holyMinor", "holyMedium", "disease", "food"]);
 /** Rim-glow canvas size relative to the sprite (room for the blur to spread). */
 const GLOW_PAD = 1.7;
@@ -330,6 +333,12 @@ const GLOW_PAD = 1.7;
 const SPRITE_LIGHT_CAP = 1.35;
 /** Shared cap for every decoration material; units each carry their own (hit flash lifts it). */
 const DECOR_LIGHT_CAP = { value: SPRITE_LIGHT_CAP };
+/** Light cap for SELF_LIT_UNITS: never brighter than their own art. */
+const SELF_LIT_UNIT_CAP = 1;
+/** Light-emitting creatures, drawn under SELF_LIT_UNIT_CAP instead of the sprite cap: their own
+ * carried light (UNIT_LIGHT_DEFS) dulled/washed out their colors instead of enhancing them, and
+ * a creature that emits light shouldn't be lit by it. Rule, per request: every familiar. */
+const SELF_LIT_UNITS = new Set<string>(["familiar", "familiar2", "familiar3", "familiar4"]);
 
 /** 2.5D perspective between characters and props: whoever stands on the nearer row (lower on
  * screen) covers whoever stands further back, whatever layer either is drawn in. Each sprite
@@ -354,19 +363,51 @@ function occluderMaterial(map: THREE.Texture | null): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({ map, alphaTest: OCCLUDER_ALPHA, colorWrite: false, depthWrite: true });
 }
 
-/** Clamps a lit sprite's final color to `cap` times its own art — see SPRITE_LIGHT_CAP. */
+/** Sprites are flat cards facing the camera, so a lamp on either side lit them the same.
+ * For map point lights only, each sprite is shaded as if it were rounded side to side: its
+ * normal turns toward screen left/right across its width, by up to this much at the edges
+ * (0 = flat card), so the side facing the lamp is brighter than the side away from it. The sun,
+ * moon and sky keep the flat normal, so daytime/ambient sprite exposure is unchanged. */
+const SPRITE_NORMAL_BEND = 0.5;
+/** Three's lights_fragment_begin with only the point-light loop using the sprite's bent normal. */
+const SPRITE_LIGHTS_FRAGMENT = (() => {
+  const chunk = THREE.ShaderChunk.lights_fragment_begin;
+  const start = chunk.indexOf("#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )");
+  const end = start < 0 ? -1 : chunk.indexOf("#pragma unroll_loop_end", start);
+  const call = "RE_Direct( directLight, geometryPosition, geometryNormal,";
+  if (end < 0 || !chunk.slice(start, end).includes(call)) return chunk;
+  return chunk.slice(0, start) + chunk.slice(start, end).replace(call, "RE_Direct( directLight, geometryPosition, spriteBentNormal,") + chunk.slice(end);
+})();
+
+/** Clamps a lit sprite's final color to `cap` times its own art — see SPRITE_LIGHT_CAP — and
+ * bends its normal for point lights (see SPRITE_NORMAL_BEND). */
 function capSpriteLight(material: THREE.MeshLambertMaterial, cap: { value: number }): void {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.spriteLightCap = cap;
+    // Which side of the card this fragment is on, in world terms (a mirrored sprite has a
+    // negative x scale, so its uv.x runs right-to-left on screen).
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying float vSpriteSide;")
+      .replace("#include <uv_vertex>", "#include <uv_vertex>\nvSpriteSide = ( uv.x - 0.5 ) * ( modelMatrix[ 0 ][ 0 ] < 0.0 ? -1.0 : 1.0 );");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform float spriteLightCap;")
+      .replace("#include <common>", "#include <common>\nuniform float spriteLightCap;\nvarying float vSpriteSide;")
+      .replace(
+        "#include <lights_fragment_begin>",
+        `vec3 spriteBentNormal = normalize( vec3( vSpriteSide * 2.0 * ${SPRITE_NORMAL_BEND.toFixed(3)}, 0.0, 1.0 ) );\n${SPRITE_LIGHTS_FRAGMENT}`,
+      )
       .replace("#include <envmap_fragment>", "outgoingLight = min(outgoingLight, sampledDiffuseColor.rgb * spriteLightCap);\n#include <envmap_fragment>");
   };
   material.customProgramCacheKey = () => "spriteLightCap";
 }
-/** How many of the pool (always the lights nearest the view) cast real cube-map shadows.
- * 0 per the user's pick: the fire's clean round light pool, without its own cube shadow. */
-const POINT_SHADOW_LIGHTS = 0;
+/** How many of the pool (always the lights nearest the view) cast real cube-map shadows: the
+ * hidden proxy volumes (PROXY_LAYER) of props and characters block the lamp's light, so a
+ * tombstone or a character throws its shadow away from the flame. Each one re-renders the
+ * proxies six times per frame, so only the nearest few; the rest stay unshadowed. */
+const POINT_SHADOW_LIGHTS = 2;
+/** Point-shadow camera near plane, in hex radii. At the old fixed 2 world px the cube shadow
+ * map drew a stray dark line straight through every shadowed light's foot (measured on a lone
+ * brazier with nothing to cast); 6–12 px (~0.2–0.35 hex) removes it. Scaled by zoom. */
+const POINT_SHADOW_NEAR = 0.2;
 /** Render layer of the hidden 3D proxy volumes (a box per prop, an upright cylinder per
  * character): the physical shapes map lights hit and are blocked by. The main camera and the
  * sun's shadow camera never see this layer — the art stays what the player sees and the sun
@@ -378,6 +419,36 @@ const PROXY_LAYER = 3;
 const GROUND_BASE_IRRADIANCE = 4.9;
 /** Fraction of an image's height, measured up from its lowest opaque row, that counts as "the
  * base touching the ground" (feet, paws, trunk, wall foot). */
+
+/** Flame halo: a soft additive glow in the air around every light prop's flame, standing in
+ * for the haze that makes a real lamp read as light spreading. Radius is this fraction of the
+ * light's reach (LightDef.radius, hex radii); HALO_STRENGTH is its peak additive opacity at
+ * night, scaled down by HALO_DAYLIGHT in daylight and HALO_TWILIGHT at dawn/dusk. */
+const HALO_RADIUS_FRACTION = 0.45;
+const HALO_STRENGTH = 0.55;
+const HALO_DAYLIGHT = 0.35;
+const HALO_TWILIGHT = 0.7;
+
+/** White radial glow, alpha (1 - r²)³: a soft core that fades to exactly zero at the rim. */
+function makeFlameHaloTexture(): THREE.CanvasTexture {
+  const size = 128;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d")!;
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (x + 0.5) / (size / 2) - 1;
+      const dy = (y + 0.5) / (size / 2) - 1;
+      const k = Math.max(0, 1 - (dx * dx + dy * dy));
+      const i = (y * size + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+      img.data[i + 3] = Math.round(255 * k * k * k);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return new THREE.CanvasTexture(c);
+}
 
 /** Falloff mask shared by every contact decal. Alpha only — the material (see
  * makeContactShadowMaterial) multiplies the ground by (1 - alpha), so the color channels are
@@ -493,6 +564,8 @@ interface DecorMeshEntry {
   proxy: THREE.Mesh | null;
   /** Environmental light this prop emits (LIGHT_DEFS), at its flame; world pixels, y-down. */
   light: { x: number; y: number; h: number; def: LightDef; seed: number } | null;
+  /** Additive glow around the flame (see HALO_STRENGTH); null for props that emit no light. */
+  halo: THREE.Mesh | null;
   /** Houses only: invisible depth-only copy of the art, drawn just before the fog-of-war sheet
    * so the fog skips the house's pixels — a house always shows at full strength. */
   fogCut: THREE.Mesh | null;
@@ -581,6 +654,8 @@ export class ThreeBattleRenderer {
   private fogMask = new FogMask();
   /** Real point lights for map light sources (see POINT_LIGHT_POOL / syncLights). */
   private pointLights: THREE.PointLight[] = [];
+  /** Wide, dim bounce fill for the nearest map lights (see BOUNCE_LIGHT_POOL / syncLights). */
+  private bounceLights: THREE.PointLight[] = [];
   /** One real spell light follows the active holy-heal target; the approved holy-light art
    * remains on the units canvas unchanged. */
   private healingSpellLight = new THREE.PointLight(0xfff4d2, 0, 1, LIGHT_DECAY);
@@ -683,6 +758,9 @@ export class ThreeBattleRenderer {
   // BattleEngine.renderUnitsAndOverlays' skipUnitSprites param) — only the character sprite art
   // itself moves here.
   private unitGroup = new THREE.Group();
+  /** Flame halos (see HALO_STRENGTH), in the air behind the props and units around them. */
+  private flameHaloGroup = new THREE.Group();
+  private flameHaloTexture = makeFlameHaloTexture();
   /** Contact-shadow footprints (z=0.51 — above tiles/overlay, below decorations and units).
    * Deliberately NOT tied to unitGroup's visibility: BattleCanvas hides the Three unit sprites
    * (units draw on the Canvas2D top layer), but these are ground marks, so they stay here. */
@@ -785,6 +863,7 @@ export class ThreeBattleRenderer {
     this.scene.add(this.decorContactGroup);
     this.scene.add(this.decorGroup);
     this.scene.add(this.unitGroup);
+    this.scene.add(this.flameHaloGroup);
     this.scene.add(this.fogMask.mesh);
     for (const placement of engine.elementalFxPlacements) {
       if (placement.family !== "procedural_pixel" || !placement.element) continue;
@@ -814,6 +893,11 @@ export class ThreeBattleRenderer {
       }
       this.pointLights.push(pl);
       this.scene.add(pl);
+    }
+    for (let i = 0; i < BOUNCE_LIGHT_POOL; i++) {
+      const bl = new THREE.PointLight(0xffffff, 0, 1, 1);
+      this.bounceLights.push(bl);
+      this.scene.add(bl);
     }
     this.scene.add(this.healingSpellLight);
     this.scene.add(this.atmosphere.group);
@@ -1167,6 +1251,10 @@ export class ThreeBattleRenderer {
       if (entry.contactMesh) this.decorContactGroup.remove(entry.contactMesh);
       if (entry.proxy) this.shadowCasterGroup.remove(entry.proxy);
       if (entry.fogCut) this.decorGroup.remove(entry.fogCut);
+      if (entry.halo) {
+        this.flameHaloGroup.remove(entry.halo);
+        (entry.halo.material as THREE.Material).dispose();
+      }
     }
     this.decorEntries = [];
     this.builtDecorKey = key;
@@ -1305,6 +1393,20 @@ export class ThreeBattleRenderer {
         const flameY = wy + offsetY - h / 2 + f.v * h;
         light = { x: wx + offsetX + sign * (f.u - 0.5) * w, y: groundWy + offsetY, h: Math.max(0, groundWy + offsetY - flameY), def: lightDef, seed: (p.x * 7.31 + p.y * 3.17) % 6.28 };
       }
+      let halo: THREE.Mesh | null = null;
+      if (light) {
+        // Depth-tested just below every sprite (DEPTH_Z_BEHIND), so the solid body of a character
+        // or prop in front of it hides the glow — it lights the air around them, never washes
+        // over them.
+        const haloMat = new THREE.MeshBasicMaterial({ map: this.flameHaloTexture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
+        haloMat.color.setRGB(light.def.color[0], light.def.color[1], light.def.color[2]);
+        halo = new THREE.Mesh(this.quadGeo, haloMat);
+        const size = 2 * light.def.radius * HALO_RADIUS_FRACTION * tile;
+        halo.scale.set(size, size, 1);
+        halo.position.set(light.x, -(light.y - light.h), DEPTH_Z_BEHIND - 0.02);
+        halo.renderOrder = 3;
+        this.flameHaloGroup.add(halo);
+      }
 
       // Hidden physical volume: a box standing on the prop's ground spot, as wide as its
       // opaque base, as tall as the shadow elevation, reaching back ("north", +Y) from the
@@ -1337,7 +1439,7 @@ export class ThreeBattleRenderer {
         this.decorGroup.add(fogCut);
       }
 
-      this.decorEntries.push({ mesh, placement: p, shadowMesh, contactMesh, light, proxy, fogCut });
+      this.decorEntries.push({ mesh, placement: p, shadowMesh, contactMesh, light, halo, proxy, fogCut });
     }
   }
 
@@ -1492,7 +1594,10 @@ export class ThreeBattleRenderer {
       // the 2.2 power.
       const flashMul = u.flash > 0 ? Math.pow(1.8 + u.flash, 2.2) : 1;
       if (u.flash > 0) entry.material.color.multiplyScalar(flashMul);
-      entry.lightCap.value = this.currentSpriteLightCap * flashMul;
+      // Familiars sit right under their own light, which washed their colors out: they are kept
+      // at their own art's brightness (SELF_LIT_UNIT_CAP) while the light still reaches
+      // everything around them. The hit flash still lifts them.
+      entry.lightCap.value = (SELF_LIT_UNITS.has(u.classId) ? SELF_LIT_UNIT_CAP : this.currentSpriteLightCap) * flashMul;
       // Level-up / heal rim glow (Canvas2D: a shadowBlur pass of the sprite in the glow color).
       let glowRgb: string | null = null;
       let glowK = 0;
@@ -2199,6 +2304,10 @@ export class ThreeBattleRenderer {
     // making the whole building look see-through. Black still adds no bloom of its own.
     const blacked: { mesh: THREE.Mesh; material: THREE.Material | THREE.Material[] }[] = [];
     for (const entry of this.decorEntries) {
+      if (entry.halo?.visible) {
+        entry.halo.visible = false;
+        hidden.push(entry.halo);
+      }
       if (!entry.light || !entry.mesh.visible) continue;
       if (entry.fogCut) {
         blacked.push({ mesh: entry.mesh, material: entry.mesh.material });
@@ -2215,6 +2324,8 @@ export class ThreeBattleRenderer {
     for (const mesh of mutedOverlays) mesh.visible = false;
     const intensities = this.pointLights.map((pl) => pl.intensity);
     for (const pl of this.pointLights) pl.intensity = 0;
+    const bounceIntensities = this.bounceLights.map((bl) => bl.intensity);
+    for (const bl of this.bounceLights) bl.intensity = 0;
     try {
       this.bloomComposer.render();
     } finally {
@@ -2222,6 +2333,7 @@ export class ThreeBattleRenderer {
       for (const mesh of hidden) mesh.visible = true;
       for (const b of blacked) b.mesh.material = b.material;
       this.pointLights.forEach((pl, i) => (pl.intensity = intensities[i]!));
+      this.bounceLights.forEach((bl, i) => (bl.intensity = bounceIntensities[i]!));
     }
   }
 
@@ -2408,12 +2520,19 @@ export class ThreeBattleRenderer {
   private syncLights(tile: number, cssW: number, cssH: number): void {
     const engine = this.engine;
     const out: EnvLight[] = [];
+    if (!getDevGfx().localLights) for (const e of this.decorEntries) if (e.halo) e.halo.visible = false;
     if (getDevGfx().localLights) {
+      const haloTime =
+        this.timeOfDay === "day" || this.timeOfDay === "noon" ? HALO_DAYLIGHT : this.timeOfDay === "dawn" || this.timeOfDay === "dusk" ? HALO_TWILIGHT : 1;
       for (const e of this.decorEntries) {
         const L = e.light;
         if (!L) continue;
+        if (e.halo) {
+          e.halo.visible = e.mesh.visible;
+          (e.halo.material as THREE.MeshBasicMaterial).opacity = HALO_STRENGTH * haloTime * flickerAt(engine.time, L.seed, L.def.flicker);
+        }
         const k = L.def.intensity * flickerAt(engine.time, L.seed, L.def.flicker);
-        out.push({ x: L.x, y: L.y, h: L.h, r: L.def.radius * LIGHT_RADIUS_MUL * tile, rgb: [L.def.color[0] * k, L.def.color[1] * k, L.def.color[2] * k] });
+        out.push({ x: L.x, y: L.y, h: Math.max(L.h, tile * MAP_LIGHT_MIN_HEIGHT), r: L.def.radius * LIGHT_RADIUS_MUL * tile, decay: MAP_LIGHT_DECAY, normDecay: MAP_LIGHT_DECAY, rgb: [L.def.color[0] * k, L.def.color[1] * k, L.def.color[2] * k] });
       }
       // Units that carry their own light (UNIT_LIGHT_DEFS) — follows the unit's live anchor, so
       // the light walks with it; hidden (fog) or dead units give none, fading ones fade it.
@@ -2443,13 +2562,15 @@ export class ThreeBattleRenderer {
               y: a.worldY + pos.wy - anchorBase.wy,
               h: tile,
               r: def.radius * tile,
+              decay: MAP_LIGHT_DECAY,
+              normDecay: MAP_LIGHT_DECAY,
               rgb,
             });
           }
         } else if (u.classId === "familiar4") {
           // Familiar Radiante's reversed Type 3 head and tail occupy the two upper neighboring
           // hexes. Keep a radius-2 pool on each; the offsets follow its interpolated movement.
-          out.push({ x: a.worldX, y: a.worldY, h: tile, r: tile * 3, rgb });
+          out.push({ x: a.worldX, y: a.worldY, h: tile, r: tile * 3, decay: MAP_LIGHT_DECAY, normDecay: MAP_LIGHT_DECAY, rgb });
           const base = hexWorld(u.x, u.y, tile);
           const upperCells = hexNeighbors(u.x, u.y)
             .filter((neighbor) => neighbor.y < u.y)
@@ -2460,11 +2581,13 @@ export class ThreeBattleRenderer {
               y: a.worldY + upperCell.wy - base.wy,
               h: tile,
               r: tile * 2,
+              decay: MAP_LIGHT_DECAY,
+              normDecay: MAP_LIGHT_DECAY,
               rgb,
             });
           }
         } else {
-          out.push({ x: a.worldX, y: a.worldY, h: tile, r: def.radius * tile, rgb });
+          out.push({ x: a.worldX, y: a.worldY, h: tile, r: def.radius * tile, decay: MAP_LIGHT_DECAY, normDecay: MAP_LIGHT_DECAY, rgb });
         }
       }
       // Procedural Pixel emitters feed the same pooled PointLights as map props and units.
@@ -2491,13 +2614,34 @@ export class ThreeBattleRenderer {
       }
       const peak = Math.max(L.rgb[0], L.rgb[1], L.rgb[2], 1e-6);
       pl.color.setRGB(L.rgb[0] / peak, L.rgb[1] / peak, L.rgb[2] / peak);
-      pl.intensity = peak * GROUND_BASE_IRRADIANCE * Math.pow(tile, LIGHT_DECAY);
+      pl.intensity = peak * GROUND_BASE_IRRADIANCE * Math.pow(tile, L.normDecay ?? LIGHT_DECAY);
       pl.decay = L.decay ?? LIGHT_DECAY;
       pl.position.set(L.x, -L.y, Math.max(L.h, tile * 0.35));
       // Range is measured in 3D from the flame, so it has to include the flame's height to still
       // reach L.r out along the ground. (Three also sets the point-shadow camera's far plane to
       // this distance — ground past it would read as shadowed.)
       pl.distance = Math.hypot(L.r, pl.position.z) * 1.05;
+      if (pl.castShadow && pl.shadow.camera.near !== tile * POINT_SHADOW_NEAR) {
+        pl.shadow.camera.near = tile * POINT_SHADOW_NEAR;
+        pl.shadow.camera.updateProjectionMatrix();
+      }
+    });
+    // Bounce fill for the nearest map lights (props and unit lights; spell/pixel emitters keep
+    // their own look). decay 1, normalized so irradiance straight under it is BOUNCE_FRACTION of
+    // the main light's one-hex irradiance: E(0) = I / z, so I = fraction x E1 x z.
+    const bounced = out.filter((L) => L.normDecay !== undefined);
+    const bh = tile * BOUNCE_HEIGHT;
+    this.bounceLights.forEach((bl, i) => {
+      const L = bounced[i];
+      if (!L) {
+        bl.intensity = 0;
+        return;
+      }
+      const peak = Math.max(L.rgb[0], L.rgb[1], L.rgb[2], 1e-6);
+      bl.color.setRGB(L.rgb[0] / peak, L.rgb[1] / peak, L.rgb[2] / peak);
+      bl.intensity = BOUNCE_FRACTION * peak * GROUND_BASE_IRRADIANCE * bh;
+      bl.position.set(L.x, -L.y, bh);
+      bl.distance = Math.hypot(L.r * BOUNCE_RADIUS_MUL, bh) * 1.05;
     });
   }
 
@@ -2628,6 +2772,7 @@ export class ThreeBattleRenderer {
     this.fogMask.dispose();
     this.proxyBox.dispose();
     this.proxyCylinder.dispose();
+    this.flameHaloTexture.dispose();
     this.proxyMaterial.dispose();
     for (const mat of this.materialCache.values()) {
       mat.map?.dispose();

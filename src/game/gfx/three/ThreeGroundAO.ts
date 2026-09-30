@@ -85,7 +85,16 @@ export class GroundAO {
         )
         .replace(
           "#include <output_fragment>",
-          "outgoingLight = min(outgoingLight, sampledDiffuseColor.rgb * groundLightCap);\n#include <output_fragment>",
+          // Soft shoulder instead of a hard min(): unchanged up to half the cap, then eases
+          // toward the cap, so a lamp's bright center keeps a gradient instead of flattening
+          // into a uniform disc with a hard edge.
+          [
+            "vec3 gLim = sampledDiffuseColor.rgb * groundLightCap;",
+            "vec3 gKnee = gLim * 0.5;",
+            "vec3 gSpan = max(gLim - gKnee, vec3(1e-4));",
+            "outgoingLight = min(outgoingLight, gKnee) + gSpan * (1.0 - exp(-max(outgoingLight - gKnee, vec3(0.0)) / gSpan));",
+            "#include <output_fragment>",
+          ].join("\n"),
         )
         .replace(
           "#include <aomap_fragment>",

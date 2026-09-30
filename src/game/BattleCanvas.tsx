@@ -365,7 +365,6 @@ export function BattleCanvas({
         lastX = e.clientX;
         lastY = e.clientY;
         canvas.setPointerCapture(e.pointerId);
-        canvas.style.cursor = "grabbing";
         if (mouseHoldTimer !== null) window.clearTimeout(mouseHoldTimer);
         mouseHoldTimer = window.setTimeout(() => {
           mouseHoldTimer = null;
@@ -448,7 +447,6 @@ export function BattleCanvas({
       const wasHolding = holding;
       cancelHold();
       if (e.pointerType === "mouse") {
-        canvas.style.cursor = "";
         if (mouseHoldTimer !== null) {
           window.clearTimeout(mouseHoldTimer);
           mouseHoldTimer = null;

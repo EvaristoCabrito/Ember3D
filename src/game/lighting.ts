@@ -91,6 +91,9 @@ export interface EnvLight {
   r: number;
   /** Optional Three.js attenuation exponent; defaults to the map lighting standard. */
   decay?: number;
+  /** Exponent the intensity is normalized with (irradiance one hex away = LightDef.intensity);
+   * defaults to LIGHT_DECAY. Map props and unit lights use MAP_LIGHT_DECAY for both. */
+  normDecay?: number;
   /** color x intensity x flicker. */
   rgb: [number, number, number];
 }
@@ -98,6 +101,21 @@ export interface EnvLight {
 /** PointLight.decay. 2 is physical inverse-square; 1.5 keeps a lit pool around a fire instead
  * of only a hot spot at its base. */
 export const LIGHT_DECAY = 1.5;
+
+/** Attenuation for map light props and unit lights (spells keep LIGHT_DECAY). Softer than 1.5 so
+ * a lamp's light keeps reaching the ground a few hexes out instead of dying within one hex. */
+export const MAP_LIGHT_DECAY = 1.25;
+/** Lowest a map light's flame may sit above the ground, in hex radii. Measured flames were only
+ * 0.7–0.9 hex up; a light that close to a flat floor pours almost everything into the hex under
+ * it (1 hex away got ~30% of the center). Raising it spreads the same light over a wider pool. */
+export const MAP_LIGHT_MIN_HEIGHT = 1;
+/** Bounce fill: each of the nearest map lights also drives a wide, dim, high light standing in
+ * for light bouncing off the lit ground onto its surroundings. Irradiance straight under it is
+ * this fraction of the main light's one-hex value, reaching BOUNCE_RADIUS_MUL x its range. */
+export const BOUNCE_FRACTION = 0.12;
+export const BOUNCE_RADIUS_MUL = 2;
+/** Bounce light height above the ground, in hex radii — high, so it spreads flat and even. */
+export const BOUNCE_HEIGHT = 2.5;
 
 /** Smooth, non-repeating-looking fire variation around 1 — a few incommensurate slow sines,
  * never a per-frame random jump. `seed` decorrelates neighbouring fires. */

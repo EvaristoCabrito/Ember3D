@@ -9,7 +9,7 @@ import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogLine, DialogTr
 const START_HEX = OVERWORLD_START_HEX;
 
 export const SLOT_COUNT = 5;
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 17;
 const BANK_KEY = "ember-save-bank";
 const SAVE_KEY = "ember-save";
 const SAVE_BAK_KEY = "ember-save.bak";
@@ -594,9 +594,10 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
   const weapons = cleanWeapons(raw.weapons);
   const equipped = cleanEquipped(raw.equipped, weapons);
   const equipment = cleanEquipment(raw.equipment);
-  // v15 removes an accidentally seeded Besta Leve from untouched new-game saves. It is found
-  // or bought during play, never granted as starting equipment.
-  if (version < 15 && completed.length === 0 && weapons["besta-leve"] != null) {
+  // v17 removes an accidentally seeded Besta Leve from untouched new-game saves, including
+  // saves that were already migrated by v15 before the cleanup covered the current version.
+  // It is found or bought during play, never granted as starting equipment.
+  if (version < 17 && completed.length === 0 && weapons["besta-leve"] != null) {
     delete weapons["besta-leve"];
     for (const [hero, weaponId] of Object.entries(equipped)) {
       if (weaponId === "besta-leve") delete equipped[hero];
