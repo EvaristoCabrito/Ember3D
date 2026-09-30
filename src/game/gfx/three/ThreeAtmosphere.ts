@@ -583,6 +583,371 @@ class GroundMist4 {
 }
 
 // ---------------------------------------------------------------------------------------------
+// "Fog 5" — thin cold ground mist: long feathered strands and shallow veils, mostly clear air.
+// Three independent flow layers (own direction, speed, stretch, height parallax) built from
+// anisotropic ridged multi-scale noise, so structure is fine filaments rather than blobs. Where
+// it collects is driven by a per-hex terrain mask baked from the map (water/woods/ruins/walls and
+// decoration cells denser, hills clearer) — see Fog5Density. Non-emissive: a restrained cold grey
+// with a slight blue cast, lightly tinted by the scene sun.
+
+const FOG5_RES = 3;
+const FOG5_DENSITY: Partial<Record<string, number>> = {
+  water: 1,
+  woods: 0.85,
+  ruins: 0.8,
+  column: 0.75,
+  nave: 0.6,
+  barricade: 0.75,
+  ember: 0.55,
+  plains: 0.5,
+  snow: 0.45,
+  door: 0.5,
+  flame: 0.3,
+  hill: 0.12,
+  void: 0,
+};
+
+/** Per-hex "how much low ground mist gathers here" mask, blurred so it reads as soft pooling. */
+class Fog5Density {
+  private texture: THREE.DataTexture | null = null;
+  private key = "";
+
+  get tex(): THREE.Texture | null {
+    return this.texture;
+  }
+
+  update(key: string, engine: BattleEngine, tile: number, boardW: number, boardH: number, cellAt: (x: number, y: number) => number): void {
+    if (key === this.key) return;
+    this.key = key;
+    const cols = engine.cols;
+    const rows = engine.rows;
+    const cell = new Float32Array(cols * rows);
+    for (let i = 0; i < cell.length; i++) cell[i] = FOG5_DENSITY[engine.tiles[i] ?? "plains"] ?? 0.5;
+    for (const d of engine.decorations) {
+      if (d.x < 0 || d.y < 0 || d.x >= cols || d.y >= rows) continue;
+      const i = d.y * cols + d.x;
+      cell[i] = Math.min(1, cell[i]! + 0.3);
+    }
+    const gw = Math.max(1, Math.ceil((boardW / tile) * FOG5_RES));
+    const gh = Math.max(1, Math.ceil((boardH / tile) * FOG5_RES));
+    const n = gw * gh;
+    const field = new Float32Array(n);
+    for (let y = 0; y < gh; y++) {
+      for (let x = 0; x < gw; x++) {
+        const c = cellAt((x + 0.5) / FOG5_RES, (y + 0.5) / FOG5_RES);
+        field[y * gw + x] = c < 0 || c >= cell.length ? 0.4 : cell[c]!;
+      }
+    }
+    const tmp = new Float32Array(n);
+    for (let pass = 0; pass < 2; pass++) {
+      boxBlur(field, tmp, gw, gh, 2, true);
+      boxBlur(tmp, field, gw, gh, 2, false);
+    }
+    const data = new Uint8Array(n * 4);
+    for (let i = 0; i < n; i++) {
+      const v = Math.round(255 * Math.max(0, Math.min(1, field[i]!)));
+      data[i * 4] = v;
+      data[i * 4 + 1] = v;
+      data[i * 4 + 2] = v;
+      data[i * 4 + 3] = 255;
+    }
+    this.texture?.dispose();
+    const tex = new THREE.DataTexture(data, gw, gh, THREE.RGBAFormat, THREE.UnsignedByteType);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.flipY = false; // same row convention as RevealMask: row y is written in plain order
+    tex.needsUpdate = true;
+    this.texture = tex;
+  }
+
+  dispose(): void {
+    this.texture?.dispose();
+  }
+}
+
+const FOG5_VERTEX = /* glsl */ `
+  varying vec2 vWorldXY;
+  void main() {
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldXY = worldPos.xy;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
+
+const FOG5_FRAGMENT = /* glsl */ `
+  uniform sampler2D uDensity;
+  uniform float uHasDensity;
+  uniform vec2 uBoardCenter;
+  uniform vec2 uBoardHalfSize;
+  uniform float uTime;
+  uniform vec2 uCam;
+  uniform float uScale;
+  uniform vec2 uDrift;
+  uniform float uStretch;
+  uniform float uAngle;
+  uniform float uWarp;
+  uniform float uParallax;
+  uniform float uSeed;
+  uniform vec3 uColor;
+  uniform vec3 uLight;
+  uniform float uAlpha;
+  // Unit feet: xy = foot centre (scene space), z = half-width, w = height of the mist band that
+  // veils the unit's boots/lower legs. uFootPass = 1 draws ONLY that veil (on the unit sprite);
+  // pass 0 is the ordinary mist, which the depth test hides behind unit silhouettes.
+  uniform vec4 uUnits[24];
+  uniform int uUnitCount;
+  uniform float uFootPass;
+  varying vec2 vWorldXY;
+
+  float hash(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+  }
+  float vnoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
+  float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    mat2 r = mat2(0.8, -0.6, 0.6, 0.8);
+    for (int i = 0; i < 4; i++) {
+      v += a * vnoise(p);
+      p = r * p * 2.05 + 11.7;
+      a *= 0.5;
+    }
+    return v;
+  }
+
+  void main() {
+    float t = uTime;
+    vec2 world = vWorldXY + uCam * uParallax;
+    vec2 p = world * uScale + uSeed;
+    float ca = cos(uAngle);
+    float sa = sin(uAngle);
+    p = vec2(p.x * ca - p.y * sa, p.x * sa + p.y * ca);
+
+    // Prevailing drift plus a slower, independent turbulence field bending the strands.
+    // Smoke-style tendrils: a doubly domain-warped noise field, then only a thin band around
+    // one iso-level of it is drawn. Contours of a warped field become curling, splitting,
+    // reconnecting ribbons — mist that swirls instead of straight lines or soft blobs.
+    vec2 q = p + uDrift * t;
+    q.y *= uStretch * 0.3;
+    vec2 w1 = vec2(fbm(q * 0.8 + vec2(0.0, t * 0.03)), fbm(q * 0.8 + vec2(5.2, -t * 0.026)));
+    vec2 w2 = vec2(fbm(q + w1 * uWarp * 1.6 + vec2(1.7, 9.2) + t * 0.02),
+                   fbm(q + w1 * uWarp * 1.6 + vec2(8.3, 2.8) - t * 0.018));
+    float field = fbm(q * 1.3 + w2 * uWarp * 2.2);
+
+    // Two iso-levels at different heights give two families of ribbons that cross and merge.
+    float c1 = 1.0 - smoothstep(0.0, 0.085, abs(field - 0.5));
+    float c2 = 1.0 - smoothstep(0.0, 0.06, abs(field - 0.62));
+    float strand = (c1 * 0.75 + c2 * 0.5);
+    // Fine wisp texture inside each ribbon so its edges feather apart.
+    strand *= 0.45 + 0.85 * fbm(q * 5.0 + w2 * 3.0);
+    strand = clamp(strand, 0.0, 1.0);
+
+    // Barely-there translucent veil hugging the ribbons.
+    float veil = smoothstep(0.3, 0.0, abs(field - 0.55)) * 0.08;
+
+    // Mist only exists in intermittent patches; most of the map stays clear.
+    float clumps = fbm(p * 0.28 + vec2(t * 0.005, -t * 0.004) + 21.0);
+
+    float density = 0.5;
+    if (uHasDensity > 0.5) {
+      vec2 uv = vec2(
+        (vWorldXY.x - (uBoardCenter.x - uBoardHalfSize.x)) / (2.0 * uBoardHalfSize.x),
+        -vWorldXY.y / (2.0 * uBoardHalfSize.y)
+      );
+      density = texture2D(uDensity, clamp(uv, 0.0, 1.0)).r;
+    }
+    // Low / cluttered ground lowers the patch threshold (more mist), high ground raises it.
+    float thresh = mix(0.58, 0.36, density);
+    float pm = smoothstep(thresh, thresh + 0.14, clumps);
+
+    float a = clamp(strand + veil, 0.0, 1.0) * pm;
+    if (uFootPass > 0.5) {
+      // Mist rises only a little way up each unit: full at the soles, gone by the knees.
+      float foot = 0.0;
+      for (int i = 0; i < 24; i++) {
+        if (i >= uUnitCount) break;
+        vec4 u = uUnits[i];
+        vec2 d = vWorldXY - u.xy;
+        float hx = abs(d.x) / u.z;
+        float up = d.y / u.w;
+        float m = (1.0 - smoothstep(0.7, 1.2, hx)) * (1.0 - smoothstep(0.0, 1.0, up)) * smoothstep(-0.5, 0.0, up);
+        foot = max(foot, m);
+      }
+      a *= foot * 0.85;
+    }
+    vec3 color = mix(uColor, uLight, 0.18);
+    gl_FragColor = vec4(color, a * uAlpha);
+  }
+`;
+
+interface Fog5LayerSpec {
+  z: number;
+  scale: number;
+  drift: [number, number];
+  stretch: number;
+  angle: number;
+  warp: number;
+  parallax: number;
+  seed: number;
+  alpha: number;
+}
+
+const FOG5_LAYERS: Fog5LayerSpec[] = [
+  // Lowest, closest to the ground: slowest, most present.
+  { z: 6, scale: 0.0034, drift: [0.07, 0.012], stretch: 5.0, angle: 0.18, warp: 1.2, parallax: 0.0, seed: 0.0, alpha: 0.6 },
+  // Slightly higher: crosses the first at a different heading and speed.
+  { z: 7, scale: 0.0048, drift: [-0.095, 0.03], stretch: 7.0, angle: -0.42, warp: 1.5, parallax: 0.04, seed: 40.0, alpha: 0.45 },
+  // Highest sliver of the shallow volume: finest, faintest, most parallax.
+  { z: 8, scale: 0.0068, drift: [0.05, -0.042], stretch: 9.0, angle: 0.95, warp: 1.0, parallax: 0.09, seed: 90.0, alpha: 0.3 },
+];
+
+class VolumetricFog5 {
+  readonly group = new THREE.Group();
+  private readonly geo = new THREE.PlaneGeometry(1, 1);
+  private readonly materials: THREE.ShaderMaterial[] = [];
+  private readonly meshes: THREE.Mesh[] = [];
+  private readonly density = new Fog5Density();
+  private builtKey = "";
+
+  private readonly layerOf: number[] = [];
+  private readonly unitsUniform = { value: Array.from({ length: 24 }, () => new THREE.Vector4()) };
+  private readonly unitCountUniform = { value: 0 };
+
+  // Real depth, using the renderer's existing depth-only "fogCut" silhouettes (units and houses
+  // write depth at z=60, see ThreeBattleRenderer's syncUnits). Pass 0 sits at z=50 with the depth
+  // test ON, so mist is hidden exactly where a unit stands. Pass 1 sits at z=60 with an EQUAL
+  // depth test, so it draws only on those unit silhouettes, and is masked to the feet.
+  private static readonly BEHIND_Z = 50;
+  private static readonly UNIT_Z = 60;
+
+  constructor() {
+    FOG5_LAYERS.forEach((spec, i) => {
+      for (const footPass of [0, 1]) {
+      const material = new THREE.ShaderMaterial({
+        vertexShader: FOG5_VERTEX,
+        fragmentShader: FOG5_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        depthTest: true,
+        depthFunc: footPass ? THREE.EqualDepth : THREE.LessEqualDepth,
+        uniforms: {
+          uUnits: this.unitsUniform,
+          uUnitCount: this.unitCountUniform,
+          uFootPass: { value: footPass },
+          uDensity: { value: null },
+          uHasDensity: { value: 0 },
+          uBoardCenter: { value: new THREE.Vector2() },
+          uBoardHalfSize: { value: new THREE.Vector2(1, 1) },
+          uTime: { value: 0 },
+          uCam: { value: new THREE.Vector2() },
+          uScale: { value: spec.scale },
+          uDrift: { value: new THREE.Vector2(spec.drift[0], spec.drift[1]) },
+          uStretch: { value: spec.stretch },
+          uAngle: { value: spec.angle },
+          uWarp: { value: spec.warp },
+          uParallax: { value: spec.parallax },
+          uSeed: { value: spec.seed },
+          // Cold neutral grey, very slight blue cast.
+          uColor: { value: new THREE.Color(0x9aa6ae) },
+          uLight: { value: new THREE.Color(0xffffff) },
+          uAlpha: { value: 0 },
+        },
+      });
+      const mesh = new THREE.Mesh(this.geo, material);
+      // Must draw after the units' fogCut depth writers (renderOrder 99).
+      mesh.renderOrder = 101 + i;
+      mesh.position.z = footPass ? VolumetricFog5.UNIT_Z : VolumetricFog5.BEHIND_Z;
+      this.materials.push(material);
+      this.meshes.push(mesh);
+      this.layerOf.push(i);
+      this.group.add(mesh);
+      }
+    });
+    this.group.visible = false;
+  }
+
+  /** Foot positions (scene space) of the units on screen; drives the boots-in-mist veil. */
+  setUnits(feet: { x: number; y: number; halfW: number; band: number }[]): void {
+    const n = Math.min(24, feet.length);
+    for (let i = 0; i < n; i++) {
+      const f = feet[i]!;
+      this.unitsUniform.value[i]!.set(f.x, f.y, Math.max(1, f.halfW), Math.max(1, f.band));
+    }
+    this.unitCountUniform.value = n;
+  }
+
+  rebuild(cols: number, rows: number, tile: number, missionId: string, tier: AtmosphereTier): void {
+    const key = `${missionId}:${cols}:${rows}:${tile}`;
+    if (key !== this.builtKey) {
+      this.builtKey = key;
+      const { w, h } = boardSize(cols, rows, tile);
+      for (const m of this.materials) {
+        (m.uniforms.uBoardCenter!.value as THREE.Vector2).set(w / 2, -h / 2);
+        (m.uniforms.uBoardHalfSize!.value as THREE.Vector2).set(w / 2, h / 2);
+      }
+      // Default footprint (covers the board) for when no viewport is supplied; coverViewport
+      // overrides it every frame during real battles.
+      for (const mesh of this.meshes) {
+        mesh.scale.set(w * 1.3, h * 1.3, 1);
+        mesh.position.x = w / 2;
+        mesh.position.y = -h / 2;
+      }
+    }
+    this.group.visible = tier.mistIntensity > 0;
+    this.materials.forEach((m, i) => {
+      // sqrt so the editor's default/low slider values still show; other fogs square theirs.
+      m.uniforms.uAlpha!.value = FOG5_LAYERS[this.layerOf[i]!]!.alpha * Math.sqrt(tier.mistIntensity);
+    });
+  }
+
+  /** Bakes the terrain-driven density mask; only rebuilds when the map itself changes. */
+  syncDensity(engine: BattleEngine, tile: number, cellAt: (x: number, y: number) => number): void {
+    if (!this.group.visible) return;
+    const { w, h } = boardSize(engine.cols, engine.rows, tile);
+    this.density.update(`${engine.mission.id}:${engine.cols}x${engine.rows}:${tile}:${engine.decorations.length}`, engine, tile, w, h, cellAt);
+    for (const m of this.materials) {
+      m.uniforms.uDensity!.value = this.density.tex;
+      m.uniforms.uHasDensity!.value = this.density.tex ? 1 : 0;
+    }
+  }
+
+  coverViewport(cssW: number, cssH: number, camX: number, camY: number): void {
+    if (!this.group.visible) return;
+    for (let i = 0; i < this.meshes.length; i++) {
+      const mesh = this.meshes[i]!;
+      mesh.scale.set(cssW * 1.16, cssH * 1.16, 1);
+      mesh.position.x = camX + cssW / 2;
+      mesh.position.y = -camY - cssH / 2;
+      (this.materials[i]!.uniforms.uCam!.value as THREE.Vector2).set(camX, -camY);
+    }
+  }
+
+  sync(dt: number, sunLight: THREE.DirectionalLight, speed: number): void {
+    if (!this.group.visible) return;
+    for (const material of this.materials) {
+      material.uniforms.uTime!.value += dt * speed;
+      (material.uniforms.uLight!.value as THREE.Color).copy(sunLight.color).multiplyScalar(Math.min(1.2, sunLight.intensity * 0.5));
+    }
+  }
+
+  dispose(): void {
+    this.geo.dispose();
+    this.density.dispose();
+    for (const material of this.materials) material.dispose();
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // "Vinheta 3" — a full-viewport painted fog field that exists ONLY outside the board. The board
 // is cut out in the fragment shader, leaving the tactical action clean while the surrounding
 // painted backdrop receives the atmosphere.
@@ -1143,6 +1508,7 @@ export class ThreeAtmosphere {
   private readonly mist2 = new GroundMist();
   private readonly mist3 = new GroundMist3();
   private readonly mist4 = new GroundMist4();
+  private readonly fog5 = new VolumetricFog5();
   private readonly revealFog = new RevealFog();
   private readonly fogArtwork = new BoardFogArtwork();
   private readonly dust = new ParticleField("dust");
@@ -1156,6 +1522,7 @@ export class ThreeAtmosphere {
       this.mist2.group,
       this.mist3.group,
       this.mist4.group,
+      this.fog5.group,
       this.revealFog.group,
       this.fogArtwork.group,
       this.dust.group,
@@ -1171,6 +1538,7 @@ export class ThreeAtmosphere {
     hemiLight: THREE.HemisphereLight,
     viewport?: { cssW: number; cssH: number; camX: number; camY: number },
     cellAt?: (x: number, y: number) => number,
+    unitFeet?: { x: number; y: number; halfW: number; band: number }[],
   ): void {
     // Mission-authored, not a hardcoded per-id table (see Mission.mistIntensity/wispIntensity/
     // wispSpeed in types.ts) — the Map Editor's "Névoa"/"Wisps"/"Velocidade" sliders are the one
@@ -1227,6 +1595,11 @@ export class ThreeAtmosphere {
     this.mist4.rebuild(engine.cols, engine.rows, tile, engine.mission.id, mist4Tier);
     if (mistType === "mist4" && viewport) this.mist4.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
     this.mist4.sync(dt, sunLight, mistSpeed);
+    this.fog5.rebuild(engine.cols, engine.rows, tile, engine.mission.id, { ...tier, mistIntensity: mistType === "fog5" ? worldMistIntensity : 0 });
+    if (mistType === "fog5" && viewport) this.fog5.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
+    if (mistType === "fog5" && cellAt) this.fog5.syncDensity(engine, tile, cellAt);
+    if (mistType === "fog5") this.fog5.setUnits(unitFeet ?? []);
+    this.fog5.sync(dt, sunLight, mistSpeed);
     this.revealFog.rebuild(engine.cols, engine.rows, tile, engine.mission.id, fog1Tier);
     if (mistType === "fog1" && viewport) this.revealFog.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
     if (mistType === "fog1" && cellAt) this.revealFog.syncReveal(engine, tile, cellAt);
@@ -1247,6 +1620,7 @@ export class ThreeAtmosphere {
     this.mist2.dispose();
     this.mist3.dispose();
     this.mist4.dispose();
+    this.fog5.dispose();
     this.revealFog.dispose();
     this.fogArtwork.dispose();
     this.dust.dispose();

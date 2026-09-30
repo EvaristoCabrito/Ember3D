@@ -72,7 +72,7 @@ export interface MapDraft {
   /** See Mission.mistIntensity. */
   mistIntensity?: number;
   /** See Mission.mistType. */
-  mistType?: "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4" | "fog1" | "none";
+  mistType?: "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4" | "fog1" | "fog5" | "none";
   /** See Mission.bloomIntensity. */
   bloomIntensity?: number;
   /** See Mission.mistSpeed. */
@@ -218,7 +218,7 @@ export function draftToMission(d: MapDraft): Mission {
     ambientIntensity: typeof d.ambientIntensity === "number" ? d.ambientIntensity : undefined,
     mistIntensity: typeof d.mistIntensity === "number" ? d.mistIntensity : undefined,
     mistSpeed: typeof d.mistSpeed === "number" ? d.mistSpeed : undefined,
-    mistType: d.mistType === "mist2" || d.mistType === "mist3" || d.mistType === "mist4" || d.mistType === "vignette" || d.mistType === "vignette2" || d.mistType === "vignette3" || d.mistType === "vignette4" || d.mistType === "fog1" || d.mistType === "none" ? d.mistType : undefined,
+    mistType: d.mistType === "mist2" || d.mistType === "mist3" || d.mistType === "mist4" || d.mistType === "vignette" || d.mistType === "vignette2" || d.mistType === "vignette3" || d.mistType === "vignette4" || d.mistType === "fog1" || d.mistType === "fog5" || d.mistType === "none" ? d.mistType : undefined,
     bloomIntensity: typeof d.bloomIntensity === "number" ? d.bloomIntensity : undefined,
     wispIntensity: typeof d.wispIntensity === "number" ? d.wispIntensity : undefined,
     wispSpeed: typeof d.wispSpeed === "number" ? d.wispSpeed : undefined,

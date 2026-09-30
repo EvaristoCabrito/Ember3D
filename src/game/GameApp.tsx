@@ -5341,7 +5341,7 @@ function MapEditorScreen({
               onChange={(e) =>
                 setDraft((d) => ({
                   ...d,
-                  mistType: e.target.value as "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4" | "fog1" | "none",
+                  mistType: e.target.value as "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4" | "fog1" | "fog5" | "none",
                 }))
               }
             >
@@ -5350,6 +5350,7 @@ function MapEditorScreen({
               <option value="mist3">Névoa 3 (ruído original, mundo inteiro)</option>
               <option value="mist4">Névoa 4 (vórtice nas bordas do mapa, centro sempre limpo)</option>
               <option value="fog1">Névoa 01 (só sobre área não revelada e o fundo, limpa no mapa revelado)</option>
+              <option value="fog5">Névoa 5 (rasteira, fiapos finos e véus)</option>
               <option value="vignette">Vinheta (tela inteira, bordas suaves)</option>
               <option value="vignette2">Vinheta 2 (bancos de névoa profundos, centro limpo)</option>
               <option value="vignette3">Vinheta 3 (névoa rasteira em faixas, sem bordas escuras)</option>

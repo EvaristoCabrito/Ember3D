@@ -494,7 +494,7 @@ export interface Mission {
    *    is set to — an explicit "off" the author can pick, distinct from just never having set
    *    mistIntensity (which still defaults mist2 on at 0.2, see below).
    * Undefined defaults to "mist2", so nothing shipped changes by default. */
-  mistType?: "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4" | "fog1" | "none";
+  mistType?: "mist2" | "mist3" | "mist4" | "vignette" | "vignette2" | "vignette3" | "vignette4" | "fog1" | "fog5" | "none";
   /** Bloom strength for the Three renderer's post-processing pass (UnrealBloomPass) — real bright-
    * surface glow (sun-lit highlights, additive wisp particles), not a fake overlay. Undefined
    * uses the renderer's own conservative default. Author-tunable per mission like every other
