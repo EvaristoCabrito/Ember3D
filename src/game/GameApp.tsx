@@ -7038,9 +7038,8 @@ function BattleScreen({
   // — the same numbers the map editor shows on hover, which the player had no way to see
   // during a fight.
   const [heldTile, setHeldTile] = useState(false);
-  // Turn order bar: visible by default, but a battle with a long roster can eat a lot of the
-  // top of the screen — tapping it collapses to a small reopen icon in the same spot.
-  const [showTurnOrder, setShowTurnOrder] = useState(true);
+  // Keep turn order tucked away until the player opens it.
+  const [showTurnOrder, setShowTurnOrder] = useState(false);
   const [hotbars, setHotbars] = useState<Record<string, (SlotAction | null)[]>>({});
   const [editingSlots, setEditingSlots] = useState(false);
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
@@ -7359,47 +7358,27 @@ function BattleScreen({
           paused={paused || introDialogOpen || outroDialogOpen || !!hud.pendingDialog}
           onTileReadout={setHeldTile}
         />
-        {hud.turnQueue.length > 1 &&
-          (showTurnOrder ? (
-            <div className="pointer-events-none absolute inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] flex items-center gap-1 flex-wrap">
-              <button
-                type="button"
-                title="Ocultar ordem de turnos"
-                onClick={() => setShowTurnOrder(false)}
-                className="pointer-events-auto bg-surface/90 border border-border rounded-md px-2 py-0.5 text-[15px] leading-tight flex items-center gap-1.5 flex-wrap hover:bg-surface-2"
-              >
+        {hud.turnQueue.length > 0 && (
+          <div className="pointer-events-none absolute left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] flex flex-col items-start gap-2">
+            <button type="button" aria-expanded={showTurnOrder} aria-label={showTurnOrder ? "Ocultar ordem de turnos" : "Mostrar ordem de turnos"}
+              onClick={() => setShowTurnOrder((open) => !open)}
+              className="pointer-events-auto flex items-center gap-2 rounded-lg border border-white/15 bg-[#111b22]/95 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-[#25313b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#cdd3dc]">
+              <ListOrdered className="size-4" /><span>Ordem</span>
+            </button>
+            {showTurnOrder && (
+              <div className="flex max-w-full gap-1.5 overflow-x-auto rounded-lg border border-white/10 bg-[#111b22]/90 p-1.5 text-xs">
                 {hud.turnQueue.map((q, i) => (
-                  <span key={q.id} className="flex items-center gap-2">
-                    {i > 0 && <span className="text-muted">→</span>}
-                    <span
-                      className={
-                        q.active
-                          ? "text-accent font-medium"
-                          : q.acted
-                            ? "text-muted line-through"
-                            : q.side === "enemy"
-                              ? "text-danger"
-                              : "text-fg"
-                      }
-                    >
-                      {q.name} · {q.initiative}
-                    </span>
+                  <span key={q.id} className={`flex shrink-0 items-center gap-2 rounded-md border px-2.5 py-1.5 ${q.active ? "border-[#dce2eb]/60 bg-[#dce2eb]/10 text-[#dce2eb]" : q.acted ? "border-transparent text-slate-500" : "border-white/10 text-slate-300"}`}>
+                    <span className="text-[10px] tabular-nums text-slate-500">{String(i + 1).padStart(2, "0")}</span>
+                    <span className={q.acted ? "line-through" : ""}>{q.name}</span>
+                    {q.active && <span className="text-[9px] font-bold uppercase">Agora</span>}
+                    {q.side === "enemy" && !q.active && <span className="size-1.5 rounded-full bg-[#e78573]" aria-label="Inimigo" />}
                   </span>
                 ))}
-              </button>
-            </div>
-          ) : (
-            <div className="pointer-events-none absolute inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] flex items-center">
-              <button
-                type="button"
-                title="Mostrar ordem de turnos"
-                onClick={() => setShowTurnOrder(true)}
-                className="pointer-events-auto bg-surface/90 border border-border rounded-md p-1.5 hover:bg-surface-2"
-              >
-                <ListOrdered className="size-4" />
-              </button>
-            </div>
-          ))}
+              </div>
+            )}
+          </div>
+        )}
         {heldTile && hud.terrain && (
           <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center px-3">
             <div className="bg-surface/95 border border-border rounded-lg px-3 py-2 max-w-sm shadow-lg">

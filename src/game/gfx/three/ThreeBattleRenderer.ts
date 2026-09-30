@@ -1,3 +1,4 @@
+import { tacticalGridStyle, GRID_ROUTE, GRID_MOVE } from "../../tacticalGrid";
 /** MILESTONE 1 (done) — terrain, ground/behind-layer decorations, and animated unit sprites all
  * render through a real Three.js scene instead of the Canvas2D-shim WebGL renderer, as the first
  * slice of migrating the battlefield to a genuine spatial rendering environment (see the
@@ -201,6 +202,22 @@ function buildHexGeometry(): THREE.BufferGeometry {
   // Needed for MILESTONE 2's MeshLambertMaterial (unlit MeshBasicMaterial never reads normals) —
   // every vertex lies in the same z=0 plane facing the camera, so this is just (0,0,1) everywhere.
   geo.computeVertexNormals();
+  return geo;
+}
+
+/** A true hex border, kept in world space beneath props and characters. */
+function buildHexBorder(inner: number): THREE.BufferGeometry {
+  const vertices: number[] = [];
+  const indices: number[] = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (60 * i - 30) * Math.PI / 180;
+    for (const r of [0.5, inner]) vertices.push(Math.cos(a) * r, -Math.sin(a) * r, 0);
+    const j = i * 2, k = ((i + 1) % 6) * 2;
+    indices.push(j, j + 1, k, k, j + 1, k + 1);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geo.setIndex(indices);
   return geo;
 }
 
@@ -573,6 +590,7 @@ export class ThreeBattleRenderer {
   /** Every lit sprite material (decorations + unit billboards) — see syncSpriteExposure. */
   private litSpriteMats = new Set<THREE.MeshLambertMaterial>();
   private hexGeo = buildHexGeometry();
+  private focusBorderGeo = buildHexBorder(0.47);
   private builtCols = -1;
   private builtRows = -1;
   private builtMissionId = "";
@@ -654,15 +672,6 @@ export class ThreeBattleRenderer {
   private webMatDim: THREE.MeshLambertMaterial | null = null;
   private overlayMatCache = new Map<string, THREE.MeshBasicMaterial>();
   private overlayMeshPool: THREE.Mesh[] = [];
-  private overlayGlowGroup = new THREE.Group();
-  private overlayGlowPool: THREE.Sprite[] = [];
-  // The old 2D marker used Canvas shadowBlur, which has a broad soft falloff rather than a
-  // flat, expanding polygon. This sprite is that same falloff in world space, so WebGL keeps
-  // the familiar 2D read while still sitting under units and props.
-  private activeTurnGlowTexture: THREE.CanvasTexture;
-  private activeTurnGlowMaterial: THREE.SpriteMaterial;
-  private activeTurnGlow: THREE.Sprite;
-
   // Animated units (see THREEJS_MILESTONE1_HANDOFF.md) — one persistent mesh per live unit id,
   // repositioned/retextured/rescaled every frame in syncUnits rather than rebuilt, since units
   // (unlike terrain/decor) change position, pose and art every frame. HP bars, hover/selection
@@ -729,20 +738,6 @@ export class ThreeBattleRenderer {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.camera = new THREE.OrthographicCamera(0, 1, 0, 1, 0.1, 2000);
     this.camera.position.z = 100;
-    const glowCanvas = document.createElement("canvas");
-    glowCanvas.width = glowCanvas.height = 128;
-    const glowCtx = glowCanvas.getContext("2d")!;
-    const gradient = glowCtx.createRadialGradient(64, 64, 6, 64, 64, 64);
-    gradient.addColorStop(0, "rgba(255,255,255,0.92)");
-    gradient.addColorStop(0.32, "rgba(255,255,255,0.45)");
-    gradient.addColorStop(1, "rgba(255,255,255,0)");
-    glowCtx.fillStyle = gradient;
-    glowCtx.fillRect(0, 0, 128, 128);
-    this.activeTurnGlowTexture = new THREE.CanvasTexture(glowCanvas);
-    this.activeTurnGlowMaterial = new THREE.SpriteMaterial({ map: this.activeTurnGlowTexture, transparent: true, depthWrite: false, opacity: 0 });
-    this.activeTurnGlow = new THREE.Sprite(this.activeTurnGlowMaterial);
-    this.activeTurnGlow.position.z = 0.45;
-    this.activeTurnGlow.visible = false;
     // Author-controlled lighting (Mission.environment/sunIntensity/ambientIntensity, editable in
     // the Map Editor's "Iluminação" section — see GameApp.tsx) — an explicit sunIntensity/
     // ambientIntensity always wins; otherwise "indoor" gets its own flatter preset, and anything
@@ -779,9 +774,9 @@ export class ThreeBattleRenderer {
     this.scene.add(this.backdropMesh);
     this.scene.add(this.tileGroup);
     this.scene.add(this.webGroup);
-    this.scene.add(this.overlayGlowGroup);
+
     this.scene.add(this.overlayGroup);
-    this.scene.add(this.activeTurnGlow);
+
     this.scene.add(this.contactShadowGroup);
     this.scene.add(this.decorContactGroup);
     this.scene.add(this.decorGroup);
@@ -1677,88 +1672,59 @@ export class ThreeBattleRenderer {
     this.backdropMesh.scale.set(width, height, 1);
   }
 
-  /** A faint, pooled halo restores the depth that the 2D renderer's shadowBlur gave blue
-   * movement/range cells. Only blue tactical overlays receive it; spell and danger colors stay
-   * deliberately flat so the board remains calm and readable. */
-  private placeBlueOverlayGlow(x: number, y: number, tile: number, index: number, fade = 1): void {
-    let glow = this.overlayGlowPool[index];
-    if (!glow) {
-      glow = new THREE.Sprite(
-        new THREE.SpriteMaterial({ map: this.activeTurnGlowTexture, color: 0x8cc8f5, transparent: true, depthWrite: false, opacity: 0.15 }),
-      );
-      this.overlayGlowGroup.add(glow);
-      this.overlayGlowPool.push(glow);
-    }
-    const { wx, wy } = hexWorld(x, y, tile);
-    const pulse = 0.5 + 0.5 * Math.sin(this.engine.time * 3.8);
-    glow.position.set(wx, -wy, 0.42);
-    glow.scale.setScalar(tile * (2.08 + pulse * 0.24));
-    (glow.material as THREE.SpriteMaterial).opacity = (0.1 + pulse * 0.1) * fade;
-    glow.visible = true;
-  }
-
-  /** Movement/attack/spell-range highlight + the active-turn ring, from the same cell/color
-   * data renderBoardOverlays (Canvas2D path) draws from — see overlayGroup's own comment for
-   * why this renders as real geometry instead of a 2D fill. Pool index reused across frames
-   * (see overlayMeshPool): cheaper than tearing down and rebuilding a THREE.Mesh per cell every
-   * single frame for what is usually the same handful of cells frame to frame. */
+  /** Reuse mesh slots for quiet fills, hex borders, and route breadcrumbs. */
   private syncOverlay(tile: number): void {
     const engine = this.engine;
     let idx = 0;
-    let glowIdx = 0;
-    const place = (x: number, y: number, fill: string) => {
+    const place = (x: number, y: number, fill: string, geometry = this.hexGeo, radius = 0.94, z = 0.5) => {
       let mesh = this.overlayMeshPool[idx];
       if (!mesh) {
-        mesh = new THREE.Mesh(this.hexGeo, this.overlayMaterialFor(fill));
+        mesh = new THREE.Mesh(geometry, this.overlayMaterialFor(fill));
         this.overlayGroup.add(mesh);
         this.overlayMeshPool.push(mesh);
-      } else {
-        mesh.material = this.overlayMaterialFor(fill);
-        mesh.visible = true;
       }
+      mesh.geometry = geometry;
+      mesh.material = this.overlayMaterialFor(fill);
+      mesh.visible = true;
       const { wx, wy } = hexWorld(x, y, tile);
-      // 1.84 = 2 * 0.92, matching the Canvas2D path's hexPath(ctx, cx, cy, tile * 0.92) radius
-      // (see buildHexGeometry's comment on why *2 turns this geometry's own radius-0.5 shape
-      // into a `tile`-radius hex).
-      mesh.scale.set(tile * 1.84, tile * 1.84, 1);
-      // Y negated, z=0.5 — see module comment on the Y-flip and overlayGroup's own comment on
-      // why this sits between tiles (z=0) and decorations (z=1).
-      mesh.position.set(wx, -wy, 0.5);
+      mesh.scale.set(tile * radius * 2, tile * radius * 2, 1);
+      mesh.position.set(wx, -wy, z);
       idx++;
     };
-    // Hidden while anything is playing, fading back in afterwards — see BattleEngine.overlayFade.
     const fade = engine.overlayFade;
-    for (const layer of fade > 0.001 ? engine.boardOverlayLayers() : []) {
-      const rgb = /rgba?\(([^,]+),([^,]+),([^,]+)/.exec(layer.fill);
-      const isBlue = !!rgb && Number(rgb[3]) > Number(rgb[1]) && Number(rgb[3]) > Number(rgb[2]);
-      const fill = fade >= 1 ? layer.fill : fadedFill(layer.fill, fade);
+    for (const layer of engine.boardOverlayLayers()) {
+      const layerFade = layer.fill === GRID_MOVE ? fade : 1;
+      const style = tacticalGridStyle(layer.fill);
       for (const c of layer.cells) {
-        place(c.x, c.y, fill);
-        if (isBlue) this.placeBlueOverlayGlow(c.x, c.y, tile, glowIdx++, fade);
+        // A continuous blue range wash, without drawing the movement lattice.
+        place(c.x, c.y, fadedFill(style.fill, layerFade), this.hexGeo, 1.0);
       }
     }
+    const route = engine.movementPreview();
+    route.forEach((c, i) => {
+      const last = i === route.length - 1;
+      place(c.x, c.y, "rgba(8,12,16,0.95)", last ? this.focusBorderGeo : this.hexGeo, last ? 0.985 : 0.16, 0.512);
+      if (last) place(c.x, c.y, "rgba(220,226,235,0.12)", this.focusBorderGeo, 1.01, 0.513);
+      place(c.x, c.y, GRID_ROUTE, last ? this.focusBorderGeo : this.hexGeo, last ? 0.94 : 0.12, 0.515);
+    });
     const active = engine.activeTurnHighlight();
     if (active) {
-      place(active.x, active.y, active.fill);
-      const pulse = 0.72 + Math.sin(engine.time * 5.5) * 0.28;
-      const { wx, wy } = hexWorld(active.x, active.y, tile);
-      this.activeTurnGlow.visible = true;
-      this.activeTurnGlow.position.set(wx, -wy, 0.45);
-      this.activeTurnGlow.scale.setScalar(tile * (2.45 + pulse * 0.32));
-      this.activeTurnGlowMaterial.color.set(active.player ? 0xd6a12a : 0xd25436);
-      this.activeTurnGlowMaterial.opacity = active.player ? Math.min(1, (0.32 + pulse * 0.18) * 1.5) : 0.72;
-    } else {
-      this.activeTurnGlow.visible = false;
+      if (active.player) {
+        place(active.x, active.y, "rgba(220,226,235,0.04)", this.focusBorderGeo, 1.035, 0.516);
+        place(active.x, active.y, "rgba(220,226,235,0.08)", this.focusBorderGeo, 1.01, 0.517);
+        place(active.x, active.y, "rgba(220,226,235,0.14)", this.focusBorderGeo, 0.985, 0.518);
+      }
+      place(active.x, active.y, "rgba(12,20,25,0.85)", this.focusBorderGeo, 0.98, 0.52);
+      place(active.x, active.y, active.fill, this.focusBorderGeo, 0.94, 0.525);
     }
-    // The mouse-selection hex, drawn here instead of on the Canvas2D units shim (see
-    // BattleEngine.renderUnitsAndOverlays' skipCursorHex) so it lands at this same z=0.5 —
-    // genuinely behind decorations/units instead of on a canvas stacked above them.
     const cur = engine.hover ?? engine.cursor;
     const curId = tileAt(engine.tiles, engine.cols, cur.x, cur.y);
-    // No cursor hex floating over erased (void) ground — there is no tile there to point at.
-    if (curId !== "void") place(cur.x, cur.y, !TERRAIN[curId].passable ? "rgba(255,90,72,0.28)" : "rgba(240,235,227,0.16)");
+    if (curId !== "void" && engine.explored(cur.x, cur.y)) {
+      const blocked = !TERRAIN[curId].passable;
+      place(cur.x, cur.y, "rgba(8,12,16,0.95)", this.focusBorderGeo, 0.985, 0.508);
+      place(cur.x, cur.y, blocked ? "rgba(231,133,115,0.95)" : "rgba(220,226,235,1)", this.focusBorderGeo, 0.94, 0.51);
+    }
     for (; idx < this.overlayMeshPool.length; idx++) this.overlayMeshPool[idx]!.visible = false;
-    for (; glowIdx < this.overlayGlowPool.length; glowIdx++) this.overlayGlowPool[glowIdx]!.visible = false;
   }
 
   private syncPortalFx(): void {
@@ -2228,11 +2194,15 @@ export class ThreeBattleRenderer {
     }
     // Map lights never feed bloom: the bloom buffer is rendered unlit by them, so a candle's
     // bright pool on the floor can't swell into a white disc over everyone standing near it.
+    // Only strong target/turn cues feed the silver glow; the blue range stays quiet.
+    const mutedOverlays = this.overlayMeshPool.filter((mesh) => mesh.visible && (mesh.material as THREE.MeshBasicMaterial).opacity < 0.5);
+    for (const mesh of mutedOverlays) mesh.visible = false;
     const intensities = this.pointLights.map((pl) => pl.intensity);
     for (const pl of this.pointLights) pl.intensity = 0;
     try {
       this.bloomComposer.render();
     } finally {
+      for (const mesh of mutedOverlays) mesh.visible = true;
       for (const mesh of hidden) mesh.visible = true;
       for (const b of blacked) b.mesh.material = b.material;
       this.pointLights.forEach((pl, i) => (pl.intensity = intensities[i]!));
@@ -2630,9 +2600,7 @@ export class ThreeBattleRenderer {
       entry.contactMaterial.dispose();
     }
     for (const mat of this.overlayMatCache.values()) mat.dispose();
-    for (const glow of this.overlayGlowPool) (glow.material as THREE.SpriteMaterial).dispose();
-    this.activeTurnGlowMaterial.dispose();
-    this.activeTurnGlowTexture.dispose();
+    this.focusBorderGeo.dispose();
     this.contactShadowTexture.dispose();
     this.decorContactMaterial.dispose();
     this.renderer.dispose();

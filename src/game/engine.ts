@@ -1,3 +1,4 @@
+import { tacticalGridStyle, GRID_MOVE, GRID_ROUTE, GRID_ALLY, GRID_ENEMY } from "./tacticalGrid";
 import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
 import { placedBlockingFootprint } from "./data";
@@ -3141,7 +3142,7 @@ export class BattleEngine {
 
   /** A wardog's bite (20%) or a zombie's hit (30%) can inflict disease on a surviving target. */
   private maybeInflictDisease(actor: Unit, target: Unit): void {
-    const chance = actor.classId === "wardog" ? DISEASE.biteChance : actor.classId === "zombie" ? DISEASE.zombieChance : 0;
+    const chance = actor.classId === "wardog" ? DISEASE.biteChance : (actor.classId === "zombie" || actor.classId === "zombie2") ? DISEASE.zombieChance : 0;
     if (chance <= 0 || !target.alive || target.diseased) return;
     if (this.rng() >= chance) return;
     target.diseased = true;
@@ -8858,7 +8859,7 @@ export class BattleEngine {
     // Zombie (480x360 canvas, figure ~95% of its height, same fill as the plain human sheets):
     // height stays the human box, width follows the canvas aspect (1.333 / 0.782) so the wide
     // lunge frames aren't squeezed. Idle, walk and ATT share this one canvas, so nothing shrinks.
-    const zombieWidthScale = u.sprite === "zombie" ? 1.705 : 1;
+    const zombieWidthScale = u.sprite === "zombie" ? 1.705 : u.sprite === "zombie2" ? 1.085 : 1;
     const h =
       cell *
       (s >= 4 ? 3.35 : s === 2 ? 1.72 : boss ? 1.44 : 1.42) *
@@ -9228,26 +9229,18 @@ export class BattleEngine {
       ctx.save();
       ctx.translate(this.frameShakeDx, this.frameShakeDy);
     }
-    // Every selectable area (walkable ground, spell range, an aimed AoE) gets the same
-    // treatment: a soft colored glow plus a bright rim, on top of the flat fill — the flat
-    // fill alone reads as a dim tint on some terrain art and is easy to miss. The glow
-    // breathes (same sine pulse as the active-turn-unit ring above) rather than sitting
-    // static, the classic tactics-RPG "selectable tile" look.
-    const glowPulse = this.reducedMotion ? 1 : 0.72 + Math.sin(this.time * 3.2) * 0.28;
-    const drawLayer = (cells: Point[], fill: string, glow: boolean) => {
-      const rgb = /rgba?\(([^),]+),([^),]+),([^),]+)/.exec(fill);
-      const [r, g, b] = rgb ? [rgb[1]!.trim(), rgb[2]!.trim(), rgb[3]!.trim()] : ["255", "255", "255"];
+    const drawLayer = (cells: Point[], fill: string, _glow: boolean) => {
+      const style = tacticalGridStyle(fill);
       ctx.save();
-      ctx.shadowColor = glow ? `rgba(${r},${g},${b},${(0.95 * glowPulse).toFixed(3)})` : "transparent";
-      ctx.shadowBlur = glow ? tile * (0.4 + 0.42 * glowPulse) : 0;
-      ctx.fillStyle = fill;
-      ctx.strokeStyle = glow ? `rgba(${r},${g},${b},${Math.min(1, 0.8 + 0.2 * glowPulse).toFixed(3)})` : `rgba(${r},${g},${b},0.6)`;
-      ctx.lineWidth = glow ? Math.max(1.8, tile * (0.06 + 0.035 * glowPulse)) : 1.4;
+      ctx.globalAlpha = fill === GRID_MOVE ? this.overlayFade : 1;
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = style.fill;
+      ctx.strokeStyle = style.edge;
+      ctx.lineWidth = Math.max(1, tile * 0.025);
       for (const c of cells) {
         const { cx, cy } = this.hexCenter(c.x, c.y);
-        this.hexPath(ctx, cx, cy, tile * 0.92);
+        this.hexPath(ctx, cx, cy, tile);
         ctx.fill();
-        ctx.stroke();
       }
       ctx.restore();
     };
@@ -9257,32 +9250,43 @@ export class BattleEngine {
     // logic (the mode/spell switch that used to live inline here) can never drift between the
     // two renderers. This method only knows how to paint a layer once it has one.
     ctx.save();
-    ctx.globalAlpha = this.overlayFade;
-    if (this.overlayFade > 0.001) for (const layer of this.boardOverlayLayers()) drawLayer(layer.cells, layer.fill, layer.glow);
+    for (const layer of this.boardOverlayLayers()) drawLayer(layer.cells, layer.fill, layer.glow);
     ctx.restore();
 
-    // Whose turn it is, drawn last (after the walkable/attack overlays above) so it's never
-    // washed out underneath them — the active unit always stands on its own reach overlay,
-    // and a thin ring alone got lost under that blue fill. A full golden hex fill, not just
-    // a rim, per direct feedback ("the whole hex must get golden"). visuallyActingUnit(), not
-    // activeTurnUnit() — see that method's own comment on why (an enemy's `.moved` flips true
-    // before its queued walk actually plays, which made this vanish mid-move).
-    const active = this.visuallyActingUnit();
-    if (active) {
-      const marker = this.activeTurnHighlight();
-      if (!marker) return;
-      const { cx, cy } = this.hexCenter(marker.x, marker.y);
-      const playerTurn = active.side === "player";
-      const glowColor = playerTurn ? "214,161,42" : "210,84,54";
-      const pulse = 0.72 + Math.sin(this.time * 5.5) * 0.28;
-      ctx.save();
-      ctx.shadowColor = `rgba(${glowColor},${playerTurn ? Math.min(1, (0.72 + pulse * 0.2) * 1.5) : 1})`;
-      ctx.shadowBlur = tile * (playerTurn ? (0.42 + pulse * 0.34) * 1.5 : 0.9);
-      ctx.fillStyle = playerTurn ? `rgba(190,124,20,${(0.32 + pulse * 0.14) * 1.5})` : `rgba(${glowColor},1)`;
-      ctx.strokeStyle = playerTurn ? `rgba(255,222,119,${0.74 + pulse * 0.24})` : `rgba(${glowColor},1)`;
-      ctx.lineWidth = Math.max(2, tile * (playerTurn ? 0.055 + pulse * 0.025 : 0.09));
-      this.hexPath(ctx, cx, cy, tile * 0.94);
+    // Route breadcrumbs and destination are crisp ground markings, without bloom.
+    const route = this.movementPreview();
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    route.forEach((c, i) => {
+      const { cx, cy } = this.hexCenter(c.x, c.y);
+      this.hexPath(ctx, cx, cy, tile * (i === route.length - 1 ? 0.94 : 0.12));
+      ctx.fillStyle = i === route.length - 1 ? "rgba(220,226,235,0.1)" : GRID_ROUTE;
+      ctx.strokeStyle = "rgba(8,12,16,0.95)";
+      ctx.lineWidth = Math.max(4, tile * 0.10);
       ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = GRID_ROUTE;
+      ctx.shadowColor = GRID_ROUTE;
+      ctx.shadowBlur = tile * 0.08;
+      ctx.lineWidth = Math.max(2, tile * 0.045);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    });
+    ctx.restore();
+    const marker = this.activeTurnHighlight();
+    if (marker) {
+      const { cx, cy } = this.hexCenter(marker.x, marker.y);
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "rgba(12,20,25,0.85)";
+      ctx.lineWidth = Math.max(4, tile * 0.11);
+      this.hexPath(ctx, cx, cy, tile * 0.94);
+      ctx.stroke();
+      ctx.strokeStyle = marker.fill;
+      ctx.shadowColor = marker.fill;
+      ctx.shadowBlur = marker.player ? tile * 0.12 : 0;
+      ctx.lineWidth = Math.max(2, tile * 0.055);
       ctx.stroke();
       ctx.restore();
     }
@@ -9497,8 +9501,8 @@ export class BattleEngine {
         const reachable = [...this.reach.values()].filter((cell) => this.hexAt(cell.x, cell.y).passable);
         const inWeb = reachable.filter((c) => this.isWebCell(c.x, c.y));
         const clear = inWeb.length ? reachable.filter((c) => !this.isWebCell(c.x, c.y)) : reachable;
-        push(clear, "rgba(140,200,245,0.5)");
-        if (inWeb.length) push(inWeb, "rgba(140,200,245,0.5)", false);
+        push(clear, GRID_MOVE);
+        if (inWeb.length) push(inWeb, GRID_MOVE, false);
       }
       const selected = this.units.find((u) => u.id === this.selectedId);
       const atkTiles: Point[] = [];
@@ -9511,10 +9515,10 @@ export class BattleEngine {
           atkTiles.push(...footprint(foe));
         }
       }
-      push(atkTiles, "rgba(230,120,85,0.55)");
+      push(atkTiles, "rgba(220,226,235,0.55)");
       if (this.pendingFoeId) {
         const foe = this.units.find((u) => u.id === this.pendingFoeId);
-        if (foe) push(footprint(foe), "rgba(245,95,65,0.6)");
+        if (foe) push(footprint(foe), "rgba(220,226,235,0.6)");
       }
     }
 
@@ -9526,6 +9530,26 @@ export class BattleEngine {
    * renderBoardOverlays' own active-turn block), not the generic drawLayer treatment.
    * ThreeBattleRenderer uses this instead, to get the same cell and color without duplicating
    * BattleEngine's turn-order logic. */
+  private previewReach: Map<string, ReachCell> | null = null;
+  private previewKey = "";
+  private previewCells: Point[] = [];
+
+  /** Uses the same unpruned walk graph as commitMove, including passage through allies. */
+  movementPreview(): Point[] {
+    const selected = this.units.find((u) => u.id === this.selectedId);
+    const to = this.hover ?? this.cursor;
+    if (this.mode !== "selected" || this.active || !selected || this.mission.explore ||
+        !this.reach.has(key(to.x, to.y)) || (to.x === selected.x && to.y === selected.y)) return [];
+    const previewKey = `${selected.id}:${selected.x},${selected.y}:${to.x},${to.y}:${selected.moveBudgetUsed}`;
+    if (this.previewReach !== this.reach || this.previewKey !== previewKey) {
+      const walkReach = computeReachable(this.effectiveUnitForReach(selected), this.tiles, this.cols, this.rows, this.units, false);
+      this.previewCells = reconstructPath(walkReach, to).slice(1);
+      this.previewReach = this.reach;
+      this.previewKey = previewKey;
+    }
+    return this.previewCells;
+  }
+
   activeTurnHighlight(): { x: number; y: number; fill: string; player: boolean } | null {
     const active = this.visuallyActingUnit();
     if (!active) return null;
@@ -9536,7 +9560,7 @@ export class BattleEngine {
     if (moving?.type === "move" && moving.id === active.id) {
       // The gold player marker is a turn cue, not a second moving sprite. Hide it during a
       // hero's walk; enemy movement keeps its red marker so AI turns remain easy to follow.
-      if (active.side === "player") return null;
+      // Keep the acting unit identifiable throughout movement.
       const from = moving.path[moving.i];
       const to = moving.path[moving.i + 1];
       if (from && to) {
@@ -9545,8 +9569,7 @@ export class BattleEngine {
         ({ x, y } = progress < 0.5 ? from : to);
       }
     }
-    const glowColor = active.side === "enemy" ? "210,84,54" : "214,161,42";
-    return { x, y, fill: `rgba(${glowColor},1)`, player: active.side === "player" };
+    return { x, y, fill: active.side === "enemy" ? GRID_ENEMY : GRID_ALLY, player: active.side === "player" };
   }
 
   /** Units, HP bars, particles, projectiles, banners, and the foreground decoration layer —
@@ -9661,8 +9684,8 @@ export class BattleEngine {
         if (blocked) {
           ctx.save();
           ctx.shadowColor = "rgba(219,58,44,0.95)";
-          ctx.shadowBlur = tile * 0.55;
-          ctx.strokeStyle = "rgba(255,90,72,0.95)";
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = "rgba(231,133,115,0.95)";
           ctx.lineWidth = 3;
           this.hexPath(ctx, cx, cy, tile * 0.9);
           ctx.stroke();
