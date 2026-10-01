@@ -11,7 +11,7 @@ function omitBoxFaces(box: THREE.BoxGeometry, faces: number[]): THREE.BoxGeometr
 }
 
 /** Solid joining walls, following the centers of neighboring architecture cells. */
-export function createWallGeometry(def: DecorationDef, tile: number, rotation: number, connections: { x: number; y: number }[] = []): THREE.BufferGeometry {
+export function createWallGeometry(def: DecorationDef, tile: number, rotation: number, connections: { x: number; y: number }[] = [], origin = { x: 0, y: 0 }): THREE.BufferGeometry {
   const height = tile * 0.5 * (def.heightScale ?? 1);
   let geometry: THREE.BufferGeometry;
   if (def.model3d === "wall") {
@@ -50,6 +50,17 @@ export function createWallGeometry(def: DecorationDef, tile: number, rotation: n
   // The battle camera looks down Z. Shear the vertical geometry toward screen-up to
   // present its height in the existing isometric view while preserving the ground grid.
   const positions = geometry.getAttribute("position");
+  // Project onto each original face before the camera shear. World coordinates keep
+  // the masonry pattern continuous across adjoining segments and corner cores.
+  const normals = geometry.getAttribute("normal");
+  const uv = geometry.getAttribute("uv");
+  const repeatSize = tile * 2;
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i) + origin.x, y = positions.getY(i) + origin.y, z = positions.getZ(i);
+    if (Math.abs(normals.getZ(i)) > 0.5) uv.setXY(i, x / repeatSize, y / repeatSize);
+    else uv.setXY(i, (Math.abs(normals.getX(i)) > 0.5 ? y : x) / repeatSize, z / repeatSize);
+  }
+  uv.needsUpdate = true;
   for (let i = 0; i < positions.count; i++) positions.setY(i, positions.getY(i) + positions.getZ(i) * 3.5);
   positions.needsUpdate = true;
   geometry.computeVertexNormals();

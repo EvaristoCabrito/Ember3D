@@ -6062,8 +6062,8 @@ function MapEditorScreen({
                         onClick={() => setDecoBrush(dec.id)}
                         className="flex items-center gap-1.5"
                       >
-                        {dec.model3d ? <span className="size-6 grid place-items-center rounded-sm border border-border text-[10px] font-semibold">3D</span> : <img
-                          src={decorationImage(dec.id)}
+                        {dec.model3d && !dec.wallTexture ? <span className="size-6 grid place-items-center rounded-sm border border-border text-[10px] font-semibold">3D</span> : <img
+                          src={dec.wallTexture ?? decorationImage(dec.id)}
                           alt=""
                           className="size-6 rounded-sm object-cover bg-bg"
                           onError={(e) => {
@@ -6485,8 +6485,8 @@ function MapEditorScreen({
             <p className="text-xs uppercase tracking-wide text-muted">Decorações ({draft.decorations.length})</p>
             {draft.decorations.map((p, i) => (
               <div key={i} className="flex items-center gap-1.5 text-xs bg-bg border border-border rounded-md px-2 py-1">
-                {DECORATIONS[p.id]?.model3d ? <span className="size-6 grid place-items-center rounded-sm border border-border text-[10px] font-semibold">3D</span> : <img
-                  src={decorationImage(p.id)}
+                {DECORATIONS[p.id]?.model3d && !DECORATIONS[p.id]?.wallTexture ? <span className="size-6 grid place-items-center rounded-sm border border-border text-[10px] font-semibold">3D</span> : <img
+                  src={DECORATIONS[p.id]?.wallTexture ?? decorationImage(p.id)}
                   alt=""
                   className="size-6 rounded-sm object-cover"
                   onError={(e) => {

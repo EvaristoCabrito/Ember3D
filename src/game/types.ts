@@ -321,6 +321,8 @@ export type WinCondition = "rout" | "boss" | "escape";
 export interface DecorationDef {
   /** Architecture meshes live in the editor's separate 3D Walls palette. */
   model3d?: "wall" | "doorway" | "door";
+  /** Repeating albedo material for architecture; lighting remains real time. */
+  wallTexture?: string;
   id: string;
   name: string;
   /** Hex offsets from the anchor cell (dx/dy in board coordinates, same convention as

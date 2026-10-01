@@ -731,6 +731,7 @@ export class ThreeBattleRenderer {
   private decorEntries: DecorMeshEntry[] = [];
   private wallEntries: { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>; placement: DecorationPlacement }[] = [];
   private wallGroup = new THREE.Group();
+  private wallTextures = new Map<string, THREE.Texture>();
   private builtDecorKey = "";
 
   // Movement/attack/spell-range highlight + the active-turn ring (see
@@ -1253,7 +1254,7 @@ export class ThreeBattleRenderer {
     // render-only scale/mirror settings so the mesh cache cannot keep the old-sized art.
     const placementKey = engine.decorations.map((p) => {
       const def = DECORATIONS[p.id];
-      return `${p.id}@${p.x},${p.y},${p.rot ?? 0},${def?.heightScale ?? 1},${def?.artScale ?? 1},${def?.mirrorAlternate ? 1 : 0}`;
+      return `${p.id}@${p.x},${p.y},${p.rot ?? 0},${def?.heightScale ?? 1},${def?.artScale ?? 1},${def?.mirrorAlternate ? 1 : 0},${def?.wallTexture ?? ""}`;
     }).join(";");
     const key = `${engine.mission.id}:${tile}:${placementKey}`;
     if (key === this.builtDecorKey) return;
@@ -1287,8 +1288,19 @@ export class ThreeBattleRenderer {
           const neighbor = architectureWorld(n.x, n.y, tile);
           return { x: neighbor.wx - wx, y: wy - neighbor.wy };
         });
-        const geometry = createWallGeometry(def, tile, p.rot ?? 0, connections);
-        const material = new THREE.MeshStandardMaterial({ color: def.model3d === "door" ? 0x77634b : 0x8b8b86, roughness: 0.94, metalness: 0, flatShading: true });
+        const geometry = createWallGeometry(def, tile, p.rot ?? 0, connections, { x: wx, y: -wy });
+        let map: THREE.Texture | undefined;
+        if (def.wallTexture) {
+          map = this.wallTextures.get(def.wallTexture);
+          if (!map) {
+            map = new THREE.TextureLoader().load(def.wallTexture);
+            map.colorSpace = THREE.SRGBColorSpace;
+            map.wrapS = map.wrapT = THREE.RepeatWrapping;
+            map.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+            this.wallTextures.set(def.wallTexture, map);
+          }
+        }
+        const material = new THREE.MeshStandardMaterial({ map, color: map ? 0xffffff : def.model3d === "door" ? 0x77634b : 0x8b8b86, roughness: 0.94, metalness: 0, flatShading: true });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(wx, -wy, 1);
         mesh.castShadow = true;
@@ -2890,6 +2902,8 @@ export class ThreeBattleRenderer {
     this.contactShadowTexture.dispose();
     this.decorContactMaterial.dispose();
     this.renderer.dispose();
+    for (const texture of this.wallTextures.values()) texture.dispose();
+    this.wallTextures.clear();
     this.engine.architectureRenderedInThree = false;
     for (const entry of this.wallEntries) {
       entry.mesh.geometry.dispose();

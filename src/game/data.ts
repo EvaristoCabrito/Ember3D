@@ -383,6 +383,14 @@ export const DEADWOODS_DECOR_IDS = new Set([
 // Multi-hex terrain props: rendered as one image over their whole footprint instead of
 // clipped per hex (see DecorationDef). Cropped from LargeHexes1-3.jpg.
 export const DECORATIONS: Record<string, DecorationDef> = {
+  "wall-3d-dungeon": { id: "wall-3d-dungeon", name: "Parede de Masmorra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/dungeon-v1.png" },
+  "wall-3d-tower": { id: "wall-3d-tower", name: "Parede de Torre 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/tower-v1.png" },
+  "wall-3d-tavern": { id: "wall-3d-tavern", name: "Parede de Taverna 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/tavern-v1.png" },
+  "wall-3d-crypt": { id: "wall-3d-crypt", name: "Parede de Cripta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/crypt-v1.png" },
+  "wall-3d-temple": { id: "wall-3d-temple", name: "Parede de Templo 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/temple-v1.png" },
+  "wall-3d-cave": { id: "wall-3d-cave", name: "Parede de Caverna 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/cave-v1.png" },
+  "wall-3d-castle": { id: "wall-3d-castle", name: "Parede de Castelo 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/castle-v1.png" },
+  "wall-3d-city": { id: "wall-3d-city", name: "Parede de Cidade 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/city-v1.png" },
   "wall-3d-stone": { id: "wall-3d-stone", name: "Parede de pedra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall" },
   "wall-3d-low": { id: "wall-3d-low", name: "Mureta de pedra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", heightScale: 0.5 },
   "door-3d-frame": { id: "door-3d-frame", name: "Passagem aberta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway" },
