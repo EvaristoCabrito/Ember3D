@@ -446,10 +446,13 @@ export function InnScreen({
                 </p>
               )}
               {status !== "done" && (
-                <p className="text-xs text-muted">
-                  Recompensa: <GoldAmount amount={quest.reward} />
-                  {quest.rewardPotions.map((kind) => ` + ${potionLabel(kind)}`).join("")}
-                </p>
+                <div className="flex flex-wrap items-center gap-x-1 text-xs text-muted">
+                  <span>Recompensa:</span>
+                  <GoldAmount amount={quest.reward} />
+                  {quest.rewardPotions.map((kind) => (
+                    <span key={kind} className="break-words">+ {potionLabel(kind)}</span>
+                  ))}
+                </div>
               )}
               {status === "available" && (
                 <Button
@@ -659,7 +662,7 @@ export function InnScreen({
       </div>
       <div className="relative z-10 p-4 pt-0 pb-[max(1rem,env(safe-area-inset-bottom))] max-w-lg mx-auto w-full">
         <Button variant="ghost" className="w-full ember-btn ember-btn-ghost" onClick={onLeave}>
-          <ChevronLeft className="size-4" /> Sair da estalagem
+          <ChevronLeft className="size-4" /> Sair da Adega
         </Button>
       </div>
       {invView && (

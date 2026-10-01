@@ -116,7 +116,7 @@ export const QUESTS: QuestDef[] = [
     missionId: "cemiterio-esquecidos",
     place: "Terreno do Cemitério dos Esquecidos, longe da entrada",
     offer:
-      "“Tem uma coisa de pernas demais rondando o cemitério, lá onde ninguém vai de propósito. Chamam de O Birolho. Comeu dois coveiros e um cavalo. Traga a morte dele e eu pago o que a adega aguenta.”",
+      "“Tem uma coisa com olhos demais rondando o cemitério, lá onde ninguém vai de propósito. Chamam de O Birolho. Comeu dois coveiros e um cavalo. Traga a morte dele e eu pago o que a adega aguenta.”",
     active: "“O Birolho ainda anda por lá. Terreno do cemitério, o canto mais longe da entrada.”",
     ready: "“Então é verdade. Ele caiu.” Brue serve um copo que não cobra.",
     done: "“Os coveiros dormem melhor. Eu também, um pouco.”",
