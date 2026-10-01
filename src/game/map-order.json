@@ -30,5 +30,8 @@
     "portao",
     "misty-cave-dungeon",
     "deep-mist"
+  ],
+  "watchtower": [
+    "watchtower-gate-floor"
   ]
 }

@@ -23,7 +23,9 @@
     {
       "id": "ice",
       "name": "Gelo",
-      "encounterIds": []
+      "encounterIds": [
+        "random-frostbound-sanctuary"
+      ]
     },
     {
       "id": "dead-nature",
@@ -33,7 +35,9 @@
     {
       "id": "underworld",
       "name": "Submundo",
-      "encounterIds": []
+      "encounterIds": [
+        "random-crystal-ossuary"
+      ]
     },
     {
       "id": "aquatic",
@@ -54,7 +58,9 @@
     {
       "id": "plains",
       "name": "Planície",
-      "encounterIds": []
+      "encounterIds": [
+        "random-whispering-reeds"
+      ]
     }
   ]
 }

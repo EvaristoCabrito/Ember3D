@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>Watchtower dungeon</title>
+<style>body{background:#151918;color:#e7e2d7;font:15px system-ui;margin:22px}.maps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}section{background:#202623;padding:14px;border-radius:12px}canvas{width:100%}h1{font-size:24px}h2{font-size:18px}p{color:#b1b9b0;line-height:1.5}.legend{color:#dad5c9}</style>
+<h1>Watchtower · Six connected floors</h1><p class="legend">Ivory: party entry · Amber: enemies · Actual terrain textures and editor decorations</p><div class="maps" id="maps"></div>
+<script type="module">
+import {latestSavedDraft} from '/src/game/mapstore.ts';
+import {DECORATIONS,decorationImage,placedFootprint} from '/src/game/data.ts';
+import {tileVariantSrc,isHexGroundVariant} from '/src/game/assets.ts';
+import {drawHexGround} from '/src/game/hexGround.ts';
+import {WebGL2DRenderer} from '/src/game/gfx/WebGL2DRenderer.ts';
+const ids=['watchtower-undercroft','watchtower-prison','watchtower-gate-floor','watchtower-barracks','watchtower-command','watchtower-beacon'];
+const imgCache=new Map();async function load(src){if(imgCache.has(src))return imgCache.get(src);const img=new Image();img.src=src;await img.decode();imgCache.set(src,img);return img}
+const surface=document.createElement('canvas');surface.width=1100;surface.height=800;const ctx=new WebGL2DRenderer(surface);
+let r=22;const center=(x,y)=>({cx:25+r*Math.sqrt(3)*(x+.5*(y&1)+.5),cy:30+r*(1.5*y+1)});
+function hex(c,x,y,rad){c.beginPath();for(let i=0;i<6;i++){const a=(60*i-30)*Math.PI/180;const px=x+rad*Math.cos(a),py=y+rad*Math.sin(a);i?c.lineTo(px,py):c.moveTo(px,py)}c.closePath()}
+for(const id of ids){const d=latestSavedDraft(id);r=900/(d.cols*Math.sqrt(3));const section=document.createElement('section');section.innerHTML=`<h2>${d.title}</h2><canvas width="1100" height="800"></canvas><p>${d.briefing}</p>`;maps.append(section);const canvas=section.querySelector('canvas'),out=canvas.getContext('2d');ctx.clearRect(0,0,1100,800);
+ for(let y=0;y<d.rows;y++)for(let x=0;x<d.cols;x++){const k=y*d.cols+x,t=d.tiles[k],v=d.tileVariants[k];if(t==='void')continue;const image=await load(tileVariantSrc(t,v));const {cx,cy}=center(x,y);ctx.save();hex(ctx,cx,cy,r);ctx.clip();if(isHexGroundVariant(t,v))drawHexGround(ctx,image,cx,cy,cx-25,cy-30,r);else ctx.drawImage(image,cx-r,cy-r,r*2,r*2);ctx.restore();}
+ out.drawImage(surface,0,0);
+ for(const p of [...d.decorations].sort((a,b)=>a.y-b.y)){const image=await load(decorationImage(p.id));const f=placedFootprint(p);const {cx,cy}=center(p.x,p.y);const w=r*(f.length>1?3.1:2.0),h=w*image.height/image.width;out.drawImage(image,cx-w/2,cy-h+r*.5,w,h);}
+ for(const [spawns,color] of [[d.playerSpawns,'#eee8d7'],[d.enemySpawns,'#e3a35b']])for(const s of spawns){const {cx,cy}=center(s.x,s.y);out.beginPath();out.arc(cx,cy,6,0,Math.PI*2);out.fillStyle=color;out.fill();out.strokeStyle='#151918';out.lineWidth=2;out.stroke();}
+}window.encounterPreviewReady=true;
+</script>

@@ -1,7 +1,7 @@
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, ChevronLeft, ChevronUp, Dices, Grip, ListOrdered, Pencil, RotateCcw, Shuffle, SlidersHorizontal, Swords, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { artProgress, loadGameArt, portraitFor, subscribeArtProgress, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
+import { artProgress, ensureSpriteArt, loadGameArt, portraitFor, releaseSpriteArt, subscribeArtProgress, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
 import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { BattleCanvas } from "./BattleCanvas";
 import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } from "./gfx/params";
@@ -765,6 +765,15 @@ function mergeBattleDiseases(existing: Record<string, boolean>, engine: BattleEn
   return heroDiseases;
 }
 
+/** Every familiar a conjurer can summon — preloaded as soon as a conjurer is in the party and
+ * kept loaded (see partyHasConjurer in GameApp), so a summon never waits on art. */
+const FAMILIAR_SPRITES: SpriteId[] = ["familiar", "familiar2", "familiar3", "familiar4"];
+
+/** Sprites a battle's own units use — loaded before its board opens (see startBattle). */
+function battleSpriteIds(battle: BattleEngine): SpriteId[] {
+  return battle.units.map((u) => u.sprite);
+}
+
 export function GameApp() {
   const [resumeEditorDraft] = useState<MapDraft | null>(() => (typeof window === "undefined" ? null : readEditorResume()));
   const [screen, setScreen] = useState<ScreenId>(() => (resumeEditorDraft ? "mapEditor" : "title"));
@@ -855,6 +864,9 @@ export function GameApp() {
   // playthrough left off.
   const [testOverworld, setTestOverworld] = useState<SaveData | null>(null);
   const awardedRef = useRef<string | null>(null);
+  // Bumped by every startBattle; a battle whose sprites finish loading after a newer one was
+  // requested is dropped (see startBattle).
+  const battleLoadRef = useRef(0);
   const combatStartRef = useRef<SaveData | null>(null);
   const resumeBattleRef = useRef<BattleSnapshot | null>(null);
   const [slotMode, setSlotMode] = useState<"new" | "continue" | "save" | "load" | null>(null);
@@ -992,6 +1004,18 @@ export function GameApp() {
     return added.length > 0 ? { ...mission, playerSpawns: [...mission.playerSpawns, ...added] } : mission;
   }
 
+  // Familiars are preloaded as soon as a conjurer (Malrec) is in the party, and stay loaded.
+  const partyHasConjurer = Object.entries(TEST_PARTY_CLASS).some(([name, classId]) => rulesClass(classId) === "conjurer" && (testMode || heroRecruited(name, save.completed)));
+  useEffect(() => {
+    if (art && partyHasConjurer) void ensureSpriteArt(art, FAMILIAR_SPRITES);
+  }, [art, partyHasConjurer]);
+  // Once a new battle is on screen, drop every sprite the previous one loaded that this one
+  // doesn't use (familiars stay while a conjurer is in the party), so memory follows the
+  // current fight (see releaseSpriteArt).
+  useEffect(() => {
+    if (art && engine) releaseSpriteArt(art, [...battleSpriteIds(engine), ...(partyHasConjurer ? FAMILIAR_SPRITES : [])]);
+  }, [art, engine, partyHasConjurer]);
+
   const startBattle = useCallback(
     (
       id: string,
@@ -1088,17 +1112,24 @@ export function GameApp() {
       const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, crossingDefeatedSpawns, questPickups }, Date.now() % 100000, testMode);
       if (resume && resume.missionId === m.id) battle.applySnapshot(resume);
       if (typeof window !== "undefined" && window.innerWidth < 720) battle.zoom = 0;
-      awardedRef.current = null;
-      setEngine(battle);
-      setMissionId(id);
-      setHud(battle.getHud());
-      setPaused(false);
-      outroDialogShownRef.current = false;
-      setOutroDialogOpen(false);
-      setSlotMode(null);
-      setScreen("battle");
+      // Sprites load per battle (see ensureSpriteArt): the board opens once this battle's own
+      // units (and the familiars, with a conjurer in the party) are loaded. If another
+      // startBattle comes in meanwhile, the newer one wins.
+      const load = ++battleLoadRef.current;
+      void ensureSpriteArt(art, [...battleSpriteIds(battle), ...(partyHasConjurer ? FAMILIAR_SPRITES : [])]).then(() => {
+        if (load !== battleLoadRef.current) return;
+        awardedRef.current = null;
+        setEngine(battle);
+        setMissionId(id);
+        setHud(battle.getHud());
+        setPaused(false);
+        outroDialogShownRef.current = false;
+        setOutroDialogOpen(false);
+        setSlotMode(null);
+        setScreen("battle");
+      });
     },
-    [art, save, testMode, muted, bank, campaignLocations],
+    [art, save, testMode, muted, bank, campaignLocations, partyHasConjurer],
   );
 
   useEffect(() => {
@@ -1485,6 +1516,12 @@ export function GameApp() {
       rations: fresh.rations,
       hungerStreak: fresh.hungerStreak,
       exploredHexes: fresh.exploredHexes,
+      // Gear starts as a brand-new save's: each hero's starter weapon in hand, nothing else
+      // owned — never the real slot's collected weapons/equipment.
+      weapons: fresh.weapons,
+      equipped: fresh.equipped,
+      equipment: fresh.equipment,
+      looseEquipment: fresh.looseEquipment,
       // Test mode always starts the party at DEFAULT_TEST_LEVEL, never whatever the real
       // save slot's own progression happens to be (a fresh/new real game reads level 1 here
       // otherwise, since this spreads ...save above) — the whole point of testing is having
@@ -3622,6 +3659,8 @@ const VARIANT_LABEL: Partial<Record<TerrainId, string[]>> = {
     "City · Solo contínuo 001",
     "Planície · Solo contínuo 001",
     "Madeira discreta · Solo contínuo 001",
+    "Grama alta · Solo contínuo 001",
+    "Planície escura · Solo contínuo 001",
   ],
   woods: ["Solo de bosque", "Bosque sombrio", "Bosque", "Sebes", "Pinhal", "Bosque 04", "Terra", "Bosque 12", "Bosque 13", "Bosque · Solo contínuo 001"],
   ruins: ["Ruínas sombrias", "Ruínas originais", "Pedra 02", "Pedra 03", "Pedra 04", "Pátio mosaico", "Lajes partidas", "Ruínas · Solo contínuo 001"],
@@ -3629,7 +3668,7 @@ const VARIANT_LABEL: Partial<Record<TerrainId, string[]>> = {
   ember: ["Brasa", "Brasa 2", "Antiga", "Cinzas", "Brasa viva", "Brasa · Solo contínuo 001"],
   hill: ["Platô rochoso", "Trilha elevada", "Ruínas elevadas", "Platô musgoso", "Colina · Solo contínuo 001"],
   flame: ["Chama", "Antiga", "Fogo", "Chama · Solo contínuo 001"],
-  nave: ["Laje", "Laje Negra", "Laje · Solo contínuo 001"],
+  nave: ["Laje", "Laje Negra", "Laje · Solo contínuo 001", "Templo antigo · Calcário contínuo 001", "Templo antigo · Basalto contínuo 001", "Masmorra · Lajes contínuas 001", "Masmorra · Tijolos contínuos 001", "Caverna · Solo contínuo 001", "Caverna com cristais · Solo contínuo 001", "Caverna · Cristais marcantes 002"],
   column: ["Coluna", "Antiga", "Coluna · Solo contínuo 001"],
   snow: [
     "Neve Rasa 4", "Neve Rasa 5", "Neve Funda 2",
@@ -7245,9 +7284,12 @@ function BattleScreen({
   // finds never showed up until the mission ended. Patch a live view in for the duration of
   // the battle instead of touching the screens themselves, which are also used from the Inn
   // (no `engine` there, where `save` genuinely is the whole truth).
-  const liveWeapons = { ...save.weapons };
+  // Test battles show a brand-new save's gear (starter weapon in hand, nothing else), never
+  // the real slot's collected weapons/equipment.
+  const gearBase = playtest ? emptySave() : save;
+  const liveWeapons = { ...gearBase.weapons };
   for (const id of engine.lootWeapons) if (!(id in liveWeapons)) liveWeapons[id] = 0;
-  const liveLooseEquipment = { ...save.looseEquipment };
+  const liveLooseEquipment = { ...gearBase.looseEquipment };
   for (const id of engine.lootEquipment) liveLooseEquipment[id] = (liveLooseEquipment[id] ?? 0) + 1;
   const liveSave: SaveData = {
     ...save,
@@ -7256,6 +7298,8 @@ function BattleScreen({
     rations: save.rations + engine.lootRations,
     bags: { ...save.bags, ...Object.fromEntries(engine.units.filter((u) => u.side === "player").map((u) => [u.name, u.bag])) },
     weapons: liveWeapons,
+    equipped: gearBase.equipped,
+    equipment: gearBase.equipment,
     looseEquipment: liveLooseEquipment,
   };
   const foe = hud.pendingFoe ?? (hud.inspected && hud.inspected.side === "enemy" && hud.selected ? hud.inspected : null);
@@ -8350,7 +8394,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
             <div className="min-w-0">
               <p className="font-display text-xl leading-tight truncate ember-title">{unit.name}</p>
               <p className={`text-xs ${unit.side === "enemy" ? "text-danger" : "text-muted"}`}>
-                {unit.className} · Nv {unit.level}
+                <span className="text-[13px]">{unit.className}</span> · Nv {unit.level}
               </p>
               {unit.side === "player" && (
                 <div className="mt-1.5 max-w-[9rem]">
@@ -8465,7 +8509,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                     aria-label={`Remover um ponto de ${label}`}
                     disabled={(statPointAllocation[stat] ?? 0) <= 0}
                     onClick={() => onAdjustStatPoint(stat, -1)}
-                    className="size-5 rounded border border-border bg-surface text-xs leading-none disabled:opacity-35"
+                    className="size-5 grid place-items-center ember-icon-btn text-xs leading-none disabled:opacity-35"
                   >
                     −
                   </button>
@@ -8475,7 +8519,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                     aria-label={`Adicionar um ponto em ${label}`}
                     disabled={unspentStatPoints <= 0}
                     onClick={() => onAdjustStatPoint(stat, 1)}
-                    className="size-5 rounded border border-accent/60 bg-surface text-xs leading-none text-accent disabled:opacity-35"
+                    className="size-5 grid place-items-center ember-icon-btn text-xs leading-none disabled:opacity-35"
                   >
                     +
                   </button>
@@ -9006,12 +9050,12 @@ function SlotScreen({
       <img src="/game/ui/travel-board.png" alt="" className="absolute inset-0 size-full object-cover object-center" />
       <div className="absolute inset-0 bg-black/20" aria-hidden="true" />
       <header className="relative z-10 flex shrink-0 items-center gap-3 border-b border-white/10 bg-black/20 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-7">
-        <button type="button" onClick={onClose} className="size-10 shrink-0 grid place-items-center rounded-md border border-white/25 bg-black/40" aria-label="Voltar">
-          <ChevronLeft className="size-5" />
+        <button type="button" onClick={onClose} className="h-9 px-3 shrink-0 flex items-center gap-1.5 ember-plate text-xs" aria-label="Voltar">
+          <ChevronLeft className="size-4" /> Voltar
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Arquivos</p>
-          <h1 className="mt-1 font-display text-2xl leading-none text-white sm:text-3xl">{title}</h1>
+          <p className="text-xs ember-kicker">Arquivos</p>
+          <h1 className="mt-1 font-display text-2xl leading-none ember-title sm:text-3xl">{title}</h1>
           <p className="mt-1 text-xs text-slate-300 sm:text-sm">{hint}</p>
         </div>
       </header>
@@ -9037,15 +9081,13 @@ function SlotScreen({
                     }
                     onPick(i);
                   }}
-                  className={`flex min-h-[116px] w-full flex-col justify-center overflow-hidden rounded-lg border px-3 py-2 text-left backdrop-blur-sm disabled:opacity-40 sm:min-h-[128px] sm:px-4 sm:py-3 ${
-                    last ? "border-accent bg-black/55" : "border-white/25 bg-black/40"
-                  }`}
+                  className={`flex min-h-[116px] w-full flex-col justify-center overflow-hidden ember-slot px-3 py-2 text-left disabled:opacity-40 sm:min-h-[128px] sm:px-4 sm:py-3 ${last ? "is-last" : ""}`}
                 >
                   <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-slate-300 sm:text-xs">Slot {i + 1}</p>
+                    <p className="text-[10px] ember-kicker sm:text-xs">Slot {i + 1}</p>
                     {last && <p className="truncate text-[9px] uppercase tracking-[0.1em] text-accent sm:text-[10px] sm:tracking-[0.14em]">Último usado</p>}
                   </div>
-                  <p className="mt-1 truncate font-display text-lg leading-tight text-white sm:text-xl">{info.title}</p>
+                  <p className="mt-1 truncate font-display text-lg leading-tight ember-title sm:text-xl">{info.title}</p>
                   <p className="line-clamp-2 text-xs leading-snug text-slate-300 sm:text-sm">{info.detail}</p>
                   {slot && !empty && (
                     <p className="mt-1 text-[10px] tabular-nums text-slate-400 sm:text-xs">{formatStamp(slot.updatedAt)}</p>

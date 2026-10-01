@@ -241,6 +241,7 @@ export function mapFileName(id: string, serial: number): string {
 }
 
 const MAP_MODULES = import.meta.glob<MapFile>("./maps/*.json", { eager: true, import: "default" });
+// Watchtower's six linked floors use the same append-only saved-map loader as other dungeons.
 
 /** Keep the source filename alongside imported JSON. This makes the filename migration
  * non-destructive: new saves use id###, while old id-### saves remain manageable. */

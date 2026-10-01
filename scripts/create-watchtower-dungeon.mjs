@@ -1,0 +1,33 @@
+import fs from 'node:fs';
+const ids={b1:'watchtower-undercroft',b2:'watchtower-prison',u1:'watchtower-gate-floor',u2:'watchtower-barracks',u3:'watchtower-command',u4:'watchtower-beacon'};
+function make(id,title,c,r,variant,briefing){return {id,index:18,title,place:'Torre de Vigia — '+title,briefing,objective:'Explore o andar e use as passagens para continuar pela torre.',win:'escape',hub:false,explore:false,autoTactics:false,fog:false,environment:'indoor',timeOfDay:'brightNight',sunIntensity:.18,ambientIntensity:1.05,locationId:id===ids.u1?'watchtower':'',cols:c,rows:r,tiles:Array(c*r).fill('void'),tileVariants:Array(c*r).fill(0),tileRots:Array(c*r).fill(0),decorations:[],playerSpawns:[],enemySpawns:[],neutralSpawns:[],baseTile:'nave',baseVariant:variant};}
+const paint=(m,x,y,t,v)=>{if(x>=0&&y>=0&&x<m.cols&&y<m.rows){m.tiles[y*m.cols+x]=t;m.tileVariants[y*m.cols+x]=v}};
+const rect=(m,x0,y0,x1,y1,t,v)=>{for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)paint(m,x,y,t,v)};
+const prop=(m,id,x,y,blocksPath=false)=>m.decorations.push({id,x,y,...(blocksPath?{blocksPath:true}:{})});
+const link=(m,x,y,target,back=false)=>m.decorations.push({id:'floor-connector',x,y,targetMapId:target,...(back?{returnConnector:true}:{})});
+function party(m,x,y){m.playerSpawns=[['Kael','kaelFinal',x,y],['Neera','neera',x+1,y],['Voss','voss',x,y+1],['Salazar','salazar',x+1,y+1]].map(([name,classId,x,y])=>({name,classId,x,y,level:10}));}
+function foes(m,list){m.enemySpawns=list.map(([classId,x,y,name])=>({name:name||'Guarda da Torre',classId,x,y,level:10}));}
+const maps=[];
+let m=make(ids.b1,'Subsolo I · Salões das Fundações',24,20,5,'Sob a torre, arcadas antigas dividem depósitos, uma cisterna e um santuário de basalto. A passagem nordeste desce à prisão; a escada sudoeste retorna à guarnição.');
+rect(m,2,2,21,17,'nave',5);rect(m,3,3,8,7,'nave',6);rect(m,15,3,20,7,'nave',4);rect(m,15,11,20,16,'nave',7);rect(m,9,12,12,15,'water',22);
+for(const [x,y]of [[6,9],[11,7],[16,9],[6,14],[18,14]])paint(m,x,y,'column',2);
+[['city-barrels',4,4],['city-crate-stack',6,5],['city-provisions',7,3],['dungeon-ossuary',18,4],['rune-stone',19,6],['light-brazier-bowl',9,9],['light-brazier-bowl',15,8],['light-wall-torch',3,9],['light-wall-torch',21,12],['chest-medium',19,15],['locked-chest',7,6],['large-boulder',16,16]].forEach(a=>prop(m,...a));
+party(m,3,15);link(m,3,14,ids.u1,true);link(m,20,3,ids.b2);foes(m,[['soldier',8,8],['pikeman',13,9],['cultist',18,7,'Guardião das Fundações'],['zombie',17,12],['zombie',20,13],['archer',11,4]]);maps.push(m);
+m=make(ids.b2,'Subsolo II · A Prisão Silenciosa',26,20,6,'A segunda fundação abriga quatro blocos de celas. Grades e pilares separam os pátios do corredor central. Gaiolas esquecidas, instrumentos de tortura e um ossário revelam o destino dos prisioneiros.');
+rect(m,2,2,23,17,'nave',6);rect(m,10,2,15,17,'nave',5);
+// Solid cell partitions with broad accessible doorways into every cell block.
+for(let y=3;y<=16;y++)if(![6,7,12,13].includes(y)){paint(m,9,y,'column',2);paint(m,16,y,'column',2)}
+for(let x=3;x<=8;x++)paint(m,x,10,'column',2);for(let x=17;x<=22;x++)paint(m,x,10,'column',2);
+[['wilds-iron-cage',4,4],['wilds-iron-cage',6,5],['dungeon-hanging-cage',19,4],['dungeon-hanging-cage',21,6],['torture-gear-01',4,13],['torture-gear-14',6,15],['dungeon-ossuary',19,13],['tombstones',21,15],['city-workbench',12,8],['light-wall-torch',11,4],['light-wall-torch',14,14],['light-brazier-bowl',12,12],['locked-chest',20,16]].forEach(a=>prop(m,...a));
+party(m,11,15);link(m,12,17,ids.b1,true);foes(m,[['captain',12,5,'Carcereiro'],['soldier',7,7],['soldier',18,7],['zombie',5,14],['zombie',20,12],['cultist',14,9,'Interrogador']]);maps.push(m);
+function upper(id,title,v,brief){const m=make(id,title,14,14,v,brief);for(let y=1;y<13;y++)for(let x=1;x<13;x++){if(!(x<3&&y<3)&&!(x>10&&y<3)&&!(x<3&&y>10)&&!(x>10&&y>10))paint(m,x,y,'nave',v)}party(m,4,10);for(const [x,y]of [[3,5],[10,5],[3,8],[10,8]])paint(m,x,y,'column',2);return m;}
+m=upper(ids.u1,'Andar I · Guarnição do Portão',5,'O piso térreo organiza o acesso à torre: depósitos a oeste, uma sala de guarda ao norte e escadas para as fundações e os andares superiores.');
+rect(m,4,3,9,4,'nave',6);[['city-barrels',2,4],['city-crate-stack',11,4],['city-notice-board-2',7,2],['light-brazier-bowl',5,7],['light-brazier-bowl',8,7],['city-covered-crate',11,9]].forEach(a=>prop(m,...a));link(m,2,9,ids.b1);link(m,9,3,ids.u2);prop(m,'dungeon-exit',5,12);foes(m,[['soldier',5,4],['soldier',8,5],['pikeman',7,8],['archer',11,6]]);maps.push(m);
+m=upper(ids.u2,'Andar II · Caserna e Arsenal',6,'A caserna divide o piso entre uma ala de madeira e um arsenal de pedra. Os pilares centrais mantêm abertas duas rotas para a escada norte.');rect(m,2,3,6,9,'plains',40);
+[['city-workbench',4,3],['city-stool',5,4],['city-sack-pile',2,6],['city-provisions',5,8],['city-crate-stack',11,4],['city-barrels',11,9],['light-wall-torch',7,2],['chest-medium',8,8]].forEach(a=>prop(m,...a));link(m,4,9,ids.u1,true);link(m,9,3,ids.u3);foes(m,[['soldier',7,5],['pikeman',8,7],['archer',11,6],['brigand',5,6]]);maps.push(m);
+m=upper(ids.u3,'Andar III · Câmara do Comandante',3,'Calcário antigo e basalto marcam a câmara do comandante. Uma mesa de guerra domina a ala norte, mas as passagens laterais permanecem livres para manobras.');rect(m,5,3,8,8,'nave',4);
+[['city-workbench',6,3],['city-stool',7,4],['city-notice-board-2',4,2],['city-shrineCandle',11,4],['light-brazier-bowl',2,7],['light-brazier-bowl',11,7],['locked-chest',11,9]].forEach(a=>prop(m,...a));link(m,4,9,ids.u2,true);link(m,9,3,ids.u4);foes(m,[['captain',7,6,'Comandante da Vigia'],['soldier',5,5],['archer',9,7],['cultist',8,4]]);maps.push(m);
+m=upper(ids.u4,'Andar IV · O Farol Apagado',4,'No topo, uma plataforma de basalto sustenta o antigo braseiro de sinalização. O vento e a luz fria atravessam o último posto de vigia. Vença os sentinelas e encerre a expedição.');m.environment='outdoor';m.sunIntensity=.6;m.ambientIntensity=.95;m.objective='Derrote a guarda do farol ou retorne pelos andares inferiores.';
+rect(m,5,5,8,8,'ruins',7);[['Brazier3',6,6],['rune-stone',7,2],['city-banner-post',2,5],['city-banner-post',11,5],['city-barrels',11,9],['chest-medium',8,8]].forEach(a=>prop(m,...a));link(m,4,9,ids.u3,true);prop(m,'dungeon-exit',9,11);foes(m,[['captain',7,4,'Sentinela do Farol'],['archer',4,4],['archer',10,4],['sorcerer',8,7,'Vigia das Cinzas']]);maps.push(m);
+for(const draft of maps){const path=`src/game/maps/${draft.id}001.json`;if(fs.existsSync(path))throw new Error(`Preserve ${path}`);fs.writeFileSync(path,JSON.stringify({serial:1,savedAt:Date.now(),draft},null,2)+'\n')}
+console.log(maps.map(m=>`${m.id}: ${m.cols}x${m.rows}`).join('\n'));

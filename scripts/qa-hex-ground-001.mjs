@@ -58,7 +58,7 @@ try {
   await page.locator('#lines').uncheck();
   await page.screenshot({path:'screenshots/hex-ground-001-seam-check.png',fullPage:true});
   if(errors.length)throw new Error(errors.join('\n'));
-  console.log('All fourteen assets loaded and rendered with the game WebGL renderer.');
+  console.log('All twenty-two assets loaded and rendered with the game WebGL renderer.');
 } finally {
   await browser.close();
 }
