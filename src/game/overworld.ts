@@ -237,7 +237,7 @@ const HERO_BASE_CLASS: Record<string, ClassId> = {
  * fullness left. Exported so a ration action outside of stepping (Alimentar todos, Inn)
  * can clear hungerStreak the moment it's earned instead of waiting for the next step. */
 export function partyIsFed(save: SaveData, test = false): boolean {
-  const ages = (hero: string) => test || (heroRecruited(hero, save.completed) && (save.unitHp[hero] ?? maxHpFor(save, hero)) > 0);
+  const ages = (hero: string) => test || (heroRecruited(hero, save.completed, save.flags) && (save.unitHp[hero] ?? maxHpFor(save, hero)) > 0);
   return Object.keys(HERO_BASE_CLASS).filter(ages).every((hero) => (save.heroHunger[hero] ?? 100) > 0);
 }
 
@@ -311,7 +311,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   // whose HP record is stale/zeroed from before they were recruited, still ages). Same
   // god-mode rule this whole file already follows for canStepOverworld. A real campaign
   // still gates on both, same as ever.
-  const ages = (hero: string) => test || (heroRecruited(hero, save.completed) && (save.unitHp[hero] ?? maxHpFor(save, hero)) > 0);
+  const ages = (hero: string) => test || (heroRecruited(hero, save.completed, save.flags) && (save.unitHp[hero] ?? maxHpFor(save, hero)) > 0);
   for (const hero of Object.keys(HERO_BASE_CLASS)) {
     if (ages(hero)) heroHunger[hero] = drainHunger(heroHunger[hero], DAILY_HUNGER_COST);
   }
@@ -411,7 +411,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
       const found: string[] = [];
       const potionKind = weightedPotionPick(Math.random);
       const recipient = Object.keys(HERO_BASE_CLASS).find(
-        (hero) => (test || heroRecruited(hero, save.completed)) && (bags[hero]?.[potionKind] ?? 0) < POTION_CARRY_MAX[potionKind],
+        (hero) => (test || heroRecruited(hero, save.completed, save.flags)) && (bags[hero]?.[potionKind] ?? 0) < POTION_CARRY_MAX[potionKind],
       );
       if (recipient) {
         bags = { ...bags, [recipient]: { ...(bags[recipient] ?? EMPTY_BAG), [potionKind]: (bags[recipient]?.[potionKind] ?? 0) + 1 } };

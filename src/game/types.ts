@@ -53,6 +53,7 @@ export type ClassId =
   | "asherah"
   | "pikeman"
   | "wardog"
+  | "wardog2"
   | "zombie" | "zombie2"
   | "troll"
   | "troll2"
@@ -121,7 +122,7 @@ export type ClassId =
   // Conjurer tier 3 (Summon Familiar Radiante): Familiar Maior's kit and stat share on a new
   // body — see SUMMON_FAMILIAR4.
   | "familiar4";
-export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "zombie" | "zombie2" | "troll" | "troll2" | "RoccoTheBird" | "morvenian-wolf" | "mordavian-wolf" | "mordavian-wolf-final" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "familiar4" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
+export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "wardog2" | "zombie" | "zombie2" | "troll" | "troll2" | "RoccoTheBird" | "morvenian-wolf" | "mordavian-wolf" | "mordavian-wolf-final" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "familiar4" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
   // Generic-enemy "alter" sprites, split off so a plain Archer/Mage/Healer enemy (and their
   // own promotions) never renders as literally the same SpriteId as Neera/Voss/Salazar the
   // MCs — see HERO_SPRITE_BY_NAME/CLASSES in engine.ts/data.ts. Each starts as a straight
@@ -252,8 +253,8 @@ export interface DialogReply {
   action?: DialogAction;
 }
 
-/** A screen a dialog reply can hand off to: Brue's tavern menu or Vargan's smith. */
-export type DialogAction = "tavern" | "smith";
+/** A handoff a dialog reply can trigger: an Inn menu or a story recruitment. */
+export type DialogAction = "tavern" | "smith" | "recruitAldric";
 
 /** One screen of the dialog popup: a speaker, an optional portrait, and the line itself.
  * Either it links straight to the next line (`next`, plain "OK" to continue) or it branches
@@ -291,6 +292,8 @@ export interface Spawn {
    * Meant for neutral-side spawns — a neutral with no dialog stays the existing wild-beast
    * behavior, unchanged. */
   dialog?: DialogTree;
+  /** Optional door that must be opened before this NPC can be talked to. */
+  dialogRequiresOpenDoor?: { x: number; y: number };
   /** Editor/test escape hatch from HERO_SPRITE_BY_NAME (engine.ts): one of the six named
    * heroes normally always renders with their own pinned sprite no matter what classId they
    * carry, so a promoted hero never visually turns into the stock enemy art their new class
@@ -644,6 +647,9 @@ export interface Unit {
    * or Potionzero (the original warm-white glow, kept for future skills). */
   healGlowKind: "holyMinor" | "holyMedium" | "disease" | "potion" | "potionZero" | "food" | "bless";
   fade: number;
+  /** Engine time (BattleEngine.time) at which this unit died — drives its death sheet (see
+   * GameArt.deaths) and holds off the fade-out until that sheet has played. */
+  diedAt?: number;
   bob: number;
   level: number;
   /** XP toward the next level (0..EXP_TO_LEVEL-1). Player-only; always 0 for enemies. */
@@ -1026,6 +1032,10 @@ export interface GameArt {
    * walk). No gameplay effect. */
   walks2: Partial<Record<SpriteId, HTMLImageElement[]>>;
   walksLeft2: Partial<Record<SpriteId, HTMLImageElement[]>>;
+  /** Death sheet (death-*.png), for the sprites that have one: plays once when the unit dies,
+   * holds the last frame for a moment, then the unit fades out as usual. Sprites without one
+   * just fade out on death, exactly as before. */
+  deaths: Partial<Record<SpriteId, HTMLImageElement[]>>;
   impact: HTMLImageElement[];
   /** Ultra-realistic Fireball core; its trail and light remain procedural. */
   fireballCore: HTMLImageElement;

@@ -138,7 +138,7 @@ export function portraitFor(sprite: SpriteId): { src: string; framed: boolean; p
 }
 
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
-const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
+const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "wardog2", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
 
 // Real load progress for the title screen's loading bar: every image request counts once when it
 // is asked for and once when it settles (loaded or failed). loadGameArt requests its batches one
@@ -146,7 +146,7 @@ const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldr
 // taken against the whole expected total instead — the count the last full load actually made
 // (remembered in localStorage), or ART_TOTAL_FALLBACK (measured) on a first-ever visit.
 const ART_TOTAL_KEY = "ember.artLoadTotal";
-const ART_TOTAL_FALLBACK = 409;
+const ART_TOTAL_FALLBACK = 1161;
 function rememberedArtTotal(): number {
   try {
     const n = Number(localStorage.getItem(ART_TOTAL_KEY));
@@ -298,6 +298,7 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   BirolhoLegs2: { n: 32, bust: "" },
   troll2: { n: 32, bust: "" },
   RoccoTheBird: { n: 32, bust: "" },
+  wardog2: { n: 32, bust: "" },
   // Zombie ATT: video 2 from 5 s, mirrored so the whole strike faces right (see its README).
   zombie: { n: 32, bust: "" },
   zombie2: { n: 10, bust: "" },
@@ -411,6 +412,8 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // Walk Left footage only; move-*.png is its mirror, same as BirolhoLegs above.
   troll2: { n: 32, bust: "" },
   RoccoTheBird: { n: 32, bust: "" },
+  // Walk Left footage only; move-*.png is its mirror, same as troll2.
+  wardog2: { n: 32, bust: "" },
   // Zombie: side-on walk from video 2 (2.05-3.9 s, two real strides), 32 frames like every
   // other long sheet; move-*.png is its mirror and the renderer mirrors it back for
   // left-facing movement.
@@ -439,6 +442,11 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
 
 const DIR_LEFT: SpriteId[] = ["aldric", "defaultLancer", "lancer", "sandoval"];
 
+// Death sheets: death-*.png, played once when the unit dies (see GameArt.deaths).
+const DEATH_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
+  wardog2: { n: 32, bust: "" },
+};
+
 // Up/down walk cycles (move-up-*.png / move-down-*.png), opt-in per sprite — see
 // GameArt.walksUp/walksDown. A sprite with only one of the two keeps its left/right walk
 // for the other direction.
@@ -453,8 +461,8 @@ const WALK2_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   familiar3: { n: 36, bust: "" },
 };
 
-type SpritePoolKey = "sprites" | "attacks" | "attacks2" | "attacksShort" | "attacksLeft" | "casts" | "castsLeft" | "counters" | "countersLeft" | "walks" | "walksLeft" | "idles" | "idles2" | "walkDirs" | "walksUp" | "walksDown" | "walks2" | "walksLeft2";
-const SPRITE_POOL_KEYS: SpritePoolKey[] = ["sprites", "attacks", "attacks2", "attacksShort", "attacksLeft", "casts", "castsLeft", "counters", "countersLeft", "walks", "walksLeft", "idles", "idles2", "walkDirs", "walksUp", "walksDown", "walks2", "walksLeft2"];
+type SpritePoolKey = "deaths" | "sprites" | "attacks" | "attacks2" | "attacksShort" | "attacksLeft" | "casts" | "castsLeft" | "counters" | "countersLeft" | "walks" | "walksLeft" | "idles" | "idles2" | "walkDirs" | "walksUp" | "walksDown" | "walks2" | "walksLeft2";
+const SPRITE_POOL_KEYS: SpritePoolKey[] = ["deaths", "sprites", "attacks", "attacks2", "attacksShort", "attacksLeft", "casts", "castsLeft", "counters", "countersLeft", "walks", "walksLeft", "idles", "idles2", "walkDirs", "walksUp", "walksDown", "walks2", "walksLeft2"];
 
 /** Loads every pool one sprite contributes to GameArt (idle, attack, cast, walk, ...) — the
  * same files, frame counts and cache-busts loadGameArt used to load for every sprite up front. */
@@ -468,7 +476,7 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
       pools[key] = value;
     }));
   };
-  const n = id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "RoccoTheBird" || id === "zombie" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
+  const n = id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "RoccoTheBird" || id === "wardog2" || id === "zombie" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
   const cacheBust = id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : "";
   put("sprites", cut(n, (i) => (id === "conjurer" ? `talk-${i}` : `${i}`), cacheBust));
   const atk = ATTACK_FRAMES[id];
@@ -482,6 +490,8 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
   if (cast && CAST_DIR_LEFT.includes(id)) put("castsLeft", cut(cast.n, (i) => `cast-left-${i}`, cast.bust));
   const counter = COUNTER_FRAMES[id];
   if (counter) put("counters", cut(counter.n, (i) => `counter-${i}`, counter.bust));
+  const death = DEATH_FRAMES[id];
+  if (death) put("deaths", cut(death.n, (i) => `death-${i}`, death.bust));
   const walk = WALK_FRAMES[id];
   if (walk) put("walks", cut(walk.n, (i) => `move-${i}`, walk.bust));
   if (DIR_LEFT.includes(id)) {
@@ -528,6 +538,10 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
   return pools;
 }
 
+/** The main characters' sprites (see HERO_SPRITE_BY_NAME in engine.ts): loaded with the game
+ * at startup and never released, so the heroes are ready on every screen right away. */
+const MC_SPRITES: SpriteId[] = ["kaelFinal", "neera", "voss", "salazar", "aldric", "malrec"];
+
 const spriteLoads = new WeakMap<GameArt, Map<SpriteId, Promise<void>>>();
 
 /** Loads one sprite's art into `art`, once — repeat calls share the same request. Every pool
@@ -556,7 +570,7 @@ export function ensureSpriteArt(art: GameArt, ids: Iterable<SpriteId>): Promise<
 /** Drops every loaded sprite not in `keep`, so memory follows the current battle instead of
  * growing with every battle played. A dropped sprite reloads on demand (browser cache). */
 export function releaseSpriteArt(art: GameArt, keep: Iterable<SpriteId>): void {
-  const keepSet = new Set(keep);
+  const keepSet = new Set([...keep, ...MC_SPRITES]);
   const loads = spriteLoads.get(art);
   if (!loads) return;
   for (const id of [...loads.keys()]) {
@@ -674,10 +688,13 @@ export async function loadGameArt(): Promise<GameArt> {
   const walks2: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   const walksLeft2: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   const walkDirs: GameArt["walkDirs"] = {};
+  const deaths: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
+  const art: GameArt = { tiles, decorations, sprites, attacks, attacks2, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, walksUp, walksDown, walks2, walksLeft2, deaths, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
+  await ensureSpriteArt(art, MC_SPRITES);
   try {
     localStorage.setItem(ART_TOTAL_KEY, String(artRequested));
   } catch {
     // No storage: the next load just falls back to ART_TOTAL_FALLBACK.
   }
-  return { tiles, decorations, sprites, attacks, attacks2, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, walksUp, walksDown, walks2, walksLeft2, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
+  return art;
 }

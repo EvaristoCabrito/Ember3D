@@ -374,7 +374,7 @@ export function OverworldMapScreen({
             className="h-9 px-3 ember-plate text-sm"
             onClick={() => {
               const heroes = (["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"] as const).filter(
-                (name) => test || heroRecruited(name, save.completed),
+                (name) => test || heroRecruited(name, save.completed, save.flags),
               );
               const fed = onUseRationAll(heroes);
               showHint(
@@ -405,7 +405,7 @@ export function OverworldMapScreen({
                 <p className="text-xs ember-kicker">Feitiços de campo</p>
                 {(() => {
                   const healers = (["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"] as const).filter((name) => {
-                    if (!(test || heroRecruited(name, save.completed))) return false;
+                    if (!(test || heroRecruited(name, save.completed, save.flags))) return false;
                     if ((save.unitHp[name] ?? 1) <= 0) return false;
                     const classId = save.promotions[name] ?? { Kael: "swordsman", Neera: "archer", Voss: "mage", Salazar: "healer", Aldric: "aldric", Malrec: "conjurer" }[name];
                     return rulesClass(classId) === "healer";
@@ -697,7 +697,7 @@ export function OverworldMapScreen({
           {atStartPreVau ? "Clique em Kael para entrar na missão" : movementOpen ? "Escolha um hexágono · 1 dia" : "Clique em Kael para mover"}
         </p>
         <div className="flex gap-3">
-          {([['Kael', 'kaelFinal'], ['Neera', 'neera'], ['Voss', 'voss'], ['Salazar', 'salazar'], ['Aldric', 'aldric'], ['Malrec', 'conjurer']] as const).filter(([name]) => test || heroRecruited(name, save.completed)).map(([name, sprite]) => (
+          {([['Kael', 'kaelFinal'], ['Neera', 'neera'], ['Voss', 'voss'], ['Salazar', 'salazar'], ['Aldric', 'aldric'], ['Malrec', 'conjurer']] as const).filter(([name]) => test || heroRecruited(name, save.completed, save.flags)).map(([name, sprite]) => (
             <div key={name} className="w-10" title={name}>
               <button type="button" aria-label={`Inventário de ${name}`} onClick={() => setInventoryHero(name)} className="min-h-11">
                 <img src={portraitFor(sprite).src} alt={name} style={{ objectPosition: portraitFor(sprite).position }} className="w-10 h-12 object-cover rounded" />

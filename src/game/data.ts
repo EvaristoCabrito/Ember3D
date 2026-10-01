@@ -890,6 +890,24 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     footprintOffsets: FOOTPRINT_TYPE_3,
     init: 6,
   },
+  // Same unit as the War Dog — only the art differs (32-frame video cut with a death sheet).
+  wardog2: {
+    id: "wardog2",
+    name: "Cão de guerra 2",
+    role: "Profano",
+    hp: 40,
+    atk: 9,
+    mag: 0,
+    def: 3,
+    res: 1,
+    mov: 5,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "wardog2",
+    size: 2,
+    footprintOffsets: FOOTPRINT_TYPE_3,
+    init: 6,
+  },
   // Stats are a first pass — placeholder numbers to get it on the board, to be balanced later.
   morvenianWolf: {
     id: "morvenianWolf",
@@ -1925,7 +1943,7 @@ export const HERO_NAMES = ["Kael", "Neera", "Voss", "Salazar"] as const;
  * in the story (Aldric, Malrec) — HERO_NAMES stays the narrower "starts in the save" tuple
  * other code keys off of, this is the roster for anything that must react to a NEW recruit
  * showing up (Mochila/Equipar's hero switcher, the RPG map's party row, etc.), gated the
- * same way as everyone else: heroRecruited(name, save.completed). */
+ * same way as everyone else: heroRecruited(name, save.completed, save.flags). */
 export const ALL_HERO_NAMES = ["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"] as const;
 
 export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def: number; res: number }> = {
@@ -1938,6 +1956,7 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   brigand: { hp: 3, atk: 2, mag: 0, def: 1, res: 1 },
   captain: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   wardog: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
+  wardog2: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   zombie: { hp: 4, atk: 2, mag: 0, def: 1, res: 1 },
   zombie2: { hp: 4, atk: 2, mag: 0, def: 1, res: 1 },
   morvenianWolf: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
@@ -3067,11 +3086,11 @@ export function pouchUpgradeBonus(equipment: SaveData["equipment"] | undefined):
  * follows (Mochila's hero switcher, the RPG map's party row, etc.), so a full six-hero
  * test roster gets its full 60 slots instead of getting docked for whichever hero hasn't
  * formally joined this save yet. */
-export function partyBagCapacity(save: Pick<SaveData, "completed" | "equipment">, test = false): number {
+export function partyBagCapacity(save: Pick<SaveData, "completed" | "flags" | "equipment">, test = false): number {
   // ALL_HERO_NAMES (all 6 possible party members), not HERO_NAMES (just the 4 starters) —
-  // Aldric and Malrec joining the party adds their own 10 slots same as anyone else, so a
+  // late recruits add their own 10 slots same as anyone else, so a
   // full six-hero roster tops out at 60, not stuck at 40.
-  const heroes = Math.max(1, ALL_HERO_NAMES.filter((name) => test || heroRecruited(name, save.completed)).length);
+  const heroes = Math.max(1, ALL_HERO_NAMES.filter((name) => test || heroRecruited(name, save.completed, save.flags)).length);
   return PARTY_BAG_PER_HERO * heroes + pouchUpgradeBonus(save.equipment);
 }
 
@@ -3083,7 +3102,7 @@ export function partyBagUsed(save: Pick<SaveData, "weapons" | "equipped" | "loos
   return weapons + gear + rationStacks;
 }
 
-export function partyBagHasRoom(save: Pick<SaveData, "completed" | "equipment" | "weapons" | "equipped" | "looseEquipment" | "rations">, extra = 1, test = false): boolean {
+export function partyBagHasRoom(save: Pick<SaveData, "completed" | "flags" | "equipment" | "weapons" | "equipped" | "looseEquipment" | "rations">, extra = 1, test = false): boolean {
   return partyBagUsed(save) + extra <= partyBagCapacity(save, test);
 }
 
@@ -3096,6 +3115,7 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   brigand: 2,
   pikeman: 3,
   wardog: 2,
+  wardog2: 2,
   zombie: 3,
   zombie2: 3,
   morvenianWolf: 3,
@@ -5610,13 +5630,10 @@ const HERO_JOIN_INDEX: Record<string, number> = (() => {
   return out;
 })();
 
-/** Whether a hero has joined the party yet — false before the mission they first appear
- * in has been reached, so their gear doesn't show up in party-wide UI (Ferreiro,
- * Mochila) before the story actually recruits them. Recruited once the PRECEDING mission
- * is completed, since that's the one whose briefing/outcome frees them — e.g. Salazar
- * (first playerSpawn in "cripta", index 6) becomes recruited on completing mission 06,
- * "Nave Enforcada" (index 5), where Asherah falls and he's found as her prisoner. */
-export function heroRecruited(name: string, completed: string[]): boolean {
+/** Whether a hero has joined the party yet. Explicit story recruitment flags take precedence;
+ * otherwise the campaign roster opens when the mission before their first appearance is done. */
+export function heroRecruited(name: string, completed: string[], flags: string[] = []): boolean {
+  if (flags.includes(`recruited:${name}`)) return true;
   const joinIndex = HERO_JOIN_INDEX[name];
   // Not found in any mission's playerSpawns at all (e.g. authored in ALL_HERO_NAMES
   // but their joining mission doesn't exist yet) — must read as "not recruited",

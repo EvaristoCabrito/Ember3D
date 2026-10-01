@@ -595,7 +595,7 @@ export function BackpackScreen({
   const bag = save.bags[heroName] ?? EMPTY_BAG;
   const weaponEntries = Object.entries(save.weapons).filter(([id]) => {
     const wielder = Object.entries(save.equipped).find(([, v]) => v === id)?.[0];
-    return !wielder || heroRecruited(wielder, save.completed);
+    return !wielder || heroRecruited(wielder, save.completed, save.flags);
   });
   const wearerOf = (id: string) =>
     Object.entries(save.equipment).find(([, slots]) => Object.values(slots).includes(id))?.[0];
@@ -610,7 +610,7 @@ export function BackpackScreen({
     ] as const)
     .filter(([id]) => {
       const wearer = wearerOf(id);
-      return !wearer || heroRecruited(wearer, save.completed);
+      return !wearer || heroRecruited(wearer, save.completed, save.flags);
     });
   // Shared stash: unequipped weapons + loose gear. Potions/gazuas stay per-hero and
   // never count. Each physical piece takes one cell — copies do not stack.
@@ -969,7 +969,7 @@ export function PartyInventoryOverlay({
   const [glowSlot, setGlowSlot] = useState<"mainHand" | EquipSlot | null>(null);
   const [view, setView] = useState<"equipment" | "backpack">(initialView);
   const [selectedHero, setSelectedHero] = useState(heroName);
-  const availableHeroes = ALL_HERO_NAMES.filter((name) => test || heroRecruited(name, save.completed));
+  const availableHeroes = ALL_HERO_NAMES.filter((name) => test || heroRecruited(name, save.completed, save.flags));
   const selectedClass = save.promotions[selectedHero] ?? HERO_BASE_CLASS[selectedHero] ?? classId;
   const glowTimer = useRef<number | null>(null);
   const flashGlow = (slot: "mainHand" | EquipSlot) => {

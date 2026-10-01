@@ -3,7 +3,7 @@ import { ALL_MISSIONS } from "./mapstore";
 import { OVERWORLD_START_HEX, worldToHex } from "./overworld";
 import { cleanHunger, fullness } from "./hunger";
 import { TIER_KEYS } from "./types";
-import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogLine, DialogTree, EquipSlot, Phase, SaveBank, SaveData, Side, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, TierKey } from "./types";
+import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogAction, DialogLine, DialogTree, EquipSlot, Phase, SaveBank, SaveData, Side, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, TierKey } from "./types";
 
 /** Fresh parties begin one hex left of Stone Bridge, on the map's west edge. */
 const START_HEX = OVERWORLD_START_HEX;
@@ -262,7 +262,8 @@ function cleanDialogTree(raw: unknown): DialogTree | null {
           if (!r || typeof r !== "object") return [];
           const rr = r as Record<string, unknown>;
           if (typeof rr.text !== "string") return [];
-          return [{ text: rr.text, next: typeof rr.next === "string" ? rr.next : null }];
+          const action = rr.action === "tavern" || rr.action === "smith" || rr.action === "recruitAldric" ? (rr.action as DialogAction) : undefined;
+          return [{ text: rr.text, next: typeof rr.next === "string" ? rr.next : null, action }];
         })
       : undefined;
     lines.push({

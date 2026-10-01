@@ -460,6 +460,10 @@ const OVERLAY_FADE_IN = 0.4;
 /** Default: one full pass of any long sheet (idle, walk, attack, cast) lasts this many
  * seconds, whatever its frame count — a 36-frame sheet plays at 12 fps. */
 const LONG_ANIM_SECONDS = 3;
+/** A death sheet (GameArt.deaths) plays over this long, then the body lies still for
+ * DEATH_HOLD_SECONDS before fading out like any other fallen unit. */
+const DEATH_ANIM_SECONDS = 3;
+const DEATH_HOLD_SECONDS = 1;
 /** Walk cycles run faster than the rest: one full pass of a long walk sheet takes this long. */
 const LONG_WALK_SECONDS = 1.5;
 /** Bow shots on a long sheet, per direct instruction: a normal ATT shot leaves only once the
@@ -1945,7 +1949,7 @@ export class BattleEngine {
       if (u.flash > 0) u.flash = Math.max(0, u.flash - cap * 4);
       if (u.levelGlow > 0) u.levelGlow = Math.max(0, u.levelGlow - cap * 0.42);
       if (u.healGlow > 0) u.healGlow = Math.max(0, u.healGlow - cap * 0.7);
-      if (!u.alive && u.fade > 0) u.fade = Math.max(0, u.fade - cap * 2.4);
+      if (!u.alive && u.fade > 0 && !this.deathSheetPlaying(u)) u.fade = Math.max(0, u.fade - cap * 2.4);
       // A freshly summoned unit starts at fade 0 (see castSummonFamiliar) and eases back in
       // while its portal plays, rather than popping fully opaque the instant it's added.
       else if (u.alive && u.fade < 1) u.fade = Math.min(1, u.fade + cap * 2.4);
@@ -2698,7 +2702,7 @@ export class BattleEngine {
     }
     if (a.stage === "fade") {
       for (const u of this.units) {
-        if (!u.alive && u.fade > 0) u.fade = Math.max(0, u.fade - dt * 2.4);
+        if (!u.alive && u.fade > 0 && !this.deathSheetPlaying(u)) u.fade = Math.max(0, u.fade - dt * 2.4);
       }
       if (a.t >= 0.4) this.finishCombat(att);
     }
@@ -3151,7 +3155,7 @@ export class BattleEngine {
 
   /** A wardog's bite (20%) or a zombie's hit (30%) can inflict disease on a surviving target. */
   private maybeInflictDisease(actor: Unit, target: Unit): void {
-    const chance = actor.classId === "wardog" ? DISEASE.biteChance : (actor.classId === "zombie" || actor.classId === "zombie2") ? DISEASE.zombieChance : 0;
+    const chance = actor.classId === "wardog" || actor.classId === "wardog2" ? DISEASE.biteChance : (actor.classId === "zombie" || actor.classId === "zombie2") ? DISEASE.zombieChance : 0;
     if (chance <= 0 || !target.alive || target.diseased) return;
     if (this.rng() >= chance) return;
     target.diseased = true;
@@ -3182,6 +3186,7 @@ export class BattleEngine {
    * hazard) behaves identically instead of four separate copies of the same logic. */
   private markDead(u: Unit): void {
     u.alive = false;
+    u.diedAt = this.time;
     sfxPlay.death();
     this.pushLog(`${u.name} foi derrotado.`);
     if (u.side === "enemy" && u.guaranteedDrop) {
@@ -6830,6 +6835,9 @@ export class BattleEngine {
     const i = target.y * this.cols + target.x;
     const chestDecorId = this.decorations.find((dec) => CHEST_DECOR_IDS.has(dec.id) && dec.x === target.x && dec.y === target.y)?.id;
     const wasChest = !!chestDecorId;
+    // A chest never touches the floor underneath it. Doors are terrain, so opening one
+    // restores the map's normal walkable floor.
+    if (!wasChest) this.tiles[i] = this.mission.baseTile ?? "nave";
     // A chest never touches `tiles` (see DECORATIONS.locked-chest's own comment) — the real
     // floor is already sitting there, so opening it leaves it alone.
     this.terrainVersion++;
@@ -7706,6 +7714,14 @@ export class BattleEngine {
       return;
     }
     if (here?.dialog && here.alive) {
+      const dialogSpawn = this.mission.neutralSpawns?.find((spawn) => spawn.name === here.name && spawn.x === here.x && spawn.y === here.y);
+      const lockedDoor = dialogSpawn?.dialogRequiresOpenDoor;
+      if (lockedDoor && tileAt(this.tiles, this.cols, lockedDoor.x, lockedDoor.y) === "door") {
+        this.tip = "A cela está trancada. Use uma gazua para abrir a porta.";
+        this.pushLog(this.tip);
+        sfxPlay.ui();
+        return;
+      }
       // Free roam: walk up to the NPC first, then talk. Already beside them (or nowhere
       // free to stand) just talks from where the leader is.
       if (this.mission.explore && selected && this.mode === "selected" && !hexNeighbors(here.x, here.y).some((n) => n.x === selected.x && n.y === selected.y)) {
@@ -8609,6 +8625,13 @@ export class BattleEngine {
     return alt;
   }
 
+  /** True while a unit that just died is still playing its death sheet (GameArt.deaths) or
+   * lying still on its last frame — its fade-out waits until this is over. */
+  private deathSheetPlaying(u: Unit): boolean {
+    if (u.alive || u.diedAt == null || !this.art.deaths[u.sprite]) return false;
+    return this.time - u.diedAt < DEATH_ANIM_SECONDS + DEATH_HOLD_SECONDS;
+  }
+
   private idleFrame(u: Unit, n: number): number {
     if (n <= 1) return 0;
     const moving = this.active?.type === "move" && this.active.id === u.id;
@@ -8882,9 +8905,12 @@ export class BattleEngine {
     const castPool = faceRight ? this.art.casts[u.sprite] : (this.art.castsLeft[u.sprite] ?? this.art.casts[u.sprite]);
     const countering = this.active?.type === "combat" && this.active.stage.startsWith("counter") && this.active.def === u.id;
     const counterPool = faceRight ? this.art.counters[u.sprite] : (this.art.countersLeft[u.sprite] ?? this.art.counters[u.sprite]);
-    const frames = atk != null ? (casting ? (castPool ?? atkPool) : countering ? (counterPool ?? atkPool) : atkPool) : walk ?? idle ?? this.art.sprites[u.sprite];
+    const deathPool = !u.alive && u.diedAt != null ? this.art.deaths[u.sprite] : undefined;
+    const frames = deathPool ?? (atk != null ? (casting ? (castPool ?? atkPool) : countering ? (counterPool ?? atkPool) : atkPool) : walk ?? idle ?? this.art.sprites[u.sprite]);
     const n = frames?.length ?? 0;
-    const fi = atk != null ? atk : walk ? this.walkFrame(u, n) : this.idleFrame(u, n || 4);
+    const fi = deathPool
+      ? Math.min(n - 1, Math.floor(((this.time - u.diedAt!) / DEATH_ANIM_SECONDS) * n))
+      : atk != null ? atk : walk ? this.walkFrame(u, n) : this.idleFrame(u, n || 4);
     const walkDirs = moving ? this.art.walkDirs[u.sprite] : undefined;
     const img = (walkDirs ? walkDirs[u.walkPose] : undefined) ?? frames?.[fi] ?? frames?.[0];
     // The draw-size correction keys off the footprint SHAPE (reference equality against
@@ -8948,6 +8974,10 @@ export class BattleEngine {
     // the canvas's own aspect kept instead of squeezed into the tall creature box.
     const troll2HeightScale = u.sprite === "troll2" ? 1.03 : 1;
     const troll2WidthScale = u.sprite === "troll2" ? 1.59 : 1;
+    // WarDog 2 (560x340 canvas, figure ~94% of its height): the War Dog's on-screen figure
+    // height (~84% of its square box), with the wide canvas's own aspect kept.
+    const wardog2HeightScale = u.sprite === "wardog2" ? 0.896 : 1;
+    const wardog2WidthScale = u.sprite === "wardog2" ? 1.372 : 1;
     // Rocco The Bird (639x360 canvas, figure ~79% of its height): troll2's on-screen figure
     // height (same Type 7 body), with the wide canvas's own aspect kept.
     const roccoHeightScale = u.sprite === "RoccoTheBird" ? 1.22 : 1;
@@ -8978,6 +9008,7 @@ export class BattleEngine {
       familiar2WalkScale *
       birolhoLegsHeightScale *
       troll2HeightScale *
+      wardog2HeightScale *
       roccoHeightScale *
       familiar4HeightScale *
       kaelFinalAtkScale *
@@ -9001,6 +9032,7 @@ export class BattleEngine {
       familiar3WidthScale *
       birolhoLegsWidthScale *
       troll2WidthScale *
+      wardog2WidthScale *
       roccoWidthScale *
       familiar4WidthScale *
       wolfFinalWidthScale *

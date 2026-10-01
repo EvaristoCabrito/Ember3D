@@ -186,7 +186,7 @@
       "nave",
       "nave",
       "nave",
-      "nave",
+      "door",
       "nave",
       "nave",
       "nave",
@@ -1850,6 +1850,18 @@
         "x": 22,
         "y": 10,
         "blocksPath": true
+      },
+      {
+        "id": "city-stone-banner-wall",
+        "x": 9,
+        "y": 2,
+        "blocksPath": true
+      },
+      {
+        "id": "city-stone-banner-wall",
+        "x": 9,
+        "y": 7,
+        "blocksPath": true
       }
     ],
     "playerSpawns": [
@@ -1926,7 +1938,78 @@
         "level": 10
       }
     ],
-    "neutralSpawns": [],
+    "neutralSpawns": [
+      {
+        "name": "Aldric",
+        "classId": "aldric",
+        "x": 7,
+        "y": 6,
+        "level": 10,
+        "dialogRequiresOpenDoor": {
+          "x": 9,
+          "y": 6
+        },
+        "dialog": {
+          "id": "aldric-cell",
+          "startId": "first-words",
+          "lines": [
+            {
+              "id": "first-words",
+              "speaker": "Aldric",
+              "portrait": "aldric",
+              "text": "Você abriu a cela? Então talvez ainda haja gente disposta a desafiar a Torre. Sou o General Aldric, da Companhia Carmesim. Antes de confiar minha vida a vocês, preciso saber o que aconteceu lá fora.",
+              "replies": [
+                {
+                  "text": "O que houve com a Companhia Carmesim?",
+                  "next": "company"
+                },
+                {
+                  "text": "Como você foi capturado?",
+                  "next": "capture"
+                },
+                {
+                  "text": "Ainda consegue lutar?",
+                  "next": "fight"
+                }
+              ]
+            },
+            {
+              "id": "company",
+              "speaker": "Aldric",
+              "portrait": "aldric",
+              "text": "A Companhia Carmesim segurou a passagem para que os sobreviventes pudessem recuar. Fui o último oficial a cair. A torre me manteve vivo para arrancar nomes e rotas dos meus soldados.",
+              "next": "offer"
+            },
+            {
+              "id": "capture",
+              "speaker": "Aldric",
+              "portrait": "aldric",
+              "text": "Fiquei para trás cobrindo a retirada. Me cercaram quando a munição acabou. Não entreguei nenhum dos meus, por mais que tentassem me convencer.",
+              "next": "offer"
+            },
+            {
+              "id": "fight",
+              "speaker": "Aldric",
+              "portrait": "aldric",
+              "text": "Ainda sei comandar uma linha e empunhar uma lança. Perdi homens demais para fingir que saí daqui inteiro, mas continuo de pé.",
+              "next": "offer"
+            },
+            {
+              "id": "offer",
+              "speaker": "Aldric",
+              "portrait": "aldric",
+              "text": "Sou um dos últimos generais sobreviventes da Companhia Carmesim. Se vocês me aceitarem, marcharei com o grupo e ajudarei a encontrar os meus. Posso marchar ao lado de vocês?",
+              "replies": [
+                {
+                  "text": "Junte-se a nós, General.",
+                  "action": "recruitAldric"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
     "baseTile": "nave",
     "baseVariant": 6
   }

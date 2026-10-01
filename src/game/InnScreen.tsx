@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BAG_MAX, CLASSES, EQUIPMENT, HERO_NAMES, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_ICON, RATIONS_PRICE, WEAPON_MAX_ENH, WEAPONS, equipmentIcon, equipmentTooltip, equipmentTypeSlotName, heroRecruited, isPlayableClassForDisplay, isPouch, lockpickTooltip, partyBagHasRoom, partyPouchId, potionTooltip, pouchIcon, weaponDiceLabel, weaponEnhCost, weaponIcon, weaponPower, weaponRangeLabel, weaponSellValue, weaponTooltip, potionLabel } from "./data";
+import { ALL_HERO_NAMES, BAG_MAX, CLASSES, EQUIPMENT, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_ICON, RATIONS_PRICE, WEAPON_MAX_ENH, WEAPONS, equipmentIcon, equipmentTooltip, equipmentTypeSlotName, heroRecruited, isPlayableClassForDisplay, isPouch, lockpickTooltip, partyBagHasRoom, partyPouchId, potionTooltip, pouchIcon, weaponDiceLabel, weaponEnhCost, weaponIcon, weaponPower, weaponRangeLabel, weaponSellValue, weaponTooltip, potionLabel } from "./data";
 import { ItemTip, PartyInventoryOverlay } from "./InventoryScreens";
-import type { Bag, ClassId, EquipSlot, PotionId, SaveData } from "./types";
+import type { Bag, ClassId, DialogLine, EquipSlot, PotionId, SaveData } from "./types";
 import { GoldAmount } from "./GoldAmount";
 import { playTheme, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { fullness, INN_MEAL_PRICE } from "./hunger";
@@ -39,6 +39,69 @@ const NPCS = [
   },
 ] as const;
 
+const MUDO_HOSTAGE_DIALOG: DialogLine[] = [
+  {
+    id: "start", speaker: "O Mudo", text: "Ele percebe que você observa a tábua. Por um instante, cobre a frase com a mão. Depois escreve: “Pergunte direito.”",
+    replies: [
+      { text: "O que significa ‘não fique parado por muito tempo’?", next: "warning" },
+      { text: "Você conhece a Torre de Vigia?", next: "watchtower" },
+      { text: "Você parece ter medo de alguém.", next: "fear" },
+    ],
+  },
+  {
+    id: "warning", speaker: "O Mudo", text: "Ele sublinha a frase duas vezes. Escreve: “Estradas mudam. Pessoas também. Quem espera demais vira parte da paisagem.”",
+    replies: [
+      { text: "Isso é um aviso ou uma ameaça?", next: "warning-answer" },
+      { text: "E a Torre de Vigia?", next: "watchtower" },
+    ],
+  },
+  { id: "warning-answer", speaker: "O Mudo", text: "Um meio sorriso. “Depende de quem está perguntando.” Ele fecha a tábua, mas não vai embora.", replies: [{ text: "Perguntar sobre a Torre de Vigia", next: "watchtower" }, { text: "Perguntar sobre a Companhia Carmesim", next: "company" }] },
+  {
+    id: "fear", speaker: "O Mudo", text: "Ele fica imóvel por tempo demais. Então escreve: “Medo faz a gente falar. Prudência faz a gente continuar vivo.”",
+    replies: [
+      { text: "Então vou ser direto: a Companhia Carmesim?", next: "company" },
+      { text: "O que aconteceu na Torre de Vigia?", next: "watchtower" },
+    ],
+  },
+  {
+    id: "company", speaker: "O Mudo", text: "Ao ler o nome, ele apaga metade do que escreveu. “A Companhia Carmesim deixou marcas por estas bandas. Algumas ainda sangram.”",
+    replies: [
+      { text: "Você lutou com eles?", next: "served" },
+      { text: "Que marcas?", next: "watchtower" },
+      { text: "Quem está sangrando?", next: "watchtower" },
+    ],
+  },
+  { id: "served", speaker: "O Mudo", text: "Ele nega com a cabeça. “Não.” Depois pensa melhor e acrescenta: “Isso não quer dizer que eu não conheça gente que lutou.”", replies: [{ text: "Então me conte sobre a Torre.", next: "watchtower" }] },
+  {
+    id: "watchtower", speaker: "O Mudo", text: "Ele olha para a porta antes de escrever: “A Torre de Vigia caiu nas mãos erradas. Há coisas lá dentro que valem mais do que ouro.”",
+    replies: [
+      { text: "Quem contou isso a você?", next: "source" },
+      { text: "Que tipo de coisa?", next: "hostage" },
+      { text: "Por que me contar agora?", next: "hesitate" },
+    ],
+  },
+  { id: "source", speaker: "O Mudo", text: "A expressão dele endurece. Ele escreve uma palavra só: “Não.” E guarda o giz. Depois o tira do bolso outra vez.", replies: [{ text: "Não vou insistir na fonte. O que está lá?", next: "hostage" }, { text: "Pelo menos me diga se é uma pessoa.", next: "hesitate" }] },
+  { id: "hesitate", speaker: "O Mudo", text: "Ele demora a responder. “Talvez eu não devesse ter começado esta conversa. Você não sabe quem mais está procurando por essa informação.”", replies: [{ text: "Posso decidir por conta própria. Continue.", next: "hostage" }, { text: "Não vou forçar você.", next: "goodbye" }] },
+  {
+    id: "hostage", speaker: "O Mudo", text: "Ele escreve devagar, como se cada palavra tivesse um custo: “Há um oficial de alta patente da Companhia Carmesim mantido como refém na Torre de Vigia.”",
+    replies: [
+      { text: "Qual é o nome dele?", next: "refusal" },
+      { text: "Como sabe disso?", next: "refusal" },
+      { text: "O que espera que eu faça?", next: "request" },
+    ],
+  },
+  { id: "refusal", speaker: "O Mudo", text: "Ele risca a pergunta com tanta força que rasga a tábua. “O nome, não. A fonte, também não. Já falei mais do que devia.”", replies: [{ text: "Entendido. Diga o que precisa de mim.", next: "request" }, { text: "Não posso ajudar sem saber mais.", next: "goodbye" }] },
+  {
+    id: "request", speaker: "O Mudo", text: "Ele mantém os olhos na porta. “Encontre o cativo e tire-o daquela cela. Não vou dizer o nome. Não vou dizer de onde veio a informação. Se aceitar, haverá pagamento quando voltar.”",
+    replies: [
+      { text: "Vou encontrar o oficial e tirá-lo de lá.", next: "accepted" },
+      { text: "Não vou me envolver nisso.", next: "goodbye" },
+    ],
+  },
+  { id: "accepted", speaker: "O Mudo", text: "Ele assente uma vez e guarda a tábua. Nenhum nome. Nenhuma pista sobre quem lhe contou.", next: null },
+  { id: "goodbye", speaker: "O Mudo", text: "Ele apaga tudo o que escreveu, menos o aviso no alto da tábua: “Não fique parado por muito tempo.”", next: null },
+];
+
 const POTION_ORDER: PotionId[] = ["weak", "mid", "potent", "disease", "manaSmall", "manaMid", "manaLarge"];
 
 const ICONS: Record<PotionId, string> = {
@@ -52,11 +115,6 @@ const ICONS: Record<PotionId, string> = {
 };
 
 const EMPTY_CART: Record<PotionId, number> = { weak: 0, mid: 0, potent: 0, disease: 0, manaSmall: 0, manaMid: 0, manaLarge: 0 };
-
-/** Aldric and Malrec join later in the story but aren't in HERO_NAMES yet, so they normally
- * never appear in the Inn/Smith. Test mode appends them so their gear/weapon compatibility
- * can be reviewed ahead of that. */
-const TEST_EXTRA_HERO_NAMES = ["Aldric", "Malrec"] as const;
 
 export function InnScreen({
   onUseRation,
@@ -91,6 +149,7 @@ export function InnScreen({
   onAcceptQuest,
   onTurnInQuest,
   onTalkToNpc,
+  onRevealHostageQuest,
   questOffered,
   startInSmith = false,
 }: {
@@ -101,6 +160,8 @@ export function InnScreen({
   /** Called whenever an NPC is opened, so progression can note who has been talked to and
    * which of their quests have been learned of (see progression.ts). */
   onTalkToNpc?: (npcId: string) => void;
+  /** Called only when the player agrees to follow the Mudo's lead. */
+  onRevealHostageQuest?: () => void;
   /** Whether a not-yet-accepted quest is on offer right now (its own availability condition).
    * Omitted means every quest is offered. */
   questOffered?: (questId: string) => boolean;
@@ -146,6 +207,7 @@ export function InnScreen({
   const [view, setView] = useState<"npc" | "smith">(startInSmith && save.seenSmithIntro ? "smith" : "npc");
   const [smithIntro, setSmithIntro] = useState(startInSmith && !save.seenSmithIntro);
   const [npc, setNpc] = useState<(typeof NPCS)[number]>(NPCS[0]);
+  const [mudoDialogId, setMudoDialogId] = useState<string | null>(null);
   const [hero, setHero] = useState<string>("Kael");
   useEffect(() => {
     onTalkToNpc?.(npc.id);
@@ -174,8 +236,8 @@ export function InnScreen({
   // Comer could already feed one at a time, never a hero outside that list.
   const partyRoster = useMemo(
     () =>
-      (test ? [...HERO_NAMES, ...TEST_EXTRA_HERO_NAMES] : HERO_NAMES).filter((name) => test || heroRecruited(name, save.completed)),
-    [test, save.completed],
+      ALL_HERO_NAMES.filter((name) => test || heroRecruited(name, save.completed, save.flags)),
+    [test, save.completed, save.flags],
   );
 
   const total = useMemo(
@@ -335,7 +397,10 @@ export function InnScreen({
             <button
               key={n.id}
               type="button"
-              onClick={() => setNpc(n)}
+              onClick={() => {
+                setNpc(n);
+                setMudoDialogId(null);
+              }}
               className={`ember-slot overflow-hidden text-left${npc.id === n.id ? " is-last" : ""}`}
             >
               <img src={n.portrait} alt="" className="w-full aspect-[2/3] object-cover" />
@@ -350,8 +415,30 @@ export function InnScreen({
               {npc.name} · {npc.role}
             </p>
             <p className="mt-1 text-sm leading-relaxed text-fg/90">{npc.talk}</p>
+            {npc.id === "mudo" && mudoDialogId == null && (
+              <Button className="mt-3 ember-btn ember-btn-primary" onClick={() => setMudoDialogId("start")}>Perguntar sobre os rumores</Button>
+            )}
           </div>
         </div>
+        {npc.id === "mudo" && mudoDialogId != null && (() => {
+          const line = MUDO_HOSTAGE_DIALOG.find((entry) => entry.id === mudoDialogId);
+          if (!line) return null;
+          return (
+            <div className="relative ember-panel p-3 flex flex-col gap-2">
+              <p className="text-xs ember-kicker">Conversa · {line.speaker}</p>
+              <p className="text-sm leading-relaxed text-fg/90">{line.text}</p>
+              {line.replies?.map((reply) => (
+                <Button key={reply.text} className="ember-btn ember-btn-ghost justify-start text-left whitespace-normal h-auto min-h-10 py-2" variant="quiet" onClick={() => {
+                  if (line.id === "request" && reply.next === "accepted") onRevealHostageQuest?.();
+                  setMudoDialogId(reply.next ?? null);
+                }}>{reply.text}</Button>
+              ))}
+              {!line.replies?.length && (
+                <Button className="ember-btn ember-btn-ghost" variant="quiet" onClick={() => setMudoDialogId(null)}>Encerrar conversa</Button>
+              )}
+            </div>
+          );
+        })()}
         {questsFor(npc.id).map((quest) => {
           const status = questStatus(save, quest);
           if (status === "available" && questOffered && !questOffered(quest.id)) return null;
@@ -368,7 +455,7 @@ export function InnScreen({
               {status !== "done" && <p className="text-xs text-muted">Onde: {quest.place}</p>}
               {status !== "available" && status !== "done" && (
                 <p className="text-xs text-muted tabular-nums">
-                  {quest.kind === "kill" ? (have >= total ? "Alvo abatido" : "Alvo ainda vivo") : `Encontrados ${have} / ${total}`}
+                  {quest.kind === "kill" ? (have >= total ? "Alvo abatido" : "Alvo ainda vivo") : quest.kind === "recruit" ? (have >= total ? "Oficial resgatado" : "Oficial ainda cativo") : `Encontrados ${have} / ${total}`}
                 </p>
               )}
               {status !== "done" && (
@@ -814,8 +901,8 @@ function SmithPanel({
         <div className="shop-panel relative ember-panel p-3 flex flex-col gap-2">
           <p className="text-xs ember-kicker">Equipamento exibido</p>
           <div className="flex flex-wrap gap-1">
-            {(test ? [...HERO_NAMES, ...TEST_EXTRA_HERO_NAMES] : HERO_NAMES)
-              .filter((name) => test || heroRecruited(name, save.completed))
+            {ALL_HERO_NAMES
+              .filter((name) => test || heroRecruited(name, save.completed, save.flags))
               .map((name) => (
               <Button
                 key={name}

@@ -314,7 +314,7 @@ function progressionExtras(save: SaveData): ProgressExtras {
     ...Object.keys(save.looseEquipment ?? {}),
     ...Object.values(save.equipment ?? {}).flatMap((slots) => Object.values(slots).filter((id): id is string => typeof id === "string")),
   ];
-  const party = ["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"].filter((name) => heroRecruited(name, save.completed));
+  const party = ["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"].filter((name) => heroRecruited(name, save.completed, save.flags));
   return { items, party };
 }
 
@@ -970,9 +970,9 @@ export function GameApp() {
    * nudged onto for a hazard (see BattleEngine.nudgeOffHazard) — never a hardcoded offset
    * that could land on a wall, water, or another unit on a layout this never saw. */
   const TEST_PARTY_CLASS: Record<string, ClassId> = { Kael: "kaelFinal", Neera: "neera", Voss: "voss", Salazar: "salazar", Aldric: "aldric", Malrec: "conjurer" };
-  function addMissingTestHeroes(mission: Mission): Mission {
+  function addAdditionalPartyHeroes(mission: Mission, roster: Record<string, ClassId>): Mission {
     const present = new Set(mission.playerSpawns.map((s) => s.name));
-    const missing = Object.keys(TEST_PARTY_CLASS).filter((name) => !present.has(name));
+    const missing = Object.keys(roster).filter((name) => !present.has(name));
     if (missing.length === 0) return mission;
     const terrain = parseLayout(mission.layout);
     const occupied = new Set([...mission.playerSpawns, ...mission.enemySpawns, ...(mission.neutralSpawns ?? [])].map((s) => hexKey(s.x, s.y)));
@@ -999,13 +999,16 @@ export function GameApp() {
       }
       if (!placed) continue; // no free cell anywhere reachable — skip rather than overlap
       occupied.add(hexKey(placed.x, placed.y));
-      added.push({ name, classId: TEST_PARTY_CLASS[name]!, x: placed.x, y: placed.y });
+      added.push({ name, classId: roster[name]!, x: placed.x, y: placed.y });
     }
     return added.length > 0 ? { ...mission, playerSpawns: [...mission.playerSpawns, ...added] } : mission;
   }
+  function addMissingTestHeroes(mission: Mission): Mission {
+    return addAdditionalPartyHeroes(mission, TEST_PARTY_CLASS);
+  }
 
   // Familiars are preloaded as soon as a conjurer (Malrec) is in the party, and stay loaded.
-  const partyHasConjurer = Object.entries(TEST_PARTY_CLASS).some(([name, classId]) => rulesClass(classId) === "conjurer" && (testMode || heroRecruited(name, save.completed)));
+  const partyHasConjurer = Object.entries(TEST_PARTY_CLASS).some(([name, classId]) => rulesClass(classId) === "conjurer" && (testMode || heroRecruited(name, save.completed, save.flags)));
   useEffect(() => {
     if (art && partyHasConjurer) void ensureSpriteArt(art, FAMILIAR_SPRITES);
   }, [art, partyHasConjurer]);
@@ -1037,12 +1040,20 @@ export function GameApp() {
       const resolved = override ?? missionById(id);
       if (!resolved) return;
       // Companions sit in the walkable Inn as NPCs, but only once they've actually joined.
-      const seated =
-        resolved.explore && !testMode && resolved.neutralSpawns
-          ? { ...resolved, neutralSpawns: resolved.neutralSpawns.filter((s) => !(s.name in TEST_PARTY_CLASS) || heroRecruited(s.name, save.completed)) }
+      const freedAldric =
+        !testMode && resolved.id === "watchtower-prison" && heroRecruited("Aldric", save.completed, save.flags) && resolved.neutralSpawns
+          ? { ...resolved, neutralSpawns: resolved.neutralSpawns.filter((spawn) => spawn.name !== "Aldric") }
           : resolved;
+      const seated =
+        freedAldric.explore && !testMode && freedAldric.neutralSpawns
+          ? { ...freedAldric, neutralSpawns: freedAldric.neutralSpawns.filter((s) => !(s.name in TEST_PARTY_CLASS) || heroRecruited(s.name, save.completed, save.flags)) }
+          : freedAldric;
       // A free-roam map is walked by the party leader alone.
-      const m = testMode && !resolved.explore ? addMissingTestHeroes(seated) : seated;
+      const m = testMode && !resolved.explore
+        ? addMissingTestHeroes(seated)
+        : !testMode && seated.id.startsWith("watchtower-") && heroRecruited("Aldric", save.completed, save.flags)
+          ? addAdditionalPartyHeroes(seated, { Aldric: "aldric" })
+          : seated;
       // !!! DO NOT change this back to `m.index + 1` (mission-position level) !!!
       // Test mode exists so the party can be tested at full strength on ANY mission without
       // grinding first — that means DEFAULT_TEST_LEVEL (see its own definition below, also
@@ -1956,7 +1967,7 @@ export function GameApp() {
           weapons={overworldSave.weapons}
           equipped={overworldSave.equipped}
           heroClass={Object.fromEntries(
-            [...DEFAULT_HEROES, ...(testMode ? TEST_EXTRA_HEROES : [])].map((h) => [h.name, overworldSave.promotions[h.name] ?? h.classId]),
+            [...DEFAULT_HEROES, ...TEST_EXTRA_HEROES.filter((h) => testMode || heroRecruited(h.name, save.completed, save.flags))].map((h) => [h.name, overworldSave.promotions[h.name] ?? h.classId]),
           )}
           save={testMode ? { ...overworldSave, ember: testEmber } : overworldSave}
           test={testMode}
@@ -2027,6 +2038,19 @@ export function GameApp() {
             const offered = questsFor(npcId as "brue" | "mudo" | "porao").filter((quest) => questStatus(next, quest) === "available" && evaluate(quest.availability, next, extras) && !(next.questsDiscovered ?? []).includes(quest.id));
             if (offered.length > 0) next = { ...next, questsDiscovered: [...(next.questsDiscovered ?? []), ...offered.map((quest) => quest.id)] };
             if (next !== rec) writeMapSave(next);
+          }}
+          onRevealHostageQuest={() => {
+            const rec = readMapSave();
+            const quest = questById("mudo-watchtower-captive");
+            if (!quest) return;
+            const flags = rec.flags ?? [];
+            const discovered = rec.questsDiscovered ?? [];
+            const next = {
+              ...rec,
+              flags: flags.includes("mudo-watchtower-intel") ? flags : [...flags, "mudo-watchtower-intel"],
+              questsDiscovered: discovered.includes(quest.id) ? discovered : [...discovered, quest.id],
+            };
+            writeMapSave(next);
           }}
           questOffered={(questId: string) => {
             const quest = questById(questId);
@@ -2193,6 +2217,15 @@ export function GameApp() {
           playtest={!!customMission}
           fleeable={!customMission && !!missionId && isRandomEncounter(missionId)}
           onDialogAction={(action) => {
+            if (action === "recruitAldric") {
+              if (testMode || customMission) return;
+              const rec = activeSave(bank);
+              const flag = "recruited:Aldric";
+              if (!(rec.flags ?? []).includes(flag)) {
+                persistCurrent(withLiveBattle({ ...rec, flags: [...(rec.flags ?? []), flag] }));
+              }
+              return;
+            }
             setInnEntry(action);
             setScreen("inn");
           }}
@@ -3482,9 +3515,8 @@ const DEFAULT_HEROES: { name: string; classId: ClassId }[] = [
   { name: "Salazar", classId: "salazar" },
 ];
 
-/** Aldric and Malrec join later in the story but aren't in HERO_NAMES/DEFAULT_HEROES yet,
- * so the Inn/Smith never lists them normally. Test mode adds them so their gear/weapon
- * compatibility can be reviewed ahead of that. */
+/** Heroes who join later are added to the test party before recruitment; normal party menus
+ * include them once their story flag or authored joining mission makes them available. */
 const TEST_EXTRA_HEROES: { name: string; classId: ClassId }[] = [
   { name: "Aldric", classId: "aldric" },
   { name: "Malrec", classId: "conjurer" },
