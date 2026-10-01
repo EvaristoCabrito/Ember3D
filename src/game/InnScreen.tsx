@@ -13,12 +13,16 @@ import { questProgress, questStatus, questsFor } from "./quests";
 
 const BAG_ICON = pouchIcon(null);
 export const HEALER_CAST_PRICE = 5;
+export const HEALER_AILMENT_PRICE = 7;
+export const NIGHT_REST_PRICE = 8;
 
 interface HealerTarget {
   name: string;
   hp: number;
   maxHp: number;
   sprite: SpriteId;
+  diseased: boolean;
+  poisoned: boolean;
 }
 
 const NPCS = [
@@ -103,11 +107,13 @@ export function InnScreen({
   onAcceptQuest,
   onTurnInQuest,
   onTalkToNpc,
+  onPassNight,
   questOffered,
   startInSmith = false,
   startInHealer = false,
   healerTargets = [],
   onHealerCast,
+  onHealerCureAilments,
 }: {
   /** Inn quests (see quests.ts): accept an offered quest / hand in a finished one for its
    * Gold reward. Each returns whether it actually applied. */
@@ -116,6 +122,8 @@ export function InnScreen({
   /** Called whenever an NPC is opened, so progression can note who has been talked to and
    * which of their quests have been learned of (see progression.ts). */
   onTalkToNpc?: (npcId: string) => void;
+  /** Spends the per-person overnight fee, advances one day, and restores the party. */
+  onPassNight?: (heroes: string[]) => { day: number; healed: number } | false;
   /** Whether a not-yet-accepted quest is on offer right now (its own availability condition).
    * Omitted means every quest is offered. */
   questOffered?: (questId: string) => boolean;
@@ -127,6 +135,8 @@ export function InnScreen({
   healerTargets?: HealerTarget[];
   /** Applies one paid Cura Média cast and returns the HP actually restored. */
   onHealerCast?: (hero: string) => number | false;
+  /** Cures every selected party member's persistent disease/poison and returns count. */
+  onHealerCureAilments?: (heroes: string[]) => number | false;
   bags: Record<string, Bag>;
   onUseRation: (hero: string) => void;
   onUseRationAll?: (heroes: string[]) => number;
@@ -178,6 +188,7 @@ export function InnScreen({
   const [rationsQtyDraft, setRationsQtyDraft] = useState("0");
   const [rationsNote, setRationsNote] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [restNote, setRestNote] = useState<string | null>(null);
   const [invView, setInvView] = useState<"doll" | "pack" | null>(null);
   useEffect(() => {
     if (!note) return;
@@ -189,6 +200,11 @@ export function InnScreen({
     const timer = window.setTimeout(() => setRationsNote(null), 2200);
     return () => window.clearTimeout(timer);
   }, [rationsNote]);
+  useEffect(() => {
+    if (!restNote) return;
+    const timer = window.setTimeout(() => setRestNote(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [restNote]);
   const bag = bags[hero] ?? { mid: 0, weak: 0, potent: 0, disease: 0, manaSmall: 0, manaMid: 0, manaLarge: 0, lockpick: 0 };
   // Same roster the Adega's own hero-selector row shows — Todos feeds exactly whoever
   // Comer could already feed one at a time, never a hero outside that list.
@@ -318,6 +334,7 @@ export function InnScreen({
         onLeave={onLeave}
         onMute={onMute}
         onCast={onHealerCast ?? (() => false)}
+        onCureAilments={onHealerCureAilments ?? (() => false)}
       />
     );
   }
@@ -385,6 +402,30 @@ export function InnScreen({
             <p className="mt-1 text-sm leading-relaxed text-fg/90">{npc.talk}</p>
           </div>
         </div>
+        {npc.id === "brue" && (
+          <div className="relative ember-panel p-3 flex flex-col gap-2">
+            <p className="text-xs ember-kicker">Descanso · uma noite</p>
+            <p className="text-sm leading-relaxed text-fg/90">Dormir na estalagem avança um dia, recupera 75% do HP perdido e restaura todos os usos de feitiço.</p>
+            <p className="text-sm tabular-nums">Prévia do custo · {partyRoster.length} pessoas × {NIGHT_REST_PRICE} Gold = <GoldAmount amount={partyRoster.length * NIGHT_REST_PRICE} /></p>
+            <p className="text-xs text-muted">Após dormir: {Math.max(0, ember - partyRoster.length * NIGHT_REST_PRICE)} Gold · Dia {save.gameClock} → {save.gameClock + 1}</p>
+            {restNote && <p className="text-sm text-accent">{restNote}</p>}
+            <Button
+              className="ember-btn ember-btn-primary"
+              disabled={!onPassNight || partyRoster.length === 0 || ember < partyRoster.length * NIGHT_REST_PRICE}
+              onClick={() => {
+                const result = onPassNight?.(partyRoster);
+                if (!result) {
+                  setRestNote("Brue recusou. Falta Gold para todo o grupo.");
+                  return;
+                }
+                sfxPlay.ui();
+                setRestNote(`Dia ${result.day}. O grupo recuperou ${result.healed} HP e todos os feitiços foram restaurados.`);
+              }}
+            >
+              Passar a Noite · {partyRoster.length * NIGHT_REST_PRICE} Gold
+            </Button>
+          </div>
+        )}
         {questsFor(npc.id).map((quest) => {
           const status = questStatus(save, quest);
           if (status === "available" && questOffered && !questOffered(quest.id)) return null;
@@ -658,6 +699,7 @@ function HealerServicePanel({
   onLeave,
   onMute,
   onCast,
+  onCureAilments,
 }: {
   ember: number;
   muted: boolean;
@@ -665,6 +707,7 @@ function HealerServicePanel({
   onLeave: () => void;
   onMute: () => void;
   onCast: (hero: string) => number | false;
+  onCureAilments: (heroes: string[]) => number | false;
 }) {
   const [casts, setCasts] = useState<Record<string, number>>({});
   const [healing, setHealing] = useState<{ hero: string; amount: number } | null>(null);
@@ -691,6 +734,8 @@ function HealerServicePanel({
   const planCost = (plan: { hero: string; count: number }[]) => plan.reduce((sum, item) => sum + item.count * HEALER_CAST_PRICE, 0);
   const selectedCost = planCost(selectedPlan);
   const allCost = planCost(allPlan);
+  const ailmentTargets = targets.filter((target) => target.diseased || target.poisoned);
+  const ailmentCost = ailmentTargets.length * HEALER_AILMENT_PRICE;
 
   const treat = async (plan: { hero: string; count: number }[], cost: number) => {
     if (busy || plan.length === 0) return;
@@ -738,6 +783,19 @@ function HealerServicePanel({
           <p className="text-sm leading-relaxed">“Uma Cura Média restaura 25% do HP máximo. Cinco Gold por conjuração; no máximo quatro por pessoa.”</p>
           <p className="text-xs text-muted">Cada conjuração mostra a Cura Média sobre o personagem tratado.</p>
         </div>
+        <div className="ember-panel p-3 flex flex-col gap-2">
+          <p className="text-sm font-medium">Curar doenças e venenos</p>
+          <p className="text-xs text-muted">
+            {ailmentTargets.length > 0
+              ? `Tratamento de ${ailmentTargets.map((target) => target.name).join(", ")} · ${ailmentTargets.length} ${ailmentTargets.length === 1 ? "pessoa" : "pessoas"} × ${HEALER_AILMENT_PRICE} Gold.`
+              : "Ninguém do grupo está doente ou envenenado."}
+          </p>
+          <p className="text-sm tabular-nums">Prévia do custo · <GoldAmount amount={ailmentCost} /> · após o tratamento: {Math.max(0, ember - ailmentCost)} Gold</p>
+          <Button className="ember-btn ember-btn-ghost" variant="quiet" disabled={busy || ailmentTargets.length === 0 || ailmentCost > ember} onClick={() => {
+            const count = onCureAilments(ailmentTargets.map((target) => target.name));
+            setNote(count === false ? "O Curandeiro não conseguiu tratar o grupo." : count === 0 ? "Ninguém precisava de tratamento." : `${count} ${count === 1 ? "pessoa foi tratada" : "pessoas foram tratadas"}.`);
+          }}>Tratar doenças e venenos · {ailmentCost} Gold</Button>
+        </div>
         {targets.map((target) => {
           const allowed = neededCasts(target);
           const chosen = Math.min(allowed, Math.max(0, casts[target.name] ?? 0));
@@ -754,6 +812,7 @@ function HealerServicePanel({
               <div className="min-w-0 flex-1">
                 <p className="font-medium">{target.name}</p>
                 <p className="text-sm tabular-nums">HP {target.hp} / {target.maxHp}{chosen > 0 && ` → ${previewHp} / ${target.maxHp}`}</p>
+                {(target.diseased || target.poisoned) && <p className="text-xs text-danger">{[target.diseased ? "Doente" : "", target.poisoned ? "Envenenado" : ""].filter(Boolean).join(" · ")}</p>}
                 {target.hp <= 0 && <p className="text-xs text-muted">Caído · não pode receber cura</p>}
                 {isHealing && <p className="text-xs text-amber-200 animate-pulse">Cura Média · +{healing.amount} HP</p>}
               </div>

@@ -1240,6 +1240,8 @@ export interface SaveData {
   /** Overworld illnesses persist between travel and battles until cured with a disease
    * potion or the Curar Doença spell. Missing heroes are healthy for old saves. */
   heroDiseases: Record<string, boolean>;
+  /** Poison residue that survives between battles until cured. Older saves default to none. */
+  heroPoisons: Record<string, boolean>;
   /** Party-wide ration stock. One ration refills one character's fullness to 100%; inn
    * meals are bought separately. A real backpack item that stacks by RATION_STACK_MAX. */
   rations: number;

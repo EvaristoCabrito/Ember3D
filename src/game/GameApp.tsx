@@ -11,7 +11,7 @@ import { getDevGfx, setDevGfx, subscribeDevGfx, type DevGfxSettings } from "./gf
 import { DevGfxPreview } from "./gfx/three/DevGfxPreview";
 import { VfxDebugPanel } from "./gfx/three/VfxDebugPanel";
 import { Hd2dTestScreen } from "./gfx/three/Hd2dTestScene";
-import { HEALER_CAST_PRICE, InnScreen } from "./InnScreen";
+import { HEALER_AILMENT_PRICE, HEALER_CAST_PRICE, NIGHT_REST_PRICE, InnScreen } from "./InnScreen";
 import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
 import { LIGHT_DEFS } from "./lighting";
@@ -249,10 +249,12 @@ function useHeroPotion(save: SaveData, hero: string, kind: PotionId): SaveData {
     return { ...save, bags: { ...save.bags, [hero]: { ...bag, [kind]: bag[kind] - 1 } }, spellUses: { ...save.spellUses, [hero]: spent } };
   }
   if (def.effect === "disease") {
-    if (!save.heroDiseases[hero]) return save;
+    if (!save.heroDiseases[hero] && !save.heroPoisons[hero]) return save;
     const heroDiseases = { ...save.heroDiseases };
     delete heroDiseases[hero];
-    return { ...save, bags: { ...save.bags, [hero]: { ...bag, [kind]: bag[kind] - 1 } }, heroDiseases };
+    const heroPoisons = { ...save.heroPoisons };
+    delete heroPoisons[hero];
+    return { ...save, bags: { ...save.bags, [hero]: { ...bag, [kind]: bag[kind] - 1 } }, heroDiseases, heroPoisons };
   }
   const maxHp = heroMaxHp(save, hero);
   const current = save.unitHp[hero] ?? maxHp;
@@ -747,7 +749,7 @@ function mapStatusUnit(save: SaveData, hero: string): UnitPublic {
     initiative: cls.init ?? 0, initiativeRoll: cls.init ?? 0, mov: Math.max(1, Math.round((stats.mov + gearBonus.mov) * diseaseKeep)), movLeft: Math.max(1, Math.round((stats.mov + gearBonus.mov) * diseaseKeep)), minRange: cls.minRange, maxRange: cls.maxRange,
     moved: false, acted: false, x: save.overworldPos.col, y: save.overworldPos.row, level, xp: save.xp[hero] ?? 0,
     bag: save.bags[hero] ?? { mid: 0, weak: 0, potent: 0, disease: 0, manaSmall: 0, manaMid: 0, manaLarge: 0, lockpick: 0 },
-    spells: emptySpells, weaponId: save.equipped[hero] ?? null, weaponEnh: 0, size: cls.size, diseased: save.heroDiseases[hero] === true, poisoned: false, bleeding: false, shock: null,
+    spells: emptySpells, weaponId: save.equipped[hero] ?? null, weaponEnh: 0, size: cls.size, diseased: save.heroDiseases[hero] === true, poisoned: save.heroPoisons[hero] === true, bleeding: false, shock: null,
     hungry: hungerPenaltyPct > 0, hungerPct: Math.round(hungerPenaltyPct * 100), fullness: save.heroHunger[hero], stunned: false, crippled: false, offHandId: null, summoned: false, asleep: false, restrained: false,
     gear,
   };
@@ -763,6 +765,16 @@ function mergeBattleDiseases(existing: Record<string, boolean>, engine: BattleEn
     else delete heroDiseases[unit.name];
   }
   return heroDiseases;
+}
+
+function mergeBattlePoisons(existing: Record<string, boolean>, engine: BattleEngine): Record<string, boolean> {
+  const heroPoisons = { ...existing };
+  for (const unit of engine.units) {
+    if (unit.side !== "player" || unit.summoned) continue;
+    if (unit.poisoned) heroPoisons[unit.name] = true;
+    else delete heroPoisons[unit.name];
+  }
+  return heroPoisons;
 }
 
 /** Every familiar a conjurer can summon — preloaded as soon as a conjurer is in the party and
@@ -1118,9 +1130,10 @@ export function GameApp() {
       const hungerPenaltyPct = testMode ? 0 : hungerPenaltyFor(save.hungerStreak);
       const heroHunger = testMode ? undefined : save.heroHunger;
       const heroDiseases = testMode ? undefined : save.heroDiseases;
+      const heroPoisons = testMode ? undefined : save.heroPoisons;
       const crossingDefeatedSpawns = !testMode && isCrossingDungeon(m) ? save.crossingDefeatedSpawns[m.id] ?? [] : [];
       const questPickups = testMode ? undefined : activePickupsFor(save, m.id);
-      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, crossingDefeatedSpawns, questPickups }, Date.now() % 100000, testMode);
+      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, heroPoisons, crossingDefeatedSpawns, questPickups }, Date.now() % 100000, testMode);
       if (resume && resume.missionId === m.id) battle.applySnapshot(resume);
       if (typeof window !== "undefined" && window.innerWidth < 720) battle.zoom = 0;
       // Sprites load per battle (see ensureSpriteArt): the board opens once this battle's own
@@ -1253,6 +1266,7 @@ export function GameApp() {
       const weapons = { ...save.weapons };
       const looseEquipment = { ...save.looseEquipment };
       const heroDiseases = mergeBattleDiseases(save.heroDiseases, engine);
+      const heroPoisons = mergeBattlePoisons(save.heroPoisons, engine);
       const found: string[] = [];
       // Weapon drops are already resolved and logged live, in-battle, by the engine
       // (kill drops in markDead, chest loot in useLockpick — both ownership- and
@@ -1298,6 +1312,7 @@ export function GameApp() {
         bags,
         heroHunger: { ...save.heroHunger, ...engine.battlePlayerHunger() },
         heroDiseases,
+        heroPoisons,
         levels,
         xp,
         weapons,
@@ -1524,6 +1539,7 @@ export function GameApp() {
       overworldMoveBudgetUsed: fresh.overworldMoveBudgetUsed,
       heroHunger: fresh.heroHunger,
       heroDiseases: fresh.heroDiseases,
+      heroPoisons: fresh.heroPoisons,
       rations: fresh.rations,
       hungerStreak: fresh.hungerStreak,
       exploredHexes: fresh.exploredHexes,
@@ -1961,6 +1977,32 @@ export function GameApp() {
             writeMapSave({ ...next, ember: testMode ? rec.ember : next.ember });
             return fed;
           }}
+          onPassNight={(heroes: string[]) => {
+            const rec = readMapSave();
+            const cost = heroes.length * NIGHT_REST_PRICE;
+            const balance = testMode ? testEmber : rec.ember ?? 0;
+            if (heroes.length === 0 || balance < cost) return false;
+            const unitHp = { ...rec.unitHp };
+            let healed = 0;
+            for (const hero of heroes) {
+              const target = mapStatusUnit(rec, hero);
+              const missing = Math.max(0, target.maxHp - target.hp);
+              if (missing <= 0) continue;
+              const amount = Math.min(missing, Math.ceil(missing * 0.75));
+              unitHp[hero] = target.hp + amount;
+              healed += amount;
+            }
+            if (testMode) setTestEmber(balance - cost);
+            const next = {
+              ...rec,
+              ember: testMode ? rec.ember : balance - cost,
+              gameClock: rec.gameClock + 1,
+              unitHp,
+              spellUses: {},
+            };
+            writeMapSave(next);
+            return { day: next.gameClock, healed };
+          }}
           bags={overworldSave.bags}
           ember={testMode ? testEmber : (save.ember ?? 0)}
           muted={muted}
@@ -1974,7 +2016,7 @@ export function GameApp() {
             ...TEST_EXTRA_HEROES.filter((h) => testMode || heroRecruited(h.name, save.completed, save.flags)),
           ].filter((h) => testMode || heroRecruited(h.name, save.completed, save.flags)).map((h) => {
             const unit = mapStatusUnit(overworldSave, h.name);
-            return { name: h.name, hp: unit.hp, maxHp: unit.maxHp, sprite: unit.sprite };
+            return { name: h.name, hp: unit.hp, maxHp: unit.maxHp, sprite: unit.sprite, diseased: unit.diseased, poisoned: unit.poisoned };
           })}
           onHealerCast={(hero: string) => {
             const rec = readMapSave();
@@ -1993,6 +2035,29 @@ export function GameApp() {
             });
             sfxPlay.heal();
             return amount;
+          }}
+          onHealerCureAilments={(heroes: string[]) => {
+            const rec = readMapSave();
+            const affected = heroes.filter((hero) => rec.heroDiseases[hero] || rec.heroPoisons[hero]);
+            if (affected.length === 0) return 0;
+            const cost = affected.length * HEALER_AILMENT_PRICE;
+            const balance = testMode ? testEmber : rec.ember ?? 0;
+            if (balance < cost) return false;
+            const heroDiseases = { ...rec.heroDiseases };
+            const heroPoisons = { ...rec.heroPoisons };
+            for (const hero of affected) {
+              delete heroDiseases[hero];
+              delete heroPoisons[hero];
+            }
+            if (testMode) setTestEmber(balance - cost);
+            writeMapSave({
+              ...rec,
+              ember: testMode ? rec.ember : balance - cost,
+              heroDiseases,
+              heroPoisons,
+            });
+            sfxPlay.heal();
+            return affected.length;
           }}
           save={testMode ? { ...overworldSave, ember: testEmber } : overworldSave}
           test={testMode}
@@ -2352,6 +2417,7 @@ export function GameApp() {
                   unitHp: { ...rec.unitHp, ...engine.battlePlayerHp() },
                   heroHunger: { ...rec.heroHunger, ...engine.battlePlayerHunger() },
                   heroDiseases: mergeBattleDiseases(rec.heroDiseases, engine),
+                  heroPoisons: mergeBattlePoisons(rec.heroPoisons, engine),
                   pendingMission: null,
                   battle: null,
                 });

@@ -723,6 +723,8 @@ interface Roster {
   heroHunger?: Record<string, number>;
   /** Persistent illnesses contracted while travelling. */
   heroDiseases?: Record<string, boolean>;
+  /** Poison that remained after the last battle. */
+  heroPoisons?: Record<string, boolean>;
 }
 
 /** True once a hero is starving badly enough to be benched outright rather than merely
@@ -823,6 +825,7 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
   const hungerPenaltyPct = side === "player" && heroIsStarving ? Math.min(0.9, Math.max(0, roster?.hungerPenaltyPct ?? 0)) : 0;
   const hungerKeep = 1 - hungerPenaltyPct;
   const diseased = side === "player" && roster?.heroDiseases?.[spawn.name] === true;
+  const poisoned = side === "player" && roster?.heroPoisons?.[spawn.name] === true;
   const diseaseKeep = diseased ? 1 - DISEASE.statPenalty : 1;
   const weapon = side === "player" ? (roster?.weapons?.[spawn.name] ?? { id: starterWeaponFor(classId), enh: 0 }) : null;
   // Range is a weapon property (D&D-weapon-style), not a class stat — falls back to the
@@ -937,7 +940,7 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
           mov: st.mov + gearBonus.mov,
         }
       : null,
-    poisoned: false,
+    poisoned,
     bleeding: false,
     bleedMovedThisTurn: false,
     stunned: false,
@@ -2135,6 +2138,7 @@ export class BattleEngine {
         u.sprite !== "morvenian-wolf" &&
         u.sprite !== "mordavian-wolf" &&
         u.sprite !== "mordavian-wolf-final" &&
+        u.sprite !== "wardog2" &&
         u.sprite !== "neera")
     )
       return;
