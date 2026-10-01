@@ -11,7 +11,7 @@ import { getDevGfx, setDevGfx, subscribeDevGfx, type DevGfxSettings } from "./gf
 import { DevGfxPreview } from "./gfx/three/DevGfxPreview";
 import { VfxDebugPanel } from "./gfx/three/VfxDebugPanel";
 import { Hd2dTestScreen } from "./gfx/three/Hd2dTestScene";
-import { InnScreen } from "./InnScreen";
+import { HEALER_CAST_PRICE, InnScreen } from "./InnScreen";
 import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
 import { LIGHT_DEFS } from "./lighting";
@@ -1969,6 +1969,31 @@ export function GameApp() {
           heroClass={Object.fromEntries(
             [...DEFAULT_HEROES, ...TEST_EXTRA_HEROES.filter((h) => testMode || heroRecruited(h.name, save.completed, save.flags))].map((h) => [h.name, overworldSave.promotions[h.name] ?? h.classId]),
           )}
+          healerTargets={[
+            ...DEFAULT_HEROES,
+            ...TEST_EXTRA_HEROES.filter((h) => testMode || heroRecruited(h.name, save.completed, save.flags)),
+          ].filter((h) => testMode || heroRecruited(h.name, save.completed, save.flags)).map((h) => {
+            const unit = mapStatusUnit(overworldSave, h.name);
+            return { name: h.name, hp: unit.hp, maxHp: unit.maxHp, sprite: unit.sprite };
+          })}
+          onHealerCast={(hero: string) => {
+            const rec = readMapSave();
+            const balance = testMode ? testEmber : rec.ember ?? 0;
+            if (balance < HEALER_CAST_PRICE) return false;
+            const target = mapStatusUnit(rec, hero);
+            const missing = target.maxHp - target.hp;
+            if (missing <= 0 || target.hp <= 0) return false;
+            const amount = Math.min(Math.max(1, Math.ceil(target.maxHp * 0.25)), missing);
+            if (amount <= 0) return false;
+            if (testMode) setTestEmber(balance - HEALER_CAST_PRICE);
+            writeMapSave({
+              ...rec,
+              ember: testMode ? rec.ember : balance - HEALER_CAST_PRICE,
+              unitHp: { ...rec.unitHp, [hero]: target.hp + amount },
+            });
+            sfxPlay.heal();
+            return amount;
+          }}
           save={testMode ? { ...overworldSave, ember: testEmber } : overworldSave}
           test={testMode}
           onMute={() => {
@@ -1976,6 +2001,7 @@ export function GameApp() {
             setMutedUi((v) => !v);
           }}
           startInSmith={innEntry === "smith"}
+          startInHealer={innEntry === "healer"}
           onLeave={
             innEntry
               ? () => {

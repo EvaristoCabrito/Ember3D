@@ -3,7 +3,8 @@ import { ChevronLeft, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ALL_HERO_NAMES, BAG_MAX, CLASSES, EQUIPMENT, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_ICON, RATIONS_PRICE, WEAPON_MAX_ENH, WEAPONS, equipmentIcon, equipmentTooltip, equipmentTypeSlotName, heroRecruited, isPlayableClassForDisplay, isPouch, lockpickTooltip, partyBagHasRoom, partyPouchId, potionTooltip, pouchIcon, weaponDiceLabel, weaponEnhCost, weaponIcon, weaponPower, weaponRangeLabel, weaponSellValue, weaponTooltip, potionLabel } from "./data";
 import { ItemTip, PartyInventoryOverlay } from "./InventoryScreens";
-import type { Bag, ClassId, EquipSlot, PotionId, SaveData } from "./types";
+import { portraitFor } from "./assets";
+import type { Bag, ClassId, EquipSlot, PotionId, SaveData, SpriteId } from "./types";
 import { GoldAmount } from "./GoldAmount";
 import { playTheme, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { fullness, INN_MEAL_PRICE } from "./hunger";
@@ -11,6 +12,14 @@ import { HungerBar } from "./HungerBar";
 import { questProgress, questStatus, questsFor } from "./quests";
 
 const BAG_ICON = pouchIcon(null);
+export const HEALER_CAST_PRICE = 5;
+
+interface HealerTarget {
+  name: string;
+  hp: number;
+  maxHp: number;
+  sprite: SpriteId;
+}
 
 const NPCS = [
   {
@@ -96,6 +105,9 @@ export function InnScreen({
   onTalkToNpc,
   questOffered,
   startInSmith = false,
+  startInHealer = false,
+  healerTargets = [],
+  onHealerCast,
 }: {
   /** Inn quests (see quests.ts): accept an offered quest / hand in a finished one for its
    * Gold reward. Each returns whether it actually applied. */
@@ -110,6 +122,11 @@ export function InnScreen({
   /** Opened by talking to Vargan in the walkable Inn: goes straight to the smith (intro
    * video first, if not seen yet), and leaving the smith leaves this screen entirely. */
   startInSmith?: boolean;
+  /** Opened by talking to Curandeiro Ancião in the walkable Inn. */
+  startInHealer?: boolean;
+  healerTargets?: HealerTarget[];
+  /** Applies one paid Cura Média cast and returns the HP actually restored. */
+  onHealerCast?: (hero: string) => number | false;
   bags: Record<string, Bag>;
   onUseRation: (hero: string) => void;
   onUseRationAll?: (heroes: string[]) => number;
@@ -146,7 +163,7 @@ export function InnScreen({
   onSellWeapon: (weaponId: string) => number | false;
   onSeenSmithIntro: () => void;
 }) {
-  const [view, setView] = useState<"npc" | "smith">(startInSmith && save.seenSmithIntro ? "smith" : "npc");
+  const [view, setView] = useState<"npc" | "smith" | "healer">(startInHealer ? "healer" : startInSmith && save.seenSmithIntro ? "smith" : "npc");
   const [smithIntro, setSmithIntro] = useState(startInSmith && !save.seenSmithIntro);
   const [npc, setNpc] = useState<(typeof NPCS)[number]>(NPCS[0]);
   const [hero, setHero] = useState<string>("Kael");
@@ -288,6 +305,19 @@ export function InnScreen({
         onOpenStatus={onOpenStatus}
         onUpgradeWeapon={onUpgradeWeapon}
         onSellWeapon={onSellWeapon}
+      />
+    );
+  }
+
+  if (view === "healer") {
+    return (
+      <HealerServicePanel
+        ember={ember}
+        muted={muted}
+        targets={healerTargets}
+        onLeave={onLeave}
+        onMute={onMute}
+        onCast={onHealerCast ?? (() => false)}
       />
     );
   }
@@ -617,6 +647,139 @@ export function InnScreen({
           initialView={invView === "pack" ? "backpack" : "equipment"}
         />
       )}
+    </section>
+  );
+}
+
+function HealerServicePanel({
+  ember,
+  muted,
+  targets,
+  onLeave,
+  onMute,
+  onCast,
+}: {
+  ember: number;
+  muted: boolean;
+  targets: HealerTarget[];
+  onLeave: () => void;
+  onMute: () => void;
+  onCast: (hero: string) => number | false;
+}) {
+  const [casts, setCasts] = useState<Record<string, number>>({});
+  const [healing, setHealing] = useState<{ hero: string; amount: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const castRef = useRef(onCast);
+  useEffect(() => {
+    castRef.current = onCast;
+  }, [onCast]);
+
+  const neededCasts = (target: HealerTarget) => {
+    if (target.hp <= 0 || target.hp >= target.maxHp) return 0;
+    const perCast = Math.max(1, Math.ceil(target.maxHp * 0.25));
+    return Math.min(4, Math.ceil((target.maxHp - target.hp) / perCast));
+  };
+  const selectedPlan = targets.flatMap((target) => {
+    const count = Math.min(neededCasts(target), Math.max(0, casts[target.name] ?? 0));
+    return count > 0 ? [{ hero: target.name, count }] : [];
+  });
+  const allPlan = targets.flatMap((target) => {
+    const count = neededCasts(target);
+    return count > 0 ? [{ hero: target.name, count }] : [];
+  });
+  const planCost = (plan: { hero: string; count: number }[]) => plan.reduce((sum, item) => sum + item.count * HEALER_CAST_PRICE, 0);
+  const selectedCost = planCost(selectedPlan);
+  const allCost = planCost(allPlan);
+
+  const treat = async (plan: { hero: string; count: number }[], cost: number) => {
+    if (busy || plan.length === 0) return;
+    if (cost > ember) {
+      setNote(`São necessários ${cost} Gold; você tem ${ember}.`);
+      return;
+    }
+    setNote(null);
+    setBusy(true);
+    for (const item of plan) {
+      for (let index = 0; index < item.count; index++) {
+        const amount = castRef.current(item.hero);
+        if (amount === false || amount <= 0) {
+          setNote("O Curandeiro não conseguiu completar a cura.");
+          setBusy(false);
+          setHealing(null);
+          return;
+        }
+        setHealing({ hero: item.hero, amount });
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 650));
+      }
+    }
+    setHealing(null);
+    setCasts({});
+    setBusy(false);
+  };
+
+  return (
+    <section className="shop-surface relative h-dvh min-h-0 flex flex-col overflow-hidden bg-bg">
+      <img src="/game/assets/brief-estalagem.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-t from-bg/85 via-bg/45 to-bg/25" />
+      <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
+        <button type="button" onClick={onLeave} disabled={busy} className="h-10 px-3 rounded-md ember-chip text-xs uppercase tracking-[0.14em] disabled:opacity-50">Voltar</button>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs ember-kicker">Curandeiro Ancião</p>
+          <h1 className="font-display text-2xl leading-none ember-title">Cura Média</h1>
+        </div>
+        <p className="text-sm ember-chip rounded-md px-2 py-1"><GoldAmount amount={ember} /></p>
+        <button type="button" onClick={onMute} className="size-10 grid place-items-center rounded-md ember-chip" aria-label="Som">
+          {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+        </button>
+      </header>
+      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-3 max-w-xl mx-auto w-full">
+        <div className="ember-panel p-3 flex flex-col gap-1">
+          <p className="text-sm leading-relaxed">“Uma Cura Média restaura 25% do HP máximo. Cinco Gold por conjuração; no máximo quatro por pessoa.”</p>
+          <p className="text-xs text-muted">Cada conjuração mostra a Cura Média sobre o personagem tratado.</p>
+        </div>
+        {targets.map((target) => {
+          const allowed = neededCasts(target);
+          const chosen = Math.min(allowed, Math.max(0, casts[target.name] ?? 0));
+          const perCast = Math.max(1, Math.ceil(target.maxHp * 0.25));
+          const previewHp = Math.min(target.maxHp, target.hp + perCast * chosen);
+          const portrait = portraitFor(target.sprite);
+          const isHealing = healing?.hero === target.name;
+          return (
+            <div key={target.name} className="relative ember-panel p-3 flex items-center gap-3">
+              <div className={`relative size-16 shrink-0 rounded-full ${isHealing ? "ring-2 ring-amber-200 shadow-[0_0_24px_rgba(255,211,105,0.95)]" : ""}`}>
+                <img src={portrait.src} alt="" style={{ objectPosition: portrait.position }} className={`h-full w-full rounded-full ${portrait.framed ? "object-cover" : "object-contain"}`} />
+                {isHealing && <div className="absolute -inset-2 rounded-full bg-[radial-gradient(circle,rgba(255,238,153,0.48),rgba(255,199,61,0.12)_55%,transparent_72%)] animate-pulse pointer-events-none" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{target.name}</p>
+                <p className="text-sm tabular-nums">HP {target.hp} / {target.maxHp}{chosen > 0 && ` → ${previewHp} / ${target.maxHp}`}</p>
+                {target.hp <= 0 && <p className="text-xs text-muted">Caído · não pode receber cura</p>}
+                {isHealing && <p className="text-xs text-amber-200 animate-pulse">Cura Média · +{healing.amount} HP</p>}
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-[0.65rem] uppercase tracking-wider text-muted">Conjurações</p>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="quiet" className="ember-btn ember-btn-sm" disabled={busy || chosen <= 0} onClick={() => setCasts((prev) => ({ ...prev, [target.name]: chosen - 1 }))}>−</Button>
+                  <span className="min-w-5 text-center tabular-nums">{chosen}/4</span>
+                  <Button size="sm" variant="quiet" className="ember-btn ember-btn-sm" disabled={busy || chosen >= allowed || chosen >= 4} onClick={() => setCasts((prev) => ({ ...prev, [target.name]: chosen + 1 }))}>+</Button>
+                </div>
+                <span className="text-xs text-muted tabular-nums">{chosen * HEALER_CAST_PRICE} Gold</span>
+              </div>
+            </div>
+          );
+        })}
+        <div className="ember-panel p-3 flex flex-col gap-2">
+          <p className="text-sm">Prévia da seleção · {selectedPlan.reduce((sum, item) => sum + item.count, 0)} conjurações · <GoldAmount amount={selectedCost} /></p>
+          <p className="text-xs text-muted">Após a seleção: {Math.max(0, ember - selectedCost)} Gold</p>
+          {note && <p className="text-sm text-amber-200">{note}</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button className="flex-1 ember-btn ember-btn-primary" disabled={busy || selectedPlan.length === 0 || selectedCost > ember} onClick={() => void treat(selectedPlan, selectedCost)}>Curar seleção · {selectedCost} Gold</Button>
+            <Button className="flex-1 ember-btn ember-btn-ghost" variant="quiet" disabled={busy || allPlan.length === 0 || allCost > ember} onClick={() => void treat(allPlan, allCost)}>Curar todos · {allCost} Gold</Button>
+          </div>
+          <p className="text-xs text-muted">Curar todos: {allPlan.reduce((sum, item) => sum + item.count, 0)} conjurações necessárias · {allCost} Gold</p>
+        </div>
+      </div>
     </section>
   );
 }

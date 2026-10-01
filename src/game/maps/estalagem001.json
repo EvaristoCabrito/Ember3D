@@ -1538,6 +1538,58 @@
               "speaker": "Curandeiro Ancião",
               "portrait": "oldHealer",
               "text": "Já costurei mais gente esta semana do que num inverno inteiro. Se sangrar, não demore.",
+              "replies": [
+                {
+                  "text": "Preciso de Cura Média.",
+                  "next": "offer"
+                },
+                {
+                  "text": "Quanto custa o seu tratamento?",
+                  "next": "price"
+                },
+                {
+                  "text": "Só estava de passagem.",
+                  "next": "farewell"
+                }
+              ]
+            },
+            {
+              "id": "offer",
+              "speaker": "Curandeiro Ancião",
+              "portrait": "oldHealer",
+              "text": "“Uma Cura Média restaura um quarto do HP máximo. São cinco Gold por conjuração; quatro conjurações restauram até o HP total. Posso tratar cada um separadamente ou cuidar de todos.”",
+              "replies": [
+                {
+                  "text": "Abrir o menu de cura.",
+                  "action": "healer"
+                },
+                {
+                  "text": "Vou pensar um pouco.",
+                  "next": "farewell"
+                }
+              ]
+            },
+            {
+              "id": "price",
+              "speaker": "Curandeiro Ancião",
+              "portrait": "oldHealer",
+              "text": "“Cinco Gold por conjuração. O menu mostra o HP de cada pessoa e o custo antes de eu começar.”",
+              "replies": [
+                {
+                  "text": "Então vamos tratar o grupo.",
+                  "next": "offer"
+                },
+                {
+                  "text": "Obrigado. Talvez depois.",
+                  "next": "farewell"
+                }
+              ]
+            },
+            {
+              "id": "farewell",
+              "speaker": "Curandeiro Ancião",
+              "portrait": "oldHealer",
+              "text": "Ele volta a organizar as faixas e os frascos sobre a mesa.",
               "next": null
             }
           ]
