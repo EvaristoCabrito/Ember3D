@@ -383,6 +383,10 @@ export const DEADWOODS_DECOR_IDS = new Set([
 // Multi-hex terrain props: rendered as one image over their whole footprint instead of
 // clipped per hex (see DecorationDef). Cropped from LargeHexes1-3.jpg.
 export const DECORATIONS: Record<string, DecorationDef> = {
+  "wall-3d-stone": { id: "wall-3d-stone", name: "Parede de pedra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall" },
+  "wall-3d-low": { id: "wall-3d-low", name: "Mureta de pedra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", heightScale: 0.5 },
+  "door-3d-frame": { id: "door-3d-frame", name: "Passagem aberta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway" },
+  "door-3d-closed": { id: "door-3d-closed", name: "Porta fechada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "door" },
   "mountain-ridge": { id: "mountain-ridge", name: "Cordilheira", footprint: DECO_PAIR, tile: "hill" },
   "spike-rocks": { id: "spike-rocks", name: "Agulhas de Pedra", footprint: DECO_PAIR, tile: "column" },
   // No tile stamp — it used to stamp "highwood" underneath itself, which is exactly
@@ -598,6 +602,8 @@ const DECORATION_ALPHA_CLEAN = new Set([
 ]);
 
 function decorationImagePath(id: string, ext: "png" | "webp"): string {
+  // Existing supplied wall artwork provides the thumbnail and legacy renderer fallback.
+  if (DECORATIONS[id]?.model3d) id = "city-stone-banner-wall";
   const file = DECORATION_ALPHA_CLEAN.has(id) ? `${id}-alpha-001` : id;
   // Both the replacement originals and their newly added side-4 files need a fresh URL:
   // browsers may have cached the previous low-res image or even the old side-4 404.
@@ -5587,7 +5593,7 @@ export function scatterDecor(m: Mission, excludeIds?: ReadonlySet<string>): Miss
   // The Map Editor lets the author opt specific props out of this pool (per direct
   // instruction) — a piece that's too distinctive to see scattered at random, without
   // pulling it out of DECORATIONS entirely and losing manual placement too.
-  const ids = Object.keys(DECORATIONS).filter((id) => !CHEST_DECOR_IDS.has(id) && !MANUAL_DECORATION_IDS.has(id) && !excludeIds?.has(id));
+  const ids = Object.keys(DECORATIONS).filter((id) => !DECORATIONS[id]?.model3d && !CHEST_DECOR_IDS.has(id) && !MANUAL_DECORATION_IDS.has(id) && !excludeIds?.has(id));
   // Uncapped and generous: scenery is the thing a board should have lots of, and anything
   // unwanted is a click to clear. Bumped from 10 to 14 per campaign-sized board alongside
   // wallCenters' own reduction above — the generator now leans toward decoration variety

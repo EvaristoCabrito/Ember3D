@@ -17,7 +17,7 @@
  * answer, and a flag that is on can only add. Neither can make a barricade walkable
  * or take height off a hill.
  */
-import { BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, CHEST_DECOR_IDS, HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, TERRAIN, WEAPONS } from "./data.ts";
+import { BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, CHEST_DECOR_IDS, DECORATIONS, HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, TERRAIN, WEAPONS } from "./data.ts";
 import type { DecorationPlacement, TerrainDef, TerrainId, Unit } from "./types.ts";
 
 export const HEX_BLOCKED = 1;
@@ -65,7 +65,9 @@ export function buildDecorOverlay(
     // the real floor stays untouched and every existing placement is covered for free.
     const isChest = CHEST_DECOR_IDS.has(p.id);
     const isBarricade = BARRICADE_LIKE_DECOR.has(p.id);
-    const bits = (p.blocksPath || isHouse || isChest || isBarricade ? HEX_BLOCKED : 0) | (p.yieldsHighGround ? HEX_HIGH : 0);
+    const architecture = DECORATIONS[p.id]?.model3d;
+    const solidArchitecture = architecture === "wall" || architecture === "door";
+    const bits = (p.blocksPath || isHouse || isChest || isBarricade || solidArchitecture ? HEX_BLOCKED : 0) | (p.yieldsHighGround ? HEX_HIGH : 0);
     if (!bits) continue;
     for (const { dx, dy } of cellsOf(p)) {
       const x = p.x + dx;

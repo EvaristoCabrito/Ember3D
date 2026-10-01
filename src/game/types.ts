@@ -319,6 +319,8 @@ export type WinCondition = "rout" | "boss" | "escape";
  * grid so it doesn't need to fill each hex's exact shape. Every hex in its footprint is
  * impassable and blocks line of sight, independent of whatever terrain tile is under it. */
 export interface DecorationDef {
+  /** Architecture meshes live in the editor's separate 3D Walls palette. */
+  model3d?: "wall" | "doorway" | "door";
   id: string;
   name: string;
   /** Hex offsets from the anchor cell (dx/dy in board coordinates, same convention as
@@ -382,7 +384,8 @@ export interface DecorationPlacement {
   y: number;
   /** How far the prop is turned, in sixths of a circle (0-5). A hexagon maps onto itself
    * every 60 degrees, so those are the only turns whose footprint still lands on real
-   * hexes. Optional: a map saved before props could turn has no such key, read as 0. */
+   * hexes. Architecture instead uses quarter-turns (0-3) for rectangular walls and doors.
+   * Optional: a map saved before props could turn has no such key, read as 0. */
   rot?: number;
   /**
    * Per-placement rule overrides, set by the two switches in the map editor.

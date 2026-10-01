@@ -4038,7 +4038,7 @@ function MapEditorScreen({
   const [pixelFxBrush, setPixelFxBrush] = useState<PixelElement>("fire");
   const [pixelFxPresetId, setPixelFxPresetId] = useState("procedural_pixel_fire");
   const [pixelFxSettings, setPixelFxSettings] = useState<PixelElementSettings>(() => pixelDefaults("fire"));
-  const [mode, setMode] = useState<"paint" | "player" | "enemy" | "npc" | "summon" | "decoration" | "elementalFx">("paint");
+  const [mode, setMode] = useState<"paint" | "player" | "enemy" | "npc" | "summon" | "decoration" | "architecture" | "elementalFx">("paint");
   // Which summon class the "Invocação" brush drops. Summons live in playerSpawns alongside
   // the heroes — the class itself says which of the two a spawn is (isSummonClass), so
   // there is no third list to keep in sync and no saved map to migrate.
@@ -4595,7 +4595,7 @@ function MapEditorScreen({
       }
       const def = DECORATIONS[hit.id];
       if (!def) return d;
-      const turned = { ...hit, rot: (((hit.rot ?? 0) + 1) % 6) };
+      const turned = { ...hit, rot: (((hit.rot ?? 0) + 1) % (def.model3d ? 4 : 6)) };
       const before = placedFootprint(hit);
       const after = placedFootprint(turned);
       // A Waypoint is a flat ground marking, not a physical object — turning it can't "bump
@@ -4624,7 +4624,8 @@ function MapEditorScreen({
           if (i >= 0) tiles[i] = def.tile;
         }
       }
-      setNote(`${def.name} em ${hit.x},${hit.y}: girada para ${turned.rot * 60}°${turned.rot === 0 ? " (de volta ao original)" : ""}.`);
+      setNote(`${def.name} em ${hit.x},${hit.y}: girada para ${turned.rot * (def.model3d ? 90 : 60)}°${turned.rot === 0 ? " (de volta ao original)" : ""}.`);
+      if (def.model3d) setSelectedPlacedDecoration({ id: turned.id, x: turned.x, y: turned.y, rot: turned.rot });
       return { ...d, tiles, tileVariants, tileRots, decorations: d.decorations.map((p) => (p === hit ? turned : p)) };
     });
   };
@@ -4642,6 +4643,8 @@ function MapEditorScreen({
   const selectedPlacementIsSolidHouse = !!selectedPlacement && (
     HOUSE_DECOR_IDS.has(selectedPlacement.id) || BIG_HOUSE_DECOR_IDS.has(selectedPlacement.id) || SOLID_HOUSE_DECOR_IDS.has(selectedPlacement.id)
   );
+  const selectedArchitecture = selectedPlacement ? DECORATIONS[selectedPlacement.id]?.model3d : undefined;
+  const selectedPlacementIsSolidArchitecture = selectedArchitecture === "wall" || selectedArchitecture === "door";
 
   /**
    * Flip one of a placement's rule switches. Off is stored as absent rather than
@@ -4835,7 +4838,7 @@ function MapEditorScreen({
         setNote(`${TERRAIN[draft.tiles[i]!].name} em ${x},${y}: girado para ${now}°${now === 0 ? " (de volta ao original)" : ""}.`);
       } else setTile(i, brush);
     }
-    else if (mode === "decoration") {
+    else if (mode === "decoration" || mode === "architecture") {
       if (turningDeco) {
         turnDecoration(x, y);
         return;
@@ -4858,7 +4861,7 @@ function MapEditorScreen({
       turnTile(i);
       const now = (((draft.tileRots?.[i] ?? 0) + 1) % 6) * 60;
       setNote(`${TERRAIN[draft.tiles[i]!].name} em ${x},${y}: girado para ${now}°${now === 0 ? " (de volta ao original)" : ""}.`);
-    } else if (mode === "decoration") {
+    } else if (mode === "decoration" || mode === "architecture") {
       turnDecoration(x, y);
     } else onCellClick(x, y);
   };
@@ -5231,7 +5234,8 @@ function MapEditorScreen({
     }
     return [...heroes.sort((a, b) => byName(a.label, b.label)), ...rest.sort((a, b) => byName(a.label, b.label))];
   })();
-  const decorOptions = Object.values(DECORATIONS).sort((a, b) => byName(a.name, b.name));
+  const decorOptions = Object.values(DECORATIONS).filter(dec => !dec.model3d).sort((a, b) => byName(a.name, b.name));
+  const architectureOptions = Object.values(DECORATIONS).filter(dec => !!dec.model3d);
   const decorationSectionFor = (id: string) => {
     if (DECORATIONS[id]?.exitKind) return "Waypoints";
     // Everything that emits light (see LIGHT_DEFS), burning houses included, in one place.
@@ -5264,7 +5268,7 @@ function MapEditorScreen({
   // "Todas" stays pinned first (it's the "show everything" reset, not a real category);
   // every actual category below it is kept in alphabetical order.
   const decorationSections = ["Todas", "Barricada", "City", "Houses", "Lights", "Madeira Morta", "Natureza", "Objetos", "Pedras e relevo", "Pontes", "Ruínas e construções", "Torture", "Waypoints", "Wilds"];
-  const visibleDecorOptions = decoSection === "Todas" ? decorOptions : decorOptions.filter((dec) => decorationSectionFor(dec.id) === decoSection);
+  const visibleDecorOptions = mode === "architecture" ? architectureOptions : decoSection === "Todas" ? decorOptions : decorOptions.filter((dec) => decorationSectionFor(dec.id) === decoSection);
 
   // Clicking a placed prop is also a lookup action: open its palette section and arm the
   // exact matching brush, so the highlighted menu entry always tells the author its name.
@@ -5272,6 +5276,8 @@ function MapEditorScreen({
     const id = selectedPlacedDecoration?.id;
     if (!id || !DECORATIONS[id]) return;
     setDecoBrush(id);
+    if (DECORATIONS[id]?.model3d) setMode("architecture");
+    else if (mode === "architecture") setMode("decoration");
     setDecoSection(decorationSectionFor(id));
   }, [selectedPlacedDecoration]);
 
@@ -5855,14 +5861,18 @@ function MapEditorScreen({
             ))}
           </div>
           <div className="flex rounded-md border border-border overflow-hidden text-xs">
-            {(["paint", "decoration", "player", "enemy", "npc", "summon"] as const).map((m) => (
+            {(["paint", "decoration", "architecture", "player", "enemy", "npc", "summon"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
-                onClick={() => setMode(m)}
+                onClick={() => {
+                  setMode(m);
+                  if (m === "architecture" && !DECORATIONS[decoBrush]?.model3d) setDecoBrush("wall-3d-stone");
+                  if (m === "decoration" && DECORATIONS[decoBrush]?.model3d) setDecoBrush(decorOptions[0]!.id);
+                }}
                 className={`px-2.5 py-1.5 ${mode === m ? "bg-accent text-bg" : "bg-bg text-muted"}`}
               >
-                {m === "paint" ? "Terreno" : m === "decoration" ? "Decoração" : m === "player" ? "Herói" : m === "enemy" ? "Inimigo" : m === "npc" ? "NPC" : "Invocação"}
+                {m === "paint" ? "Terreno" : m === "decoration" ? "Decoração" : m === "architecture" ? "3D Walls" : m === "player" ? "Herói" : m === "enemy" ? "Inimigo" : m === "npc" ? "NPC" : "Invocação"}
               </button>
             ))}
           </div>
@@ -6008,12 +6018,13 @@ function MapEditorScreen({
             )}
           </div>
         )}
-        {mode === "decoration" && (
+        {(mode === "decoration" || mode === "architecture") && (
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xs text-muted flex-1 min-w-[12rem]">
-                Clique na casa âncora pra colocar; clique em qualquer casa que a decoração cubra pra remover. Toda casa
-                coberta fica intransponível e bloqueia visão/tiro, não importa o terreno por baixo.
+                {mode === "architecture"
+                  ? "Coloque paredes em linhas e colunas para formar salas retangulares contínuas. Paredes e portas fechadas bloqueiam movimento e visão; passagens abertas permitem atravessar. Selecione uma peça e use Delete para remover."
+                  : "Clique na casa âncora pra colocar; clique em qualquer casa que a decoração cubra pra remover. Toda casa coberta fica intransponível e bloqueia visão/tiro, não importa o terreno por baixo."}
               </p>
               <Button
                 size="sm"
@@ -6022,19 +6033,19 @@ function MapEditorScreen({
                   setTurningDeco((v) => !v);
                   setNote(
                     turningDeco
-                      ? "Pincel de volta: clicar coloca e remove decoração."
-                      : "Girar objeto armado: cada clique numa decoração vira ela 60°, com toda a área junto. Seis cliques voltam ao original.",
+                      ? mode === "architecture" ? "Pincel 3D ativo: clique para colocar ou selecionar uma peça." : "Pincel de volta: clicar coloca e remove decoração."
+                      : mode === "architecture" ? "Girar peça 3D armado: cada clique vira a peça 90°. Quatro cliques voltam ao original." : "Girar objeto armado: cada clique numa decoração vira ela 60°, com toda a área junto. Seis cliques voltam ao original.",
                   );
                 }}
-                title="Gira a decoração 60° por clique. Uma que ocupa vários hexes gira a área inteira de uma vez — um hexágono cai sobre si mesmo a cada 60°, então essas são as únicas voltas que ainda caem em casas reais."
+                title={mode === "architecture" ? "Gira a peça 3D 90° por clique." : "Gira a decoração 60° por clique. Uma que ocupa vários hexes gira a área inteira de uma vez — um hexágono cai sobre si mesmo a cada 60°, então essas são as únicas voltas que ainda caem em casas reais."}
               >
-                {turningDeco ? "Girando — clique numa decoração" : "Girar objeto"}
+                {turningDeco ? mode === "architecture" ? "Girando — clique numa peça 3D" : "Girando — clique numa decoração" : "Girar objeto"}
               </Button>
             </div>
-            <p className="text-xs text-muted">
+            {mode === "decoration" && <p className="text-xs text-muted">
               O dado em cada uma liga/desliga se ela pode sair no sorteio de "Gerar terreno" — aceso participa, apagado só
               entra no mapa se você colocar à mão.
-            </p>
+            </p>}
 
             <div className="ember-scrollbar overflow-x-auto overflow-y-hidden border border-border rounded-md p-1.5 bg-bg/40 h-28 min-h-[104px] min-w-[280px]">
               <div className="grid grid-rows-2 grid-flow-col auto-cols-max gap-1.5">
@@ -6062,7 +6073,7 @@ function MapEditorScreen({
                         />
                         {dec.name}
                       </button>
-                      <button
+                      {!dec.model3d && <button
                         type="button"
                         onClick={() => toggleShuffleExclude(dec.id)}
                         className={`px-1 ${excluded ? "text-muted" : "text-accent"}`}
@@ -6074,7 +6085,7 @@ function MapEditorScreen({
                         }
                       >
                         <Dices className="size-3.5" />
-                      </button>
+                      </button>}
                     </div>
                   );
                 })}
@@ -6083,11 +6094,11 @@ function MapEditorScreen({
 
             <div className="flex flex-col gap-1.5 border border-border rounded-md p-2 bg-bg/40">
               <div className="flex items-center gap-2 text-xs">
-                <span className="uppercase tracking-wide text-muted">Regras da decoração</span>
+                <span className="uppercase tracking-wide text-muted">{mode === "architecture" ? "Regras da peça 3D" : "Regras da decoração"}</span>
                 <span className="text-muted">
                   {selectedPlacement
                     ? `${DECORATIONS[selectedPlacement.id]?.name ?? selectedPlacement.id} em ${selectedPlacement.x},${selectedPlacement.y}`
-                    : "clique numa decoração no mapa"}
+                    : mode === "architecture" ? "clique numa peça 3D no mapa" : "clique numa decoração no mapa"}
                 </span>
               </div>
               <label
@@ -6096,8 +6107,8 @@ function MapEditorScreen({
               >
                 <input
                   type="checkbox"
-                  disabled={!selectedPlacement || selectedPlacementIsSolidHouse}
-                  checked={!!selectedPlacement?.blocksPath || selectedPlacementIsSolidHouse}
+                  disabled={!selectedPlacement || selectedPlacementIsSolidHouse || selectedPlacementIsSolidArchitecture}
+                  checked={!!selectedPlacement?.blocksPath || selectedPlacementIsSolidHouse || selectedPlacementIsSolidArchitecture}
                   onChange={() => toggleDecorationRule("blocksPath")}
                 />
                 <span className="text-muted">Bloquear caminho</span>
@@ -6115,8 +6126,8 @@ function MapEditorScreen({
                 <span className="text-muted">Alto terreno</span>
               </label>
               <p className="text-xs text-muted">
-                Os dois só acrescentam: desligados, o hexágono mantém a regra do terreno que está embaixo. Uma barricada
-                segue intransponível com "Bloquear caminho" desligado, porque é a definição dela que a torna sólida.
+                {mode === "architecture" ? "Paredes e portas fechadas são sólidas. Passagens abertas permitem atravessar; o piso original é preservado."
+                  : 'Os dois só acrescentam: desligados, o hexágono mantém a regra do terreno que está embaixo. Uma barricada segue intransponível com "Bloquear caminho" desligado, porque é a definição dela que a torna sólida.'}
               </p>
             </div>
 
@@ -6249,14 +6260,14 @@ function MapEditorScreen({
             >
               ↷ Refazer
             </Button>
-            <label className="flex items-center gap-1 rounded-md border border-border bg-bg px-2 py-1 text-xs" title="Categoria atualmente exibida na paleta de decorações">
+            {mode !== "architecture" && <label className="flex items-center gap-1 rounded-md border border-border bg-bg px-2 py-1 text-xs" title="Categoria atualmente exibida na paleta de decorações">
               <span className="text-muted">Decorações</span>
               <select className="max-w-36 bg-transparent text-fg outline-none" value={decoSection} onChange={(e) => setDecoSection(e.target.value)}>
                 {decorationSections.map((section) => (
                   <option key={section} value={section}>{section}</option>
                 ))}
               </select>
-            </label>
+            </label>}
             <Button
               size="sm"
               variant={showPreview ? "quiet" : "ghost"}
@@ -6336,7 +6347,7 @@ function MapEditorScreen({
                 mission={previewMission}
                 art={art}
                 onCellClick={onCellClick}
-                selectedDecorationId={mode === "decoration" ? decoBrush : undefined}
+                selectedDecorationId={mode === "decoration" || mode === "architecture" ? decoBrush : undefined}
                 selectedPlacedDecoration={selectedPlacedDecoration}
                 onUnitSelect={selectPreviewUnit}
                 onHeldUnitDelete={deleteHeldPreviewUnit}

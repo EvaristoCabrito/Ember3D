@@ -39,6 +39,7 @@ import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_ROUTE, GRID_MOVE, GRI
  * only the intermediate Three.js coordinates carry the flip, nothing outside this file does. */
 
 import * as THREE from "three";
+import { createWallGeometry } from "./ThreeWalls";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -170,6 +171,11 @@ function hexWorld(col: number, row: number, tile: number): { wx: number; wy: num
     wx: tile * SQRT3 * (col + 0.5 * (row & 1) + 0.5),
     wy: tile * BOARD_PAD_MUL + tile * (1.5 * row + 1),
   };
+}
+
+/** Architecture uses aligned columns, allowing straight rectangular rooms over the board. */
+function architectureWorld(col: number, row: number, tile: number): { wx: number; wy: number } {
+  return { wx: tile * SQRT3 * (col + 0.5), wy: tile * BOARD_PAD_MUL + tile * (1.5 * row + 1) };
 }
 
 /** Pointy-top hex fan (center + 6 rim vertices + 6 triangles), radius 0.5 so scaling by
@@ -723,6 +729,8 @@ export class ThreeBattleRenderer {
   private decorShadowMatCache = new Map<string, THREE.MeshBasicMaterial>();
   private decorFogCutMatCache = new Map<string, THREE.MeshBasicMaterial>();
   private decorEntries: DecorMeshEntry[] = [];
+  private wallEntries: { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>; placement: DecorationPlacement }[] = [];
+  private wallGroup = new THREE.Group();
   private builtDecorKey = "";
 
   // Movement/attack/spell-range highlight + the active-turn ring (see
@@ -865,6 +873,7 @@ export class ThreeBattleRenderer {
     this.scene.add(this.contactShadowGroup);
     this.scene.add(this.decorContactGroup);
     this.scene.add(this.decorGroup);
+    this.scene.add(this.wallGroup);
     this.scene.add(this.unitGroup);
     this.scene.add(this.flameHaloGroup);
     this.scene.add(this.fogMask.mesh);
@@ -1248,6 +1257,12 @@ export class ThreeBattleRenderer {
     }).join(";");
     const key = `${engine.mission.id}:${tile}:${placementKey}`;
     if (key === this.builtDecorKey) return;
+    for (const entry of this.wallEntries) {
+      this.wallGroup.remove(entry.mesh);
+      entry.mesh.geometry.dispose();
+      entry.mesh.material.dispose();
+    }
+    this.wallEntries = [];
     for (const entry of this.decorEntries) {
       this.decorGroup.remove(entry.mesh);
       if (entry.shadowMesh) this.shadowCasterGroup.remove(entry.shadowMesh);
@@ -1261,10 +1276,28 @@ export class ThreeBattleRenderer {
     }
     this.decorEntries = [];
     this.builtDecorKey = key;
+    const architectureCells = new Set(engine.decorations.filter(p => DECORATIONS[p.id]?.model3d).map(p => `${p.x},${p.y}`));
 
     for (const p of engine.decorations) {
       const def = DECORATIONS[p.id];
       if (!def) continue;
+      if (def.model3d) {
+        const { wx, wy } = architectureWorld(p.x, p.y, tile);
+        const connections = [{ x: p.x - 1, y: p.y }, { x: p.x + 1, y: p.y }, { x: p.x, y: p.y - 1 }, { x: p.x, y: p.y + 1 }].filter(n => architectureCells.has(`${n.x},${n.y}`)).map(n => {
+          const neighbor = architectureWorld(n.x, n.y, tile);
+          return { x: neighbor.wx - wx, y: wy - neighbor.wy };
+        });
+        const geometry = createWallGeometry(def, tile, p.rot ?? 0, connections);
+        const material = new THREE.MeshStandardMaterial({ color: def.model3d === "door" ? 0x77634b : 0x8b8b86, roughness: 0.94, metalness: 0, flatShading: true });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(wx, -wy, 1);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.layers.enable(PROXY_LAYER);
+        this.wallGroup.add(mesh);
+        this.wallEntries.push({ mesh, placement: p });
+        continue;
+      }
       const decorLayer = def.unitLayer ?? (def.foreground ? "front" : "ground");
       // Fog 2 deliberately sits above every decoration but below units. Front props therefore
       // belong in this same Three layer too; keeping them on the top 2D unit canvas would make
@@ -1719,6 +1752,9 @@ export class ThreeBattleRenderer {
    * only ever sets `visible = true`. */
   private syncDecorVisibility(): void {
     const engine = this.engine;
+    for (const entry of this.wallEntries) {
+      entry.mesh.visible = !engine.fogged || engine.explored(entry.placement.x, entry.placement.y);
+    }
     if (!engine.fogged) {
       for (const entry of this.decorEntries) {
         entry.mesh.visible = true;
@@ -1943,6 +1979,7 @@ export class ThreeBattleRenderer {
    * comment), just without drawing through the Canvas2D shim afterward. */
   render(cssW: number, cssH: number): void {
     const tile = this.engine.updateCameraLayout(cssW, cssH);
+    this.engine.architectureRenderedInThree = true;
     this.syncBackdrop(cssW, cssH, tile);
     this.ensureBuilt(tile);
     this.syncDirtyTiles();
@@ -2853,5 +2890,10 @@ export class ThreeBattleRenderer {
     this.contactShadowTexture.dispose();
     this.decorContactMaterial.dispose();
     this.renderer.dispose();
+    this.engine.architectureRenderedInThree = false;
+    for (const entry of this.wallEntries) {
+      entry.mesh.geometry.dispose();
+      entry.mesh.material.dispose();
+    }
   }
 }

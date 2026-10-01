@@ -1266,6 +1266,8 @@ export class BattleEngine {
   speedMode: "slow" | "normal" | "fast" = "normal";
   camX = 0;
   camY = 0;
+  /** The Three scene owns architecture even while sprite props move to the FX overlay. */
+  architectureRenderedInThree = false;
   /** Off (0) in battle. The editor preview opts into a small edge rim so camera focus near
    * the board boundary does not expose half a viewport of empty void. */
   private previewPanMarginRadii = 0;
@@ -8553,6 +8555,7 @@ export class BattleEngine {
       .sort((a, b) => a.order - b.order || a.index - b.index);
     for (const { p } of orderedDecorations) {
       const def = DECORATIONS[p.id];
+      if (def?.model3d && this.architectureRenderedInThree) continue;
       let img = this.art.decorations[p.id];
       if ((!img || !img.naturalWidth) && def) {
         img = this.art.decorations[p.id] ?? new Image();
