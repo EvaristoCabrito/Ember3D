@@ -262,7 +262,7 @@ function cleanDialogTree(raw: unknown): DialogTree | null {
           if (!r || typeof r !== "object") return [];
           const rr = r as Record<string, unknown>;
           if (typeof rr.text !== "string") return [];
-          const action = rr.action === "tavern" || rr.action === "smith" || rr.action === "recruitAldric" ? (rr.action as DialogAction) : undefined;
+          const action = rr.action === "tavern" || rr.action === "smith" || rr.action === "recruitAldric" || rr.action === "acceptSuspectHostageQuest" ? (rr.action as DialogAction) : undefined;
           return [{ text: rr.text, next: typeof rr.next === "string" ? rr.next : null, action }];
         })
       : undefined;

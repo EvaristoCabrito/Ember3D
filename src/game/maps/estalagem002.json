@@ -1583,7 +1583,175 @@
               "id": "l1",
               "speaker": "Cliente Suspeito",
               "portrait": "shadyPatron",
-              "text": "Não me olhe muito. Quem olha demais acaba lembrado — e quem é lembrado, some.",
+              "text": "Ele espera até que a mesa ao lado se distraia. “Sente-se. Se alguém perguntar, não nos conhecemos. O que quer saber?”",
+              "replies": [
+                {
+                  "text": "Você mencionou a Torre de Vigia.",
+                  "next": "watchtower"
+                },
+                {
+                  "text": "O que sabe da Companhia Carmesim?",
+                  "next": "company"
+                },
+                {
+                  "text": "Por que está tão preocupado em ser visto?",
+                  "next": "wary"
+                }
+              ]
+            },
+            {
+              "id": "watchtower",
+              "speaker": "Cliente Suspeito",
+              "portrait": "shadyPatron",
+              "text": "Ele baixa a voz. “A Torre está nas mãos de gente que não costuma fazer prisioneiros por muito tempo.”",
+              "replies": [
+                {
+                  "text": "Quem lhe contou isso?",
+                  "next": "source"
+                },
+                {
+                  "text": "Quem está preso lá?",
+                  "next": "hostage"
+                },
+                {
+                  "text": "Você parece saber mais do que diz.",
+                  "next": "wary"
+                }
+              ]
+            },
+            {
+              "id": "company",
+              "speaker": "Cliente Suspeito",
+              "portrait": "shadyPatron",
+              "text": "Ao ouvir o nome da Companhia Carmesim, ele para de mexer o copo. “Já vi o que resta de um regimento quando seus oficiais desaparecem.”",
+              "replies": [
+                {
+                  "text": "Um oficial da Companhia está na Torre?",
+                  "next": "hostage"
+                },
+                {
+                  "text": "Você serviu com eles?",
+                  "next": "service"
+                },
+                {
+                  "text": "O que aconteceu com o regimento?",
+                  "next": "wary"
+                }
+              ]
+            },
+            {
+              "id": "wary",
+              "speaker": "Cliente Suspeito",
+              "portrait": "shadyPatron",
+              "text": "Ele observa a sala antes de responder. “Eu faço perguntas antes de confiar. Quem fala demais acaba no lugar errado, na hora errada.”",
+              "replies": [
+                {
+                  "text": "Não quero causar problemas. Só quero entender.",
+                  "next": "watchtower"
+                },
+                {
+                  "text": "Você tem medo de que descubram que está falando?",
+                  "next": "source"
+                },
+                {
+                  "text": "Então vou direto ao ponto: quem está preso?",
+                  "next": "hostage"
+                }
+              ]
+            },
+            {
+              "id": "service",
+              "speaker": "Cliente Suspeito",
+              "portrait": "shadyPatron",
+              "text": "“Não. Mas conheci soldados que serviram. Alguns nomes ainda fazem as pessoas olharem por cima do ombro.” Ele se cala, como se tivesse dito demais.",
+              "replies": [
+                {
+                  "text": "Está falando do oficial na Torre?",
+                  "next": "hostage"
+                },
+                {
+                  "text": "Pode confiar em mim.",
+                  "next": "wary"
+                }
+              ]
+            },
+            {
+              "id": "source",
+              "speaker": "Cliente Suspeito",
+              "portrait": "shadyPatron",
+              "text": "Ele aperta o copo. “Não vou dizer quem me contou. Nem como essa pessoa soube. Se é isso que procura, a conversa acaba aqui.”",
+              "replies": [
+                {
+                  "text": "Tudo bem. O que pode me dizer?",
+                  "next": "hostage"
+                },
+                {
+                  "text": "Pelo menos me diga se é mesmo um soldado.",
+                  "next": "hostage"
+                },
+                {
+                  "text": "Não vou pressioná-lo.",
+                  "next": "leave"
+                }
+              ]
+            },
+            {
+              "id": "hostage",
+              "speaker": "Cliente Suspeito",
+              "portrait": "shadyPatron",
+              "text": "Ele hesita, olhando de novo para a sala. “Há um oficial de alta patente da Companhia Carmesim mantido como refém na Torre de Vigia. É tudo que posso confirmar.”",
+              "replies": [
+                {
+                  "text": "Qual é o nome dele?",
+                  "next": "refusal"
+                },
+                {
+                  "text": "Quem passou essa informação?",
+                  "next": "refusal"
+                },
+                {
+                  "text": "O que quer que eu faça?",
+                  "next": "offer"
+                }
+              ]
+            },
+            {
+              "id": "refusal",
+              "speaker": "Cliente Suspeito",
+              "portrait": "shadyPatron",
+              "text": "“Não.” A resposta sai seca. “Não direi o nome e não direi de onde veio a informação. Já arrisquei demais só em confirmar que existe um cativo.”",
+              "replies": [
+                {
+                  "text": "Entendido. O que espera de mim?",
+                  "next": "offer"
+                },
+                {
+                  "text": "Sem mais detalhes, não posso prometer nada.",
+                  "next": "leave"
+                }
+              ]
+            },
+            {
+              "id": "offer",
+              "speaker": "Cliente Suspeito",
+              "portrait": "shadyPatron",
+              "text": "“Tire o oficial da cela na Torre de Vigia. Se conseguir trazê-lo de volta, haverá pagamento. Não pergunte o nome dele. E, por tudo que é sagrado, não tente descobrir quem me contou.”",
+              "replies": [
+                {
+                  "text": "Vou resgatá-lo. Pode contar comigo.",
+                  "action": "acceptSuspectHostageQuest"
+                },
+                {
+                  "text": "Não posso me envolver nisso.",
+                  "next": "leave"
+                }
+              ]
+            },
+            {
+              "id": "leave",
+              "speaker": "Cliente Suspeito",
+              "portrait": "shadyPatron",
+              "text": "Ele termina a bebida e vira o copo vazio para baixo. “Então não tivemos esta conversa.”",
               "next": null
             }
           ]

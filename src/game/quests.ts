@@ -7,7 +7,7 @@
 import type { PotionId } from "./types";
 import type { Condition, Effect } from "./progression";
 
-export type QuestNpcId = "brue" | "mudo" | "porao";
+export type QuestNpcId = "brue" | "mudo" | "suspicious" | "porao";
 
 export interface QuestPickupDef {
   id: string;
@@ -73,8 +73,8 @@ export const QUESTS: QuestDef[] = [
     ],
   },
   {
-    id: "mudo-watchtower-captive",
-    npc: "mudo",
+    id: "suspeito-watchtower-captive",
+    npc: "suspicious",
     title: "O oficial cativo",
     kind: "recruit",
     missionId: "watchtower-prison",
@@ -86,7 +86,7 @@ export const QUESTS: QuestDef[] = [
     reward: 300,
     rewardPotions: [],
     targetName: "Aldric",
-    availability: { flagSet: "mudo-watchtower-intel" },
+    availability: { flagSet: "suspeito-watchtower-intel" },
   },
   {
     id: "porao-caliches",

@@ -2035,22 +2035,9 @@ export function GameApp() {
             let next = rec;
             if (!(rec.npcTalked ?? []).includes(npcId)) next = { ...next, npcTalked: [...(rec.npcTalked ?? []), npcId] };
             const extras = progressionExtras(next);
-            const offered = questsFor(npcId as "brue" | "mudo" | "porao").filter((quest) => questStatus(next, quest) === "available" && evaluate(quest.availability, next, extras) && !(next.questsDiscovered ?? []).includes(quest.id));
+            const offered = questsFor(npcId as "brue" | "mudo" | "suspicious" | "porao").filter((quest) => questStatus(next, quest) === "available" && evaluate(quest.availability, next, extras) && !(next.questsDiscovered ?? []).includes(quest.id));
             if (offered.length > 0) next = { ...next, questsDiscovered: [...(next.questsDiscovered ?? []), ...offered.map((quest) => quest.id)] };
             if (next !== rec) writeMapSave(next);
-          }}
-          onRevealHostageQuest={() => {
-            const rec = readMapSave();
-            const quest = questById("mudo-watchtower-captive");
-            if (!quest) return;
-            const flags = rec.flags ?? [];
-            const discovered = rec.questsDiscovered ?? [];
-            const next = {
-              ...rec,
-              flags: flags.includes("mudo-watchtower-intel") ? flags : [...flags, "mudo-watchtower-intel"],
-              questsDiscovered: discovered.includes(quest.id) ? discovered : [...discovered, quest.id],
-            };
-            writeMapSave(next);
           }}
           questOffered={(questId: string) => {
             const quest = questById(questId);
@@ -2217,6 +2204,23 @@ export function GameApp() {
           playtest={!!customMission}
           fleeable={!customMission && !!missionId && isRandomEncounter(missionId)}
           onDialogAction={(action) => {
+            if (action === "acceptSuspectHostageQuest") {
+              if (testMode || customMission) return;
+              const rec = readMapSave();
+              const quest = questById("suspeito-watchtower-captive");
+              if (!quest) return;
+              const intelFlag = "suspeito-watchtower-intel";
+              const flags = rec.flags ?? [];
+              const discovered = rec.questsDiscovered ?? [];
+              const active = rec.questsActive ?? [];
+              writeMapSave({
+                ...rec,
+                flags: flags.includes(intelFlag) ? flags : [...flags, intelFlag],
+                questsDiscovered: discovered.includes(quest.id) ? discovered : [...discovered, quest.id],
+                questsActive: active.includes(quest.id) ? active : [...active, quest.id],
+              });
+              return;
+            }
             if (action === "recruitAldric") {
               if (testMode || customMission) return;
               const rec = activeSave(bank);
