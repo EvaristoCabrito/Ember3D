@@ -12,7 +12,7 @@ function omitBoxFaces(box: THREE.BoxGeometry, faces: number[]): THREE.BoxGeometr
 
 /** Solid joining walls, following the centers of neighboring architecture cells. */
 export function createWallGeometry(def: DecorationDef, tile: number, rotation: number, connections: { x: number; y: number }[] = [], origin = { x: 0, y: 0 }): THREE.BufferGeometry {
-  const height = tile * 0.5 * (def.heightScale ?? 1);
+  const height = tile * 0.75 * (def.heightScale ?? 1);
   let geometry: THREE.BufferGeometry;
   if (def.model3d === "wall") {
     const thickness = tile * 0.32;
@@ -54,7 +54,7 @@ export function createWallGeometry(def: DecorationDef, tile: number, rotation: n
   // the masonry pattern continuous across adjoining segments and corner cores.
   const normals = geometry.getAttribute("normal");
   const uv = geometry.getAttribute("uv");
-  const repeatSize = tile * 2;
+  const repeatSize = tile;
   for (let i = 0; i < positions.count; i++) {
     const x = positions.getX(i) + origin.x, y = positions.getY(i) + origin.y, z = positions.getZ(i);
     if (Math.abs(normals.getZ(i)) > 0.5) uv.setXY(i, x / repeatSize, y / repeatSize);

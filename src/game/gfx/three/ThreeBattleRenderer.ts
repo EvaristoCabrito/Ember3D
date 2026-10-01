@@ -1296,7 +1296,10 @@ export class ThreeBattleRenderer {
             map = new THREE.TextureLoader().load(def.wallTexture);
             map.colorSpace = THREE.SRGBColorSpace;
             map.wrapS = map.wrapT = THREE.RepeatWrapping;
-            map.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+            map.magFilter = THREE.LinearFilter;
+            map.minFilter = THREE.LinearMipmapLinearFilter;
+            map.generateMipmaps = true;
+            map.anisotropy = Math.min(16, this.renderer.capabilities.getMaxAnisotropy());
             this.wallTextures.set(def.wallTexture, map);
           }
         }

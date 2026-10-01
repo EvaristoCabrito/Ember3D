@@ -276,7 +276,8 @@ export function MapPreviewCanvas({
         pixelFxCanvas.style.width = `${w}px`;
         pixelFxCanvas.style.height = `${h}px`;
         pixelFxCanvas.style.display = "block";
-        pixelRenderer.setSize(renderW, renderH, dpr);
+        // Keep 3D materials sharp when exact editor zoom scales the canvas up.
+        pixelRenderer.setSize(renderW, renderH, dpr * Math.max(1, previewRenderScale));
         const drawDecorationsOverFx = !!fx?.hasEffects();
         pixelRenderer.setSpritesAndDecorationsVisible(!drawDecorationsOverFx, !drawDecorationsOverFx);
         pixelRenderer.render(renderW, renderH);

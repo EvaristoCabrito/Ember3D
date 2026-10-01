@@ -15,3 +15,10 @@ Shared prompt:
 - `castle-v1.png`: Large clean blue grey dressed granite rectangular blocks, strong mortar lines.
 - `city-v1.png`: Warm sandy grey small coursed masonry stones, weathered urban stonework.
 
+## Photorealistic v2 replacement
+
+Generated with the built-in imagegen tool. Each setting uses the following prompt, substituting its material description from above. Requested size was 2048×2048; delivered PNGs are 1254×1254. These are the active `*-v2.png` assets; v1 originals remain archived.
+
+> Use case: photorealistic-natural. Asset type: high-resolution seamless PBR albedo wall texture for a 3D game. Create a 2048x2048 square photographic material scan of [material description]. True photorealism: fine mineral grains, realistic mortar and pores, lifelike material color variation, crisp continuous fine details without pixel art or painted outlines. Straight-on orthographic surface, perfectly uniform diffuse illumination, no cast shadows, no perspective, no vignette, no text or objects. All four edges must tile seamlessly. This is a flat surface texture only, not a picture of a room. Natural realistic scale, avoid exaggerated cracks, no hand-painted stylization.
+
+

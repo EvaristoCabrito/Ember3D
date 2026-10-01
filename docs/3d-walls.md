@@ -6,4 +6,6 @@ Place wall modules in neighboring rows and columns to form continuous rectangula
 
 Walls and closed doors block movement and line of sight without changing the floor tile. Open doorways are passable. The initial closed-door piece is static; opening interactions, locks, and secret passages can be added separately.
 
+Architecture height is now 50% taller than the original release, including door frames so they meet the wall tops. All eight themed walls use the photorealistic v2 textures at a finer repeat scale, with trilinear mip filtering and up to 16x anisotropy. The 3D preview also accounts for editor zoom when allocating its drawing resolution.
+
 The Three.js renderer builds solid geometry with rough materials, receives lighting, and casts shadows from the sun and local lights. Geometry is projected into the game's existing isometric view. The textured styles use repeating 2D albedo artwork, projected before the view shear and aligned across neighboring segments. Textures are shared per renderer and disposed when it closes. Architecture stays in the Three scene while spell effects temporarily move ordinary sprite decorations to an overlay. Undiscovered architecture remains hidden under fog.
