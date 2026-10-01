@@ -1,5 +1,5 @@
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ChevronDown, ChevronLeft, ChevronUp, Dices, Grip, ListOrdered, Pencil, RotateCcw, Shuffle, SlidersHorizontal, Swords, Volume2, VolumeX, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronUp, Dices, Grip, ListOrdered, Lock, Pencil, RotateCcw, Shuffle, SlidersHorizontal, Swords, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { artProgress, ensureSpriteArt, loadGameArt, portraitFor, releaseSpriteArt, subscribeArtProgress, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
 import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
@@ -7169,9 +7169,10 @@ function CampaignScreen({
                   openInn ? "inn-open" : "border-border"
                 }`}
               >
-                <p className="text-sm uppercase tracking-[0.16em] text-muted">
+                <p className="flex items-center gap-2 text-sm uppercase tracking-[0.16em] text-muted">
                   {String(campaignNumber + 1).padStart(2, "0")} · {m.place}
                   {m.hub && !lock ? " · aberta" : done ? " · feito" : ""}
+                  {lock && <Lock className="size-4 shrink-0" aria-label="Cenário bloqueado" />}
                 </p>
                 <p className="font-display text-2xl">{m.title}</p>
                 <p className="text-base text-muted">{m.objective}</p>

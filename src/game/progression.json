@@ -1,5 +1,5 @@
 {
-  "_readme": "Progression data. chapters: major story flags (a chapter can also be reached through reachedWhen, or by a quest/trigger effect setChapter). missionGates: { missionId: { visible?: Condition, unlock?: Condition } } - a mission listed here is hidden until `visible` holds, then shown-but-locked until `unlock` holds; a mission NOT listed here keeps its normal chapter-by-chapter chain. triggers: [{ when: Condition, do: [Effect] }] fire whenever the save changes. See progression.ts for the condition and effect vocabulary.",
+  "_readme": "Progression data. chapters: major story flags (a chapter can also be reached through reachedWhen, or by a quest/trigger effect setChapter). missionGates: { missionId: { visible?: Condition, unlock?: Condition } } - when `visible` is omitted a mission stays visible; otherwise it is hidden until `visible` holds. A visible mission stays locked until `unlock` holds. A mission NOT listed here keeps its normal chapter-by-chapter chain. triggers: [{ when: Condition, do: [Effect] }] fire whenever the save changes. See progression.ts for the condition and effect vocabulary.",
   "chapters": [
     { "id": 1, "name": "Capítulo 1" },
     { "id": 2, "name": "Capítulo 2" },
@@ -7,11 +7,9 @@
   ],
   "missionGates": {
     "cemiterio-esquecidos": {
-      "visible": { "questDiscovered": "brue-birolho" },
       "unlock": { "questActive": "brue-birolho" }
     },
     "watchtower-gate-floor": {
-      "visible": { "questDiscovered": "suspeito-watchtower-captive" },
       "unlock": { "questActive": "suspeito-watchtower-captive" }
     }
   },

@@ -56,13 +56,13 @@ test("a mission with only an unlock rule is visible (revealed) until unlocked", 
   assert.equal(missionAccess("m", base({ chapter: 2 }), {}, false, gates), "available");
 });
 
-test("Cemetery and Watchtower campaigns require their offered quests to be accepted", () => {
+test("Cemetery and Watchtower campaigns stay visible and locked until their quests are accepted", () => {
   const cases = [
     ["cemiterio-esquecidos", "brue-birolho"],
     ["watchtower-gate-floor", "suspeito-watchtower-captive"],
   ] as const;
   for (const [missionId, questId] of cases) {
-    assert.equal(missionAccess(missionId, base()), "hidden", `${missionId} stays hidden before its quest is discovered`);
+    assert.equal(missionAccess(missionId, base()), "revealed", `${missionId} is visible but locked from the start`);
     assert.equal(
       missionAccess(missionId, base({ questsDiscovered: [questId] })),
       "revealed",
