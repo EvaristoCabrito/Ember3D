@@ -1,5 +1,7 @@
 import * as THREE from "three";
 
+const MAGIC_MISSILE_VFX_RENDER_ORDER = 8;
+
 export interface MagicMissileV2Settings {
   missileCount: number; missileScale: number; formationSpacing: number; launchInterval: number;
   projectileSpeed: number; acceleration: number; trajectoryCurvature: number; trajectoryHeight: number;
@@ -104,6 +106,10 @@ export class MagicMissileV2VFX {
       this.impactFractures.push(fractures); this.arcaneFilaments.push(filaments);
       const trail = this.createTrail(); this.trailMeshes.push(trail); this.root.add(trail);
     }
+    // Render missile pieces after character sprites, while preserving normal scene depth occlusion.
+    this.root.traverse((object) => {
+      object.renderOrder = MAGIC_MISSILE_VFX_RENDER_ORDER;
+    });
     this.root.visible = false; this.movingLight.visible = false; for (const light of this.impactLights) light.visible = false;
   }
 

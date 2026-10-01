@@ -1975,6 +1975,22 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     size: 1,
     init: 7,
   },
+  travelingMerchant: {
+    id: "travelingMerchant",
+    name: "Mercador Itinerante",
+    role: "Civil — mercador",
+    hp: 10,
+    atk: 1,
+    mag: 0,
+    def: 1,
+    res: 1,
+    mov: 3,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "travelingMerchant",
+    size: 1,
+    init: 7,
+  },
 };
 
 export const HERO_NAMES = ["Kael", "Neera", "Voss", "Salazar"] as const;
@@ -2070,6 +2086,7 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   soupLady: { hp: 1, atk: 0, mag: 0, def: 1, res: 1 },
   villagerF1: { hp: 2, atk: 1, mag: 0, def: 0, res: 1 },
   woodsman: { hp: 2, atk: 1, mag: 0, def: 1, res: 0 },
+  travelingMerchant: { hp: 2, atk: 0, mag: 0, def: 1, res: 1 },
 };
 
 export const MAX_LEVEL = 30;

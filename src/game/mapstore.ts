@@ -14,7 +14,7 @@
  * decorateOpenTerrain): those exist to dress the hand-written RAW_MISSIONS, and
  * a map arranged by hand in the editor loads exactly as it was arranged.
  */
-import { MISSIONS, TILE_CHAR, WORLD_LOCATIONS } from "./data";
+import { DECORATIONS, MISSIONS, TILE_CHAR, WORLD_LOCATIONS } from "./data";
 import SLOT_CONFIG from "./map-slots.json";
 import ORDER_CONFIG from "./map-order.json";
 import LOCATION_ORDER_CONFIG from "./location-order.json";
@@ -26,6 +26,16 @@ import type { ClassId, DecorationPlacement, DialogTree, ElementalFxPlacement, Ma
  * saved crossings get the same revisit behavior without adding another editor setting. */
 export function isCrossingDungeon(mission: Pick<Mission, "id" | "title" | "win">): boolean {
   return mission.win === "escape" || /crossing|travessia/i.test(`${mission.id} ${mission.title}`);
+}
+
+/** Any dungeon — a crossing, or a map with a dungeon-exit / floor-connector waypoint — keeps
+ * its defeated enemies dead between visits (no respawns). */
+export function keepsDefeatedSpawns(mission: Pick<Mission, "id" | "title" | "win" | "decorations">): boolean {
+  if (isCrossingDungeon(mission)) return true;
+  return (mission.decorations ?? []).some((d) => {
+    const kind = DECORATIONS[d.id]?.exitKind;
+    return kind === "dungeon" || kind === "connector";
+  });
 }
 
 /** A spawn as edited in the Map Editor — the real Spawn shape plus a per-spawn test

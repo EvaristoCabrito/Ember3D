@@ -376,18 +376,23 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
     diseaseText = `${hero} contraiu uma doença na estrada (−10% nos atributos até ser curado).`;
   }
   const landedLocation = locationAt(locations, toCol, toRow);
-  const roadIds = roadEncounterIds();
+  // Every road map is one-time per campaign slot except the traveling merchant.
+  const repeatableRoadEncounter = "random-encounter-11";
+  const seenRoadEncounters = save.roadEncountersSeen ?? [];
+  const roadIds = roadEncounterIds().filter((id) => id === repeatableRoadEncounter || (!save.completed.includes(id) && !seenRoadEncounters.includes(id)));
   // Doubled, not just flat-boosted, while the "large tracks" alert is active — same relative
   // read on the odds regardless of what BATTLE_ENCOUNTER_CHANCE itself is tuned to later.
   const battleChance = save.alertStreak > 0 ? BATTLE_ENCOUNTER_CHANCE * 2 : BATTLE_ENCOUNTER_CHANCE;
   let alertStreak = Math.max(0, save.alertStreak - 1);
   let lastRoadEncounterId = save.lastRoadEncounterId;
+  let roadEncountersSeen = seenRoadEncounters;
   if (!event && !landedLocation && roadIds.length > 0 && Math.random() < battleChance) {
     // Never the same road encounter twice in a row — drop last time's pick from the pool
     // unless it's the only one there is, in which case a repeat is unavoidable.
     const pool = roadIds.length > 1 ? roadIds.filter((id) => id !== save.lastRoadEncounterId) : roadIds;
     const missionId = pool[Math.floor(Math.random() * pool.length)]!;
     lastRoadEncounterId = missionId;
+    roadEncountersSeen = [...new Set([...roadEncountersSeen, missionId])];
     event = { kind: "battle", text: "", missionId };
   }
   if (!event && !landedLocation && Math.random() < TEXT_ENCOUNTER_CHANCE) {
@@ -504,6 +509,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
       hungerStreak,
       alertStreak,
       lastRoadEncounterId,
+      roadEncountersSeen,
       unitHp,
       weapons,
       looseEquipment,

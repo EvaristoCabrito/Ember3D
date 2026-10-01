@@ -378,10 +378,12 @@ interface BladeFx {
   seed: number;
   /** Shoulder Smash's arc reads heavier/warmer than Cleave's — same shape, different tint. */
   warm: boolean;
+  /** Execution chop mirrors toward the attacker's side of its target. */
+  mirrorX: boolean;
 }
 const BLADE_FX_CAP = 12;
 function blankBladeFx(): BladeFx {
-  return { live: false, kind: "arc", x: 0, y: 0, toX: 0, toY: 0, a0: 0, a1: 0, t: 0, max: 0.32, seed: 0, warm: false };
+  return { live: false, kind: "arc", x: 0, y: 0, toX: 0, toY: 0, a0: 0, a1: 0, t: 0, max: 0.32, seed: 0, warm: false, mirrorX: false };
 }
 
 function blankParticle(): Particle {
@@ -1458,6 +1460,7 @@ export class BattleEngine {
     ];
     for (const u of this.units) {
       this.nudgeOffHazard(u);
+      if (u.side === "player") this.nudgeOffWaypoint(u);
       u.bob = this.rng() * 16;
     }
     this.rollOpeningInitiative(this.units.filter(takesTurns));
@@ -1607,6 +1610,12 @@ export class BattleEngine {
       // The HUD may only count enemies the party can currently see while fog is active.
       enemyAlive: this.units.filter((u) => u.side === "enemy" && u.alive && !this.unitHidden(u)).length,
       busy: this.mode === "locked" || !!this.active || this.queue.length > 0,
+      canCancelMovement:
+        (this.active?.type === "move" &&
+          !!this.selectedId &&
+          this.active.id === this.selectedId &&
+          this.units.some((u) => u.id === this.selectedId && u.side === "player" && u.alive)) ||
+        this.canCancelCommittedMovement(),
       result: this.result,
       winAvailable: this.winAvailable,
       activeExit: this.activeExit,
@@ -2635,7 +2644,13 @@ export class BattleEngine {
             this.emitBladeFx("rushImpact", target.x, target.y, { a0: Math.atan2(tc.cy - oc.cy, tc.cx - oc.cx) });
           }
           if (a.stage === "hit" && a.spellKind === "shieldBash") this.emitBladeFx("shockRing", target.x, target.y);
-          if (a.stage === "hit" && a.spellKind === "executionerStrike") this.emitBladeFx("execution", target.x, target.y, { warm: executed });
+          if (a.stage === "hit" && a.spellKind === "executionerStrike") {
+            const attackerCenter = this.hexCenter(actor.x, actor.y);
+            const targetCenter = this.hexCenter(target.x, target.y);
+            const fromLeft = attackerCenter.cx < targetCenter.cx ||
+              (attackerCenter.cx === targetCenter.cx && actor.x < target.x);
+            this.emitBladeFx("execution", target.x, target.y, { warm: executed, mirrorX: fromLeft });
+          }
           if (target.hp <= 0) {
             this.markDead(target);
           } else {
@@ -3495,6 +3510,39 @@ export class BattleEngine {
     }
   }
 
+  /** A hero must never start a map standing on a waypoint, or the "use waypoint" prompt
+   * fires immediately. Moves it to the nearest passable, unoccupied, non-waypoint hex
+   * (occ() includes body-type zones, so no zone is ever entered). */
+  private nudgeOffWaypoint(unit: Unit): void {
+    const waypointCells = new Set<string>();
+    for (const d of this.decorations) {
+      if (!DECORATIONS[d.id]?.exitKind) continue;
+      for (const f of placedFootprint(d)) waypointCells.add(key(d.x + f.dx, d.y + f.dy));
+    }
+    if (!waypointCells.has(key(unit.x, unit.y))) return;
+    const occ = this.occ();
+    const seen = new Set<string>([key(unit.x, unit.y)]);
+    const q: Point[] = [{ x: unit.x, y: unit.y }];
+    while (q.length) {
+      const cur = q.shift()!;
+      for (const n of hexNeighbors(cur.x, cur.y)) {
+        if (n.x < 0 || n.y < 0 || n.x >= this.cols || n.y >= this.rows) continue;
+        const k = key(n.x, n.y);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const who = occ.get(k);
+        if (this.hexAt(n.x, n.y).passable && !waypointCells.has(k) && (!who || who.id === unit.id)) {
+          unit.x = n.x;
+          unit.y = n.y;
+          unit.drawX = n.x;
+          unit.drawY = n.y;
+          return;
+        }
+        q.push(n);
+      }
+    }
+  }
+
   /** Bleeding hurts on every action; walking only opens the wound once per own turn. */
   private applyBleedingActionDamage(u: Unit | undefined, isMove: boolean): boolean {
     if (!u || !u.alive || !u.bleeding || (isMove && u.bleedMovedThisTurn)) return !!u?.alive;
@@ -3925,7 +3973,7 @@ export class BattleEngine {
     kind: BladeKind,
     x: number,
     y: number,
-    opts: { a0?: number; a1?: number; toX?: number; toY?: number; warm?: boolean; dur?: number } = {},
+    opts: { a0?: number; a1?: number; toX?: number; toY?: number; warm?: boolean; mirrorX?: boolean; dur?: number } = {},
   ): void {
     if (this.reducedMotion) return;
     let slot = this.bladeFx.find((b) => !b.live);
@@ -3948,6 +3996,7 @@ export class BattleEngine {
     slot.a0 = opts.a0 ?? 0;
     slot.a1 = opts.a1 ?? opts.a0 ?? 0;
     slot.warm = opts.warm ?? false;
+    slot.mirrorX = opts.mirrorX ?? false;
     slot.t = 0;
     slot.max = opts.dur ?? (kind === "rushTrail" ? 0.5 : kind === "rushImpact" ? 0.55 : kind === "execution" ? 0.7 : kind === "tripSweep" ? 0.65 : kind === "ring" || kind === "shockRing" ? 0.46 : kind === "dash" ? 0.36 : 0.4);
     slot.seed = this.rng() * Math.PI * 2;
@@ -4260,6 +4309,23 @@ export class BattleEngine {
     );
   }
 
+  /** A post-action move that used the last movement points can still be cancelled before
+   * the player explicitly ends the turn. `orig` is the safe position captured when the
+   * action finished, so this only rewinds the movement after that action. */
+  private canCancelCommittedMovement(): boolean {
+    const u = this.units.find((candidate) => candidate.id === this.selectedId);
+    return !!u &&
+      u.side === "player" &&
+      u.alive &&
+      u.acted &&
+      !u.moved &&
+      !this.moveSpoiled &&
+      !!this.orig &&
+      (u.x !== this.orig.x || u.y !== this.orig.y) &&
+      !this.active &&
+      this.queue.length === 0 &&
+      this.mode === "selected";
+  }
   /** Puts the active unit back where its turn began and refunds every hex it walked — the
    * whole budget, not the last hop, so a wrong click costs nothing. Undoing is not itself a
    * move: the unit is left selected with its full reach, exactly as the turn opened. */
@@ -4300,6 +4366,9 @@ export class BattleEngine {
       u.drawX = u.x;
       u.drawY = u.y;
       u.moveBudgetUsed = this.origMoveBudgetUsed ?? (u.acted ? u.moveBudgetUsed : 0);
+      // Leaving a waypoint by cancelling the move invalidates the offered exit immediately.
+      // Otherwise the stale exit prompt can still be confirmed from elsewhere on the map.
+      this.evaluateEnd();
     }
     this.selectedId = null;
     this.pendingFoeId = null;
@@ -4326,6 +4395,21 @@ export class BattleEngine {
 
   cancel(): void {
     const u = this.units.find((x) => x.id === this.selectedId);
+    // Movement animations and their queued follow-up are still cancellable: the action has
+    // not resolved until that walk settles. Rewind to the last safe point before deselecting.
+    // This also lets a player change their mind after reaching a waypoint but before trying
+    // its escape chance.
+    if (this.active?.type === "move" && u?.side === "player" && u.alive && this.active.id === u.id) {
+      this.active = null;
+      this.queue.length = 0;
+      this.onNextIdle = null;
+      this.waypointCheckPending = false;
+      this.mode = "selected";
+      this.deselect();
+      sfxPlay.ui();
+      this.emit();
+      return;
+    }
     if (this.mode === "awaitSpell") {
       this.spellArmed = false;
       this.spellAim = null;
@@ -4712,7 +4796,7 @@ export class BattleEngine {
 
   private castExecutionerStrike(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Toque no inimigo.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -4750,7 +4834,7 @@ export class BattleEngine {
 
   private castShieldBash(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Toque no inimigo.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -5421,6 +5505,94 @@ export class BattleEngine {
     return !this.unitHidden(u);
   }
 
+  /** Give Magic Missile's target picker and cast guard the same actionable reason. */
+  private magicMissileTargetError(caster: Unit, cell: Point): string | null {
+    const here = this.occ().get(key(cell.x, cell.y));
+    if (!here || !here.alive || here.dialog || this.unitHidden(here)) {
+      return "Não há inimigo visível nessa casa.";
+    }
+    if (!this.debugFreeCast && here.side !== "enemy" && here.side !== "neutral") {
+      return "Míssil Mágico não pode mirar em aliados.";
+    }
+    if (manhattan(caster, cell) > MAGIC_MISSILE.range) {
+      return `Alvo fora de alcance (máximo ${MAGIC_MISSILE.range} hexes).`;
+    }
+    if (!clearShot(caster, cell, this.tiles, this.cols, "bolt", this.decorOverlay)) {
+      return "Linha de tiro bloqueada.";
+    }
+    return null;
+  }
+
+  private spellAimError(caster: Unit, cell: Point): string {
+    const kind = this.spellKind;
+    if (!kind) return "Nenhuma habilidade está mirando agora.";
+    if (kind === "magicMissile" || kind === "magicMissileV2") {
+      return this.magicMissileTargetError(caster, cell) ?? "Esse alvo não pode ser atingido por esta habilidade.";
+    }
+    if (kind === "cureMinor" || kind === "cureWounds" || kind === "cureLight") {
+      const range = CURES[kind].range;
+      const who = this.occ().get(key(cell.x, cell.y));
+      if (manhattan(caster, cell) > range) return `Alvo fora de alcance (máximo ${range} hexes).`;
+      if (!who) return "Escolha uma aliada na casa selecionada.";
+      if (!this.debugFreeCast && who.side !== "player") return "Essa cura só pode ser usada em uma aliada.";
+      if (!this.debugFreeCast && who.hp >= who.maxHp) return "Essa aliada está com a vida cheia.";
+      return "Essa casa não atende aos requisitos desta cura.";
+    }
+    if (kind === "cureDisease") {
+      const who = this.occ().get(key(cell.x, cell.y));
+      if (manhattan(caster, cell) > CURE_DISEASE.range) return `Alvo fora de alcance (máximo ${CURE_DISEASE.range} hexes).`;
+      if (!who) return "Escolha uma aliada na casa selecionada.";
+      if (!this.debugFreeCast && who.side !== "player") return "A cura de doença só pode ser usada em uma aliada.";
+      if (!this.debugFreeCast && !who.diseased && !who.poisoned) return "Essa aliada não está doente nem envenenada.";
+      return "Essa casa não atende aos requisitos desta habilidade.";
+    }
+
+    const target = this.occ().get(key(cell.x, cell.y));
+    const targetRequired = ["longShot", "lightning", "lightningTier3", "shock", "phantasmalForce", "multiShot", "doubleStrike", "trip", "lifeDrain", "executionerStrike", "shieldBash"].includes(kind);
+    if (targetRequired) {
+      if (!target) return "Não há unidade na casa selecionada.";
+      if (this.unitHidden(target)) return "Escolha um inimigo visível.";
+      if (target.dialog) return "Personagens de conversa não podem ser alvos de ataque.";
+      if (target.side === caster.side) return "Essa habilidade não pode mirar em uma aliada.";
+    }
+
+    const distance = manhattan(caster, cell);
+    if (kind === "longShot" || kind === "multiShot") {
+      const max = kind === "longShot" ? this.longMax(caster) : MULTI_SHOT.range;
+      if (distance < caster.minRange) return `Alvo perto demais (alcance mínimo ${caster.minRange} hexes).`;
+      if (distance > max) return `Alvo fora de alcance (máximo ${max} hexes).`;
+      if (!clearShot(caster, cell, this.tiles, this.cols, "arrow", this.decorOverlay)) return "Linha de tiro bloqueada por terreno ou obstáculo.";
+    }
+    if (kind === "lightning" || kind === "lightningTier3" || kind === "shock" || kind === "phantasmalForce") {
+      const range = kind === "lightning" ? LIGHTNING.range : kind === "lightningTier3" ? LIGHTNING_T3.range : kind === "shock" ? SHOCK.range : PHANTASMAL_FORCE.range;
+      if (distance > range) return `Alvo fora de alcance (máximo ${range} hexes).`;
+      if (kind === "phantasmalForce" && !clearShot(caster, cell, this.tiles, this.cols, "bolt", this.decorOverlay)) return "Linha de tiro bloqueada por terreno ou obstáculo.";
+    }
+    if (kind === "fireball" || kind === "causticVenom" || kind === "webOfDreams") {
+      const range = kind === "fireball" ? FIREBALL.range : kind === "causticVenom" ? CAUSTIC_VENOM.range : WEB_OF_DREAMS.range;
+      if (distance > range) return `Casa fora de alcance (máximo ${range} hexes).`;
+      if (!clearShot(caster, fireballOrigin(cell, this.cols, this.rows), this.tiles, this.cols, "bolt", this.decorOverlay)) return "Linha de tiro bloqueada por terreno ou obstáculo.";
+    }
+    if (kind === "cleave" || kind === "shoulderSmash") return "Escolha um hex vizinho ao personagem.";
+    if (kind === "sweep") return `Escolha uma casa dentro do raio ${SWEEP.radius}.`;
+    if (kind === "piercing" || kind === "piercingThrust" || kind === "burningHands" || kind === "divineWrath" || kind === "stampede") {
+      return "Escolha uma linha reta válida dentro do alcance da habilidade.";
+    }
+    if (kind === "bullRush") return "Não há um caminho livre com espaço para concluir a investida nesse alvo.";
+    if (kind === "summonFamiliar" || kind === "summonFamiliar2" || kind === "summonFamiliar3" || kind === "summonFamiliar4" || kind === "summonZombieDog") {
+      const range = kind === "summonZombieDog" ? SUMMON_ZOMBIE_DOG.range : kind === "summonFamiliar4" ? SUMMON_FAMILIAR4.range : kind === "summonFamiliar3" ? SUMMON_FAMILIAR3.range : kind === "summonFamiliar2" ? SUMMON_FAMILIAR2.range : SUMMON_FAMILIAR.range;
+      if (distance > range) return `Ponto de invocação fora de alcance (máximo ${range} hexes).`;
+      if (target) return "O ponto de invocação está ocupado.";
+      if (!inBounds(cell.x, cell.y, this.cols, this.rows)) return "O ponto de invocação fica fora do mapa.";
+      if (!this.hexAt(cell.x, cell.y).passable) return "O terreno bloqueia a invocação.";
+      return "Não há espaço livre para essa criatura nesse ponto.";
+    }
+    if (["doubleStrike", "trip", "lifeDrain", "executionerStrike", "shieldBash"].includes(kind)) {
+      return "Esse inimigo não está ao alcance ou não pode ser atingido daqui.";
+    }
+    return "Esta casa não atende aos requisitos de alvo da habilidade.";
+  }
+
   /**
    * `attackableEnemies` filtered down to foes the party can actually see.
    *
@@ -5644,9 +5816,7 @@ export class BattleEngine {
       return manhattan(caster, cell) <= SWEEP.radius;
     }
     if (this.spellKind === "magicMissile" || this.spellKind === "magicMissileV2") {
-      const here = this.occ().get(key(cell.x, cell.y));
-      if (!this.targetable(here) || manhattan(caster, cell) > MAGIC_MISSILE.range) return false;
-      return clearShot(caster, cell, this.tiles, this.cols, "bolt", this.decorOverlay);
+      return this.magicMissileTargetError(caster, cell) === null && this.targetable(this.occ().get(key(cell.x, cell.y)));
     }
     if (this.spellKind === "phantasmalForce") {
       const here = this.occ().get(key(cell.x, cell.y));
@@ -5802,7 +5972,7 @@ export class BattleEngine {
 
   private castHeal(unit: Unit, cell: Point, kind: HealId): void {
     if (!this.validHealTarget(unit, cell)) {
-      this.tip = "Alvo inválido.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -5819,7 +5989,7 @@ export class BattleEngine {
 
   private castCureDisease(unit: Unit, cell: Point): void {
     if (!this.validCureDiseaseTarget(unit, cell)) {
-      this.tip = "Alvo inválido.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -5860,13 +6030,17 @@ export class BattleEngine {
 
   private castLongShot(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Alvo fora de alcance.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
     const occ = this.occ();
     const foe = occ.get(key(cell.x, cell.y));
-    if (!foe) return;
+    if (!foe) {
+      this.tip = "Não há unidade na casa selecionada.";
+      sfxPlay.ui();
+      return;
+    }
     this.spendTier(unit, "longShot");
     this.spellKind = null;
     this.missileTargets = [];
@@ -5929,7 +6103,7 @@ export class BattleEngine {
 
   private castLightning(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Alvo fora de alcance.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -5958,7 +6132,7 @@ export class BattleEngine {
 
   private castLightningTier3(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Alvo fora de alcance.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -5988,14 +6162,19 @@ export class BattleEngine {
   /** Each missile is aimed separately, so the cast collects one target per tap and only
    * fires once they are all chosen. They may be stacked on one enemy or spread around. */
   private castMagicMissile(unit: Unit, cell: Point): void {
-    if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Alvo fora de alcance.";
+    const targetError = this.magicMissileTargetError(unit, cell);
+    if (targetError || !this.spellAimValid(unit, cell)) {
+      this.tip = targetError ?? this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
     const occ = this.occ();
     const foe = occ.get(key(cell.x, cell.y));
-    if (!foe) return;
+    if (!foe) {
+      this.tip = "Não há inimigo visível nessa casa.";
+      sfxPlay.ui();
+      return;
+    }
 
     const want = magicMissileCount(unit.level);
     this.missileTargets.push({ id: foe.id, cell: { x: cell.x, y: cell.y } });
@@ -6036,7 +6215,7 @@ export class BattleEngine {
    * MAG-scaled spellDamage roll — Multi Shot is a volley of arrows, not a spell. */
   private castMultiShot(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Alvo fora de alcance.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6077,7 +6256,7 @@ export class BattleEngine {
 
   private castDoubleStrike(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Toque no inimigo.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6099,7 +6278,7 @@ export class BattleEngine {
 
   private castTrip(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Toque no inimigo.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6129,7 +6308,7 @@ export class BattleEngine {
    * damage is known. */
   private castLifeDrain(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Toque no inimigo.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6161,7 +6340,7 @@ export class BattleEngine {
    * no dedicated art of its own yet) instead of melee. */
   private castPhantasmalForce(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Alvo fora de alcance.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6198,7 +6377,7 @@ export class BattleEngine {
    * SUMMON_FAMILIAR2/SUMMON_FAMILIAR3's notes. */
   private castSummonFamiliar(unit: Unit, cell: Point, tier: 1 | 2 | 3 | 4 | 5): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Escolha um espaço livre ao alcance.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6325,7 +6504,7 @@ export class BattleEngine {
 
   private castWebOfDreams(unit: Unit, click: Point): void {
     if (!this.spellAimValid(unit, click)) {
-      this.tip = "Escolha um espaço ao alcance.";
+      this.tip = this.spellAimError(unit, click);
       sfxPlay.ui();
       return;
     }
@@ -6368,7 +6547,7 @@ export class BattleEngine {
 
   private castCleave(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Toque num hex vizinho.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6407,13 +6586,13 @@ export class BattleEngine {
    * (weaponBonusBonus) plus a level-gated die, on top of a plain weapon hit. */
   private castDivineWrath(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Alcance ou linha inválidos.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
     const tiles = this.wrathRay(unit, cell, DIVINE_WRATH.range);
     if (!tiles || tiles.length === 0) {
-      this.tip = "Alcance ou linha inválidos.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6447,7 +6626,7 @@ export class BattleEngine {
    * a shield is equipped (see startShoulderSmash), so no equipment check needed here. */
   private castShoulderSmash(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Toque num hex vizinho.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6486,13 +6665,13 @@ export class BattleEngine {
    * tells it apart from Divine Wrath's ally-proof line. */
   private castStampede(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
-      this.tip = "Alcance ou linha inválidos.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
     const tiles = this.wrathRay(unit, cell, STAMPEDE.range);
     if (!tiles || tiles.length === 0) {
-      this.tip = "Alcance ou linha inválidos.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6528,7 +6707,7 @@ export class BattleEngine {
     const ray = this.wrathRay(unit, cell, power.range);
     const dir = ray && ray[0] ? axisDir(unit, ray[0]) : null;
     if (!dir) {
-      this.tip = "Alcance ou linha inválidos.";
+      this.tip = this.spellAimError(unit, cell);
       sfxPlay.ui();
       return;
     }
@@ -6581,13 +6760,23 @@ export class BattleEngine {
     return hexNeighbors(actor.x, actor.y).some((n) => n.x === cell.x && n.y === cell.y) ? target : null;
   }
 
+  private potionTargetError(actor: Unit, cell: Point): string {
+    const occupant = this.units.find((x) => x.alive && occupies(x, cell.x, cell.y));
+    if (!occupant) return "Não há aliado nessa casa. Escolha você ou um aliado adjacente.";
+    if (occupant.side !== "player") return "Poções só podem ser usadas em você ou em um aliado.";
+    if (occupant.id !== actor.id && !hexNeighbors(actor.x, actor.y).some((n) => n.x === cell.x && n.y === cell.y)) {
+      return "Esse aliado está longe demais; poções alcançam apenas o próprio personagem ou um aliado adjacente.";
+    }
+    return "Esse personagem não pode receber esta poção agora.";
+  }
+
   /** The tap that resolves an armed potion (see usePotion/handleCell's awaitPotion branch). */
   private confirmPotionAt(actor: Unit, cell: Point): void {
     const kind = this.potionAim;
     if (!kind) return;
     const target = this.validPotionTarget(actor, cell);
     if (!target) {
-      this.tip = "Alvo inválido — só você ou um aliado adjacente.";
+      this.tip = this.potionTargetError(actor, cell);
       sfxPlay.ui();
       return;
     }
@@ -7730,14 +7919,7 @@ export class BattleEngine {
       }
       this.hover = cell;
       if (!this.spellAimValid(selected, cell)) {
-        this.tip =
-          this.spellKind === "piercing"
-            ? "Escolha uma reta da colmeia."
-            : this.spellKind === "cleave"
-              ? "Toque num hex vizinho."
-              : this.spellKind === "longShot"
-                ? "Alvo fora de alcance."
-                : "Alvo inválido.";
+        this.tip = this.spellAimError(selected, cell);
         this.spellArmed = false;
         sfxPlay.ui();
         return;
@@ -7876,16 +8058,13 @@ export class BattleEngine {
       // any other. The turn ends when the pool runs dry (with the action already spent),
       // never merely because the unit acted first.
       if (unit.acted && unit.mov - unit.moveBudgetUsed <= 0) {
-        unit.moved = true;
-        this.selectedId = null;
-        this.pendingFoeId = null;
-        this.inspectedId = null;
-        this.threat = [];
+        // Keep the actor selected with no reach so the player can undo this post-action
+        // movement before explicitly passing the turn. auto-passing here removed any
+        // chance to cancel the move that spent the final movement point.
+        this.selectedId = unit.id;
         this.reach.clear();
         this.attackFrom.clear();
-        this.orig = null;
-        this.turnStart = null;
-        this.mode = "idle";
+        this.mode = "selected";
         return;
       }
       // Not acted yet — movement isn't a one-shot: the unit stays "selected" with a fresh
@@ -8707,7 +8886,7 @@ export class BattleEngine {
             : 1.85;
     // Conjurer sheets (and Malrec's own, the same 36-frame data) are intentionally 10%
     // slower without slowing turn or spell logic.
-    const animationRate = u.sprite === "conjurer" || u.sprite === "malrec" ? 0.9 : 1;
+    const animationRate = u.sprite === "travelingMerchant" ? 0.45 : u.sprite === "conjurer" || u.sprite === "malrec" ? 0.9 : 1;
     const rate = base * (moving ? 2.2 : 1) * animationRate;
     if (moving || this.reducedMotion) return Math.floor(u.bob * rate) % n;
     const cycle = Math.max(2, n * 2 - 2);
@@ -11154,9 +11333,10 @@ export class BattleEngine {
           const headY = topY + (botY - topY) * fall * fall;
           const w = tile * 0.8 * sz;
           const blade = new Path2D();
-          blade.moveTo(cx - w * 0.25, topY);
-          blade.quadraticCurveTo(cx + w * 1.7, (topY + headY) / 2, cx, headY);
-          blade.quadraticCurveTo(cx + w * 0.15, (topY + headY) / 2, cx - w * 0.25, topY);
+          const side = b.mirrorX ? -1 : 1;
+          blade.moveTo(cx - w * 0.25 * side, topY);
+          blade.quadraticCurveTo(cx + w * 1.7 * side, (topY + headY) / 2, cx, headY);
+          blade.quadraticCurveTo(cx + w * 0.15 * side, (topY + headY) / 2, cx - w * 0.25 * side, topY);
           blade.closePath();
           ctx.globalCompositeOperation = "source-over";
           ctx.globalAlpha = fade;

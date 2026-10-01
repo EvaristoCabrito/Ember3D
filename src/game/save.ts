@@ -262,7 +262,7 @@ function cleanDialogTree(raw: unknown): DialogTree | null {
           if (!r || typeof r !== "object") return [];
           const rr = r as Record<string, unknown>;
           if (typeof rr.text !== "string") return [];
-          const action = rr.action === "tavern" || rr.action === "smith" || rr.action === "healer" || rr.action === "recruitAldric" || rr.action === "acceptSuspectHostageQuest" ? (rr.action as DialogAction) : undefined;
+          const action = rr.action === "tavern" || rr.action === "smith" || rr.action === "healer" || rr.action === "merchant" || rr.action === "recruitAldric" || rr.action === "acceptSuspectHostageQuest" ? (rr.action as DialogAction) : undefined;
           return [{ text: rr.text, next: typeof rr.next === "string" ? rr.next : null, action }];
         })
       : undefined;
@@ -545,6 +545,7 @@ export function emptySave(muted = false): SaveData {
     hungerStreak: 0,
     alertStreak: 0,
     lastRoadEncounterId: null,
+    roadEncountersSeen: [],
     exploredHexes: [`${START_HEX.x},${START_HEX.y}`],
   };
 }
@@ -683,6 +684,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     hungerStreak: clampInt(raw.hungerStreak, 0, 999999),
     alertStreak: clampInt(raw.alertStreak, 0, 999999),
     lastRoadEncounterId: typeof raw.lastRoadEncounterId === "string" ? raw.lastRoadEncounterId : null,
+    roadEncountersSeen: cleanStringList(raw.roadEncountersSeen, MISSION_IDS),
     exploredHexes: cleanExploredHexes(raw.exploredHexes, completed, overworldPos),
   };
 }

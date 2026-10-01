@@ -39,6 +39,7 @@ import {
   RANDOM_ENCOUNTER_REGIONS,
   isRandomEncounter,
   isCrossingDungeon,
+  keepsDefeatedSpawns,
   clearSessionMapOverride,
   draftToMission,
   latestSerialFor,
@@ -281,6 +282,7 @@ function hudBlank(): HudSnapshot {
     playerAlive: 0,
     enemyAlive: 0,
     busy: false,
+    canCancelMovement: false,
     result: null,
     winAvailable: false,
     activeExit: null,
@@ -400,6 +402,7 @@ const BRIEF_ART: Record<string, string> = {
   estalagem: "/game/assets/brief-estalagem.jpg",
   colina: "/game/assets/brief-colina.jpg",
   passagem: "/game/assets/brief-passagem.jpg?v=2",
+  "watchtower-gate-floor": "/game/assets/brief-watchtower.jpg",
   vertente: "/game/assets/brief-vertente.jpg?v=2",
   portao: "/game/assets/brief-portao.jpg",
   profundezas: "/game/assets/profundezas-bg.jpg?v=2",
@@ -1049,6 +1052,7 @@ export function GameApp() {
       enemyLevels?: Record<number, number>,
       neutralLevels?: Record<number, number>,
       resume?: BattleSnapshot,
+      preserveKnockouts = false,
     ) => {
       if (!art) return;
       // A real mission start (no override) always clears any leftover playtest identity —
@@ -1070,11 +1074,17 @@ export function GameApp() {
           ? { ...freedAldric, neutralSpawns: freedAldric.neutralSpawns.filter((s) => !(s.name in TEST_PARTY_CLASS) || heroRecruited(s.name, save.completed, save.flags)) }
           : freedAldric;
       // A free-roam map is walked by the party leader alone.
-      const m = testMode && !resolved.explore
+      let m = testMode && !resolved.explore
         ? addMissingTestHeroes(seated)
         : !testMode && seated.id.startsWith("watchtower-") && heroRecruited("Aldric", save.completed, save.flags)
           ? addAdditionalPartyHeroes(seated, { Aldric: "aldric" })
           : seated;
+      // Advancing through a dungeon connector carries wounds forward. Heroes who fell on
+      // the previous floor stay out of the next one instead of respawning at full HP
+      // because zero was treated like a missing HP value.
+      if (preserveKnockouts) {
+        m = { ...m, playerSpawns: m.playerSpawns.filter((spawn) => carried[spawn.name] !== 0) };
+      }
       // !!! DO NOT change this back to `m.index + 1` (mission-position level) !!!
       // Test mode exists so the party can be tested at full strength on ANY mission without
       // grinding first — that means DEFAULT_TEST_LEVEL (see its own definition below, also
@@ -1140,7 +1150,7 @@ export function GameApp() {
       const heroHunger = testMode ? undefined : save.heroHunger;
       const heroDiseases = testMode ? undefined : save.heroDiseases;
       const heroPoisons = testMode ? undefined : save.heroPoisons;
-      const crossingDefeatedSpawns = !testMode && isCrossingDungeon(m) ? save.crossingDefeatedSpawns[m.id] ?? [] : [];
+      const crossingDefeatedSpawns = !testMode && keepsDefeatedSpawns(m) ? save.crossingDefeatedSpawns[m.id] ?? [] : [];
       const questPickups = testMode ? undefined : activePickupsFor(save, m.id);
       const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, heroPoisons, crossingDefeatedSpawns, questPickups }, Date.now() % 100000, testMode);
       if (resume && resume.missionId === m.id) battle.applySnapshot(resume);
@@ -1202,6 +1212,7 @@ export function GameApp() {
   const persistVictory = useCallback(() => {
     if (!engine || !mission) return;
     const battleHp = engine.battlePlayerHp();
+    const floorConnector = engine.activeExit?.id === "floor-connector";
     const bags = engine.remainingBags();
     const growth: GrowthLine[] = [];
     const newPromotions: { name: string; options: [ClassId, ClassId] }[] = [];
@@ -1217,10 +1228,12 @@ export function GameApp() {
       const stTo = statsFor(u.classId, to);
       const mag = CLASSES[u.classId].mag > 0;
       const battle = battleHp[u.name] ?? u.hp;
-      const healed = u.alive
-        ? Math.min(stTo.hp, battle + Math.ceil((stTo.hp - battle) * 0.5))
-        : Math.max(1, Math.ceil(stTo.hp * 0.5));
-      const restHp = u.alive ? healed - battle : healed;
+      const healed = floorConnector
+        ? (u.alive ? battle : 0)
+        : u.alive
+          ? Math.min(stTo.hp, battle + Math.ceil((stTo.hp - battle) * 0.5))
+          : Math.max(1, Math.ceil(stTo.hp * 0.5));
+      const restHp = floorConnector ? 0 : u.alive ? healed - battle : healed;
       hp[u.name] = healed;
       growth.push({
         name: u.name,
@@ -1263,11 +1276,14 @@ export function GameApp() {
     awardedRef.current = mission.id;
     const completed = save.completed.includes(mission.id) ? save.completed : [...save.completed, mission.id];
     if (!testMode) {
-      const crossingDefeatedSpawns = isCrossingDungeon(mission)
-        ? [...new Set([
-            ...(save.crossingDefeatedSpawns[mission.id] ?? []),
-            ...engine.units.filter((unit) => (unit.side === "enemy" || unit.side === "neutral") && !unit.alive && !unit.summoned).map((unit) => unit.id),
-          ])]
+      const crossingDefeatedSpawns = keepsDefeatedSpawns(mission)
+        ? {
+            ...save.crossingDefeatedSpawns,
+            [mission.id]: [...new Set([
+              ...(save.crossingDefeatedSpawns[mission.id] ?? []),
+              ...engine.units.filter((unit) => (unit.side === "enemy" || unit.side === "neutral") && !unit.alive && !unit.summoned).map((unit) => unit.id),
+            ])],
+          }
         : save.crossingDefeatedSpawns;
       const loot = engine.units
         .filter((x) => x.side === "enemy" && !x.alive)
@@ -1355,12 +1371,22 @@ export function GameApp() {
     sfxPlay.ui();
   };
 
+  const [missionNotice, setMissionNotice] = useState<string | null>(null);
   const openMission = (id: string) => {
     bootAudio();
     if (!testMode && isGatedMission(id)) {
       const rec = readMapSave();
       if (missionAccess(id, rec, progressionExtras(rec)) !== "available") return;
     }
+    // Only dungeons can be entered again once done; any other finished mission is closed for good.
+    if (!testMode && save.completed.includes(id)) {
+      const done = missionById(id);
+      if (!done || !keepsDefeatedSpawns(done)) {
+        setMissionNotice("Você não pode repetir missões já completadas.");
+        return;
+      }
+    }
+    setMissionNotice(null);
     const wispForest = campaignLocations.find((location) => location.id === "wisp-forest");
     const enteringWispForest = Boolean(
       wispForest &&
@@ -1506,17 +1532,17 @@ export function GameApp() {
     playMenuMusic();
   }, [screen, muted, missionId, innEntry, save.seenSmithIntro]);
 
-  // Normal campaigns keep the one travel style selected when the campaign began. Test mode
-  // deliberately has no persistent save, so it returns to the choice screen every time.
+  // Reuse the selected travel style whenever the map opens. Campaign saves persist it;
+  // test mode keeps it in memory for this session.
   const goToMap = useCallback(() => {
-    const mode = testMode ? null : save.mapMode;
+    const mode = testMode ? mapMode : (save.mapMode ?? mapMode);
     if (mode) {
       setMapMode(mode);
       setScreen(mode === "classic" ? "worldMap" : "overworldMap");
       return;
     }
     setScreen("mapChoice");
-  }, [save.mapMode, testMode]);
+  }, [save.mapMode, mapMode, testMode]);
 
   const leaveBoot = useCallback(() => {
     // Entering the world map is a hard music boundary: do not leave intro.mp3 under it.
@@ -1925,6 +1951,15 @@ export function GameApp() {
           onPick={openMission}
         />
       )}
+      {missionNotice && (screen === "campaign" || screen === "worldMap" || screen === "overworldMap") && (
+        <button
+          type="button"
+          onClick={() => setMissionNotice(null)}
+          className="fixed z-50 top-24 left-1/2 -translate-x-1/2 ember-plate px-3 py-1.5 text-xs"
+        >
+          {missionNotice}
+        </button>
+      )}
       {screen === "overworldMap" && !overworldSave.seenOverworldIntro && (
         <OverworldIntroScreen
           onClose={() => {
@@ -2081,6 +2116,7 @@ export function GameApp() {
           }}
           startInSmith={innEntry === "smith"}
           startInHealer={innEntry === "healer"}
+          startInMerchant={innEntry === "merchant"}
           onLeave={
             innEntry
               ? () => {
@@ -2394,6 +2430,7 @@ export function GameApp() {
           }}
           onHud={onHud}
           onPause={() => setPaused(true)}
+          onTitle={goToTitle}
           onResume={() => {
             setSlotMode(null);
             setOverwrite(null);
@@ -2488,9 +2525,10 @@ export function GameApp() {
           advanceLabel={hud.activeExit?.id === "floor-connector" ? (hud.activeExit.returnConnector ? "Voltar" : "Avançar") : undefined}
           onAdvance={
             hud.activeExit?.id === "floor-connector" && hud.activeExit.targetMapId
-              ? () => startBattle(hud.activeExit!.targetMapId!, save.unitHp)
+              ? () => startBattle(hud.activeExit!.targetMapId!, save.unitHp, undefined, undefined, undefined, undefined, undefined, true)
               : undefined
           }
+          resting={hud.activeExit?.id !== "floor-connector"}
           turn={hud.turn}
           growth={lastGrowth}
           loot={lastLoot}
@@ -2524,7 +2562,7 @@ export function GameApp() {
             goToMap();
           }}
           mapLabel={customMission ? "Voltar ao editor" : "Mapa"}
-          onTitle={goToTitle}
+
           // The raw "next mission by global index" shortcut this used to offer could skip
           // straight past an entire other location (missions aren't numbered in location
           // order) — hasNext is always false below now, so this never fires; onMap is the
@@ -2546,7 +2584,7 @@ export function GameApp() {
           turn={hud.turn}
           growth={null}
           art={briefArt(mission.id)}
-          onTitle={goToTitle}
+
           onNext={() => startBattle(mission.id, save.unitHp, customMission ?? undefined)}
           onMap={
             customMission
@@ -7269,6 +7307,7 @@ function BattleScreen({
   onSave,
   onLoad,
   onQuit,
+  onTitle,
   onEquipWeapon,
   onEquipItem,
   onAdjustStatPoint,
@@ -7291,6 +7330,7 @@ function BattleScreen({
   onSave: () => void;
   onLoad: () => void;
   onQuit: () => void;
+  onTitle: () => void;
   /** Persist a mid-battle gear change. `alsoOwn` is true when the item came out of a chest
    * this battle and therefore is not in the save's owned lists yet. */
   onEquipWeapon?: (hero: string, weaponId: string, alsoOwn: boolean) => void;
@@ -7898,7 +7938,7 @@ function BattleScreen({
               </button>
             </>
           ) : (
-            <p className="text-xs text-muted">{hud.phase === "enemy" ? "O inimigo age…" : "Toque numa aliada ou num inimigo."}</p>
+            <p className="text-xs text-muted">{hud.phase === "enemy" ? "O inimigo age…" : "Toque num aliado ou num inimigo com o botão direito para ver o status."}</p>
           )}
         </div>
         {engine.mission.explore ? (
@@ -7969,7 +8009,7 @@ function BattleScreen({
             size="sm"
             variant="ghost"
             className="ember-btn ember-btn-sm ember-btn-ghost"
-            disabled={(!showAct && hud.mode !== "awaitPotion") || hud.busy}
+            disabled={((!showAct && hud.mode !== "awaitPotion") || hud.busy) && !hud.canCancelMovement}
             onClick={() => engine.cancel()}
           >
             Cancelar
@@ -8018,11 +8058,6 @@ function BattleScreen({
           {hud.winAvailable && !hud.result && (
             <Button size="sm" className="ml-auto ember-btn ember-btn-sm ember-btn-primary" onClick={() => hud.activeExit ? setWinPopupDismissed(false) : engine.confirmFinish()}>
               {hud.activeExit ? "Usar waypoint" : "Encerrar missão"}
-            </Button>
-          )}
-          {hud.canUndoMove && !hud.result && (
-            <Button size="sm" variant="ghost" className="ember-btn ember-btn-sm ember-btn-ghost" title="Volta ao ponto onde o turno começou e devolve todo o movimento gasto. Some assim que você age." onClick={() => engine.undoMove()}>
-              Desfazer movimento
             </Button>
           )}
           <Button size="sm" variant="ghost" className={`ember-btn ember-btn-sm ember-btn-ghost${hud.winAvailable && !hud.result ? "" : " ml-auto"}`} disabled={hud.phase !== "player" || !!hud.result} onClick={() => engine.endTurn()}>
@@ -8168,6 +8203,9 @@ function BattleScreen({
                   {playtest ? "Encerrar teste" : "Desistir"}
                 </Button>
               )}
+              <Button variant="ghost" className="ember-btn ember-btn-ghost" onClick={onTitle}>
+                Tela inicial
+              </Button>
             </div>
           </div>
         </div>
@@ -8958,7 +8996,6 @@ function ResultScreen({
   turn,
   growth,
   art,
-  onTitle,
   onNext,
   onInn,
   onMap,
@@ -8969,6 +9006,7 @@ function ResultScreen({
   loot,
   advanceLabel,
   onAdvance,
+  resting = true,
 }: {
   win: boolean;
   title: string;
@@ -8976,7 +9014,6 @@ function ResultScreen({
   turn: number;
   growth: GrowthLine[] | null;
   art: string | null;
-  onTitle: () => void;
   onNext: () => void;
   onInn?: () => void;
   onMap?: () => void;
@@ -8991,6 +9028,8 @@ function ResultScreen({
    * destination, not the "next mission by index" hasNext was turned off for). */
   advanceLabel?: string;
   onAdvance?: () => void;
+  /** Floor connectors continue the same expedition and do not grant camp recovery. */
+  resting?: boolean;
 }) {
   return (
     <section className="relative h-dvh min-h-0 flex flex-col overflow-hidden bg-bg">
@@ -9000,15 +9039,16 @@ function ResultScreen({
           <div className="absolute inset-0 bg-gradient-to-t from-bg/90 via-bg/40 to-bg/20" />
         </>
       )}
-      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-4">
+      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-4 pt-[max(2rem,env(safe-area-inset-top))] pb-4">
+        <div style={{ zoom: 0.75 }}>
         <p className={`text-sm ember-kicker${win ? "" : " is-defeat"}`}>
-          {win ? "Vitória" : "Derrota"} · T{turn}
+          <span style={{ zoom: 4 / 3 }}>{win ? "Vitória" : "Derrota"} · T{turn}</span>
         </p>
-        <h1 className="font-display text-4xl sm:text-5xl mt-2 mb-2 ember-title">{title}</h1>
+        <h1 className="font-display text-4xl sm:text-5xl mt-2 mb-2 ember-title"><span style={{ zoom: 4 / 3 }}>{title}</span></h1>
         <p className="text-lg text-muted mb-6">{body}</p>
         {loot && loot.length > 0 && <p className="text-sm text-accent mb-4">Achado no campo: {loot.join(", ")}</p>}
         {growth && growth.length > 0 && (
-          <ul className="mb-6 space-y-2 max-w-lg">
+          <ul className="mb-6 space-y-2 max-w-[34rem] w-full">
             {growth.map((g) => (
               <li key={g.name} className="ember-slot px-3 py-2.5">
                 <p className="font-medium text-lg">
@@ -9027,7 +9067,9 @@ function ResultScreen({
                   g.to !== g.from && <p className="mt-1 text-sm text-accent">Nível máximo · subiu</p>
                 )}
                 <p className="text-sm text-muted tabular-nums mt-1">Combate: {g.hpBattle}/{g.maxFrom}</p>
-                {g.fallen ? (
+                {!resting ? (
+                  <p className="text-sm text-muted tabular-nums">{g.fallen ? "Fora do próximo andar" : `Próximo andar: ${g.hpCamp} HP · sem descanso`}</p>
+                ) : g.fallen ? (
                   <p className="text-sm text-muted tabular-nums">Descanso: revive com {g.hpCamp} HP (metade de {g.maxTo})</p>
                 ) : (
                   <p className="text-sm tabular-nums text-fg/90">
@@ -9049,13 +9091,14 @@ function ResultScreen({
                 ) : g.to !== g.from ? (
                   <p className="text-sm text-muted">Magias: este nível não adicionou usos — cargas gastas não voltam</p>
                 ) : null}
-                <p className="text-base tabular-nums mt-1">Acampamento: {g.hpCamp}/{g.maxTo}</p>
+                {resting && <p className="text-base tabular-nums mt-1">Acampamento: {g.hpCamp}/{g.maxTo}</p>}
               </li>
             ))}
           </ul>
         )}
+        </div>
       </div>
-      <div className="relative z-10 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col gap-2">
+      <div className="relative z-10 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col gap-2 max-w-xl w-full" style={{ zoom: 0.75 }}>
         {onAdvance && (
           <Button size="xl" className="w-full ember-btn ember-btn-primary" onClick={onAdvance}>
             {advanceLabel ?? "Avançar"}
@@ -9082,9 +9125,7 @@ function ResultScreen({
             {mapLabel ?? "Cenários"}
           </Button>
         )}
-        <Button variant="ghost" className="w-full ember-btn ember-btn-ghost" onClick={onTitle}>
-          Tela inicial
-        </Button>
+
       </div>
     </section>
   );

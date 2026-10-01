@@ -4,16 +4,16 @@ Enter from Watchtower via `watchtower-gate-floor`. All six maps are available th
 
 | Floor | Map ID | Size | Role |
 | --- | --- | --- | --- |
-| Lower I | watchtower-undercroft | 24×20 | Stores, cistern and basalt sanctuary |
-| Lower II | watchtower-prison | 26×20 | Four cell blocks, guard aisle, torture/ossuary rooms, and Aldric's lockpick-gated cell |
-| Upper I | watchtower-gate-floor | 14×14 | Gate guard and dungeon entrance |
-| Upper II | watchtower-barracks | 14×14 | Wooden barracks wing and stone arsenal |
-| Upper III | watchtower-command | 14×14 | Commander chamber and limestone/basalt floors |
-| Upper IV | watchtower-beacon | 14×14 | Signal brazier and final sentinels |
+| Lower I | watchtower-undercroft | 48×40 | Stores, cistern and basalt sanctuary |
+| Lower II | watchtower-prison | 52×40 | Four cell blocks, guard aisle, torture/ossuary rooms, and Aldric's lockpick-gated cell |
+| Upper I | watchtower-gate-floor | 28×28 | Gate guard and dungeon entrance |
+| Upper II | watchtower-barracks | 28×28 | Wooden barracks wing and stone arsenal |
+| Upper III | watchtower-command | 28×28 | Commander chamber and limestone/basalt floors |
+| Upper IV | watchtower-beacon | 28×28 | Signal brazier and final sentinels |
 
 Connections: Prison ↔ Undercroft ↔ Gate ↔ Barracks ↔ Command ↔ Beacon. The gate and beacon have dungeon exits. Red floor connectors use the existing transition system; these are not new stair art. Return links are labeled Voltar.
 
-The four upper maps share their tower outline, column positions and stair layout. New ground variants use board-aligned continuous material mapping. Older cages, wall segments, storage props, braziers and furnishings provide detail without replacing assets or changing FX definitions.
+The four upper maps share their doubled tower outline, column positions and stair layout. Party entry points are spaced away from exit and floor connectors so the first move cannot immediately leave a floor. Each floor has two additional guards positioned away from the party entry. New ground variants use board-aligned continuous material mapping. Older cages, wall segments, storage props, braziers and furnishings provide detail without replacing assets or changing FX definitions.
 
 The prison's Aldric dialogue branches through his account of the Crimson Company's defeat and ends with an option to recruit him. A lockpick opens the cell; after he joins, he is added to the party roster and appears on the remaining watchtower floors.
 

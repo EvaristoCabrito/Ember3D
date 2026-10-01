@@ -124,7 +124,8 @@ export type ClassId =
   // body — see SUMMON_FAMILIAR4.
   | "familiar4"
   // Conjurer tier 5 (Invocar Cão Zumbi): a summoned zombie dog — see SUMMON_ZOMBIE_DOG.
-  | "zombieDog";
+  | "zombieDog"
+  | "travelingMerchant";
 export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "wardog2" | "EmberedWraith" | "zombie" | "zombie2" | "troll" | "troll2" | "RoccoTheBird" | "morvenian-wolf" | "mordavian-wolf" | "mordavian-wolf-final" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "familiar4" | "zombieDog" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
   // Generic-enemy "alter" sprites, split off so a plain Archer/Mage/Healer enemy (and their
   // own promotions) never renders as literally the same SpriteId as Neera/Voss/Salazar the
@@ -147,7 +148,7 @@ export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric
   | "shadyPatron"
   | "soupLady"
   | "villagerF1"
-  | "woodsman";
+  | "woodsman" | "travelingMerchant";
 export type HealId = "cureMinor" | "cureWounds" | "cureLight";
 export type SpellKind =
   | "fireball"
@@ -257,8 +258,8 @@ export interface DialogReply {
   action?: DialogAction;
 }
 
-/** A handoff a dialog reply can trigger: an Inn menu or a story recruitment. */
-export type DialogAction = "tavern" | "smith" | "healer" | "recruitAldric" | "acceptSuspectHostageQuest";
+/** A handoff a dialog reply can trigger: an Inn or merchant shop, or a story recruitment. */
+export type DialogAction = "tavern" | "smith" | "healer" | "merchant" | "recruitAldric" | "acceptSuspectHostageQuest";
 
 /** One screen of the dialog popup: a speaker, an optional portrait, and the line itself.
  * Either it links straight to the next line (`next`, plain "OK" to continue) or it branches
@@ -947,6 +948,8 @@ export interface HudSnapshot {
   playerAlive: number;
   enemyAlive: number;
   busy: boolean;
+  /** Whether Cancel can safely stop a player movement animation before its queued action resolves. */
+  canCancelMovement: boolean;
   result: "victory" | "defeat" | null;
   winAvailable: boolean;
   /** The waypoint currently offering an exit action — see DecorationDef.exitKind and
@@ -1269,6 +1272,8 @@ export interface SaveData {
    * very next pick (see roadEncounterIds/stepOverworld in overworld.ts) so the same fight
    * never repeats twice in a row. null before the first one ever fires. */
   lastRoadEncounterId: string | null;
+  /** Road battle maps seen during this campaign; each saved slot keeps its own encounter history. */
+  roadEncountersSeen?: string[];
 }
 
 export interface SaveBank {

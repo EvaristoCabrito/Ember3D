@@ -132,13 +132,15 @@ const HERO_PORTRAIT: Partial<Record<string, string>> = {
  * the source image's own dimensions. */
 export function portraitFor(sprite: SpriteId): { src: string; framed: boolean; position?: string } {
   const framed = HERO_PORTRAIT[sprite];
-  return framed
-    ? { src: framed, framed: true }
-    : { src: `/game/sprites/${sprite}/1.png`, framed: false };
+  return sprite === "travelingMerchant"
+    ? { src: "/game/portraits/traveling-merchant.png", framed: false }
+    : framed
+      ? { src: framed, framed: true }
+      : { src: `/game/sprites/${sprite}/1.png`, framed: false };
 }
 
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
-const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "wardog2", "EmberedWraith", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombieDog", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
+const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "wardog2", "EmberedWraith", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombieDog", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman", "travelingMerchant"];
 
 // Real load progress for the title screen's loading bar: every image request counts once when it
 // is asked for and once when it settles (loaded or failed). loadGameArt requests its batches one
@@ -665,7 +667,19 @@ export async function loadGameArt(): Promise<GameArt> {
     loadImage("/game/fx/lightning-core-v3.png?v=1"),
   ]);
   const webfloor = await loadImage("/game/fx/webfloor.png?v=1");
+  const watchtowerEntryBackdrop = await loadImage("/game/assets/watchtower-entry-bg.jpg");
+  const watchtowerDungeonBackdrop = await loadImage("/game/assets/watchtower-dungeon-bg.jpg");
+  const watchtowerUpperBackdrop = await loadImage("/game/assets/watchtower-upper-bg.jpg");
+  const watchtowerBeaconBackdrop = await loadImage("/game/assets/watchtower-beacon-bg.jpg");
   const backdrops: Record<string, HTMLImageElement> = {
+    // Watchtower route: the entry courtyard, two lower dungeon floors, the second and third
+    // upper floors, then the beacon on the fourth upper floor.
+    "watchtower-gate-floor": watchtowerEntryBackdrop,
+    "watchtower-undercroft": watchtowerDungeonBackdrop,
+    "watchtower-prison": watchtowerDungeonBackdrop,
+    "watchtower-barracks": watchtowerUpperBackdrop,
+    "watchtower-command": watchtowerUpperBackdrop,
+    "watchtower-beacon": watchtowerBeaconBackdrop,
     "frozen-tundra-crossing": await loadImage("/game/assets/frozen-tundra-background.jpg"),
     profundezas: await loadImage("/game/assets/profundezas-bg.jpg?v=2"),
     thebridge: await loadImage("/game/assets/thebridge-bg.jpg?v=1"),

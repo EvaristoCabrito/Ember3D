@@ -2307,17 +2307,21 @@ export class ThreeBattleRenderer {
     const casterVisual = this.engine.unitVisual(caster, tile);
     const casterGroundY = casterAnchor.worldY + casterVisual.footY;
     const casterCenterY = (casterVisual.footOffset - casterVisual.h * 0.38) * casterVisual.scaleY;
-    // This spell is a foreground combat effect: keep it readable over actors along its path.
-    const missileDepth = DEPTH_Z_FRONT - 0.1;
+    const targetAnchor = this.engine.unitAnchor(target);
+    const targetVisual = this.engine.unitVisual(target, tile);
+    const targetGroundY = targetAnchor.worldY + targetVisual.footY;
+    const targetCenterY = (targetVisual.footOffset - targetVisual.h * 0.48) * targetVisual.scaleY;
+    // Keep the spell just in front of both endpoint sprite planes. Depth testing stays enabled,
+    // so nearer scene geometry can still occlude the missile normally.
+    const missileDepth = Math.max(
+      spriteDepthZ(casterGroundY, tile) + UNIT_DEPTH_TIE,
+      spriteDepthZ(targetGroundY, tile) + UNIT_DEPTH_TIE,
+    ) + 0.01;
     const origin = new THREE.Vector3(
       casterAnchor.worldX + casterVisual.sway,
       -(casterGroundY + casterVisual.bob - casterVisual.lift + casterCenterY),
       missileDepth,
     );
-    const targetAnchor = this.engine.unitAnchor(target);
-    const targetVisual = this.engine.unitVisual(target, tile);
-    const targetGroundY = targetAnchor.worldY + targetVisual.footY;
-    const targetCenterY = (targetVisual.footOffset - targetVisual.h * 0.48) * targetVisual.scaleY;
     const destination = new THREE.Vector3(
       targetAnchor.worldX + targetVisual.sway,
       -(targetGroundY + targetVisual.bob - targetVisual.lift + targetCenterY),

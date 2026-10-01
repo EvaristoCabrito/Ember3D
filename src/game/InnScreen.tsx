@@ -58,9 +58,18 @@ const NPCS = [
     talk: "Não subo. O chão me conhece. Tragam histórias, não luz. Se Brue ainda mede Gold, o mundo não acabou.",
     shop: false,
   },
+  {
+    id: "merchant",
+    name: "Mercador Itinerante",
+    role: "Viajante",
+    portrait: "/game/portraits/traveling-merchant.png",
+    talk: "Poções, rações e gazuas. Levo pouco, mas escolhi bem.",
+    shop: true,
+  },
 ] as const;
 
 const POTION_ORDER: PotionId[] = ["weak", "mid", "potent", "disease", "manaSmall", "manaMid", "manaLarge"];
+const MERCHANT_POTION_ORDER: PotionId[] = ["weak", "mid", "manaSmall"];
 
 const ICONS: Record<PotionId, string> = {
   weak: "/game/icons/potion-weak.png",
@@ -111,6 +120,7 @@ export function InnScreen({
   questOffered,
   startInSmith = false,
   startInHealer = false,
+  startInMerchant = false,
   healerTargets = [],
   onHealerCast,
   onHealerCureAilments,
@@ -132,6 +142,8 @@ export function InnScreen({
   startInSmith?: boolean;
   /** Opened by talking to Curandeiro Ancião in the walkable Inn. */
   startInHealer?: boolean;
+  /** Opens the limited roadside merchant inventory instead of the inn menus. */
+  startInMerchant?: boolean;
   healerTargets?: HealerTarget[];
   /** Applies one paid Cura Média cast and returns the HP actually restored. */
   onHealerCast?: (hero: string) => number | false;
@@ -175,7 +187,8 @@ export function InnScreen({
 }) {
   const [view, setView] = useState<"npc" | "smith" | "healer">(startInHealer ? "healer" : startInSmith && save.seenSmithIntro ? "smith" : "npc");
   const [smithIntro, setSmithIntro] = useState(startInSmith && !save.seenSmithIntro);
-  const [npc, setNpc] = useState<(typeof NPCS)[number]>(NPCS[0]);
+  const [npc, setNpc] = useState<(typeof NPCS)[number]>(startInMerchant ? NPCS[NPCS.length - 1] : NPCS[0]);
+  const npcOptions = startInMerchant ? [NPCS[NPCS.length - 1]] : NPCS.slice(0, -1);
   const [hero, setHero] = useState<string>("Kael");
   useEffect(() => {
     onTalkToNpc?.(npc.id);
@@ -343,7 +356,7 @@ export function InnScreen({
 
   return (
     <section className="shop-surface relative h-dvh min-h-0 flex flex-col overflow-hidden bg-bg">
-      <img src="/game/assets/brief-estalagem.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+      {!startInMerchant && <img src="/game/assets/brief-estalagem.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />}
       <div className="absolute inset-0 bg-gradient-to-t from-bg/80 via-bg/25 to-bg/10" />
       <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
         {/* Back/exit always sits at the far left, across every screen, so it never gets lost. */}
@@ -351,8 +364,8 @@ export function InnScreen({
           Sair
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-xs ember-kicker">Pousada à margem da cinza</p>
-          <h1 className="font-display text-2xl leading-none ember-title">A Estalagem do Osso Seco</h1>
+          <p className="text-xs ember-kicker">{startInMerchant ? "Parada na estrada" : "Pousada à margem da cinza"}</p>
+          <h1 className="font-display text-2xl leading-none ember-title">{startInMerchant ? "Mercador Itinerante" : "A Estalagem do Osso Seco"}</h1>
         </div>
         <button
           type="button"
@@ -369,13 +382,13 @@ export function InnScreen({
         >
           Equipar
         </button>
-        <button
+        {!startInMerchant && (<button
           type="button"
           onClick={enterSmith}
           className="h-10 px-3 rounded-md ember-chip text-xs uppercase tracking-[0.14em]"
         >
           Ferreiro
-        </button>
+        </button>)}
         <p className="text-sm ember-chip rounded-md px-2 py-1"><GoldAmount amount={ember} /></p>
         <button type="button" onClick={onMute} className="size-10 grid place-items-center rounded-md ember-chip" aria-label="Som">
           {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
@@ -383,7 +396,7 @@ export function InnScreen({
       </header>
       <div className="relative z-10 flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-3 max-w-lg mx-auto w-full">
         <div className="grid grid-cols-3 gap-2">
-          {NPCS.map((n) => (
+          {npcOptions.map((n) => (
             <button
               key={n.id}
               type="button"
@@ -404,7 +417,7 @@ export function InnScreen({
             <p className="mt-1 text-sm leading-relaxed text-fg/90">{npc.talk}</p>
           </div>
         </div>
-        {npc.id === "brue" && (
+        {npc.id === "brue" && !startInMerchant && (
           <div className="relative ember-panel p-3 flex flex-col gap-2">
             <p className="text-xs ember-kicker">Descanso · uma noite</p>
             <p className="text-sm leading-relaxed text-fg/90">Dormir na estalagem avança um dia, recupera 75% do HP perdido e restaura todos os usos de feitiço.</p>
@@ -481,7 +494,7 @@ export function InnScreen({
         })}
         {npc.shop && (
           <div className="shop-panel relative ember-panel p-3 flex flex-col gap-2">
-            <p className="text-xs ember-kicker">Adega · quem leva</p>
+            <p className="text-xs ember-kicker">{startInMerchant ? "Estoque limitado · escolha o que levar" : "Adega · quem leva"}</p>
             <div className="flex flex-wrap gap-1">
               {partyRoster.map((name) => (
                 <Button
@@ -531,7 +544,7 @@ export function InnScreen({
                   Prévia: {mealTargets.length} {mealTargets.length === 1 ? "pessoa" : "pessoas"} podem comer · total {mealAllCost} Gold
                 </p>
               </div>
-              {POTION_ORDER.map((kind) => {
+              {(startInMerchant ? MERCHANT_POTION_ORDER : POTION_ORDER).map((kind) => {
                 const price = POTION_PRICE[kind];
                 const have = bag[kind] ?? 0;
                 const qty = cart[kind] ?? 0;
@@ -773,7 +786,7 @@ function HealerServicePanel({
 
   return (
     <section className="shop-surface relative h-dvh min-h-0 flex flex-col overflow-hidden bg-bg">
-      <img src="/game/assets/brief-estalagem.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+      {!startInMerchant && <img src="/game/assets/brief-estalagem.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />}
       <div className="absolute inset-0 bg-gradient-to-t from-bg/85 via-bg/45 to-bg/25" />
       <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
         <button type="button" onClick={onLeave} disabled={busy} className="h-10 px-3 rounded-md ember-chip text-xs uppercase tracking-[0.14em] disabled:opacity-50">Voltar</button>
