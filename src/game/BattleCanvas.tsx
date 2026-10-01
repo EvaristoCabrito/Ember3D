@@ -210,9 +210,9 @@ export function BattleCanvas({
       }
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       // Elemental FX is a DOM canvas between the Three scene and the normal unit overlay.
-      // While it is active, decorations must move to that upper overlay too; otherwise the FX
-      // canvas inevitably paints over them regardless of their Three world depth.
-      const drawDecorationsOverFx = !!rendererThree && !!fx?.hasEffects();
+      // Sprite-only maps move decorations to that overlay. Architecture maps keep actors
+      // in the shared scene so the FX snapshot preserves the wall depth relationship.
+      const drawDecorationsOverFx = !!rendererThree && !rendererThree.hasArchitecture() && !!fx?.hasEffects();
       if (rendererThree) {
         // Move both Three-owned sprites and decorations into the shared upper painter's pass
         // while FX is visible. That pass has the required order: rear decor → characters →

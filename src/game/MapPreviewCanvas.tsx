@@ -174,7 +174,7 @@ export function MapPreviewCanvas({
     }
     const pixelFxCanvas = pixelFxCanvasRef.current;
     // The procedural family needs the same lit terrain, props and point-light pool as battle.
-    // Render that battle scene in the preview when a procedural placement is present.
+    // Render that battle scene for procedural placements and architectural geometry.
     let pixelRenderer: ThreeBattleRenderer | null = null;
     const pixelPlacements = engine.elementalFxPlacements.filter((placement) => placement.family === "procedural_pixel" && placement.element);
     const hasArchitecture = engine.decorations.some(p => !!DECORATIONS[p.id]?.model3d);
@@ -232,7 +232,7 @@ export function MapPreviewCanvas({
           unitsCtx.clear();
           unitsCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
           unitsCtx.clearRect(0, 0, renderW, renderH);
-          const drawDecorationsOverFx = !!pixelRenderer && !!fx?.hasEffects();
+          const drawDecorationsOverFx = !!pixelRenderer && !hasArchitecture && !!fx?.hasEffects();
           engine.renderUnitsAndOverlays(
             unitsCtx, renderW, renderH, undefined,
             !!pixelRenderer && !drawDecorationsOverFx,
@@ -278,7 +278,7 @@ export function MapPreviewCanvas({
         pixelFxCanvas.style.display = "block";
         // Keep 3D materials sharp when exact editor zoom scales the canvas up.
         pixelRenderer.setSize(renderW, renderH, dpr * Math.max(1, previewRenderScale));
-        const drawDecorationsOverFx = !!fx?.hasEffects();
+        const drawDecorationsOverFx = !hasArchitecture && !!fx?.hasEffects();
         pixelRenderer.setSpritesAndDecorationsVisible(!drawDecorationsOverFx, !drawDecorationsOverFx);
         pixelRenderer.render(renderW, renderH);
       } else if (pixelFxCanvas) pixelFxCanvas.style.display = "none";

@@ -4,6 +4,10 @@ The map editor has a **3D Walls** tab beside Terreno and Decoração. It contain
 
 Place wall modules in neighboring rows and columns to form continuous rectangular room boundaries. Architecture uses aligned columns rather than staggered hex-shaped pieces, with square corner joints. Use Girar objeto to turn a doorway or isolated wall by 90 degrees. The board cells still determine movement blocking. Select a placed piece and press Delete to remove it. Pieces are saved with the map and appear in the live preview and combat.
 
+**Regras da peça 3D** provides Horizontal / Vertical buttons instead of the ordinary decoration rule switches. These set the new-piece brush direction and turn a selected piece immediately. New walls join along their chosen axis; older saved walls retain automatic corner joins until their direction is explicitly edited. New maps and maps without a saved atmosphere setting start with Sem névoa, including when 3D effects are active.
+
+Walls use the same ground-line depth as character sprites for front/behind occlusion, while retaining their full physical height for lighting and shadows. When architecture is present, characters and scenery stay in the shared Three scene during elemental effects so a separate sprite overlay cannot bypass wall occlusion.
+
 Walls and closed doors block movement and line of sight without changing the floor tile. Open doorways are passable. The initial closed-door piece is static; opening interactions, locks, and secret passages can be added separately.
 
 Architecture height is now 50% taller than the original release, including door frames so they meet the wall tops. All eight themed walls use the photorealistic v2 textures at a finer repeat scale, with trilinear mip filtering and up to 16x anisotropy. The 3D preview also accounts for editor zoom when allocating its drawing resolution.

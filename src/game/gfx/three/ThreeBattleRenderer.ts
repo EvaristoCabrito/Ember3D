@@ -39,7 +39,7 @@ import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_ROUTE, GRID_MOVE, GRI
  * only the intermediate Three.js coordinates carry the flip, nothing outside this file does. */
 
 import * as THREE from "three";
-import { createWallGeometry } from "./ThreeWalls";
+import { configureWallDepth, createWallGeometry } from "./ThreeWalls";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -799,6 +799,10 @@ export class ThreeBattleRenderer {
     this.decorGroup.visible = decorationsVisible;
   }
 
+  hasArchitecture(): boolean {
+    return this.engine.decorations.some(p => !!DECORATIONS[p.id]?.model3d);
+  }
+
   // MILESTONE 3 — real world-space ground mist + drift particles, owned end-to-end by
   // ThreeAtmosphere (see that file's header comment for why scene.fog isn't used and why this
   // sits at Z > 3, strictly above every mesh above). lastFrameTime is only for this: nothing
@@ -1254,7 +1258,7 @@ export class ThreeBattleRenderer {
     // render-only scale/mirror settings so the mesh cache cannot keep the old-sized art.
     const placementKey = engine.decorations.map((p) => {
       const def = DECORATIONS[p.id];
-      return `${p.id}@${p.x},${p.y},${p.rot ?? 0},${def?.heightScale ?? 1},${def?.artScale ?? 1},${def?.mirrorAlternate ? 1 : 0},${def?.wallTexture ?? ""}`;
+      return `${p.id}@${p.x},${p.y},${p.rot ?? 0},${p.wallOrientation ?? "auto"},${def?.heightScale ?? 1},${def?.artScale ?? 1},${def?.mirrorAlternate ? 1 : 0},${def?.wallTexture ?? ""}`;
     }).join(";");
     const key = `${engine.mission.id}:${tile}:${placementKey}`;
     if (key === this.builtDecorKey) return;
@@ -1284,7 +1288,7 @@ export class ThreeBattleRenderer {
       if (!def) continue;
       if (def.model3d) {
         const { wx, wy } = architectureWorld(p.x, p.y, tile);
-        const connections = [{ x: p.x - 1, y: p.y }, { x: p.x + 1, y: p.y }, { x: p.x, y: p.y - 1 }, { x: p.x, y: p.y + 1 }].filter(n => architectureCells.has(`${n.x},${n.y}`)).map(n => {
+        const connections = [{ x: p.x - 1, y: p.y }, { x: p.x + 1, y: p.y }, { x: p.x, y: p.y - 1 }, { x: p.x, y: p.y + 1 }].filter(n => architectureCells.has(`${n.x},${n.y}`) && (!p.wallOrientation || (p.wallOrientation === "horizontal" ? n.y === p.y : n.x === p.x))).map(n => {
           const neighbor = architectureWorld(n.x, n.y, tile);
           return { x: neighbor.wx - wx, y: wy - neighbor.wy };
         });
@@ -1304,6 +1308,7 @@ export class ThreeBattleRenderer {
           }
         }
         const material = new THREE.MeshStandardMaterial({ map, color: map ? 0xffffff : def.model3d === "door" ? 0x77634b : 0x8b8b86, roughness: 0.94, metalness: 0, flatShading: true });
+        configureWallDepth(material, tile, DEPTH_Z_BASE, DEPTH_Z_PER_TILE);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(wx, -wy, 1);
         mesh.castShadow = true;

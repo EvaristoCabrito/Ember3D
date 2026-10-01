@@ -1560,7 +1560,7 @@ export class ThreeAtmosphere {
     // that look comes entirely from BattleCanvas.tsx's screen-space CSS vignette instead.
     // "none" is an explicit author override: no mist, world-space or screen-space, whatever
     // mistIntensity is set to.
-    const mistType = engine.mission.mistType ?? "mist2";
+    const mistType = engine.mission.mistType ?? "none";
     // "none" ("Sem névoa") is a full atmosphere kill-switch, not just the mist layer — per
     // direct correction, it means everything off: mist, vignette, AND wisps/embers, whatever
     // their own sliders are set to.

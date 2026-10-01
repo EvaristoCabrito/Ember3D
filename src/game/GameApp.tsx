@@ -3563,7 +3563,7 @@ function blankDraft(): MapDraft {
     ambientIntensity: DEFAULT_AMBIENT_INTENSITY,
     mistIntensity: 0.2,
     mistSpeed: 1,
-    mistType: "mist2",
+    mistType: "none",
     bloomIntensity: DEFAULT_BLOOM_INTENSITY,
     wispIntensity: 0.02,
     wispSpeed: 1,
@@ -3619,7 +3619,7 @@ function missionToDraft(m: Mission): MapDraft {
     ambientIntensity: m.ambientIntensity ?? DEFAULT_AMBIENT_INTENSITY,
     mistIntensity: m.mistIntensity ?? 0.2,
     mistSpeed: m.mistSpeed ?? 1,
-    mistType: m.mistType ?? "mist2",
+    mistType: m.mistType ?? "none",
     bloomIntensity: m.bloomIntensity ?? DEFAULT_BLOOM_INTENSITY,
     wispIntensity: m.wispIntensity ?? 0.02,
     wispSpeed: m.wispSpeed ?? 1,
@@ -4030,6 +4030,7 @@ function MapEditorScreen({
   const [turning, setTurning] = useState(false);
   const [turningDeco, setTurningDeco] = useState(false);
   const [decoBrush, setDecoBrush] = useState<string>(Object.keys(DECORATIONS)[0]!);
+  const [wallOrientation, setWallOrientation] = useState<"horizontal" | "vertical">("horizontal");
   // A placed prop is selected by clicking any hex of its footprint; Delete removes this exact placement.
   const [selectedPlacedDecoration, setSelectedPlacedDecoration] = useState<{ id: string; x: number; y: number; rot?: number } | null>(null);
   const [decoSection, setDecoSection] = useState("Todas");
@@ -4595,7 +4596,8 @@ function MapEditorScreen({
       }
       const def = DECORATIONS[hit.id];
       if (!def) return d;
-      const turned = { ...hit, rot: (((hit.rot ?? 0) + 1) % (def.model3d ? 4 : 6)) };
+      const nextRot = (((hit.rot ?? 0) + 1) % (def.model3d ? 4 : 6));
+      const turned: DecorationPlacement = { ...hit, rot: nextRot, ...(def.model3d ? { wallOrientation: nextRot % 2 ? "vertical" : "horizontal" } : {}) };
       const before = placedFootprint(hit);
       const after = placedFootprint(turned);
       // A Waypoint is a flat ground marking, not a physical object — turning it can't "bump
@@ -4645,6 +4647,18 @@ function MapEditorScreen({
   );
   const selectedArchitecture = selectedPlacement ? DECORATIONS[selectedPlacement.id]?.model3d : undefined;
   const selectedPlacementIsSolidArchitecture = selectedArchitecture === "wall" || selectedArchitecture === "door";
+  const activeWallOrientation = selectedArchitecture
+    ? selectedPlacement?.wallOrientation ?? ((selectedPlacement?.rot ?? 0) % 2 ? "vertical" : "horizontal")
+    : wallOrientation;
+  const changeWallOrientation = (orientation: "horizontal" | "vertical") => {
+    setWallOrientation(orientation);
+    if (!selectedPlacement || !selectedArchitecture) return;
+    const rot = orientation === "vertical" ? 1 : 0;
+    setDraft(d => ({ ...d, decorations: d.decorations.map(p =>
+      p.id === selectedPlacement.id && p.x === selectedPlacement.x && p.y === selectedPlacement.y
+        ? { ...p, rot, wallOrientation: orientation } : p) }));
+    setSelectedPlacedDecoration({ id: selectedPlacement.id, x: selectedPlacement.x, y: selectedPlacement.y, rot });
+  };
 
   /**
    * Flip one of a placement's rule switches. Off is stored as absent rather than
@@ -4788,7 +4802,9 @@ function MapEditorScreen({
       // hex to barricade's dirt/rubble ground art — defaulted on here instead of the
       // author having to remember to check "Bloquear caminho" every time. Houses too.
       const blocksByDefault = BARRICADE_LIKE_DECOR.has(decoBrush) || HOUSE_DECOR_IDS.has(decoBrush) || BIG_HOUSE_DECOR_IDS.has(decoBrush) || SOLID_HOUSE_DECOR_IDS.has(decoBrush);
-      const placed = blocksByDefault ? { id: decoBrush, x, y, blocksPath: true } : { id: decoBrush, x, y };
+      const placed: DecorationPlacement = def.model3d
+        ? { id: decoBrush, x, y, rot: wallOrientation === "vertical" ? 1 : 0, wallOrientation }
+        : blocksByDefault ? { id: decoBrush, x, y, blocksPath: true } : { id: decoBrush, x, y };
       // No auto-selection of any sort, per direct instruction: placing stays on the current
       // brush so the author can keep placing more of the same thing; they select something
       // else (to inspect/delete/edit rules) only by clicking it themselves.
@@ -5737,7 +5753,7 @@ function MapEditorScreen({
             <span className="text-muted w-28 shrink-0">Tipo de névoa</span>
             <select
               className="bg-bg border border-border rounded-md px-2 py-1 flex-1"
-              value={draft.mistType ?? "mist2"}
+              value={draft.mistType ?? "none"}
               onChange={(e) =>
                 setDraft((d) => ({
                   ...d,
@@ -6101,7 +6117,17 @@ function MapEditorScreen({
                     : mode === "architecture" ? "clique numa peça 3D no mapa" : "clique numa decoração no mapa"}
                 </span>
               </div>
-              <label
+              {mode === "architecture" ? (
+                <div className="flex gap-2" role="group" aria-label="Orientação da peça 3D">
+                  {(["horizontal", "vertical"] as const).map(orientation => (
+                    <button key={orientation} type="button" aria-pressed={activeWallOrientation === orientation}
+                      onClick={() => changeWallOrientation(orientation)}
+                      className={`flex-1 rounded border px-3 py-2 text-sm ${activeWallOrientation === orientation ? "border-accent bg-accent/15 text-accent" : "border-border text-muted"}`}>
+                      {orientation === "horizontal" ? "Horizontal" : "Vertical"}
+                    </button>
+                  ))}
+                </div>
+              ) : <><label
                 className={`flex items-center gap-2 text-sm ${selectedPlacement ? "" : "opacity-50"}`}
                 title="Ligado, o hexágono deixa de ser navegável. Nesta engine sólido é sólido: também passa a barrar flecha e névoa."
               >
@@ -6124,9 +6150,9 @@ function MapEditorScreen({
                   onChange={() => toggleDecorationRule("yieldsHighGround")}
                 />
                 <span className="text-muted">Alto terreno</span>
-              </label>
+              </label></>}
               <p className="text-xs text-muted">
-                {mode === "architecture" ? "Paredes e portas fechadas são sólidas. Passagens abertas permitem atravessar; o piso original é preservado."
+                {mode === "architecture" ? "Escolha a orientação para colocar novas peças ou mudar a peça selecionada. Paredes e portas fechadas bloqueiam o caminho; passagens abertas permitem atravessar."
                   : 'Os dois só acrescentam: desligados, o hexágono mantém a regra do terreno que está embaixo. Uma barricada segue intransponível com "Bloquear caminho" desligado, porque é a definição dela que a torna sólida.'}
               </p>
             </div>

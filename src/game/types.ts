@@ -389,6 +389,8 @@ export interface DecorationPlacement {
    * hexes. Architecture instead uses quarter-turns (0-3) for rectangular walls and doors.
    * Optional: a map saved before props could turn has no such key, read as 0. */
   rot?: number;
+  /** Explicit wall axis; absent preserves older maps' automatic corner joins. */
+  wallOrientation?: "horizontal" | "vertical";
   /**
    * Per-placement rule overrides, set by the two switches in the map editor.
    *

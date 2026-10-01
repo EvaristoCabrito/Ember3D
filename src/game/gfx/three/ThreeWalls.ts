@@ -2,6 +2,25 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { DecorationDef } from "../../types";
 
+/** Match sprite ground-line depth without changing the physical shadow geometry. */
+export function configureWallDepth(material: THREE.MeshStandardMaterial, tile: number, base: number, perTile: number): void {
+  material.onBeforeCompile = shader => {
+    shader.uniforms.wallTile = { value: tile };
+    shader.uniforms.wallDepthBase = { value: base };
+    shader.uniforms.wallDepthPerTile = { value: perTile };
+    shader.vertexShader = `uniform float wallTile;\nuniform float wallDepthBase;\nuniform float wallDepthPerTile;\nvarying float wallGroundDepth;\n${shader.vertexShader}`
+      .replace("#include <project_vertex>", `#include <project_vertex>
+        vec4 wallGround = modelMatrix * vec4(transformed.x, transformed.y - transformed.z * 3.5, 0.0, 1.0);
+        float wallZ = wallDepthBase + (-wallGround.y / wallTile) * wallDepthPerTile;
+        vec4 wallDepthClip = projectionMatrix * viewMatrix * vec4(wallGround.xy, wallZ, 1.0);
+        wallGroundDepth = wallDepthClip.z / wallDepthClip.w * 0.5 + 0.5;
+      `);
+    shader.fragmentShader = `varying float wallGroundDepth;\n${shader.fragmentShader}`
+      .replace("#include <dithering_fragment>", "#include <dithering_fragment>\n gl_FragDepth = wallGroundDepth;");
+  };
+  material.customProgramCacheKey = () => "architecture-ground-depth-v1";
+}
+
 /** Remove internal caps at joins so they cannot cast a seam onto a neighboring wall. */
 function omitBoxFaces(box: THREE.BoxGeometry, faces: number[]): THREE.BoxGeometry {
   const indices = Array.from(box.index!.array).filter((_, i) => !faces.includes(Math.floor(i / 6)));
