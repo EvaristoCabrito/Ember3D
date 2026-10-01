@@ -1239,6 +1239,24 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     footprintOffsets: FOOTPRINT_TYPE_7,
     init: 8,
   },
+  roccoTheBird: {
+    id: "roccoTheBird",
+    name: "Rocco The Bird",
+    role: "Chefe",
+    hp: 108,
+    atk: 25,
+    mag: 25,
+    def: 20,
+    res: 20,
+    mov: 5,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "RoccoTheBird",
+    size: 4,
+    footprintOffsets: FOOTPRINT_TYPE_7,
+    init: 8,
+    boss: true,
+  },
   swampBlueCalf: {
     id: "swampBlueCalf",
     name: "Swamp Blue Calf",
@@ -1940,6 +1958,7 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   asherah: { hp: 5, atk: 2, mag: 0, def: 2, res: 2 },
   troll: { hp: 5, atk: 2, mag: 0, def: 2, res: 1 },
   troll2: { hp: 5, atk: 2, mag: 0, def: 2, res: 1 },
+  roccoTheBird: { hp: 5, atk: 3, mag: 3, def: 2, res: 2 },
   // The troll's growth times 1.4, rounded — see CLASSES.ancientGolem. res can't scale: 40%
   // of 1 rounds back to 1.
   ancientGolem: { hp: 7, atk: 3, mag: 0, def: 3, res: 1 },
@@ -3098,6 +3117,7 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   asherah: 12,
   troll: 8,
   troll2: 8,
+  roccoTheBird: 12,
 };
 
 export function emberForKill(classId: ClassId): number {
@@ -3835,6 +3855,7 @@ export function isEnemyMageClass(id: ClassId): boolean {
 /** Choque charges spawned on an enemy mage. Birolho (and Birolho2) get 3; every other mage
  * gets 2. */
 export function shockChargesFor(classId: ClassId): number {
+  if (classId === "roccoTheBird") return 1;
   if (classId === "birolho" || classId === "birolho2" || classId === "birolho3" || classId === "birolhoLegs" || classId === "birolhoLegs2") return 3;
   if (isEnemyMageClass(classId)) return 2;
   return 0;

@@ -27,7 +27,7 @@ export function DialogOverlay({ tree, onClose, onAction }: { tree: DialogTree; o
   const portrait = line.portrait ? portraitFor(line.portrait) : null;
   return (
     <div className="absolute inset-0 z-50 ember-veil flex items-end sm:items-center justify-center p-4">
-      <div className="w-full max-w-xl ember-window rounded-xl p-5 flex gap-4">
+      <div className="relative w-full max-w-xl ember-panel p-5 flex gap-4">
         {portrait && (
           <img
             src={portrait.src}
@@ -37,7 +37,7 @@ export function DialogOverlay({ tree, onClose, onAction }: { tree: DialogTree; o
           />
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted">{line.speaker}</p>
+          <p className="text-xs ember-kicker">{line.speaker}</p>
           <p className="mt-1 text-base leading-relaxed text-fg whitespace-pre-line">{line.text}</p>
           <div className="mt-4 flex flex-col gap-2">
             {line.replies && line.replies.length > 0 ? (
@@ -45,7 +45,7 @@ export function DialogOverlay({ tree, onClose, onAction }: { tree: DialogTree; o
                 <Button
                   key={i}
                   variant="quiet"
-                  className="w-full text-left justify-start"
+                  className="w-full text-left justify-start ember-btn ember-btn-sm ember-btn-ghost"
                   onClick={() => {
                     if (reply.action && onAction) {
                       onClose();
@@ -59,7 +59,7 @@ export function DialogOverlay({ tree, onClose, onAction }: { tree: DialogTree; o
                 </Button>
               ))
             ) : (
-              <Button className="w-full" onClick={() => advance(line.next)}>
+              <Button className="w-full ember-btn ember-btn-primary" onClick={() => advance(line.next)}>
                 {line.next ? "Próximo" : "Ok"}
               </Button>
             )}

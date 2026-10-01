@@ -1,4 +1,6 @@
-import { tacticalGridStyle, GRID_MOVE, GRID_ROUTE, GRID_ALLY, GRID_ENEMY, GRID_ENEMY_TARGET } from "./tacticalGrid";
+import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_MOVE, GRID_ROUTE, GRID_ALLY, GRID_ENEMY, GRID_ENEMY_TARGET, GRID_ENEMY_GLOW } from "./tacticalGrid";
+import { isHexGroundVariant } from "./assets";
+import { drawHexGround } from "./hexGround";
 import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
 import { placedBlockingFootprint } from "./data";
@@ -880,7 +882,9 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
       // tier1/tier2/tier4 uses — see cultistSpellUses/brigandSpellUses/birolhoSpellUses and
       // runAiFor's cultist/brigand/birolho branches.
       tier1:
-        cls.id === "cultist" || cls.id === "cultistV2"
+        cls.id === "roccoTheBird"
+          ? 2
+          : cls.id === "cultist" || cls.id === "cultistV2"
           ? cultistSpellUses(level).magicMissile
           : cls.id === "brigand"
             ? brigandSpellUses(level).longShot
@@ -888,7 +892,10 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
               ? birolhoSpellUses(level).magicMissile
               : remainingTier(cls.id, 1, "tier1", level, side, roster, spawn.name),
       tier2:
-        cls.id === "cultist" || cls.id === "cultistV2"
+        // Rocco The Bird: tier2 holds his 3 Burning Beak (Burning Hands) casts.
+        cls.id === "roccoTheBird"
+          ? 3
+          : cls.id === "cultist" || cls.id === "cultistV2"
           ? cultistSpellUses(level).lightning
           : cls.id === "brigand"
             ? brigandSpellUses(level).piercing
@@ -7383,6 +7390,85 @@ export class BattleEngine {
       }
     }
 
+    // Rocco The Bird — per battle: 1 Choque, 2 Magic Missile, 3 Burning Beak (Burning Hands,
+    // shown as "Burning Beak" when he casts it). Burning Beak outranks Magic Missile outranks
+    // Choque; the cone is never aimed where it would also burn one of his own allies.
+    if (next.classId === "roccoTheBird" && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.shockCharges > 0)) {
+      if (next.spells.tier2 > 0) {
+        const power = burningHandsPower(next.level);
+        let bestCone: { tiles: Point[]; ids: string[]; from: Point; score: number } | null = null;
+        for (const cell of reach.values()) {
+          for (const dir of CUBE_DIRS) {
+            const tiles = coneSector(cell, dir, power.radius, this.cols, this.rows);
+            const ids: string[] = [];
+            let score = 0;
+            let burnsAlly = false;
+            for (const t of tiles) {
+              const who = this.units.find((x) => x.alive && occupies(x, t.x, t.y));
+              if (!who || who.id === next.id || ids.includes(who.id)) continue;
+              if (who.side !== "player") burnsAlly = true;
+              ids.push(who.id);
+              score += 10 + (who.maxHp - who.hp) * 3 + (who.hp <= 8 ? 20 : 0);
+            }
+            if (burnsAlly || !ids.length) continue;
+            if (!bestCone || score > bestCone.score) bestCone = { tiles, ids, from: { x: cell.x, y: cell.y }, score };
+          }
+        }
+        if (bestCone) {
+          if (bestCone.from.x !== next.x || bestCone.from.y !== next.y) {
+            this.queue.push({ type: "move", id: next.id, path: reconstructPath(walkReach, bestCone.from) });
+          }
+          this.spendTier(next, "burningHands");
+          this.queue.push({
+            type: "spell",
+            att: next.id,
+            tiles: bestCone.tiles,
+            ids: bestCone.ids,
+            dice: power.dice,
+            faces: power.faces,
+            bonus: 0,
+            label: "Burning Beak",
+            spellMul: power.mul,
+            spellKind: "burningHands",
+          });
+          this.queue.push({ type: "delay", dur: 0.12 });
+          return;
+        }
+      }
+      if (next.spells.tier1 > 0) {
+        let bestSpell: { foe: Unit; from: Point; score: number } | null = null;
+        for (const cell of reach.values()) {
+          for (const foe of players) {
+            if (manhattan(cell, foe) > MAGIC_MISSILE.range) continue;
+            if (!clearShot(cell, { x: foe.x, y: foe.y }, this.tiles, this.cols, "bolt", this.decorOverlay)) continue;
+            const score = (foe.maxHp - foe.hp) * 3 + (foe.hp <= 8 ? 20 : 0);
+            if (!bestSpell || score > bestSpell.score) bestSpell = { foe, from: { x: cell.x, y: cell.y }, score };
+          }
+        }
+        if (bestSpell) {
+          if (bestSpell.from.x !== next.x || bestSpell.from.y !== next.y) {
+            this.queue.push({ type: "move", id: next.id, path: reconstructPath(walkReach, bestSpell.from) });
+          }
+          this.spendTier(next, "magicMissile");
+          this.queue.push({
+            type: "spell",
+            att: next.id,
+            tiles: [{ x: bestSpell.foe.x, y: bestSpell.foe.y }],
+            ids: [bestSpell.foe.id],
+            dice: MAGIC_MISSILE.dice,
+            faces: MAGIC_MISSILE.faces,
+            bonus: MAGIC_MISSILE.bonus,
+            label: MAGIC_MISSILE.name,
+            spellMul: MAGIC_MISSILE.mul,
+            spellKind: "magicMissile",
+          });
+          this.queue.push({ type: "delay", dur: 0.12 });
+          return;
+        }
+      }
+      if (this.tryAiShock(next, reach, walkReach, players)) return;
+    }
+
     // Any other enemy mage (a player-class mage spawned as a foe, promoted casters, etc.)
     // still gets Choque even if they don't share the cultist/birolho AI branches.
     if (
@@ -8858,6 +8944,10 @@ export class BattleEngine {
     // the canvas's own aspect kept instead of squeezed into the tall creature box.
     const troll2HeightScale = u.sprite === "troll2" ? 1.03 : 1;
     const troll2WidthScale = u.sprite === "troll2" ? 1.59 : 1;
+    // Rocco The Bird (639x360 canvas, figure ~79% of its height): troll2's on-screen figure
+    // height (same Type 7 body), with the wide canvas's own aspect kept.
+    const roccoHeightScale = u.sprite === "RoccoTheBird" ? 1.22 : 1;
+    const roccoWidthScale = u.sprite === "RoccoTheBird" ? 2.55 : 1;
     // familiar4 (1302x620 canvas, figure ~90% of its height): Familiar Maior's on-screen
     // height, with the wide canvas's own aspect kept.
     const familiar4HeightScale = u.sprite === "familiar4" ? 0.97 : 1;
@@ -8884,6 +8974,7 @@ export class BattleEngine {
       familiar2WalkScale *
       birolhoLegsHeightScale *
       troll2HeightScale *
+      roccoHeightScale *
       familiar4HeightScale *
       kaelFinalAtkScale *
       neeraAtkScale *
@@ -8906,6 +8997,7 @@ export class BattleEngine {
       familiar3WidthScale *
       birolhoLegsWidthScale *
       troll2WidthScale *
+      roccoWidthScale *
       familiar4WidthScale *
       wolfFinalWidthScale *
       zombieWidthScale *
@@ -9168,12 +9260,17 @@ export class BattleEngine {
           // hexagon onto itself, so only the picture moves — the shape stays put and the
           // neighbours still line up.
           const rot = this.tileRots[y * this.cols + x] ?? 0;
-          if (rot) {
+          const continuousGround = isHexGroundVariant(drawId, variant);
+          if (rot && !continuousGround) {
             ctx.translate(cx, cy);
             ctx.rotate((rot * Math.PI) / 3);
             ctx.translate(-cx, -cy);
           }
-          if (img) ctx.drawImage(img, cx - tile, cy - tile, tile * 2, tile * 2);
+          if (img && continuousGround) {
+            // Shared board coordinates keep neighboring hexes on the same surface.
+            // Material rotation is intentionally fixed; rotating a single cell would split it.
+            drawHexGround(ctx, img, cx, cy, cx - this.layout.ox, cy - this.layout.oy, tile);
+          } else if (img) ctx.drawImage(img, cx - tile, cy - tile, tile * 2, tile * 2);
           else {
             ctx.fillStyle = "#1e1b18";
             ctx.fill();
@@ -9242,8 +9339,8 @@ export class BattleEngine {
       const style = tacticalGridStyle(fill);
       ctx.save();
       ctx.globalAlpha = fill === GRID_MOVE ? this.overlayFade : 1;
-      ctx.shadowColor = style.edge;
-      ctx.shadowBlur = glow && fill === GRID_ENEMY_TARGET ? tile * 0.18 : 0;
+      ctx.shadowColor = fill === GRID_ENEMY_TARGET ? GRID_ENEMY_GLOW : style.edge;
+      ctx.shadowBlur = 0;
       ctx.fillStyle = style.fill;
       ctx.strokeStyle = style.edge;
       ctx.lineWidth = Math.max(1, tile * 0.025);
@@ -9251,6 +9348,10 @@ export class BattleEngine {
         const { cx, cy } = this.hexCenter(c.x, c.y);
         this.hexPath(ctx, cx, cy, tile);
         ctx.fill();
+        if (fill === GRID_MOVE || fill === GRID_ENEMY_TARGET) {
+          this.hexPath(ctx, cx, cy, tile * 0.94);
+          ctx.stroke();
+        }
       }
       ctx.restore();
     };

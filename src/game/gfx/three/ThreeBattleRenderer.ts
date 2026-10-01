@@ -1,4 +1,4 @@
-import { tacticalGridStyle, GRID_ROUTE, GRID_MOVE, GRID_ENEMY_TARGET } from "../../tacticalGrid";
+import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_ROUTE, GRID_MOVE, GRID_ENEMY_TARGET, GRID_ENEMY_GLOW } from "../../tacticalGrid";
 /** MILESTONE 1 (done) — terrain, ground/behind-layer decorations, and animated unit sprites all
  * render through a real Three.js scene instead of the Canvas2D-shim WebGL renderer, as the first
  * slice of migrating the battlefield to a genuine spatial rendering environment (see the
@@ -1762,16 +1762,18 @@ export class ThreeBattleRenderer {
     const rgb = m ? `${m[1]},${m[2]},${m[3]}` : fill;
     const hit = this.gridGlowMatCache.get(rgb);
     if (hit) return hit;
-    const r = m ? Number(m[1]) / 255 : 1;
-    const g = m ? Number(m[2]) / 255 : 1;
-    const b = m ? Number(m[3]) / 255 : 1;
+    const glow = rgb === "110,0,8";
+    const glowMatch = /rgba?\(([^,]+),([^,]+),([^,]+)(?:,([^)]+))?\)/.exec(GRID_ENEMY_GLOW);
+    const r = glow && glowMatch ? Number(glowMatch[1]) / 255 : m ? Number(m[1]) / 255 : 1;
+    const g = glow && glowMatch ? Number(glowMatch[2]) / 255 : m ? Number(m[2]) / 255 : 1;
+    const b = glow && glowMatch ? Number(glowMatch[3]) / 255 : m ? Number(m[3]) / 255 : 1;
     const mat = new THREE.MeshBasicMaterial({
       map: this.flameHaloTexture,
       color: new THREE.Color(r, g, b),
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      opacity: 0.14,
+      opacity: 0.3,
     });
     this.gridGlowMatCache.set(rgb, mat);
     return mat;
@@ -1830,7 +1832,7 @@ export class ThreeBattleRenderer {
         this.gridGlowMeshes.push(mesh);
       }
       mesh.material = this.overlayGlowMaterialFor(fill);
-      mesh.material.opacity = 0.14 * fade;
+      mesh.material.opacity = 0.3 * fade;
       mesh.visible = true;
       const { wx, wy } = hexWorld(x, y, tile);
       const size = tile * 2.7;
@@ -1858,8 +1860,10 @@ export class ThreeBattleRenderer {
       const layerFade = layer.fill === GRID_MOVE ? fade : 1;
       const style = tacticalGridStyle(layer.fill);
       for (const c of layer.cells) {
-        if (layer.glow && layer.fill === GRID_ENEMY_TARGET) placeGlow(c.x, c.y, style.fill, layerFade);
         place(c.x, c.y, fadedFill(style.fill, layerFade), this.hexGeo, 1.0);
+        if (layer.fill === GRID_MOVE || layer.fill === GRID_ENEMY_TARGET) {
+          place(c.x, c.y, fadedFill(style.edge, layerFade), this.focusBorderGeo, 0.94, 0.505);
+        }
       }
     }
     const route = engine.movementPreview();

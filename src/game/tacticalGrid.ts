@@ -12,3 +12,11 @@ export const GRID_ROUTE = "rgba(220,226,235,1)";
 export const GRID_ALLY = "rgba(220,226,235,1)";
 export const GRID_ENEMY = "rgba(231,133,115,1)";
 export const GRID_ENEMY_TARGET = "rgba(110,0,8,0.85)";
+export const GRID_ENEMY_GLOW = "rgba(205,24,38,0.78)";
+
+/** Quiet floor markings v2. Legacy palette and styling above remain available. */
+export function tacticalGridStyleQuiet(fill: string): { fill: string; edge: string } {
+  if (fill === GRID_MOVE) return { fill: "rgba(226,221,203,0.035)", edge: "rgba(226,221,203,0.26)" };
+  if (fill === GRID_ENEMY_TARGET) return { fill: "rgba(214,162,102,0.065)", edge: "rgba(226,178,119,0.58)" };
+  return tacticalGridStyle(fill);
+}

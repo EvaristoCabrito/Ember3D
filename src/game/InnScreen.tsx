@@ -299,8 +299,8 @@ export function InnScreen({
           Sair
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted">Pousada à margem da cinza</p>
-          <h1 className="font-display text-2xl leading-none">A Estalagem do Osso Seco</h1>
+          <p className="text-xs ember-kicker">Pousada à margem da cinza</p>
+          <h1 className="font-display text-2xl leading-none ember-title">A Estalagem do Osso Seco</h1>
         </div>
         <button
           type="button"
@@ -336,14 +336,14 @@ export function InnScreen({
               key={n.id}
               type="button"
               onClick={() => setNpc(n)}
-              className={`rounded-xl border overflow-hidden text-left ${npc.id === n.id ? "border-accent" : "border-border"}`}
+              className={`ember-slot overflow-hidden text-left${npc.id === n.id ? " is-last" : ""}`}
             >
               <img src={n.portrait} alt="" className="w-full aspect-[2/3] object-cover" />
               <p className="px-2 py-1 text-xs font-medium truncate ember-chip">{n.name}</p>
             </button>
           ))}
         </div>
-        <div className="ember-window rounded-xl p-3 flex gap-3">
+        <div className="relative ember-panel p-3 flex gap-3">
           <img src={npc.portrait} alt="" className="h-24 w-16 object-cover rounded-md shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-medium">
@@ -357,8 +357,8 @@ export function InnScreen({
           if (status === "available" && questOffered && !questOffered(quest.id)) return null;
           const { have, total } = questProgress(save, quest);
           return (
-            <div key={quest.id} className="ember-window rounded-xl p-3 flex flex-col gap-2">
-              <p className="text-xs uppercase tracking-[0.16em] text-muted">
+            <div key={quest.id} className="relative ember-panel p-3 flex flex-col gap-2">
+              <p className="text-xs ember-kicker">
                 Missão · {status === "done" ? "concluída" : status === "available" ? "oferecida" : status === "ready" ? "pronta para entregar" : "em andamento"}
               </p>
               <p className="text-sm font-medium">{quest.title}</p>
@@ -379,6 +379,7 @@ export function InnScreen({
               )}
               {status === "available" && (
                 <Button
+                  className="ember-btn ember-btn-primary"
                   onClick={() => {
                     if (onAcceptQuest?.(quest.id)) sfxPlay.ui();
                   }}
@@ -388,6 +389,7 @@ export function InnScreen({
               )}
               {status === "ready" && (
                 <Button
+                  className="ember-btn ember-btn-primary"
                   onClick={() => {
                     if (onTurnInQuest?.(quest.id)) sfxPlay.ui();
                   }}
@@ -399,13 +401,13 @@ export function InnScreen({
           );
         })}
         {npc.shop && (
-          <div className="shop-panel ember-window rounded-xl p-3 flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-[0.16em] text-muted">Adega · quem leva</p>
+          <div className="shop-panel relative ember-panel p-3 flex flex-col gap-2">
+            <p className="text-xs ember-kicker">Adega · quem leva</p>
             <div className="flex flex-wrap gap-1">
               {partyRoster.map((name) => (
                 <Button
                   key={name}
-                  className="shop-hero-selector"
+                  className={`shop-hero-selector ember-btn ember-btn-sm ${hero === name ? "ember-btn-primary" : "ember-btn-ghost"}`}
                   size="sm"
                   variant={hero === name ? undefined : "quiet"}
                   onClick={() => {
@@ -420,16 +422,16 @@ export function InnScreen({
               ))}
             </div>
             <div className="flex flex-col gap-1">
-              <div className="rounded-md border border-border p-3">
+              <div className="ember-slot p-3">
                 <p className="text-sm">Refeição para {hero} · {INN_MEAL_PRICE} Gold</p>
                 <p className="text-xs text-muted">Enche a saciedade até 120% · bônus de 20%</p>
                 <HungerBar name={hero} value={save.heroHunger[hero]} />
                 <div className="flex gap-1.5 mt-2">
-                  <Button className="flex-1" disabled={ember < INN_MEAL_PRICE || fullness(save.heroHunger[hero]) >= 120 || (save.unitHp[hero] ?? 1) <= 0} onClick={() => setNote(onBuyMeal(hero) ? `${hero} comeu. Saciedade: 120%.` : "Falta Gold ou o personagem já está satisfeito.")}>
+                  <Button className="flex-1 ember-btn ember-btn-sm ember-btn-primary" disabled={ember < INN_MEAL_PRICE || fullness(save.heroHunger[hero]) >= 120 || (save.unitHp[hero] ?? 1) <= 0} onClick={() => setNote(onBuyMeal(hero) ? `${hero} comeu. Saciedade: 120%.` : "Falta Gold ou o personagem já está satisfeito.")}>
                     Comer · {INN_MEAL_PRICE} Gold
                   </Button>
                   <Button
-                    className="flex-1"
+                    className="flex-1 ember-btn ember-btn-sm ember-btn-ghost"
                     variant="quiet"
                     disabled={ember < INN_MEAL_PRICE || !partyRoster.some((name) => fullness(save.heroHunger[name]) < 120 && (save.unitHp[name] ?? 1) > 0)}
                     onClick={() => {
@@ -506,15 +508,15 @@ export function InnScreen({
             </p>
             {note && <p className="text-sm text-accent">{note}</p>}
             <div className="flex gap-2">
-              <Button className="flex-1" disabled={items <= 0} onClick={pay}>
+              <Button className="flex-1 ember-btn ember-btn-sm ember-btn-primary" disabled={items <= 0} onClick={pay}>
                 Pagar
               </Button>
-              <Button variant="quiet" onClick={() => { setCart({ ...EMPTY_CART }); setNote(null); }}>
+              <Button variant="quiet" className="ember-btn ember-btn-sm ember-btn-ghost" onClick={() => { setCart({ ...EMPTY_CART }); setNote(null); }}>
                 Limpar
               </Button>
             </div>
 
-            <p className="mt-2 text-xs uppercase tracking-[0.16em] text-muted">Rações · para toda a party</p>
+            <p className="mt-2 text-xs ember-kicker">Rações · para toda a party</p>
             <ItemTip text="Alimenta o grupo inteiro por um dia cada, no mapa. Empilha até 30 por espaço na mochila." className="block">
               <div className="tavern-item-window flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
                 <img src={RATIONS_ICON} alt="" className="size-6 rounded-sm object-cover bg-black" />
@@ -575,14 +577,14 @@ export function InnScreen({
               </div>
             </ItemTip>
             {rationsNote && <p className="text-sm text-accent">{rationsNote}</p>}
-            <Button className="w-full" disabled={rationsQty <= 0 || ember < rationsQty * RATIONS_PRICE} onClick={buyRations}>
+            <Button className="w-full ember-btn ember-btn-primary" disabled={rationsQty <= 0 || ember < rationsQty * RATIONS_PRICE} onClick={buyRations}>
               Comprar {rationsQty > 0 ? `(${rationsQty * RATIONS_PRICE} Gold)` : ""}
             </Button>
           </div>
         )}
       </div>
       <div className="relative z-10 p-4 pt-0 pb-[max(1rem,env(safe-area-inset-bottom))] max-w-lg mx-auto w-full">
-        <Button variant="ghost" className="w-full" onClick={onLeave}>
+        <Button variant="ghost" className="w-full ember-btn ember-btn-ghost" onClick={onLeave}>
           <ChevronLeft className="size-4" /> Sair da estalagem
         </Button>
       </div>
@@ -775,8 +777,8 @@ function SmithPanel({
           <ChevronLeft className="size-4 inline -mt-0.5" /> Voltar
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted">A forja no porão</p>
-          <h1 className="font-display text-2xl leading-none">Vargan, o Ferreiro</h1>
+          <p className="text-xs ember-kicker">A forja no porão</p>
+          <h1 className="font-display text-2xl leading-none ember-title">Vargan, o Ferreiro</h1>
         </div>
         <button
           type="button"
@@ -799,25 +801,25 @@ function SmithPanel({
         </button>
       </header>
       {note && (
-        <div className="pointer-events-none absolute left-1/2 top-20 z-30 -translate-x-1/2 rounded-lg border border-accent bg-surface px-4 py-2 text-sm text-fg shadow-2xl" role="status" aria-live="polite">
+        <div className="pointer-events-none absolute left-1/2 top-20 z-30 -translate-x-1/2 ember-plate is-accent px-4 py-2 text-sm" role="status" aria-live="polite">
           {note}
         </div>
       )}
       <div className="relative z-10 flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-3 max-w-lg ml-auto w-full">
-        <div className="shop-panel ember-window rounded-xl p-3">
+        <div className="shop-panel relative ember-panel p-3">
           <p className="text-sm leading-relaxed text-fg/90">
             “Aço, sangue, alma — tudo é forjado.” Ele não fala mais que isso. Aponta pra bigorna e espera você escolher.
           </p>
         </div>
-        <div className="shop-panel ember-window rounded-xl p-3 flex flex-col gap-2">
-          <p className="text-xs uppercase tracking-[0.16em] text-muted">Equipamento exibido</p>
+        <div className="shop-panel relative ember-panel p-3 flex flex-col gap-2">
+          <p className="text-xs ember-kicker">Equipamento exibido</p>
           <div className="flex flex-wrap gap-1">
             {(test ? [...HERO_NAMES, ...TEST_EXTRA_HERO_NAMES] : HERO_NAMES)
               .filter((name) => test || heroRecruited(name, save.completed))
               .map((name) => (
               <Button
                 key={name}
-                className="shop-hero-selector"
+                className={`shop-hero-selector ember-btn ember-btn-sm ${hero === name ? "ember-btn-primary" : "ember-btn-ghost"}`}
                 size="sm"
                 variant={hero === name ? undefined : "quiet"}
                 onClick={() => {
@@ -830,7 +832,7 @@ function SmithPanel({
             ))}
           </div>
 
-          <p className="text-xs uppercase tracking-[0.16em] text-muted mt-2">Equipada</p>
+          <p className="text-xs ember-kicker mt-2">Equipada</p>
           {equippedWeapon ? (
             <ItemTip text={weaponTooltip(equippedWeapon, equippedEnh)} className="block">
               <div className="flex items-center gap-2 rounded-md border border-accent px-2 py-1.5">
@@ -845,13 +847,13 @@ function SmithPanel({
                   <span className="block text-[10px] uppercase tracking-wide text-muted">Mão principal</span>
                 </span>
                 <div className="flex flex-col gap-1">
-                  <Button size="sm" disabled={nextEnhCost == null || ember < nextEnhCost} onClick={upgrade}>
+                  <Button size="sm" className="ember-btn ember-btn-sm ember-btn-primary" disabled={nextEnhCost == null || ember < nextEnhCost} onClick={upgrade}>
                     {nextEnhCost == null ? "Máx." : `+1 · ${nextEnhCost} Gold`}
                   </Button>
-                  <Button size="sm" variant="quiet" onClick={() => onEquipWeapon(hero, "")}>
+                  <Button size="sm" variant="quiet" className="ember-btn ember-btn-sm ember-btn-ghost" onClick={() => onEquipWeapon(hero, "")}>
                     Desequipar
                   </Button>
-                  <Button size="sm" variant="quiet" onClick={() => sell(equippedWeapon.id)}>
+                  <Button size="sm" variant="quiet" className="ember-btn ember-btn-sm ember-btn-ghost" onClick={() => sell(equippedWeapon.id)}>
                     Vender · {weaponSellValue(equippedWeapon.id, equippedEnh)} Gold
                   </Button>
                 </div>
@@ -863,7 +865,7 @@ function SmithPanel({
 
           {owned.length > 0 && (
             <>
-              <p className="text-xs uppercase tracking-[0.16em] text-muted mt-2">No saco</p>
+              <p className="text-xs ember-kicker mt-2">No saco</p>
               <div className="flex flex-col gap-1">
                 {owned.map((w) => (
                   <ItemTip key={w.id} text={weaponTooltip(w, weapons[w.id] ?? 0)} className="block">
@@ -885,10 +887,10 @@ function SmithPanel({
                           </span>
                         )}
                       </span>
-                      <Button size="sm" variant="quiet" onClick={() => equip(w.id)}>
+                      <Button size="sm" variant="quiet" className="ember-btn ember-btn-sm ember-btn-ghost" onClick={() => equip(w.id)}>
                         Equipar
                       </Button>
-                      <Button size="sm" variant="quiet" onClick={() => sell(w.id)}>
+                      <Button size="sm" variant="quiet" className="ember-btn ember-btn-sm ember-btn-ghost" onClick={() => sell(w.id)}>
                         Vender · {weaponSellValue(w.id, weapons[w.id] ?? 0)} Gold
                       </Button>
                     </div>
@@ -900,7 +902,7 @@ function SmithPanel({
 
           {notOwned.length > 0 && (
             <>
-              <p className="text-xs uppercase tracking-[0.16em] text-muted mt-2">Na bancada</p>
+              <p className="text-xs ember-kicker mt-2">Na bancada</p>
               <div className="flex flex-col gap-1">
                 {notOwned.map((w) => (
                   <ItemTip key={w.id} text={weaponTooltip(w)} className="block">
@@ -922,7 +924,7 @@ function SmithPanel({
                           </span>
                         )}
                       </span>
-                      <Button size="sm" disabled={bagFull || ember < w.price} onClick={() => buy(w.id)}>
+                      <Button size="sm" className="ember-btn ember-btn-sm ember-btn-primary" disabled={bagFull || ember < w.price} onClick={() => buy(w.id)}>
                         Comprar
                       </Button>
                     </div>
@@ -931,7 +933,7 @@ function SmithPanel({
               </div>
             </>
           )}
-          <p className="text-xs uppercase tracking-[0.16em] text-muted mt-2">Anéis</p>
+          <p className="text-xs ember-kicker mt-2">Anéis</p>
           <p className="text-[11px] text-muted">Cabem nos dois dedos da paper doll. Compra dois se quiser testar os dois espaços.</p>
           <div className="grid grid-cols-2 gap-1.5">
             {smithRings.map((item) => (
@@ -944,12 +946,12 @@ function SmithPanel({
                     <span className="block truncate">{item.name}</span>
                     <span className="block text-[10px] text-muted">{equipmentTypeSlotName(item)} · {item.price ?? 0} Gold</span>
                   </span>
-                  <Button size="sm" disabled={bagFull || ember < (item.price ?? 0)} onClick={() => buyEquipment(item.id)}>Comprar</Button>
+                  <Button size="sm" className="ember-btn ember-btn-sm ember-btn-primary" disabled={bagFull || ember < (item.price ?? 0)} onClick={() => buyEquipment(item.id)}>Comprar</Button>
                 </div>
               </ItemTip>
             ))}
           </div>
-          <p className="text-xs uppercase tracking-[0.16em] text-muted mt-2">Armaduras e acessórios</p>
+          <p className="text-xs ember-kicker mt-2">Armaduras e acessórios</p>
           <p className="text-[11px] text-muted">Estoque básico da estalagem. As peças superiores pertencem ao ferreiro da cidade.</p>
           <div className="grid grid-cols-2 gap-1.5">
             {smithEquipment.map((item) => (
@@ -962,7 +964,7 @@ function SmithPanel({
                     <span className="block truncate">{item.name}</span>
                     <span className="block text-[10px] text-muted">{equipmentTypeSlotName(item)} · {item.price ?? 0} Gold</span>
                   </span>
-                  <Button size="sm" disabled={bagFull || ember < (item.price ?? 0)} onClick={() => buyEquipment(item.id)}>Comprar</Button>
+                  <Button size="sm" className="ember-btn ember-btn-sm ember-btn-primary" disabled={bagFull || ember < (item.price ?? 0)} onClick={() => buyEquipment(item.id)}>Comprar</Button>
                 </div>
               </ItemTip>
             ))}

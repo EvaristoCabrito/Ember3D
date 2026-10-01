@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Ember · Hex ground 001</title>
+<style>
+body{margin:0;background:#151817;color:#e6e0d4;font:15px system-ui;padding:24px}h1{font-size:24px;margin:0 0 8px}p{color:#a9b0a9;margin:0 0 20px}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}.tile{background:#202523;padding:12px;border-radius:8px}h2{font-size:16px;margin:0 0 8px}canvas{width:100%;aspect-ratio:1;display:block}label{display:block;margin-bottom:16px}a{color:#bdccb4}
+</style>
+<h1>Ember · Hex ground 001</h1>
+<p>Fourteen terrain variants · Actual pointy-top board geometry · Shared board surface</p>
+<label><input id="lines" type="checkbox" checked> Show hex grid</label>
+<label><input id="characters" type="checkbox" checked> Human scale reference on Planície and Madeira</label>
+<div class="grid" id="grid"></div>
+<script type="module">
+import { drawHexGround } from '/src/game/hexGround.ts';
+import { WebGL2DRenderer } from '/src/game/gfx/WebGL2DRenderer.ts';
+const names=['Agua','Bosque','Brasa','Chama','City','Colina','Coluna','Laje','Ruinas','Neve','Planicie','Madeira','Tundra','Tundra-snow'];
+const surface=document.createElement('canvas');surface.width=420;surface.height=420;
+const renderer=new WebGL2DRenderer(surface);
+const human=new Image();human.src='/game/sprites/kael-v2/stand-1.png';await human.decode();
+const entries=await Promise.all(names.map(async name=>{
+ const node=document.createElement('div');node.className='tile';
+ node.innerHTML=`<h2>${name}</h2><canvas width="420" height="420"></canvas>`;grid.append(node);
+ const canvas=node.querySelector('canvas');const image=new Image();
+ image.src=`/game/tiles/hex-ground-001-${name.toLowerCase()}.png`;
+ await image.decode();
+ return {name,canvas,image};
+}));
+function hex(ctx,cx,cy,r){ctx.beginPath();for(let i=0;i<6;i++){const a=(60*i-30)*Math.PI/180;const x=cx+r*Math.cos(a),y=cy+r*Math.sin(a);i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.closePath()}
+function render(){for(const {name,canvas,image} of entries){
+ const ctx=renderer;
+ ctx.clearRect(0,0,canvas.width,canvas.height);const r=58;
+ for(let y=0;y<5;y++)for(let x=0;x<5;x++){
+ const wx=r*Math.sqrt(3)*(x+.5*(y&1)+.5),wy=r*(1.5*y+1),cx=wx-62,cy=wy-30;
+ ctx.save();hex(ctx,cx,cy,r);ctx.clip();
+ if(name==='Coluna')ctx.drawImage(image,cx-r,cy-r,2*r,2*r);
+ else drawHexGround(ctx,image,cx,cy,wx,wy,r);
+ ctx.restore();
+ if(lines.checked){hex(ctx,cx,cy,r);ctx.strokeStyle='#e2dfcb44';ctx.lineWidth=.7;ctx.stroke()}
+ }
+ if(characters.checked && (name==='Planicie' || name==='Madeira')){
+  const cell=r*Math.sqrt(3),h=cell*1.42*1.2,w=cell*1.11*1.2;
+  ctx.drawImage(human,210-w/2,240-h,w,h);
+ }
+ canvas.getContext('2d').drawImage(surface,0,0);
+}}lines.onchange=render;characters.onchange=render;render();window.hexGroundReady=true;
+</script>
+</html>

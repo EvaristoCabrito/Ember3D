@@ -345,33 +345,33 @@ export function OverworldMapScreen({
       <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 30% 20%, #241f19 0%, #0c0b0a 70%)" }} />
 
       <header className="relative z-20 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 flex-wrap">
-        <button type="button" onClick={onBack} className="size-10 grid place-items-center rounded-md border border-border bg-bg/70" aria-label="Voltar">
+        <button type="button" onClick={onBack} className="size-10 grid place-items-center ember-icon-btn" aria-label="Voltar">
           <ChevronLeft className="size-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm uppercase tracking-[0.18em] text-muted">{test ? "Modo teste" : "Campanha"} · RPG</p>
-          <h1 className="font-display text-3xl leading-none">Mapa</h1>
+          <p className="text-sm ember-kicker">{test ? "Modo teste" : "Campanha"} · RPG</p>
+          <h1 className="font-display text-3xl leading-none ember-title">Mapa</h1>
         </div>
         <button
           type="button"
           onClick={() => setQuestLogOpen(true)}
           aria-label="Registro de missões"
-          className="h-10 inline-flex items-center gap-2 rounded-md border border-border bg-bg/70 px-3 text-sm"
+          className="h-10 inline-flex items-center gap-2 ember-plate px-3 text-sm"
         >
           <BookOpen className="size-4" />
           <span>Missões</span>
         </button>
-        <p className="text-sm text-muted border border-border rounded-md px-2 py-1 bg-bg/70">Dia <span className="text-fg tabular-nums">{gameClock}</span></p>
-        <p className="text-sm text-muted border border-border rounded-md px-2 py-1 bg-bg/70">Rações <span className="text-fg tabular-nums">{rations}</span></p>
+        <p className="text-sm text-muted ember-plate px-2 py-1">Dia <span className="text-fg tabular-nums">{gameClock}</span></p>
+        <p className="text-sm text-muted ember-plate px-2 py-1">Rações <span className="text-fg tabular-nums">{rations}</span></p>
         {hungerStreak > 0 && (
-          <p className="text-sm border rounded-md px-2 py-1 bg-bg/70 border-danger/60 text-danger">
+          <p className="text-sm ember-plate px-2 py-1 text-danger">
             Fome <span className="tabular-nums">{hungerStreak}d</span>
           </p>
         )}
         {onUseRationAll && (
           <button
             type="button"
-            className="h-9 px-3 rounded-md border border-border bg-bg/70 text-sm"
+            className="h-9 px-3 ember-plate text-sm"
             onClick={() => {
               const heroes = (["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"] as const).filter(
                 (name) => test || heroRecruited(name, save.completed),
@@ -401,8 +401,8 @@ export function OverworldMapScreen({
               <img src="/game/icons/field-spells.png" alt="" draggable={false} className="block h-full w-full object-cover" />
             </button>
             {fieldSpellsOpen && (
-              <div className="absolute right-0 top-full mt-2 w-72 rounded-md border border-border bg-bg/95 p-3 flex flex-col gap-2 shadow-lg shadow-bg/40 z-20">
-                <p className="text-xs uppercase tracking-[0.14em] text-muted">Feitiços de campo</p>
+              <div className="absolute right-0 top-full mt-2 w-72 ember-plate p-3 flex flex-col gap-2 z-20">
+                <p className="text-xs ember-kicker">Feitiços de campo</p>
                 {(() => {
                   const healers = (["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"] as const).filter((name) => {
                     if (!(test || heroRecruited(name, save.completed))) return false;
@@ -428,7 +428,7 @@ export function OverworldMapScreen({
                         <button
                           type="button"
                           disabled={disabled}
-                          className="h-8 px-2 rounded-md border border-border bg-bg/70 text-xs disabled:opacity-40"
+                          className="h-8 px-2 ember-plate text-xs disabled:opacity-40"
                           onClick={() => {
                             const ok = onCastCreateFoodAndWater(name);
                             showHint(ok ? `${name} restaurou a fome.` : "Não foi possível lançar.");
@@ -444,21 +444,21 @@ export function OverworldMapScreen({
             )}
           </div>
         )}
-        <button type="button" onClick={onMute} className="size-9 grid place-items-center rounded-md border border-border bg-bg/70" aria-label="Som">
+        <button type="button" onClick={onMute} className="size-9 grid place-items-center ember-icon-btn" aria-label="Som">
           {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
         </button>
         <div className="relative">
           <button
             type="button"
             onClick={() => setAudioSettingsOpen((o) => !o)}
-            className="size-9 grid place-items-center rounded-md border border-border bg-bg/70"
+            className="size-9 grid place-items-center ember-icon-btn"
             aria-label="Volumes"
             aria-expanded={audioSettingsOpen}
           >
             <SlidersHorizontal className="size-4" />
           </button>
           {audioSettingsOpen && (
-            <div className="absolute right-0 top-full mt-2 w-64 rounded-md border border-border bg-bg/95 p-3 flex flex-col gap-3 shadow-lg shadow-bg/40 z-20">
+            <div className="absolute right-0 top-full mt-2 w-64 ember-plate p-3 flex flex-col gap-3 z-20">
               <label className="flex flex-col gap-1.5">
                 <span className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-muted">
                   Música <span className="tabular-nums text-fg">{Math.round(audioLevels.music * 100)}%</span>
@@ -521,7 +521,7 @@ export function OverworldMapScreen({
                     unlockAudio();
                     sfxPlay.magicAttack();
                   }}
-                  className="h-8 px-3 rounded-md border border-border bg-bg/70 text-xs uppercase tracking-[0.1em]"
+                  className="h-8 px-3 ember-plate text-xs uppercase tracking-[0.1em]"
                 >
                   Testar
                 </button>
@@ -529,7 +529,7 @@ export function OverworldMapScreen({
             </div>
           )}
         </div>
-        <p className="text-sm text-muted border border-border rounded-md px-2 py-1 bg-bg/70"><GoldAmount amount={ember} /></p>
+        <p className="text-sm text-muted ember-plate px-2 py-1"><GoldAmount amount={ember} /></p>
       </header>
 
       <div
@@ -687,7 +687,7 @@ export function OverworldMapScreen({
       </div>
 
       {hint && (
-        <div className="absolute z-30 top-24 left-1/2 -translate-x-1/2 bg-bg/90 border border-border rounded-md px-3 py-1.5 text-xs text-fg">
+        <div className="absolute z-30 top-24 left-1/2 -translate-x-1/2 ember-plate px-3 py-1.5 text-xs">
           {hint}
         </div>
       )}
@@ -711,9 +711,9 @@ export function OverworldMapScreen({
 
       {event && (
         <div className="absolute inset-0 z-40 ember-veil flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Evento da viagem">
-          <div className="w-full max-w-sm bg-surface border border-border rounded-lg px-5 py-4 text-sm text-fg shadow-lg shadow-bg/40">
+          <div className="relative w-full max-w-sm ember-panel px-5 py-4 text-sm">
             <p>{event.text}</p>
-            <button type="button" onClick={onDismissEvent} className="mt-4 h-11 w-full rounded-md border border-border bg-bg text-sm font-medium">
+            <button type="button" onClick={onDismissEvent} className="mt-4 h-11 w-full ember-btn ember-btn-primary text-sm">
               OK
             </button>
           </div>
@@ -722,13 +722,13 @@ export function OverworldMapScreen({
 
       {confirmVau && (
         <div className="absolute inset-0 z-40 ember-veil flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Entrar na missão">
-          <div className="w-full max-w-sm bg-surface border border-border rounded-lg px-5 py-4 text-sm text-fg shadow-lg shadow-bg/40">
-            <p className="font-display text-xl text-center mb-4">Entrar na missão?</p>
+          <div className="relative w-full max-w-sm ember-panel px-5 py-4 text-sm">
+            <p className="font-display text-xl text-center mb-4 ember-title">Entrar na missão?</p>
             <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => setConfirmVau(false)}
-                className="h-11 flex-1 rounded-md border border-border bg-bg text-sm font-medium"
+                className="h-11 flex-1 ember-btn ember-btn-ghost text-sm"
               >
                 Não
               </button>
@@ -738,7 +738,7 @@ export function OverworldMapScreen({
                   setConfirmVau(false);
                   onPick("vau");
                 }}
-                className="h-11 flex-1 rounded-md border border-accent bg-accent/20 text-sm font-medium"
+                className="h-11 flex-1 ember-btn ember-btn-primary text-sm"
               >
                 Sim
               </button>
@@ -748,7 +748,7 @@ export function OverworldMapScreen({
       )}
 
       {artOk && (
-        <div className="absolute z-20 bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 flex flex-col gap-1 bg-bg/85 border border-border rounded-lg p-1">
+        <div className="absolute z-20 bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 flex flex-col gap-1 ember-plate p-1">
           <button
             type="button"
             onClick={() => {
@@ -845,13 +845,13 @@ function QuestLogPanel({ save, onClose }: { save: SaveData; onClose: () => void 
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section role="dialog" aria-modal="true" aria-labelledby="quest-log-title" className="flex max-h-[82dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
-        <header className="flex items-start justify-between gap-3 border-b border-border p-4">
+      <section role="dialog" aria-modal="true" aria-labelledby="quest-log-title" className="relative flex max-h-[82dvh] w-full max-w-2xl flex-col overflow-hidden ember-panel">
+        <header className="flex items-start justify-between gap-3 border-b border-[#6b5238]/60 p-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.16em] text-muted">Estalagem · {completed.length}/{QUESTS.length} concluídas</p>
-            <h2 id="quest-log-title" className="mt-1 font-display text-2xl">Registro de missões</h2>
+            <p className="text-xs ember-kicker">Estalagem · {completed.length}/{QUESTS.length} concluídas</p>
+            <h2 id="quest-log-title" className="mt-1 font-display text-2xl ember-title">Registro de missões</h2>
           </div>
-          <button type="button" onClick={onClose} className="grid size-9 place-items-center rounded-md border border-border" aria-label="Fechar registro de missões">
+          <button type="button" onClick={onClose} className="grid size-9 place-items-center ember-icon-btn" aria-label="Fechar registro de missões">
             <X className="size-4" />
           </button>
         </header>
@@ -859,16 +859,16 @@ function QuestLogPanel({ save, onClose }: { save: SaveData; onClose: () => void 
           <div className="flex flex-col gap-4">
             {sections.map(({ title, list, empty }) => (
               <section key={title}>
-                <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-muted">{title} · {list.length}</h3>
+                <h3 className="mb-2 text-sm ember-kicker">{title} · {list.length}</h3>
                 <div className="flex flex-col gap-2">
-                  {list.length === 0 && <p className="rounded-lg border border-border bg-bg/60 p-3 text-sm text-muted">{empty}</p>}
+                  {list.length === 0 && <p className="ember-slot p-3 text-sm text-muted">{empty}</p>}
                   {list.map(({ quest, status }) => {
                     const { have, total } = questProgress(save, quest);
                     return (
-                      <article key={quest.id} className="rounded-lg border border-border bg-bg/60 p-3">
+                      <article key={quest.id} className="ember-slot p-3">
                         <div className="flex items-center gap-2">
                           {status === "done" ? <Check className="size-4 shrink-0 text-accent" /> : <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-accent" />}
-                          <h4 className="min-w-0 flex-1 font-display text-lg leading-tight">{quest.title}</h4>
+                          <h4 className="min-w-0 flex-1 font-display text-lg leading-tight ember-title">{quest.title}</h4>
                           <span className="shrink-0 text-xs text-muted">{status === "done" ? "Concluída" : status === "ready" ? "Entregar" : "Em andamento"}</span>
                         </div>
                         <p className="mt-1 pl-6 text-sm text-muted">
@@ -923,10 +923,10 @@ function LocationPanel({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-md max-h-[80dvh] overflow-y-auto bg-surface/95 border border-border rounded-xl p-5">
+      <div className="relative w-full max-w-md max-h-[80dvh] overflow-y-auto ember-panel p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
-          <p className="font-display text-xl leading-tight">{location.name}</p>
-          <button type="button" onClick={onClose} className="size-8 grid place-items-center rounded-md border border-border" aria-label="Fechar">
+          <p className="font-display text-xl leading-tight ember-title">{location.name}</p>
+          <button type="button" onClick={onClose} className="size-8 grid place-items-center ember-icon-btn" aria-label="Fechar">
             <X className="size-4" />
           </button>
         </div>
@@ -936,7 +936,7 @@ function LocationPanel({
             const optionalCrossing = st === "done" && isCrossingDungeon(m);
             return (
               <li key={m.id}>
-                <div className="rounded-xl border border-border bg-surface p-3">
+                <div className="ember-slot p-3">
                   <button
                     type="button"
                     disabled={optionalCrossing}
@@ -953,22 +953,22 @@ function LocationPanel({
                       st === "locked" ? `opacity-40 ${m.id === flashId ? "locked-flash" : ""}` : optionalCrossing ? "cursor-default" : ""
                     }`}
                   >
-                    <p className="text-sm uppercase tracking-[0.16em] text-muted flex items-center gap-1.5">
+                    <p className="text-sm ember-kicker flex items-center gap-1.5">
                       {st === "locked" && <Lock className="size-3" />}
                       {st === "done" && <Check className="size-3 text-accent" />}
                       {String(i + 1).padStart(2, "0")} · {m.place}
                       {st === "done" ? " · feito" : ""}
                     </p>
-                    <p className="font-display text-2xl">{m.title}</p>
+                    <p className="font-display text-2xl ember-title">{m.title}</p>
                     <p className="text-base text-muted">{m.objective}</p>
                     {optionalCrossing && <p className="mt-2 text-sm text-accent">Travessia concluída · escolha como seguir</p>}
                   </button>
                   {optionalCrossing && (
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button type="button" onClick={onPassThrough} className="min-h-10 rounded-lg border border-border px-3 text-sm font-medium hover:bg-surface-2">
+                      <button type="button" onClick={onPassThrough} className="min-h-10 ember-btn ember-btn-sm ember-btn-ghost px-3 text-sm">
                         Passar sem entrar
                       </button>
-                      <button type="button" onClick={() => onPick(m.id)} className="min-h-10 rounded-lg bg-accent px-3 text-sm font-semibold text-bg hover:brightness-110">
+                      <button type="button" onClick={() => onPick(m.id)} className="min-h-10 ember-btn ember-btn-sm ember-btn-primary px-3 text-sm">
                         Explorar de novo
                       </button>
                     </div>

@@ -197,31 +197,31 @@ export function WorldMapScreen({
       />
 
       <header className="relative z-20 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4">
-        <button type="button" onClick={onBack} className="size-10 grid place-items-center rounded-md border border-border bg-bg/70" aria-label="Voltar">
+        <button type="button" onClick={onBack} className="size-10 grid place-items-center ember-icon-btn" aria-label="Voltar">
           <ChevronLeft className="size-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm uppercase tracking-[0.18em] text-muted">{test ? "Modo teste" : "Campanha"}</p>
-          <h1 className="font-display text-3xl leading-none">Mapa</h1>
+          <p className="text-sm ember-kicker">{test ? "Modo teste" : "Campanha"}</p>
+          <h1 className="font-display text-3xl leading-none ember-title">Mapa</h1>
         </div>
-        <button type="button" onClick={onOpenList} className="h-9 px-3 rounded-md border border-border bg-bg/70 text-xs uppercase tracking-[0.14em]">
+        <button type="button" onClick={onOpenList} className="h-9 px-3 ember-plate text-xs uppercase tracking-[0.14em]">
           Lista
         </button>
-        <button type="button" onClick={onMute} className="size-9 grid place-items-center rounded-md border border-border bg-bg/70" aria-label="Som">
+        <button type="button" onClick={onMute} className="size-9 grid place-items-center ember-icon-btn" aria-label="Som">
           {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
         </button>
         <div className="relative">
           <button
             type="button"
             onClick={() => setAudioSettingsOpen((o) => !o)}
-            className="size-9 grid place-items-center rounded-md border border-border bg-bg/70"
+            className="size-9 grid place-items-center ember-icon-btn"
             aria-label="Volumes"
             aria-expanded={audioSettingsOpen}
           >
             <SlidersHorizontal className="size-4" />
           </button>
           {audioSettingsOpen && (
-            <div className="absolute right-0 top-full mt-2 w-64 rounded-md border border-border bg-bg/95 p-3 flex flex-col gap-3 shadow-lg shadow-bg/40 z-20">
+            <div className="absolute right-0 top-full mt-2 w-64 ember-plate p-3 flex flex-col gap-3 z-20">
               <label className="flex flex-col gap-1.5">
                 <span className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-muted">
                   Música <span className="tabular-nums text-fg">{Math.round(audioLevels.music * 100)}%</span>
@@ -284,7 +284,7 @@ export function WorldMapScreen({
                     unlockAudio();
                     sfxPlay.magicAttack();
                   }}
-                  className="h-8 px-3 rounded-md border border-border bg-bg/70 text-xs uppercase tracking-[0.1em]"
+                  className="h-8 px-3 ember-plate text-xs uppercase tracking-[0.1em]"
                 >
                   Testar
                 </button>
@@ -292,7 +292,7 @@ export function WorldMapScreen({
             </div>
           )}
         </div>
-        <p className="text-sm text-muted border border-border rounded-md px-2 py-1 bg-bg/70"><GoldAmount amount={ember} /></p>
+        <p className="text-sm text-muted ember-plate px-2 py-1"><GoldAmount amount={ember} /></p>
       </header>
 
       {/* A real scroll viewport (not shrink-to-fit) — the map renders at ZOOM_STOPS[zoomIdx]%
@@ -393,7 +393,7 @@ export function WorldMapScreen({
       </div>
 
       {artOk && (
-        <div className="absolute z-20 bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 flex flex-col gap-1 bg-bg/85 border border-border rounded-lg p-1">
+        <div className="absolute z-20 bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 flex flex-col gap-1 ember-plate p-1">
           <button
             type="button"
             onClick={() => {
@@ -469,10 +469,10 @@ function LocationPanel({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-md max-h-[80dvh] overflow-y-auto bg-surface/95 border border-border rounded-xl p-5">
+      <div className="relative w-full max-w-md max-h-[80dvh] overflow-y-auto ember-panel p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
-          <p className="font-display text-xl leading-tight">{location.name}</p>
-          <button type="button" onClick={onClose} className="size-8 grid place-items-center rounded-md border border-border" aria-label="Fechar">
+          <p className="font-display text-xl leading-tight ember-title">{location.name}</p>
+          <button type="button" onClick={onClose} className="size-8 grid place-items-center ember-icon-btn" aria-label="Fechar">
             <X className="size-4" />
           </button>
         </div>
@@ -492,17 +492,17 @@ function LocationPanel({
                     onPick(m.id);
                   }}
                   aria-label={st === "locked" ? `${m.title} (bloqueado)` : undefined}
-                  className={`w-full text-left rounded-xl border bg-surface px-4 py-3 ${
-                    st === "locked" ? `opacity-40 border-border ${m.id === flashId ? "locked-flash" : ""}` : "border-border"
+                  className={`w-full text-left ember-slot px-4 py-3 ${
+                    st === "locked" ? `opacity-40 ${m.id === flashId ? "locked-flash" : ""}` : ""
                   }`}
                 >
-                  <p className="text-sm uppercase tracking-[0.16em] text-muted flex items-center gap-1.5">
+                  <p className="text-sm ember-kicker flex items-center gap-1.5">
                     {st === "locked" && <Lock className="size-3" />}
                     {st === "done" && <Check className="size-3 text-accent" />}
                     {String(i + 1).padStart(2, "0")} · {m.place}
                     {st === "done" ? " · feito" : ""}
                   </p>
-                  <p className="font-display text-2xl">{m.title}</p>
+                  <p className="font-display text-2xl ember-title">{m.title}</p>
                   <p className="text-base text-muted">{m.objective}</p>
                 </button>
               </li>

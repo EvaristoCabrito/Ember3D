@@ -2574,7 +2574,7 @@ function TitleScreen({
         <button
           type="button"
           onClick={onMute}
-          className="size-11 grid place-items-center rounded-md border border-border text-fg"
+          className="size-11 grid place-items-center ember-icon-btn"
           aria-label={muted ? "Ativar som" : "Silenciar"}
         >
           {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
@@ -2600,15 +2600,15 @@ function TitleScreen({
           Seis sobreviventes. Um tabuleiro de guerra. Cada casa conta.
         </p>
         <div className="flex flex-col gap-3">
-          <Button size="xl" disabled={!ready} onClick={onNew}>
+          <Button size="xl" className="ember-btn ember-btn-primary" disabled={!ready} onClick={onNew}>
             {ready ? "Nova campanha" : "Carregando…"}
           </Button>
           {hasProgress && (
-            <Button size="lg" variant="ghost" disabled={!ready} onClick={onContinue}>
+            <Button size="lg" variant="ghost" className="ember-btn ember-btn-ghost" disabled={!ready} onClick={onContinue}>
               Continuar
             </Button>
           )}
-          <Button size="lg" variant="quiet" onClick={onHelp}>
+          <Button size="lg" variant="quiet" className="ember-btn ember-btn-ghost" onClick={onHelp}>
             Como jogar
           </Button>
         </div>
@@ -3598,7 +3598,7 @@ const BUILDER_TERRAIN: TerrainId[] = [
  * than deleted: variant indices are positional, so dropping one would shift every later
  * variant and repaint saved maps. plains 15 = "Trilha de Terra". */
 const HIDDEN_VARIANTS: Partial<Record<TerrainId, number[]>> = {
-  plains: [15, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37],
+  plains: [15, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38],
   // Keep these saved-map indices intact while removing them from the water picker.
   water: [3, 7],
 };
@@ -3619,20 +3619,26 @@ const VARIANT_LABEL: Partial<Record<TerrainId, string[]>> = {
     "Piso de tábuas usadas",
     "Piso de taverna clássica",
     "Piso de taverna tranquila",
+    "City · Solo contínuo 001",
+    "Planície · Solo contínuo 001",
+    "Madeira discreta · Solo contínuo 001",
   ],
-  woods: ["Solo de bosque", "Bosque sombrio", "Bosque", "Sebes", "Pinhal", "Bosque 04", "Terra", "Bosque 12", "Bosque 13"],
-  ruins: ["Ruínas sombrias", "Ruínas originais", "Pedra 02", "Pedra 03", "Pedra 04", "Pátio mosaico", "Lajes partidas"],
-  water: ["Água costeira", "Antiga", "Praia", "Pântano", "Costa baixo", "Costa esq.", "Costa dir.", "Mar fundo", "Mar fundo 2", "Costa 01", "Costa 02", "Ponta baixo 01", "Ponta baixo 02", "Água rasa", "Água rasa 2", "Água costa", "Água costa 2", "Pântano escuro", "Praia", "Rio", "Mar", "Mar profundo"],
-  ember: ["Brasa", "Brasa 2", "Antiga", "Cinzas", "Brasa viva"],
-  hill: ["Platô rochoso", "Trilha elevada", "Ruínas elevadas", "Platô musgoso"],
-  flame: ["Chama", "Antiga", "Fogo"],
-  nave: ["Laje", "Laje Negra"],
-  column: ["Coluna", "Antiga"],
+  woods: ["Solo de bosque", "Bosque sombrio", "Bosque", "Sebes", "Pinhal", "Bosque 04", "Terra", "Bosque 12", "Bosque 13", "Bosque · Solo contínuo 001"],
+  ruins: ["Ruínas sombrias", "Ruínas originais", "Pedra 02", "Pedra 03", "Pedra 04", "Pátio mosaico", "Lajes partidas", "Ruínas · Solo contínuo 001"],
+  water: ["Água costeira", "Antiga", "Praia", "Pântano", "Costa baixo", "Costa esq.", "Costa dir.", "Mar fundo", "Mar fundo 2", "Costa 01", "Costa 02", "Ponta baixo 01", "Ponta baixo 02", "Água rasa", "Água rasa 2", "Água costa", "Água costa 2", "Pântano escuro", "Praia", "Rio", "Mar", "Mar profundo", "Água · Solo contínuo 001"],
+  ember: ["Brasa", "Brasa 2", "Antiga", "Cinzas", "Brasa viva", "Brasa · Solo contínuo 001"],
+  hill: ["Platô rochoso", "Trilha elevada", "Ruínas elevadas", "Platô musgoso", "Colina · Solo contínuo 001"],
+  flame: ["Chama", "Antiga", "Fogo", "Chama · Solo contínuo 001"],
+  nave: ["Laje", "Laje Negra", "Laje · Solo contínuo 001"],
+  column: ["Coluna", "Antiga", "Coluna · Solo contínuo 001"],
   snow: [
     "Neve Rasa 4", "Neve Rasa 5", "Neve Funda 2",
     "Mato Seco", "Folhas Mortas", "Pinhal Ressequido", "Bosque Gelado",
     "Pinhal Frio", "Folhas Congeladas", "Brejo Congelado", "Urze Gelada",
     "Planície Ressequida", "Planície Congelada", "Encosta Morta", "Arbustos Frios",
+    "Neve · Solo contínuo 001",
+    "Tundra sem neve · Solo contínuo 001",
+    "Tundra com neve · Solo contínuo 001",
   ],
 };
 
@@ -5710,10 +5716,10 @@ function MapEditorScreen({
                         setBrush(terrain);
                         if (key === "city") {
                           setCityMode(true);
-                          setVariant((v) => (v >= 21 && v <= 37 && v !== 22 ? v : 21));
+                          setVariant((v) => (v >= 21 && v <= 38 && v !== 22 ? v : 21));
                         } else {
                           setCityMode(false);
-                          setVariant((v) => (terrain === "plains" && v >= 21 && v <= 37 ? 0 : Math.min(v, (TILE_VARIANT_COUNT[terrain] ?? 1) - 1)));
+                          setVariant((v) => (terrain === "plains" && v >= 21 && v <= 38 ? 0 : Math.min(v, (TILE_VARIANT_COUNT[terrain] ?? 1) - 1)));
                         }
                       }}
                       className={`text-xs px-1.5 py-1 rounded-md border flex items-center gap-1.5 ${selected ? "border-accent" : "border-border"}`}
@@ -5774,7 +5780,7 @@ function MapEditorScreen({
                         original variant index i (art file, saved-map value), so re-sorting
                         this list can never relabel or repaint an existing tile. */}
                     {Array.from({ length: TILE_VARIANT_COUNT[brush] ?? 1 }, (_, i) => i)
-                      .filter((i) => cityMode && brush === "plains" ? i >= 21 && i <= 37 && i !== 22 : !HIDDEN_VARIANTS[brush]?.includes(i))
+                      .filter((i) => cityMode && brush === "plains" ? i >= 21 && i <= 38 && i !== 22 : !HIDDEN_VARIANTS[brush]?.includes(i))
                       .sort((a, b) => byName(VARIANT_LABEL[brush]?.[a] ?? String(a + 1).padStart(3, "0"), VARIANT_LABEL[brush]?.[b] ?? String(b + 1).padStart(3, "0")))
                       .map((i) => (
                   <button
@@ -7042,33 +7048,33 @@ function BriefingScreen({
         </>
       )}
       <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 sm:px-6">
-        <button type="button" onClick={onBack} className="size-10 grid place-items-center rounded-md border border-border bg-surface/90" aria-label="Voltar">
+        <button type="button" onClick={onBack} className="size-10 grid place-items-center ember-icon-btn" aria-label="Voltar">
           <ChevronLeft className="size-5" />
         </button>
         <div className="flex-1">
-          <p className="text-sm uppercase tracking-[0.18em] text-muted">{mission.place}</p>
-          <h1 className="font-display text-3xl leading-none">{mission.title}</h1>
+          <p className="text-sm ember-kicker">{mission.place}</p>
+          <h1 className="font-display text-3xl leading-none ember-title">{mission.title}</h1>
         </div>
         <button
           type="button"
           onClick={onMute}
-          className="size-10 grid place-items-center rounded-md border border-border bg-surface/90 text-fg"
+          className="size-10 grid place-items-center ember-icon-btn"
           aria-label={muted ? "Ativar som" : "Silenciar"}
         >
           {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
         </button>
       </header>
       <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-4 pb-4 sm:px-6">
-        <div className="max-w-xl rounded-xl border border-border bg-surface/90 p-5 shadow-lg shadow-bg/30">
+        <div className="relative max-w-xl ember-panel p-5">
           <p className="text-lg leading-relaxed text-fg">{mission.briefing}</p>
-          <div className="mt-5 border-t border-border pt-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-muted">Objetivo</p>
+          <div className="mt-5 ember-rule pt-4">
+            <p className="text-xs ember-kicker">Objetivo</p>
             <p className="mt-1 text-base font-medium text-accent">{mission.objective}</p>
           </div>
         </div>
       </div>
       <div className="relative z-10 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
-        <Button size="xl" className="w-full max-w-xl" onClick={onStart}>
+        <Button size="xl" className="w-full max-w-xl ember-btn ember-btn-primary" onClick={onStart}>
           <Swords className="size-5" /> {mission.id === "estalagem" ? "Entrar" : "Entrar em combate"}
         </Button>
       </div>
@@ -7484,7 +7490,7 @@ function BattleScreen({
         )}
         {heldTile && hud.terrain && (
           <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center px-3">
-            <div className="bg-surface/95 border border-border rounded-lg px-3 py-2 max-w-sm shadow-lg">
+            <div className="ember-plate px-3 py-2 max-w-sm">
               {hud.terrain.spellZone ? (
                 <>
                   <p className="font-display text-base leading-tight">{WEB_OF_DREAMS.name}</p>
@@ -7511,12 +7517,12 @@ function BattleScreen({
         )}
         <div className="pointer-events-none absolute inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-20 flex items-start justify-end gap-1">
           {showTurnOrder && !engine.mission.explore && (
-            <p className="bg-surface/90 border border-border rounded-md px-1.5 py-0.5 text-[10px] tabular-nums text-muted pointer-events-none">
+            <p className="ember-plate px-1.5 py-0.5 text-[10px] tabular-nums text-muted pointer-events-none">
               T{hud.turn} · {hud.playerAlive}/{hud.enemyAlive}
             </p>
           )}
           {hud.terrain && (hud.terrain.note || hud.terrain.id === "barricade" || hud.terrain.id === "hill") && (
-            <p className="bg-surface/90 border border-border rounded-md px-1.5 py-0.5 text-[10px] text-accent pointer-events-none max-w-[14rem] truncate">
+            <p className="ember-plate px-1.5 py-0.5 text-[10px] text-accent pointer-events-none max-w-[14rem] truncate">
               {hud.terrain.name}
             </p>
           )}
@@ -7524,7 +7530,7 @@ function BattleScreen({
             <button
               type="button"
               onClick={onMute}
-              className="size-7 grid place-items-center rounded-md border border-border bg-surface/90"
+              className="size-7 grid place-items-center ember-plate"
               aria-label="Som"
             >
               {muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
@@ -7532,7 +7538,7 @@ function BattleScreen({
             <button
               type="button"
               onClick={onPause}
-              className="h-7 px-2 rounded-md border border-border bg-surface/90 text-[10px] tracking-[0.14em] uppercase"
+              className="h-7 px-2 ember-plate text-[10px] tracking-[0.14em] uppercase"
             >
               Opções
             </button>
@@ -7540,15 +7546,15 @@ function BattleScreen({
         </div>
         {hud.banner && (
           <div className="pointer-events-none absolute inset-x-0 top-14 flex justify-center">
-            <div className="bg-surface/95 border border-border rounded-md px-4 py-1.5 font-display text-lg tracking-wide">
+            <div className="ember-plate px-4 py-1.5 font-display text-lg tracking-wide ember-title">
               {hud.banner}
             </div>
           </div>
         )}
         {hud.targetPrompt && !hud.result && (
           <div className="pointer-events-none absolute inset-x-0 top-14 flex justify-center px-3">
-            <div className="bg-surface border-2 border-accent rounded-lg px-4 py-2.5 text-center shadow-lg">
-              <p className="font-display text-lg tracking-wide leading-tight">
+            <div className="ember-plate is-accent px-4 py-2.5 text-center">
+              <p className="font-display text-lg tracking-wide leading-tight ember-title">
                 Escolha {hud.targetPrompt.need} alvo{hud.targetPrompt.need > 1 ? "s" : ""}
               </p>
               <p className="text-sm text-muted mt-0.5">
@@ -7564,12 +7570,12 @@ function BattleScreen({
         )}
         {hud.tip && !(hud.winAvailable && !winPopupDismissed) && (
           <div className="pointer-events-none absolute inset-x-2 bottom-2">
-            <p className="bg-surface/90 border border-border rounded-md px-2 py-1 text-xs text-muted text-center">{hud.tip}</p>
+            <p className="ember-plate px-2 py-1 text-xs text-muted text-center">{hud.tip}</p>
           </div>
         )}
         {hud.winAvailable && !hud.result && !winPopupDismissed && (
           <div className="pointer-events-none absolute inset-x-2 bottom-2 flex justify-center">
-            <div className="pointer-events-auto bg-surface/95 border border-accent rounded-md px-3 py-2 flex items-center gap-3 flex-wrap justify-center">
+            <div className="pointer-events-auto ember-plate is-accent px-3 py-2 flex items-center gap-3 flex-wrap justify-center">
               <p className="text-sm">
                 {hud.activeExit?.id === "escape-exit"
                   ? "Encontraram uma rota de fuga. Desejam tentar escapar? (60% de chance)"
@@ -7582,10 +7588,10 @@ function BattleScreen({
                       : "Todos os inimigos caíram. Encerrar a missão?"}
               </p>
               <div className="flex items-center gap-2">
-                <Button size="sm" disabled={!engine.canConfirmFinish()} onClick={() => engine.confirmFinish()}>
+                <Button size="sm" className="ember-btn ember-btn-sm ember-btn-primary" disabled={!engine.canConfirmFinish()} onClick={() => engine.confirmFinish()}>
                   {hud.activeExit?.id === "escape-exit" ? "Tentar escapar" : hud.activeExit ? "Sair" : "Encerrar missão"}
                 </Button>
-                <Button size="sm" variant="quiet" onClick={() => setWinPopupDismissed(true)}>
+                <Button size="sm" variant="quiet" className="ember-btn ember-btn-sm ember-btn-ghost" onClick={() => setWinPopupDismissed(true)}>
                   {hud.activeExit ? "Ficar" : "Continuar explorando"}
                 </Button>
               </div>
@@ -7594,9 +7600,9 @@ function BattleScreen({
         )}
         {hud.chestLoot && (
           <div className="absolute inset-0 z-50 ember-veil flex items-center justify-center p-4">
-            <div className="w-full max-w-sm bg-surface border border-accent rounded-xl p-5">
-              <p className="text-xs uppercase tracking-[0.18em] text-muted">Baú aberto</p>
-              <h2 className="font-display text-2xl leading-none mt-1 mb-3">{hud.chestLoot.unitName} encontrou</h2>
+            <div className="relative w-full max-w-sm ember-panel p-5">
+              <p className="text-xs ember-kicker">Baú aberto</p>
+              <h2 className="font-display text-2xl leading-none mt-1 mb-3 ember-title">{hud.chestLoot.unitName} encontrou</h2>
               <ul className="flex flex-col gap-1.5 mb-4">
                 <li className="text-sm flex items-center gap-1.5">
                   <GoldAmount amount={hud.chestLoot.ember} prefix className="text-accent font-bold" />
@@ -7611,7 +7617,7 @@ function BattleScreen({
                 ))}
                 {hud.chestLoot.items.length === 0 && <li className="text-sm text-muted">Nada além do Gold.</li>}
               </ul>
-              <Button className="w-full" onClick={() => engine.acknowledgeChestLoot()}>
+              <Button className="w-full ember-btn ember-btn-primary" onClick={() => engine.acknowledgeChestLoot()}>
                 Ok
               </Button>
             </div>
@@ -7629,7 +7635,7 @@ function BattleScreen({
           <button
             type="button"
             onClick={() => setFirstBattleHintDismissed(true)}
-            className="max-w-md rounded-lg border border-accent/60 bg-surface/95 px-3 py-2 text-center text-xs leading-relaxed text-fg shadow-lg"
+            className="max-w-md ember-plate is-accent px-3 py-2 text-center text-xs leading-relaxed"
           >
             <span className="font-medium text-accent">Primeira batalha:</span> clique no retrato para abrir status e equipamento. Clique na barra de HP para abrir o log de combate.
             <span className="block mt-1 text-[10px] uppercase tracking-wide text-muted">Toque para fechar</span>
@@ -7637,7 +7643,7 @@ function BattleScreen({
         </aside>
       )}
 
-      <footer className="shrink-0 border-t border-border bg-surface px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <footer className="relative shrink-0 ember-hud-bar px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <div className="min-h-16 sm:min-h-[4.5rem] flex items-center gap-2">
           {unit ? (
             <>
@@ -7717,7 +7723,7 @@ function BattleScreen({
         {engine.mission.explore ? (
           <div className="flex gap-1 min-h-10 items-center mt-1">
             <p className="text-xs text-muted">Clique no chão para andar · clique em alguém para conversar.</p>
-            <Button size="sm" className="ml-auto" onClick={onQuit}>
+            <Button size="sm" className="ml-auto ember-btn ember-btn-sm ember-btn-primary" onClick={onQuit}>
               Sair
             </Button>
           </div>
@@ -7727,6 +7733,7 @@ function BattleScreen({
             <Button
               size="sm"
               variant="quiet"
+              className="ember-btn ember-btn-sm ember-btn-ghost"
               disabled={!showAct || hud.busy || hud.mode === "awaitSpell"}
               onClick={() => engine.startOffHand()}
               title={
@@ -7738,11 +7745,11 @@ function BattleScreen({
               {hud.offHandKind === "shield" ? "Investida de Escudo" : "Mão Secundária"}
             </Button>
           )}
-          <Button size="sm" disabled={!showAct || !hud.canAttack || hud.busy || hud.mode === "awaitSpell"} onClick={() => engine.startAttack()}>
+          <Button size="sm" className="ember-btn ember-btn-sm ember-btn-primary" disabled={!showAct || !hud.canAttack || hud.busy || hud.mode === "awaitSpell"} onClick={() => engine.startAttack()}>
             Atacar
           </Button>
           {hud.mode === "awaitSpell" && (
-            <Button size="sm" disabled={!hud.spellReady || hud.busy} onClick={() => engine.confirmSpell()}>
+            <Button size="sm" className="ember-btn ember-btn-sm ember-btn-primary" disabled={!hud.spellReady || hud.busy} onClick={() => engine.confirmSpell()}>
               Lançar
             </Button>
           )}
@@ -7752,7 +7759,7 @@ function BattleScreen({
                 type="button"
                 disabled={!showAct || hud.busy}
                 onClick={() => engine.useLockpick()}
-                className="relative h-9 px-2 rounded-md border border-border bg-bg flex items-center gap-1 disabled:opacity-40"
+                className="relative h-9 px-2 ember-socket flex items-center gap-1 disabled:opacity-40"
               >
                 <img src="/game/icons/lockpick.png" alt="" className="size-5 rounded-sm object-contain" />
                 <span className="text-sm tabular-nums">×{actor?.bag.lockpick ?? 0}</span>
@@ -7763,6 +7770,7 @@ function BattleScreen({
             <Button
               size="sm"
               variant="ghost"
+              className="ember-btn ember-btn-sm ember-btn-ghost"
               disabled={hud.busy}
               title="Apenas na borda do mapa. 60% de chance; se falhar, o turno acaba e os inimigos continuam atacando."
               onClick={() => {
@@ -7773,12 +7781,13 @@ function BattleScreen({
               Fugir combate · 60%
             </Button>
           )}
-          <Button size="sm" variant="quiet" disabled={!showAct || hud.busy} onClick={() => engine.wait()}>
+          <Button size="sm" variant="quiet" className="ember-btn ember-btn-sm ember-btn-ghost" disabled={!showAct || hud.busy} onClick={() => engine.wait()}>
             Esperar
           </Button>
           <Button
             size="sm"
             variant="ghost"
+            className="ember-btn ember-btn-sm ember-btn-ghost"
             disabled={(!showAct && hud.mode !== "awaitPotion") || hud.busy}
             onClick={() => engine.cancel()}
           >
@@ -7796,9 +7805,7 @@ function BattleScreen({
                       type="button"
                       disabled={!editingSlots && disabled}
                       onClick={() => activateSlot(i)}
-                      className={`relative size-9 grid place-items-center overflow-visible rounded-md border ${
-                        action && slotActive(action) ? "border-accent bg-accent/20" : "border-border bg-bg"
-                      } ${editingSlots ? "outline outline-1 outline-dashed outline-muted" : ""} disabled:opacity-40`}
+                      className={`relative size-9 grid place-items-center overflow-visible ember-socket ${action && slotActive(action) ? "is-active" : ""} ${editingSlots ? "outline outline-1 outline-dashed outline-muted" : ""} disabled:opacity-40`}
                     >
                       <span className="absolute z-10 -top-1 -left-1 bg-surface border border-border rounded px-0.5 text-[8px] tabular-nums leading-tight text-muted">
                         F{i + 1}
@@ -7821,23 +7828,23 @@ function BattleScreen({
                 type="button"
                 onClick={() => setEditingSlots((v) => !v)}
                 title="Configurar slots"
-                className={`size-9 grid place-items-center rounded-md border ${editingSlots ? "border-accent bg-accent/20" : "border-border bg-bg"}`}
+                className={`size-9 grid place-items-center ember-socket${editingSlots ? " is-active" : ""}`}
               >
                 <Pencil className="size-4" />
               </button>
             </div>
           )}
           {hud.winAvailable && !hud.result && (
-            <Button size="sm" className="ml-auto" onClick={() => hud.activeExit ? setWinPopupDismissed(false) : engine.confirmFinish()}>
+            <Button size="sm" className="ml-auto ember-btn ember-btn-sm ember-btn-primary" onClick={() => hud.activeExit ? setWinPopupDismissed(false) : engine.confirmFinish()}>
               {hud.activeExit ? "Usar waypoint" : "Encerrar missão"}
             </Button>
           )}
           {hud.canUndoMove && !hud.result && (
-            <Button size="sm" variant="ghost" title="Volta ao ponto onde o turno começou e devolve todo o movimento gasto. Some assim que você age." onClick={() => engine.undoMove()}>
+            <Button size="sm" variant="ghost" className="ember-btn ember-btn-sm ember-btn-ghost" title="Volta ao ponto onde o turno começou e devolve todo o movimento gasto. Some assim que você age." onClick={() => engine.undoMove()}>
               Desfazer movimento
             </Button>
           )}
-          <Button size="sm" variant="ghost" className={hud.winAvailable && !hud.result ? "" : "ml-auto"} disabled={hud.phase !== "player" || !!hud.result} onClick={() => engine.endTurn()}>
+          <Button size="sm" variant="ghost" className={`ember-btn ember-btn-sm ember-btn-ghost${hud.winAvailable && !hud.result ? "" : " ml-auto"}`} disabled={hud.phase !== "player" || !!hud.result} onClick={() => engine.endTurn()}>
             Fim do turno
           </Button>
         </div>
@@ -7853,12 +7860,12 @@ function BattleScreen({
         >
           <div className="status-panel w-full max-w-sm max-h-[85dvh] overflow-y-auto ember-window rounded-xl p-6">
             <div className="flex items-start justify-between gap-3 mb-4">
-              <h2 className="font-display text-2xl">Opções</h2>
+              <h2 className="font-display text-2xl ember-title">Opções</h2>
               <button
                 type="button"
                 onClick={onResume}
                 aria-label="Fechar opções"
-                className="size-8 shrink-0 grid place-items-center rounded-md border border-border bg-bg/70"
+                className="size-8 shrink-0 grid place-items-center ember-icon-btn"
               >
                 <X className="size-4" />
               </button>
@@ -7870,31 +7877,32 @@ function BattleScreen({
                 barra de ações.
               </p>
             )}
-            <p className="text-xs uppercase tracking-[0.18em] text-muted mb-2">Zoom</p>
+            <p className="text-xs ember-kicker mb-2">Zoom</p>
             <div className="grid grid-cols-4 gap-1 mb-4">
               {(["Distante", "Longe", "Médio", "Perto"] as const).map((label, i) => (
-                <Button key={label} size="sm" variant={hud.zoom === i ? undefined : "quiet"} onClick={() => engine.setZoom(i)}>
+                <Button key={label} size="sm" variant={hud.zoom === i ? undefined : "quiet"} className={`ember-btn ember-btn-sm ${hud.zoom === i ? "ember-btn-primary" : "ember-btn-ghost"}`} onClick={() => engine.setZoom(i)}>
                   {label}
                 </Button>
               ))}
             </div>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted mb-2">Velocidade</p>
+            <p className="text-xs ember-kicker mb-2">Velocidade</p>
             <div className="grid grid-cols-3 gap-1 mb-4">
               {(["slow", "normal", "fast"] as const).map((mode) => (
                 <Button
                   key={mode}
                   size="sm"
                   variant={hud.speedMode === mode ? undefined : "quiet"}
+                  className={`ember-btn ember-btn-sm ${hud.speedMode === mode ? "ember-btn-primary" : "ember-btn-ghost"}`}
                   onClick={() => engine.setSpeed(mode)}
                 >
                   {mode === "slow" ? "Lenta" : mode === "normal" ? "Normal" : "Rápida"}
                 </Button>
               ))}
             </div>
-            <div className="mb-4 border-t border-border pt-3">
+            <div className="mb-4 ember-rule pt-3">
               <button
                 type="button"
-                className="w-full flex items-center justify-between rounded-md border border-border bg-bg/50 px-3 py-2 text-left"
+                className="w-full flex items-center justify-between ember-slot px-3 py-2 text-left"
                 onClick={() => setAudioSettingsOpen((open) => !open)}
                 aria-expanded={audioSettingsOpen}
               >
@@ -7959,7 +7967,7 @@ function BattleScreen({
                   </label>
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs text-muted">Deixe Música em 0% para ouvir somente os efeitos.</p>
-                    <Button size="sm" variant="quiet" onClick={() => { unlockAudio(); sfxPlay.magicAttack(); }}>
+                    <Button size="sm" variant="quiet" className="ember-btn ember-btn-sm ember-btn-ghost" onClick={() => { unlockAudio(); sfxPlay.magicAttack(); }}>
                       Testar
                     </Button>
                   </div>
@@ -7967,15 +7975,15 @@ function BattleScreen({
               )}
             </div>
             <div className="flex flex-col gap-2">
-              <Button onClick={onResume}>Continuar</Button>
-              <Button variant="quiet" onClick={onSave}>
+              <Button className="ember-btn ember-btn-primary" onClick={onResume}>Continuar</Button>
+              <Button variant="quiet" className="ember-btn ember-btn-ghost" onClick={onSave}>
                 Save
               </Button>
-              <Button variant="quiet" onClick={onLoad}>
+              <Button variant="quiet" className="ember-btn ember-btn-ghost" onClick={onLoad}>
                 Load
               </Button>
               {!fleeable && (
-                <Button variant="ghost" onClick={onQuit}>
+                <Button variant="ghost" className="ember-btn ember-btn-ghost" onClick={onQuit}>
                   {playtest ? "Encerrar teste" : "Desistir"}
                 </Button>
               )}
@@ -8130,10 +8138,10 @@ function SlotPicker({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-sm ember-window rounded-xl p-4">
+      <div className="relative w-full max-w-sm ember-panel p-4">
         <div className="flex items-center justify-between mb-3">
-          <p className="font-display text-lg">Escolher pra esse slot</p>
-          <button type="button" onClick={onClose} className="size-8 grid place-items-center rounded-md border border-border" aria-label="Fechar">
+          <p className="font-display text-lg ember-title">Escolher pra esse slot</p>
+          <button type="button" onClick={onClose} className="size-8 grid place-items-center ember-icon-btn" aria-label="Fechar">
             <X className="size-4" />
           </button>
         </div>
@@ -8147,7 +8155,7 @@ function SlotPicker({
               <button
                 type="button"
                 onClick={() => onPick(action)}
-                className="w-full flex items-center gap-2 bg-bg border border-border rounded-md px-2 py-2 text-left"
+                className="w-full flex items-center gap-2 ember-slot px-2 py-2 text-left"
               >
                 <img src={slotIcon(action)} alt="" className="size-6 rounded-sm object-cover shrink-0" />
                 <span className="text-sm">{slotLabel(action)}</span>
@@ -8157,7 +8165,7 @@ function SlotPicker({
           <button
             type="button"
             onClick={() => onPick(null)}
-            className="flex items-center gap-2 bg-bg border border-border rounded-md px-2 py-2 text-left text-muted"
+            className="flex items-center gap-2 ember-slot px-2 py-2 text-left text-muted"
           >
             <span className="size-6 grid place-items-center shrink-0">—</span>
             <span className="text-sm">Deixar vazio</span>
@@ -8340,7 +8348,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
               {unit.side === "player" && <HungerBar name={unit.name} value={unit.fullness} />}
             </div>
             <div className="min-w-0">
-              <p className="font-display text-xl leading-tight truncate">{unit.name}</p>
+              <p className="font-display text-xl leading-tight truncate ember-title">{unit.name}</p>
               <p className={`text-xs ${unit.side === "enemy" ? "text-danger" : "text-muted"}`}>
                 {unit.className} · Nv {unit.level}
               </p>
@@ -8366,15 +8374,15 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
             <div className="flex items-center gap-1.5">
               {onCycle && (
                 <>
-                  <button type="button" onClick={() => onCycle(-1)} className="size-7 grid place-items-center rounded-md border border-border" aria-label="Personagem anterior">
+                  <button type="button" onClick={() => onCycle(-1)} className="size-7 grid place-items-center ember-icon-btn" aria-label="Personagem anterior">
                     <ChevronUp className="size-3.5" />
                   </button>
-                  <button type="button" onClick={() => onCycle(1)} className="size-7 grid place-items-center rounded-md border border-border" aria-label="Próximo personagem">
+                  <button type="button" onClick={() => onCycle(1)} className="size-7 grid place-items-center ember-icon-btn" aria-label="Próximo personagem">
                     <ChevronDown className="size-3.5" />
                   </button>
                 </>
               )}
-              <button type="button" onClick={onClose} className="size-7 grid place-items-center rounded-md border border-border" aria-label="Fechar">
+              <button type="button" onClick={onClose} className="size-7 grid place-items-center ember-icon-btn" aria-label="Fechar">
                 <X className="size-3.5" />
               </button>
             </div>
@@ -8427,14 +8435,14 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
           <div className="mb-4 flex items-center gap-3 rounded-lg border border-accent/40 bg-bg px-3 py-2.5">
             <img src="/game/icons/stat-points-001.png" alt="" className="size-10 shrink-0 object-contain" />
             <div className="min-w-0">
-              <p className="text-xs uppercase tracking-[0.16em] text-muted">Pontos de atributo</p>
+              <p className="text-xs ember-kicker">Pontos de atributo</p>
               <p className="font-display text-lg leading-tight tabular-nums">{unspentStatPoints} disponível{unspentStatPoints === 1 ? "" : "is"}</p>
               <p className="text-[11px] text-muted">Ganhe {STAT_POINTS_PER_LEVEL} por nível e distribua como quiser.</p>
             </div>
           </div>
         )}
 
-        <p className="text-xs uppercase tracking-[0.18em] text-muted mb-2">Atributos</p>
+        <p className="text-xs ember-kicker mb-2">Atributos</p>
         <div className="grid grid-cols-4 gap-1.5 mb-4">
           {stats.map(({ label, value, stat, gear, penalized }) => (
             <div key={label} className="bg-bg border border-border rounded-md px-1 py-1 text-center">
@@ -8479,7 +8487,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
 
         {unit.side === "player" && (swordsman || mage || conjurer || archer || healer || lancer || familiar1 || familiar2 || familiar3 || familiar4) && (
           <>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted mb-2">Magias e habilidades</p>
+            <p className="text-xs ember-kicker mb-2">Magias e habilidades</p>
             <div className="grid grid-cols-1 gap-1.5">
                   {swordsman && (
                     <>
@@ -8688,7 +8696,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
 
         {unit.side === "player" && (
           <>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted mb-2 mt-5">Poções</p>
+            <p className="text-xs ember-kicker mb-2 mt-5">Poções</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               {ALL_POTIONS.filter((kind) => (unit.bag[kind] ?? 0) > 0).map((kind) => (
                 <ItemTip key={kind} text={potionTooltip(kind)} className="block">
@@ -8728,7 +8736,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
         >
           <div className="w-full max-w-xs ember-window rounded-xl p-5 text-center">
             <div className="flex items-start justify-end">
-              <button type="button" onClick={() => setShowConditionDetail(false)} className="size-8 grid place-items-center rounded-md border border-border" aria-label="Fechar">
+              <button type="button" onClick={() => setShowConditionDetail(false)} className="size-8 grid place-items-center ember-icon-btn" aria-label="Fechar">
                 <X className="size-4" />
               </button>
             </div>
@@ -8812,16 +8820,16 @@ function ResultScreen({
         </>
       )}
       <div className="relative z-10 flex-1 min-h-0 overflow-y-auto px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-4">
-        <p className="text-sm uppercase tracking-[0.2em] text-muted">
+        <p className={`text-sm ember-kicker${win ? "" : " is-defeat"}`}>
           {win ? "Vitória" : "Derrota"} · T{turn}
         </p>
-        <h1 className="font-display text-4xl sm:text-5xl mt-2 mb-2">{title}</h1>
+        <h1 className="font-display text-4xl sm:text-5xl mt-2 mb-2 ember-title">{title}</h1>
         <p className="text-lg text-muted mb-6">{body}</p>
         {loot && loot.length > 0 && <p className="text-sm text-accent mb-4">Achado no campo: {loot.join(", ")}</p>}
         {growth && growth.length > 0 && (
           <ul className="mb-6 space-y-2 max-w-lg">
             {growth.map((g) => (
-              <li key={g.name} className="rounded-md border border-border bg-bg/55 px-3 py-2.5">
+              <li key={g.name} className="ember-slot px-3 py-2.5">
                 <p className="font-medium text-lg">
                   {g.name}
                   {g.to !== g.from ? ` · Nv ${g.from} → ${g.to}` : ` · Nv ${g.from}`}
@@ -8868,12 +8876,12 @@ function ResultScreen({
       </div>
       <div className="relative z-10 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col gap-2">
         {onAdvance && (
-          <Button size="xl" className="w-full" onClick={onAdvance}>
+          <Button size="xl" className="w-full ember-btn ember-btn-primary" onClick={onAdvance}>
             {advanceLabel ?? "Avançar"}
           </Button>
         )}
         {hasNext && (
-          <Button size="xl" className="w-full" onClick={onNext}>
+          <Button size="xl" className="w-full ember-btn ember-btn-primary" onClick={onNext}>
             {retry ? (
               <>
                 <RotateCcw className="size-5" /> Tentar de novo
@@ -8884,16 +8892,16 @@ function ResultScreen({
           </Button>
         )}
         {win && innOpen && onInn && (
-          <Button variant="quiet" className="w-full inn-open" onClick={onInn}>
+          <Button variant="quiet" className="w-full ember-btn ember-btn-ghost inn-open" onClick={onInn}>
             Estalagem do Osso Seco
           </Button>
         )}
         {(win || mapLabel) && onMap && (
-          <Button variant="ghost" className="w-full" onClick={onMap}>
+          <Button variant="ghost" className="w-full ember-btn ember-btn-ghost" onClick={onMap}>
             {mapLabel ?? "Cenários"}
           </Button>
         )}
-        <Button variant="ghost" className="w-full" onClick={onTitle}>
+        <Button variant="ghost" className="w-full ember-btn ember-btn-ghost" onClick={onTitle}>
           Tela inicial
         </Button>
       </div>

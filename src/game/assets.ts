@@ -6,27 +6,47 @@ import type { GameArt, SpriteId, TerrainId } from "./types";
 // different variant in Mission.tileVariants — keep it as the tile that's safe
 // for existing maps.
 export const TILE_VARIANT_COUNT: Record<TerrainId, number> = {
-  plains: 38,
-  woods: 9,
-  ruins: 7,
-  water: 22,
-  ember: 5,
-  hill: 4,
-  flame: 3,
-  column: 2,
-  nave: 2,
+  plains: 41,
+  woods: 10,
+  ruins: 8,
+  water: 23,
+  ember: 6,
+  hill: 5,
+  flame: 4,
+  column: 3,
+  nave: 3,
   barricade: 1,
   door: 1,
   void: 1,
   // The Icelands section keeps legacy snow variants first, then the 12 supplied
   // cold-ground tiles (snow004–snow015) so saved maps retain their old indices.
-  snow: 15,
+  snow: 18,
+};
+
+/** Append-only terrain set: previous saved-map indices keep their exact artwork. */
+export const HEX_GROUND_001: Partial<Record<TerrainId, { variant: number; file: string }>> = {
+  water: { variant: 22, file: "hex-ground-001-agua" },
+  woods: { variant: 9, file: "hex-ground-001-bosque" },
+  ember: { variant: 5, file: "hex-ground-001-brasa" },
+  flame: { variant: 3, file: "hex-ground-001-chama" },
+  plains: { variant: 38, file: "hex-ground-001-city" },
+  hill: { variant: 4, file: "hex-ground-001-colina" },
+  column: { variant: 2, file: "hex-ground-001-coluna" },
+  nave: { variant: 2, file: "hex-ground-001-laje" },
+  ruins: { variant: 7, file: "hex-ground-001-ruinas" },
+  snow: { variant: 15, file: "hex-ground-001-neve" },
 };
 
 /** The art file a tile variant paints with, without path or cache-buster — "woods002".
  * Two variants of the same terrain differ only in art, so this is the only way to tell
  * from a painted map which of them a cell is actually using. */
 export function tileVariantName(id: TerrainId, variant: number): string {
+  if (id === "snow" && variant === 16) return "hex-ground-001-tundra";
+  if (id === "snow" && variant === 17) return "hex-ground-001-tundra-snow";
+  if (id === "plains" && variant === 39) return "hex-ground-001-planicie";
+  if (id === "plains" && variant === 40) return "hex-ground-001-madeira";
+  const ground = HEX_GROUND_001[id];
+  if (ground && variant === ground.variant) return ground.file;
   // New ground materials are inserted ahead of the legacy plains without renaming
   // their on-disk files, so saved maps keep their original art available.
   if (id === "plains") {
@@ -57,6 +77,10 @@ export function tileVariantName(id: TerrainId, variant: number): string {
     return `ruins${String(variant + 1).padStart(3, "0")}`;
   }
   return `${id}${String(variant + 1).padStart(3, "0")}`;
+}
+
+export function isHexGroundVariant(id: TerrainId, variant: number): boolean {
+  return id !== "column" && (HEX_GROUND_001[id]?.variant === variant || (id === "plains" && (variant === 39 || variant === 40)) || (id === "snow" && (variant === 16 || variant === 17)));
 }
 
 export function tileVariantSrc(id: TerrainId, variant: number): string {
@@ -108,7 +132,7 @@ export function portraitFor(sprite: SpriteId): { src: string; framed: boolean; p
 }
 
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
-const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "troll2", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
+const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
 
 // Real load progress for the title screen's loading bar: every image request counts once when it
 // is asked for and once when it settles (loaded or failed). loadGameArt requests its batches one
@@ -272,7 +296,7 @@ export async function loadGameArt(): Promise<GameArt> {
   const attacks: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   await Promise.all(
     SPRITES.map(async (id) => {
-      const n = id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "zombie" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
+      const n = id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "RoccoTheBird" || id === "zombie" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
       const cacheBust = id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : "";
       sprites[id] = await Promise.all(
         Array.from({ length: n }, (_, i) =>
@@ -321,6 +345,7 @@ export async function loadGameArt(): Promise<GameArt> {
     BirolhoLegs: { n: 32, bust: "" },
     BirolhoLegs2: { n: 32, bust: "" },
     troll2: { n: 32, bust: "" },
+    RoccoTheBird: { n: 32, bust: "" },
     // Zombie ATT: video 2 from 5 s, mirrored so the whole strike faces right (see its README).
     zombie: { n: 32, bust: "" },
     zombie2: { n: 10, bust: "" },
@@ -370,6 +395,7 @@ export async function loadGameArt(): Promise<GameArt> {
     // Familiar 2's real rear-up/charge/beam-release windup — a distinct animation from its
     // ATT cut (the crouch/lunge), not a fallback.
     familiar2: { n: 24, bust: "" },
+    RoccoTheBird: { n: 32, bust: "" },
     // Familiar 3's spellcasting windup (cast-*.png) — plays for its Fireball cast only
     // (attackPose falls back to `attacks` for a plain melee swing); see ATTACK_FRAMES/
     // ATTACK2_FRAMES above for its two melee attack cuts.
@@ -470,6 +496,7 @@ export async function loadGameArt(): Promise<GameArt> {
     BirolhoLegs2: { n: 32, bust: "" },
     // Walk Left footage only; move-*.png is its mirror, same as BirolhoLegs above.
     troll2: { n: 32, bust: "" },
+    RoccoTheBird: { n: 32, bust: "" },
     // Zombie: side-on walk from video 2 (2.05-3.9 s, two real strides), 32 frames like every
     // other long sheet; move-*.png is its mirror and the renderer mirrors it back for
     // left-facing movement.
