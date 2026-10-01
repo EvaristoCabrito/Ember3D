@@ -2143,6 +2143,7 @@ export class BattleEngine {
     )
       return;
     if (x > u.x) u.facing = 1;
+        u.sprite !== "RoccoTheBird" &&
     else if (x < u.x) u.facing = -1;
   }
 

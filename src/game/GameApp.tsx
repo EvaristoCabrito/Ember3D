@@ -3071,44 +3071,31 @@ const SKILL_DAMAGE_ROWS: { name: string; cls: ClassId; tier: SpellTier; formula:
 function HelpModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<"basicos" | "tabelas" | "loot" | "dano">("basicos");
   return (
-    <div className="absolute inset-0 z-20 bg-bg/80 flex items-end sm:items-center justify-center p-4">
-      <div className="w-full max-w-lg max-h-[85dvh] overflow-y-auto ember-window rounded-xl p-6">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <h2 className="font-display text-2xl">Como jogar</h2>
-          <button type="button" onClick={onClose} className="size-11 grid place-items-center" aria-label="Fechar">
-            <X className="size-5" />
+    <div className="absolute inset-0 z-20 ember-veil flex items-end sm:items-center justify-center p-4">
+      {/* The framed panel stays put and only the inner area scrolls, so the panel's gold
+          corners don't scroll away with the content. */}
+      <div className="relative w-full max-w-lg max-h-[85dvh] flex flex-col ember-panel p-6">
+        <div className="flex items-start justify-between gap-4 mb-4 shrink-0">
+          <h2 className="font-display text-2xl leading-none ember-title">Como jogar</h2>
+          <button type="button" onClick={onClose} className="size-8 grid place-items-center ember-icon-btn" aria-label="Fechar">
+            <X className="size-4" />
           </button>
         </div>
-        <div className="flex gap-1 mb-4 border-b border-border">
-          <button
-            type="button"
-            onClick={() => setTab("basicos")}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${tab === "basicos" ? "border-accent text-fg" : "border-transparent text-muted"}`}
-          >
+        <div className="grid grid-cols-4 gap-1 mb-4 shrink-0">
+          <Button size="sm" variant={tab === "basicos" ? undefined : "quiet"} className={`ember-btn ember-btn-sm ${tab === "basicos" ? "ember-btn-primary" : "ember-btn-ghost"}`} onClick={() => setTab("basicos")}>
             Básicos
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("tabelas")}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${tab === "tabelas" ? "border-accent text-fg" : "border-transparent text-muted"}`}
-          >
+          </Button>
+          <Button size="sm" variant={tab === "tabelas" ? undefined : "quiet"} className={`ember-btn ember-btn-sm ${tab === "tabelas" ? "ember-btn-primary" : "ember-btn-ghost"}`} onClick={() => setTab("tabelas")}>
             Usos
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("dano")}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${tab === "dano" ? "border-accent text-fg" : "border-transparent text-muted"}`}
-          >
+          </Button>
+          <Button size="sm" variant={tab === "dano" ? undefined : "quiet"} className={`ember-btn ember-btn-sm ${tab === "dano" ? "ember-btn-primary" : "ember-btn-ghost"}`} onClick={() => setTab("dano")}>
             Dano
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("loot")}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${tab === "loot" ? "border-accent text-fg" : "border-transparent text-muted"}`}
-          >
+          </Button>
+          <Button size="sm" variant={tab === "loot" ? undefined : "quiet"} className={`ember-btn ember-btn-sm ${tab === "loot" ? "ember-btn-primary" : "ember-btn-ghost"}`} onClick={() => setTab("loot")}>
             Loot
-          </button>
+          </Button>
         </div>
+        <div className="min-h-0 flex-1 overflow-y-auto ember-scrollbar pr-1">
         {tab === "basicos" ? (
           <ul className="space-y-3 text-sm text-muted leading-relaxed">
             <li>Toque numa aliada para ver movimento (azul) e ataque (vermelho).</li>
@@ -3268,7 +3255,8 @@ function HelpModal({ onClose }: { onClose: () => void }) {
             </p>
           </div>
         )}
-        <Button className="mt-5 w-full" onClick={onClose}>
+        </div>
+        <Button className="mt-5 w-full shrink-0 ember-btn ember-btn-primary" onClick={onClose}>
           Entendi
         </Button>
       </div>
