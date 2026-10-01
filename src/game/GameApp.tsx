@@ -7810,10 +7810,10 @@ function BattleScreen({
               </p>
               <div className="flex items-center gap-2">
                 <Button size="sm" className="ember-btn ember-btn-sm ember-btn-primary" disabled={!engine.canConfirmFinish()} onClick={() => engine.confirmFinish()}>
-                  {hud.activeExit?.id === "escape-exit" ? "Tentar escapar" : hud.activeExit ? "Sair" : "Encerrar missão"}
+                  {hud.activeExit?.id === "escape-exit" ? "Tentar escapar" : hud.activeExit?.id === "floor-connector" ? "Sim" : hud.activeExit ? "Sair" : "Encerrar missão"}
                 </Button>
                 <Button size="sm" variant="quiet" className="ember-btn ember-btn-sm ember-btn-ghost" onClick={() => setWinPopupDismissed(true)}>
-                  {hud.activeExit ? "Ficar" : "Continuar explorando"}
+                  {hud.activeExit?.id === "floor-connector" ? "Não" : hud.activeExit ? "Ficar" : "Continuar explorando"}
                 </Button>
               </div>
             </div>
