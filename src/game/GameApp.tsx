@@ -7804,8 +7804,8 @@ function BattleScreen({
                     ? "Encontraram a saída da masmorra. Desejam sair?"
                     : hud.activeExit?.id === "floor-connector"
                       ? hud.activeExit.returnConnector
-                        ? "Encontraram a passagem de volta. Desejam voltar?"
-                        : "Encontraram uma passagem para o próximo andar. Desejam avançar?"
+                        ? "Encontraram a passagem de volta. Deseja voltar?"
+                        : "Encontraram uma passagem para o próximo andar. Deseja avançar?"
                       : "Todos os inimigos caíram. Encerrar a missão?"}
               </p>
               <div className="flex items-center gap-2">
