@@ -1394,6 +1394,7 @@ export class BattleEngine {
     // DECORATIONS and in the editor <img>, but missing from art.decorations, so combat
     // used to skip it. Fill any hole so Testar paints the same props the editor lists.
     for (const p of this.decorations) {
+      if (DECORATIONS[p.id]?.model3d) continue;
       if (this.art.decorations[p.id]?.naturalWidth) continue;
       const img = new Image();
       img.src = decorationImage(p.id);
@@ -8555,7 +8556,7 @@ export class BattleEngine {
       .sort((a, b) => a.order - b.order || a.index - b.index);
     for (const { p } of orderedDecorations) {
       const def = DECORATIONS[p.id];
-      if (def?.model3d && this.architectureRenderedInThree) continue;
+      if (def?.model3d) continue;
       let img = this.art.decorations[p.id];
       if ((!img || !img.naturalWidth) && def) {
         img = this.art.decorations[p.id] ?? new Image();

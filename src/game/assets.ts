@@ -609,6 +609,7 @@ export async function loadGameArt(): Promise<GameArt> {
   const decorations = {} as Record<string, HTMLImageElement>;
   await Promise.all(
     Object.keys(DECORATIONS).map(async (id) => {
+      if (DECORATIONS[id]?.model3d) return;
       // PNG first (every existing decoration ships as one); a prop supplied as WebP with real
       // alpha baked in (see decorationImage's own note) falls back to that automatically.
       decorations[id] = await loadImage(decorationImage(id))

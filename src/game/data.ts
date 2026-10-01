@@ -602,8 +602,6 @@ const DECORATION_ALPHA_CLEAN = new Set([
 ]);
 
 function decorationImagePath(id: string, ext: "png" | "webp"): string {
-  // Existing supplied wall artwork provides the thumbnail and legacy renderer fallback.
-  if (DECORATIONS[id]?.model3d) id = "city-stone-banner-wall";
   const file = DECORATION_ALPHA_CLEAN.has(id) ? `${id}-alpha-001` : id;
   // Both the replacement originals and their newly added side-4 files need a fresh URL:
   // browsers may have cached the previous low-res image or even the old side-4 404.

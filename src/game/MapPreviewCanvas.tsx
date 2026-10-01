@@ -1,5 +1,5 @@
 import { type PointerEvent, useEffect, useRef, useState } from "react";
-import { placedFootprint, TERRAIN, TILE_CHAR } from "./data";
+import { DECORATIONS, placedFootprint, TERRAIN, TILE_CHAR } from "./data";
 import { tileVariantName } from "./assets";
 import { BattleEngine, ZOOM_RADII } from "./engine";
 import { EffectsRenderer } from "./gfx/EffectsRenderer";
@@ -177,9 +177,11 @@ export function MapPreviewCanvas({
     // Render that battle scene in the preview when a procedural placement is present.
     let pixelRenderer: ThreeBattleRenderer | null = null;
     const pixelPlacements = engine.elementalFxPlacements.filter((placement) => placement.family === "procedural_pixel" && placement.element);
-    if (pixelFxCanvas && pixelPlacements.length) {
+    const hasArchitecture = engine.decorations.some(p => !!DECORATIONS[p.id]?.model3d);
+    if (pixelFxCanvas && (pixelPlacements.length || hasArchitecture)) {
       try {
         pixelRenderer = new ThreeBattleRenderer(pixelFxCanvas, engine);
+        engine.architectureRenderedInThree = true;
       } catch (error) {
         console.error("Procedural Pixel preview could not start", error);
       }
@@ -302,11 +304,11 @@ export function MapPreviewCanvas({
     // draw() call once fx.hasEffects() goes false, and stops itself right after.
     let fxRaf = 0;
     const animateFx = () => {
-      if (!fx?.hasEffects() && !(pixelRenderer && pixelPlacements.length > 0)) return;
+      if (!fx?.hasEffects() && !(pixelRenderer && (pixelPlacements.length > 0 || hasArchitecture))) return;
       draw();
       fxRaf = requestAnimationFrame(animateFx);
     };
-    if (fx?.hasEffects() || (pixelRenderer && pixelPlacements.length > 0)) fxRaf = requestAnimationFrame(animateFx);
+    if (fx?.hasEffects() || (pixelRenderer && (pixelPlacements.length > 0 || hasArchitecture))) fxRaf = requestAnimationFrame(animateFx);
     if (!verticalScrollInitializedRef.current) {
       requestAnimationFrame(() => {
         const centeredTop = Math.round(Math.max(0, viewport.scrollHeight - viewport.clientHeight) / 2);
