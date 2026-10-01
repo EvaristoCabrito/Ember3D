@@ -16,7 +16,7 @@ import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
 import { LIGHT_DEFS } from "./lighting";
 import { DialogEditor } from "./DialogEditor";
-import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
+import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
 import { QUESTS, activePickupsFor, questById, questProgress, questStatus, questsFor } from "./quests";
 import { advanceProgression, evaluate, isGatedMission, missionAccess, type MissionAccess, type ProgressExtras } from "./progression";
 import { BattleEngine, heroSpriteFor } from "./engine";
@@ -458,7 +458,8 @@ function classSpells(classId: ClassId, level = Number.POSITIVE_INFINITY): SpellK
         // PHANTASMAL_FORCE_UNLOCK_LEVEL — it shares tier 1's pool with summonFamiliar but
         // isn't selectable/castable until level 2); summonFamiliar2 (Familiar Maior) is the
         // same deal at tier 2 (shares that tier's pool of uses with webOfDreams).
-        return ["summonFamiliar", "phantasmalForce", "webOfDreams", "summonFamiliar2", "summonFamiliar4", "summonFamiliar3"];
+        // summonZombieDog: tier 5 here for testing — meant to become a Necromancer tier 6 spell.
+        return ["summonFamiliar", "phantasmalForce", "webOfDreams", "summonFamiliar2", "summonFamiliar4", "summonFamiliar3", "summonZombieDog"];
       case "familiar":
         // Familiar's own hotbar, once summoned — Magic Missile is its only action beyond a
         // plain attack (see FAMILIAR_SPELL/familiarMagicMissileCharges).
@@ -474,6 +475,9 @@ function classSpells(classId: ClassId, level = Number.POSITIVE_INFINITY): SpellK
       case "familiar3":
         // The Big Guy's own hotbar, once summoned — its only action beyond a plain attack.
         return ["fireball"];
+      case "zombieDog":
+        // Cão Zumbi's own hotbar: Veneno Cáustico, twice per battle (FAMILIAR_SPELL charges).
+        return ["causticVenom"];
       case "archer":
         return ["longShot", "piercing", "multiShot"];
       case "healer":
@@ -567,6 +571,9 @@ function slotIcon(action: SlotAction): string {
       return spellIcon("summon-familiar3");
     case "summonFamiliar4":
       return spellIcon("summon-familiar4");
+    // No dedicated art yet — reuses the base familiar summon icon.
+    case "summonZombieDog":
+      return spellIcon("summon-familiar");
     case "webOfDreams":
       return spellIcon("web-of-dreams");
     // Familiar Maior's own second spell — no dedicated art; reuses the cure icon since it's
@@ -653,6 +660,8 @@ function slotLabel(action: SlotAction): string {
       return SUMMON_FAMILIAR3.name;
     case "summonFamiliar4":
       return SUMMON_FAMILIAR4.name;
+    case "summonZombieDog":
+      return SUMMON_ZOMBIE_DOG.name;
     case "webOfDreams":
       return WEB_OF_DREAMS.name;
     case "lifeDrain":
@@ -779,7 +788,7 @@ function mergeBattlePoisons(existing: Record<string, boolean>, engine: BattleEng
 
 /** Every familiar a conjurer can summon — preloaded as soon as a conjurer is in the party and
  * kept loaded (see partyHasConjurer in GameApp), so a summon never waits on art. */
-const FAMILIAR_SPRITES: SpriteId[] = ["familiar", "familiar2", "familiar3", "familiar4"];
+const FAMILIAR_SPRITES: SpriteId[] = ["familiar", "familiar2", "familiar3", "familiar4", "zombieDog"];
 
 /** Sprites a battle's own units use — loaded before its board opens (see startBattle). */
 function battleSpriteIds(battle: BattleEngine): SpriteId[] {
@@ -2904,6 +2913,7 @@ const SKILL_CLASS: Partial<Record<SpellKind, ClassId>> = {
   summonFamiliar2: "conjurer",
   summonFamiliar3: "conjurer",
   summonFamiliar4: "conjurer",
+  summonZombieDog: "conjurer",
   webOfDreams: "conjurer",
   longShot: "archer",
   piercing: "archer",
@@ -7543,6 +7553,9 @@ function BattleScreen({
         break;
       case "summonFamiliar4":
         engine.startSummonFamiliar4();
+        break;
+      case "summonZombieDog":
+        engine.startSummonZombieDog();
         break;
       case "webOfDreams":
         engine.startWebOfDreams();

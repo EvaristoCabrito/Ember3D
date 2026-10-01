@@ -1207,6 +1207,24 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     size: 1,
     init: 2,
   },
+  // Twice the Zombie (HP/ATK/DEF/RES, move and initiative), with MAG to match his ATK for his spells: 2 Força
+  // Fantasmal + 1 Relâmpago per battle (see the cultist/wraith branch in runAiFor).
+  emberedWraith: {
+    id: "emberedWraith",
+    name: "Embered Wraith",
+    role: "Morto-vivo",
+    hp: 76,
+    atk: 18,
+    mag: 18,
+    def: 6,
+    res: 2,
+    mov: 6,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "EmberedWraith",
+    size: 1,
+    init: 4,
+  },
   zombie2: {
     id: "zombie2",
     name: "Zumbi 2",
@@ -1567,6 +1585,28 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     // Troll/Birolho/Horror/Asherah/Ancient Golem getting stuck on their own footprint.
     size: 2,
     footprintOffsets: FOOTPRINT_TYPE_6,
+    init: 6,
+    summon: true,
+  },
+  // Conjurer tier 5 (Invocar Cão Zumbi) — see castSummonFamiliar. Like the familiars, these
+  // combat stats are a fallback only: the real numbers are 100% of the caster's own current
+  // attributes (SUMMON_ZOMBIE_DOG.statScale), computed live at cast time. Casts Veneno
+  // Cáustico twice per battle (FAMILIAR_SPELL / Unit.spellCharges).
+  zombieDog: {
+    id: "zombieDog",
+    name: "Cão Zumbi",
+    role: "Invocação",
+    hp: 22,
+    atk: 8,
+    mag: 8,
+    def: 4,
+    res: 4,
+    mov: 5,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "zombieDog",
+    size: 2,
+    footprintOffsets: FOOTPRINT_TYPE_2,
     init: 6,
     summon: true,
   },
@@ -1959,6 +1999,8 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   wardog2: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   zombie: { hp: 4, atk: 2, mag: 0, def: 1, res: 1 },
   zombie2: { hp: 4, atk: 2, mag: 0, def: 1, res: 1 },
+  // Twice the Zombie's growth, MAG growing with ATK.
+  emberedWraith: { hp: 8, atk: 4, mag: 4, def: 2, res: 2 },
   morvenianWolf: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   mordavianWolf: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   mordavianWolfFinal: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
@@ -2001,6 +2043,7 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   familiar: { hp: 0, atk: 0, mag: 0, def: 0, res: 0 },
   familiar2: { hp: 0, atk: 0, mag: 0, def: 0, res: 0 },
   familiar3: { hp: 0, atk: 0, mag: 0, def: 0, res: 0 },
+  zombieDog: { hp: 0, atk: 0, mag: 0, def: 0, res: 0 },
   familiar4: { hp: 0, atk: 0, mag: 0, def: 0, res: 0 },
   paladin: { hp: 5, atk: 1, mag: 1, def: 3, res: 2 },
   heavyKnight: { hp: 5, atk: 1, mag: 0, def: 3, res: 1 },
@@ -3118,6 +3161,7 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   wardog2: 2,
   zombie: 3,
   zombie2: 3,
+  emberedWraith: 6,
   morvenianWolf: 3,
   mordavianWolf: 5,
   mordavianWolfFinal: 5,
@@ -3693,6 +3737,16 @@ export const SUMMON_FAMILIAR4 = {
   statScale: 0.75,
 };
 
+/** Conjurer tier 5 (for testing — meant to become a Necromancer tier 6 spell): summons a
+ * Zombie Dog (Type 2 body) with 100% of the caster's current stats, same one-at-a-time rule
+ * and range as the familiars. The dog casts Veneno Cáustico twice per battle. */
+export const SUMMON_ZOMBIE_DOG = {
+  name: "Invocar Cão Zumbi",
+  range: 4,
+  statScale: 1,
+  causticVenomCharges: 2,
+};
+
 /** Which of the conjurer's three familiar tiers gets a spell of its own, and which one —
  * Familiar and Familiar Maior (tiers 1-2) both get Magic Missile, Familiar Titã (tier 3) gets
  * Bola de Fogo instead. Every other tier/class is absent, meaning "no familiar spell of its
@@ -3705,6 +3759,7 @@ export const FAMILIAR_SPELL: Partial<Record<ClassId, SpellKind>> = {
   familiar2: "magicMissile",
   familiar3: "fireball",
   familiar4: "magicMissile",
+  zombieDog: "causticVenom",
 };
 
 /** Familiar Titã's own Fireball charges for the battle — set once at summon time from the
@@ -4248,6 +4303,7 @@ export const SPELL_TIER: Partial<Record<SpellKind, SpellTier>> = {
   summonFamiliar2: 2,
   summonFamiliar3: 4,
   summonFamiliar4: 3,
+  summonZombieDog: 5,
   webOfDreams: 2,
   fireball: 3,
   lightningTier3: 5,

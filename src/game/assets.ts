@@ -138,7 +138,7 @@ export function portraitFor(sprite: SpriteId): { src: string; framed: boolean; p
 }
 
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
-const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "wardog2", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
+const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "wardog2", "EmberedWraith", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombieDog", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman"];
 
 // Real load progress for the title screen's loading bar: every image request counts once when it
 // is asked for and once when it settles (loaded or failed). loadGameArt requests its batches one
@@ -298,6 +298,8 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   BirolhoLegs2: { n: 32, bust: "" },
   troll2: { n: 32, bust: "" },
   RoccoTheBird: { n: 32, bust: "" },
+  EmberedWraith: { n: 32, bust: "" },
+  zombieDog: { n: 32, bust: "" },
   wardog2: { n: 32, bust: "" },
   // Zombie ATT: video 2 from 5 s, mirrored so the whole strike faces right (see its README).
   zombie: { n: 32, bust: "" },
@@ -344,6 +346,8 @@ const CAST_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // ATT cut (the crouch/lunge), not a fallback.
   familiar2: { n: 24, bust: "" },
   RoccoTheBird: { n: 32, bust: "" },
+  EmberedWraith: { n: 32, bust: "" },
+  zombieDog: { n: 32, bust: "" },
   // Familiar 3's spellcasting windup (cast-*.png) — plays for its Fireball cast only
   // (attackPose falls back to `attacks` for a plain melee swing); see ATTACK_FRAMES/
   // ATTACK2_FRAMES above for its two melee attack cuts.
@@ -412,6 +416,8 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // Walk Left footage only; move-*.png is its mirror, same as BirolhoLegs above.
   troll2: { n: 32, bust: "" },
   RoccoTheBird: { n: 32, bust: "" },
+  EmberedWraith: { n: 32, bust: "" },
+  zombieDog: { n: 32, bust: "" },
   // Walk Left footage only; move-*.png is its mirror, same as troll2.
   wardog2: { n: 32, bust: "" },
   // Zombie: side-on walk from video 2 (2.05-3.9 s, two real strides), 32 frames like every
@@ -442,9 +448,17 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
 
 const DIR_LEFT: SpriteId[] = ["aldric", "defaultLancer", "lancer", "sandoval"];
 
+// Hit-reaction sheets: hit-*.png, played whenever the unit takes damage (see GameArt.hits).
+const HIT_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
+  "mordavian-wolf-final": { n: 32, bust: "" },
+};
+
 // Death sheets: death-*.png, played once when the unit dies (see GameArt.deaths).
 const DEATH_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
+  "mordavian-wolf-final": { n: 32, bust: "" },
   wardog2: { n: 32, bust: "" },
+  EmberedWraith: { n: 32, bust: "" },
+  zombieDog: { n: 32, bust: "" },
 };
 
 // Up/down walk cycles (move-up-*.png / move-down-*.png), opt-in per sprite — see
@@ -461,8 +475,8 @@ const WALK2_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   familiar3: { n: 36, bust: "" },
 };
 
-type SpritePoolKey = "deaths" | "sprites" | "attacks" | "attacks2" | "attacksShort" | "attacksLeft" | "casts" | "castsLeft" | "counters" | "countersLeft" | "walks" | "walksLeft" | "idles" | "idles2" | "walkDirs" | "walksUp" | "walksDown" | "walks2" | "walksLeft2";
-const SPRITE_POOL_KEYS: SpritePoolKey[] = ["deaths", "sprites", "attacks", "attacks2", "attacksShort", "attacksLeft", "casts", "castsLeft", "counters", "countersLeft", "walks", "walksLeft", "idles", "idles2", "walkDirs", "walksUp", "walksDown", "walks2", "walksLeft2"];
+type SpritePoolKey = "hits" | "deaths" | "sprites" | "attacks" | "attacks2" | "attacksShort" | "attacksLeft" | "casts" | "castsLeft" | "counters" | "countersLeft" | "walks" | "walksLeft" | "idles" | "idles2" | "walkDirs" | "walksUp" | "walksDown" | "walks2" | "walksLeft2";
+const SPRITE_POOL_KEYS: SpritePoolKey[] = ["hits", "deaths", "sprites", "attacks", "attacks2", "attacksShort", "attacksLeft", "casts", "castsLeft", "counters", "countersLeft", "walks", "walksLeft", "idles", "idles2", "walkDirs", "walksUp", "walksDown", "walks2", "walksLeft2"];
 
 /** Loads every pool one sprite contributes to GameArt (idle, attack, cast, walk, ...) — the
  * same files, frame counts and cache-busts loadGameArt used to load for every sprite up front. */
@@ -476,7 +490,7 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
       pools[key] = value;
     }));
   };
-  const n = id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "RoccoTheBird" || id === "wardog2" || id === "zombie" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
+  const n = id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" || id === "zombie" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
   const cacheBust = id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : "";
   put("sprites", cut(n, (i) => (id === "conjurer" ? `talk-${i}` : `${i}`), cacheBust));
   const atk = ATTACK_FRAMES[id];
@@ -490,6 +504,8 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
   if (cast && CAST_DIR_LEFT.includes(id)) put("castsLeft", cut(cast.n, (i) => `cast-left-${i}`, cast.bust));
   const counter = COUNTER_FRAMES[id];
   if (counter) put("counters", cut(counter.n, (i) => `counter-${i}`, counter.bust));
+  const hit = HIT_FRAMES[id];
+  if (hit) put("hits", cut(hit.n, (i) => `hit-${i}`, hit.bust));
   const death = DEATH_FRAMES[id];
   if (death) put("deaths", cut(death.n, (i) => `death-${i}`, death.bust));
   const walk = WALK_FRAMES[id];
@@ -689,7 +705,8 @@ export async function loadGameArt(): Promise<GameArt> {
   const walksLeft2: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   const walkDirs: GameArt["walkDirs"] = {};
   const deaths: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
-  const art: GameArt = { tiles, decorations, sprites, attacks, attacks2, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, walksUp, walksDown, walks2, walksLeft2, deaths, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
+  const hits: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
+  const art: GameArt = { tiles, decorations, sprites, attacks, attacks2, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, walksUp, walksDown, walks2, walksLeft2, deaths, hits, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
   await ensureSpriteArt(art, MC_SPRITES);
   try {
     localStorage.setItem(ART_TOTAL_KEY, String(artRequested));

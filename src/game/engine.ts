@@ -1,7 +1,7 @@
 import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_MOVE, GRID_ROUTE, GRID_ALLY, GRID_ENEMY, GRID_ENEMY_TARGET, GRID_ENEMY_GLOW } from "./tacticalGrid";
 import { isHexGroundVariant, requestSpriteArt } from "./assets";
 import { drawHexGround } from "./hexGround";
-import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
+import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
 import { placedBlockingFootprint } from "./data";
 import { canCounter, makeForecast, mulberry32, powerOf, protOf, rollDamage, rollDamageCustom } from "./combat";
@@ -464,6 +464,9 @@ const LONG_ANIM_SECONDS = 3;
  * DEATH_HOLD_SECONDS before fading out like any other fallen unit. */
 const DEATH_ANIM_SECONDS = 3;
 const DEATH_HOLD_SECONDS = 1;
+/** A hit-reaction sheet (GameArt.hits) plays over this long. On a killing blow it plays
+ * first and the death sheet starts right after it. */
+const HIT_ANIM_SECONDS = 3;
 /** Walk cycles run faster than the rest: one full pass of a long walk sheet takes this long. */
 const LONG_WALK_SECONDS = 1.5;
 /** Bow shots on a long sheet, per direct instruction: a normal ATT shot leaves only once the
@@ -891,6 +894,8 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
       tier1:
         cls.id === "roccoTheBird"
           ? 2
+          : cls.id === "emberedWraith"
+            ? 0
           : cls.id === "cultist" || cls.id === "cultistV2"
           ? cultistSpellUses(level).magicMissile
           : cls.id === "brigand"
@@ -902,6 +907,8 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
         // Rocco The Bird: tier2 holds his 3 Burning Beak (Burning Hands) casts.
         cls.id === "roccoTheBird"
           ? 3
+          : cls.id === "emberedWraith"
+            ? 1
           : cls.id === "cultist" || cls.id === "cultistV2"
           ? cultistSpellUses(level).lightning
           : cls.id === "brigand"
@@ -929,7 +936,7 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
     footprintOffsets: cls.footprintOffsets,
     shock: null,
     shockCharges: side === "enemy" ? shockChargesFor(cls.id) : 0,
-    fantomForceCharges: side === "enemy" && (cls.id === "cultist" || cls.id === "cultistV2") ? 2 : 0,
+    fantomForceCharges: side === "enemy" && (cls.id === "cultist" || cls.id === "cultistV2" || cls.id === "emberedWraith") ? 2 : 0,
     diseased,
     diseaseBase: diseased
       ? {
@@ -1015,7 +1022,7 @@ function unitFromSnap(snap: BattleUnitSnap): Unit {
     footprintOffsets: cls?.footprintOffsets,
     shock: snap.shock ? { ...snap.shock } : null,
     shockCharges: snap.shockCharges ?? 0,
-    fantomForceCharges: snap.fantomForceCharges ?? ((classId === "cultist" || classId === "cultistV2") && snap.side === "enemy" ? 2 : 0),
+    fantomForceCharges: snap.fantomForceCharges ?? ((classId === "cultist" || classId === "cultistV2" || classId === "emberedWraith") && snap.side === "enemy" ? 2 : 0),
     blessedHitBonusPct: snap.blessedHitBonusPct ?? 0,
     blessedRoundsLeft: snap.blessedRoundsLeft ?? 0,
     diseased: snap.diseased,
@@ -2144,6 +2151,8 @@ export class BattleEngine {
         u.sprite !== "mordavian-wolf-final" &&
         u.sprite !== "wardog2" &&
         u.sprite !== "RoccoTheBird" &&
+        u.sprite !== "EmberedWraith" &&
+        u.sprite !== "zombieDog" &&
         u.sprite !== "neera")
     )
       return;
@@ -2590,6 +2599,7 @@ export class BattleEngine {
           hit.dmg = Math.max(1, Math.floor(hit.dmg * this.zoneDamageMul(target)));
           target.hp = Math.max(0, target.hp - hit.dmg);
           target.flash = 1;
+          target.hitAt = this.time;
           this.provoke(target, actor);
           if (target.side !== actor.side) {
             if (a.stage === "hit") {
@@ -2985,6 +2995,7 @@ export class BattleEngine {
         dmg = Math.max(1, Math.floor(dmg * this.zoneDamageMul(foe)));
         foe.hp = Math.max(0, foe.hp - dmg);
         foe.flash = 1;
+        foe.hitAt = this.time;
         this.provoke(foe, att);
         if (a.poison) foe.poisoned = true;
         // Dreno de Vida: heals the familiar's own summoning conjurer for a share of the
@@ -3491,6 +3502,7 @@ export class BattleEngine {
     const dmg = rollDice(1, 8, 0, this.rng);
     u.hp = Math.max(0, u.hp - dmg);
     u.flash = 1;
+    u.hitAt = this.time;
     this.spawnHit(u, dmg, false);
     this.tip = `Sangramento · 1D8 dano`;
     this.pushLog(`Sangramento fere ${u.name}: ${dmg} dano`);
@@ -3516,6 +3528,7 @@ export class BattleEngine {
       const dmg = Math.max(1, rollDice(echo.dice, echo.faces, echo.bonus, this.rng) - u.res);
       u.hp = Math.max(0, u.hp - dmg);
       u.flash = 1;
+      u.hitAt = this.time;
       this.spawnHit(u, dmg, false);
       this.tip = `Relâmpago · ${diceFormula(echo.dice, echo.faces, echo.bonus)} − RES`;
       this.pushLog(`Eco de relâmpago em ${u.name}: ${dmg} dano`);
@@ -3528,6 +3541,7 @@ export class BattleEngine {
       const dmg = rollDice(1, 4, 0, this.rng);
       u.hp = Math.max(0, u.hp - dmg);
       u.flash = 1;
+      u.hitAt = this.time;
       this.spawnHit(u, dmg, false);
       this.tip = `Veneno · 1D4 dano`;
       this.pushLog(`Veneno consome ${u.name}: ${dmg} dano`);
@@ -3576,6 +3590,7 @@ export class BattleEngine {
     for (let i = 0; i < terr.hazardDice; i++) dmg += 1 + Math.floor(this.rng() * faces);
     unit.hp = Math.max(0, unit.hp - dmg);
     unit.flash = 1;
+    unit.hitAt = this.time;
     this.spawnHit(unit, dmg, false);
     this.pushLog(`${terr.name} feriu ${unit.name}: ${dmg} dano`);
     sfxPlay.hit();
@@ -4398,7 +4413,7 @@ export class BattleEngine {
 
   startCausticVenom(): void {
     const u = this.units.find((x) => x.id === this.selectedId);
-    if (!u || u.acted || this.tierRemaining(u, "causticVenom") <= 0) return;
+    if (!u || u.acted || this.familiarSpellRemaining(u, "causticVenom") <= 0) return;
     this.mode = "awaitSpell";
     this.spellKind = "causticVenom";
     this.spellArmed = false;
@@ -4915,6 +4930,23 @@ export class BattleEngine {
     sfxPlay.ui();
   }
 
+  startSummonZombieDog(): void {
+    const u = this.units.find((x) => x.id === this.selectedId);
+    if (!u || u.acted || this.tierRemaining(u, "summonZombieDog") <= 0) return;
+    if (this.hasFamiliarOut(u, "zombieDog")) {
+      this.tip = `${u.name} já tem ${CLASSES.zombieDog!.name} invocado.`;
+      sfxPlay.ui();
+      return;
+    }
+    this.mode = "awaitSpell";
+    this.spellKind = "summonZombieDog";
+    this.spellArmed = false;
+    this.spellAim = null;
+    this.hover = null;
+    this.tip = `${SUMMON_ZOMBIE_DOG.name}: convoca um Cão Zumbi com ${Math.round(SUMMON_ZOMBIE_DOG.statScale * 100)}% dos seus atributos atuais, até ${SUMMON_ZOMBIE_DOG.range} hexes. Pode lançar Veneno Cáustico ${SUMMON_ZOMBIE_DOG.causticVenomCharges}× por conta própria. Toque num espaço livre.`;
+    sfxPlay.ui();
+  }
+
   startWebOfDreams(): void {
     const u = this.units.find((x) => x.id === this.selectedId);
     if (!u || u.acted || this.tierRemaining(u, "webOfDreams") <= 0) return;
@@ -5124,6 +5156,10 @@ export class BattleEngine {
     }
     if (this.spellKind === "summonFamiliar4") {
       this.castSummonFamiliar(u, cell, 4);
+      return;
+    }
+    if (this.spellKind === "summonZombieDog") {
+      this.castSummonFamiliar(u, cell, 5);
       return;
     }
     if (this.spellKind === "webOfDreams") {
@@ -5617,14 +5653,15 @@ export class BattleEngine {
       if (!this.targetable(here) || manhattan(caster, cell) > PHANTASMAL_FORCE.range) return false;
       return clearShot(caster, cell, this.tiles, this.cols, "bolt", this.decorOverlay);
     }
-    if (this.spellKind === "summonFamiliar" || this.spellKind === "summonFamiliar2" || this.spellKind === "summonFamiliar3" || this.spellKind === "summonFamiliar4") {
-      const range = this.spellKind === "summonFamiliar4" ? SUMMON_FAMILIAR4.range : this.spellKind === "summonFamiliar3" ? SUMMON_FAMILIAR3.range : this.spellKind === "summonFamiliar2" ? SUMMON_FAMILIAR2.range : SUMMON_FAMILIAR.range;
+    if (this.spellKind === "summonFamiliar" || this.spellKind === "summonFamiliar2" || this.spellKind === "summonFamiliar3" || this.spellKind === "summonFamiliar4" || this.spellKind === "summonZombieDog") {
+      const range = this.spellKind === "summonZombieDog" ? SUMMON_ZOMBIE_DOG.range : this.spellKind === "summonFamiliar4" ? SUMMON_FAMILIAR4.range : this.spellKind === "summonFamiliar3" ? SUMMON_FAMILIAR3.range : this.spellKind === "summonFamiliar2" ? SUMMON_FAMILIAR2.range : SUMMON_FAMILIAR.range;
       if (manhattan(caster, cell) > range) return false;
       // Familiar 3 is a real multi-hex creature (FOOTPRINT_TYPE_6) — every cell of the shape
       // it would actually occupy has to be checked, not just the anchor tile, or it can be
       // summoned half-overlapping a wall/unit/off-map edge (same class of bug computeReachable
       // was fixed for — see footprintCost's comment in pathfinding.ts).
-      const cells = this.spellKind === "summonFamiliar3" ? footprint({ x: cell.x, y: cell.y, size: CLASSES.familiar3!.size, footprintOffsets: CLASSES.familiar3!.footprintOffsets }) : [cell];
+      const bodyClass = this.spellKind === "summonFamiliar3" ? CLASSES.familiar3! : this.spellKind === "summonZombieDog" ? CLASSES.zombieDog! : null;
+      const cells = bodyClass ? footprint({ x: cell.x, y: cell.y, size: bodyClass.size, footprintOffsets: bodyClass.footprintOffsets }) : [cell];
       const occ = this.occ();
       for (const p of cells) {
         if (!inBounds(p.x, p.y, this.cols, this.rows)) return false;
@@ -6159,14 +6196,14 @@ export class BattleEngine {
    * selects which of the three — same spawn logic, just a stronger creature/class/tier and
    * its own spell/slot per tier, never an automatic upgrade of the one before it. See
    * SUMMON_FAMILIAR2/SUMMON_FAMILIAR3's notes. */
-  private castSummonFamiliar(unit: Unit, cell: Point, tier: 1 | 2 | 3 | 4): void {
+  private castSummonFamiliar(unit: Unit, cell: Point, tier: 1 | 2 | 3 | 4 | 5): void {
     if (!this.spellAimValid(unit, cell)) {
       this.tip = "Escolha um espaço livre ao alcance.";
       sfxPlay.ui();
       return;
     }
     // `tier` picks the creature (4 = Familiar Radiante, cast from spell tier 3), not the spell tier.
-    const cls = tier === 4 ? CLASSES.familiar4! : tier === 3 ? CLASSES.familiar3! : tier === 2 ? CLASSES.familiar2! : CLASSES.familiar!;
+    const cls = tier === 5 ? CLASSES.zombieDog! : tier === 4 ? CLASSES.familiar4! : tier === 3 ? CLASSES.familiar3! : tier === 2 ? CLASSES.familiar2! : CLASSES.familiar!;
     // Re-checked here, not just in startSummonFamiliarX above — the authoritative gate, so
     // the one-per-tier cap and tier 2's own level gate hold even if the awaitSpell state was
     // ever entered some other way.
@@ -6182,10 +6219,10 @@ export class BattleEngine {
       sfxPlay.ui();
       return;
     }
-    const scale = tier === 4 ? SUMMON_FAMILIAR4.statScale : tier === 3 ? SUMMON_FAMILIAR3.statScale : tier === 2 ? SUMMON_FAMILIAR2.statScale : SUMMON_FAMILIAR.statScale;
-    const spellKind: SpellKind = tier === 4 ? "summonFamiliar4" : tier === 3 ? "summonFamiliar3" : tier === 2 ? "summonFamiliar2" : "summonFamiliar";
-    const spellName = tier === 4 ? SUMMON_FAMILIAR4.name : tier === 3 ? SUMMON_FAMILIAR3.name : tier === 2 ? SUMMON_FAMILIAR2.name : SUMMON_FAMILIAR.name;
-    const namePrefix = tier === 4 ? "Familiar Radiante de" : tier === 3 ? "Familiar Titã de" : tier === 2 ? "Familiar Maior de" : "Familiar de";
+    const scale = tier === 5 ? SUMMON_ZOMBIE_DOG.statScale : tier === 4 ? SUMMON_FAMILIAR4.statScale : tier === 3 ? SUMMON_FAMILIAR3.statScale : tier === 2 ? SUMMON_FAMILIAR2.statScale : SUMMON_FAMILIAR.statScale;
+    const spellKind: SpellKind = tier === 5 ? "summonZombieDog" : tier === 4 ? "summonFamiliar4" : tier === 3 ? "summonFamiliar3" : tier === 2 ? "summonFamiliar2" : "summonFamiliar";
+    const spellName = tier === 5 ? SUMMON_ZOMBIE_DOG.name : tier === 4 ? SUMMON_FAMILIAR4.name : tier === 3 ? SUMMON_FAMILIAR3.name : tier === 2 ? SUMMON_FAMILIAR2.name : SUMMON_FAMILIAR.name;
+    const namePrefix = tier === 5 ? "Cão Zumbi de" : tier === 4 ? "Familiar Radiante de" : tier === 3 ? "Familiar Titã de" : tier === 2 ? "Familiar Maior de" : "Familiar de";
     const maxHp = Math.max(1, Math.round(unit.maxHp * scale));
     const familiarInitiativeRoll = 1 + Math.floor(this.rng() * 20);
     const familiar: Unit = {
@@ -6239,7 +6276,7 @@ export class BattleEngine {
       footprintOffsets: cls.footprintOffsets,
       shock: null,
       shockCharges: 0,
-      spellCharges: tier === 3 ? familiarSpellCharges(unit.level) : familiarMagicMissileCharges(unit.level),
+      spellCharges: tier === 5 ? SUMMON_ZOMBIE_DOG.causticVenomCharges : tier === 3 ? familiarSpellCharges(unit.level) : familiarMagicMissileCharges(unit.level),
       lifeDrainCharges: tier === 2 || tier === 4 ? familiarLifeDrainCharges(unit.level) : undefined,
       summonerId: unit.id,
       diseased: false,
@@ -7195,7 +7232,7 @@ export class BattleEngine {
     // Cultist ("Feiticeiro") and Cultist V2 ("Cultista Ancestral") — same kit, same priority:
     // Relâmpago outranks Choque outranks Magic Missile. Choque ignores cover the same way
     // Relâmpago does; Magic Missile still needs line of sight.
-    if ((next.classId === "cultist" || next.classId === "cultistV2") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.shockCharges > 0 || (next.fantomForceCharges ?? 0) > 0)) {
+    if ((next.classId === "cultist" || next.classId === "cultistV2" || next.classId === "emberedWraith") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.shockCharges > 0 || (next.fantomForceCharges ?? 0) > 0)) {
       if (next.spells.tier2 > 0) {
         let bestBolt: { foe: Unit; from: Point; score: number } | null = null;
         for (const cell of reach.values()) {
@@ -7946,7 +7983,7 @@ export class BattleEngine {
       if (u && !ids.includes(u.id)) ids.push(u.id);
     }
     const center = this.units.find((x) => x.alive && occupies(x, origin.x, origin.y));
-    this.spendTier(unit, "causticVenom");
+    this.spendFamiliarOrTier(unit, "causticVenom");
     this.spellKind = null;
     this.missileTargets = [];
     this.tip = null;
@@ -8645,7 +8682,8 @@ export class BattleEngine {
    * lying still on its last frame — its fade-out waits until this is over. */
   private deathSheetPlaying(u: Unit): boolean {
     if (u.alive || u.diedAt == null || !this.art.deaths[u.sprite]) return false;
-    return this.time - u.diedAt < DEATH_ANIM_SECONDS + DEATH_HOLD_SECONDS;
+    const hitLead = this.art.hits[u.sprite] ? HIT_ANIM_SECONDS : 0;
+    return this.time - u.diedAt < hitLead + DEATH_ANIM_SECONDS + DEATH_HOLD_SECONDS;
   }
 
   private idleFrame(u: Unit, n: number): number {
@@ -8921,12 +8959,20 @@ export class BattleEngine {
     const castPool = faceRight ? this.art.casts[u.sprite] : (this.art.castsLeft[u.sprite] ?? this.art.casts[u.sprite]);
     const countering = this.active?.type === "combat" && this.active.stage.startsWith("counter") && this.active.def === u.id;
     const counterPool = faceRight ? this.art.counters[u.sprite] : (this.art.countersLeft[u.sprite] ?? this.art.counters[u.sprite]);
-    const deathPool = !u.alive && u.diedAt != null ? this.art.deaths[u.sprite] : undefined;
-    const frames = deathPool ?? (atk != null ? (casting ? (castPool ?? atkPool) : countering ? (counterPool ?? atkPool) : atkPool) : walk ?? idle ?? this.art.sprites[u.sprite]);
+    // Hit reaction (GameArt.hits): plays for HIT_ANIM_SECONDS after taking damage, unless the
+    // unit is attacking or walking. On a killing blow it plays first, then the death sheet.
+    const hitPool = this.art.hits[u.sprite];
+    const sinceHit = hitPool && u.hitAt != null ? this.time - u.hitAt : Infinity;
+    const hitPlaying = sinceHit < HIT_ANIM_SECONDS && (!u.alive || (atk == null && !moving));
+    const deathPool = !hitPlaying && !u.alive && u.diedAt != null ? this.art.deaths[u.sprite] : undefined;
+    const deathT = u.diedAt != null ? this.time - u.diedAt - (hitPool ? HIT_ANIM_SECONDS : 0) : 0;
+    const frames = hitPlaying ? hitPool : deathPool ?? (atk != null ? (casting ? (castPool ?? atkPool) : countering ? (counterPool ?? atkPool) : atkPool) : walk ?? idle ?? this.art.sprites[u.sprite]);
     const n = frames?.length ?? 0;
-    const fi = deathPool
-      ? Math.min(n - 1, Math.floor(((this.time - u.diedAt!) / DEATH_ANIM_SECONDS) * n))
-      : atk != null ? atk : walk ? this.walkFrame(u, n) : this.idleFrame(u, n || 4);
+    const fi = hitPlaying
+      ? Math.min(n - 1, Math.floor((sinceHit / HIT_ANIM_SECONDS) * n))
+      : deathPool
+        ? Math.min(n - 1, Math.max(0, Math.floor((deathT / DEATH_ANIM_SECONDS) * n)))
+        : atk != null ? atk : walk ? this.walkFrame(u, n) : this.idleFrame(u, n || 4);
     const walkDirs = moving ? this.art.walkDirs[u.sprite] : undefined;
     const img = (walkDirs ? walkDirs[u.walkPose] : undefined) ?? frames?.[fi] ?? frames?.[0];
     // The draw-size correction keys off the footprint SHAPE (reference equality against
@@ -8994,6 +9040,13 @@ export class BattleEngine {
     // height (~84% of its square box), with the wide canvas's own aspect kept.
     const wardog2HeightScale = u.sprite === "wardog2" ? 0.896 : 1;
     const wardog2WidthScale = u.sprite === "wardog2" ? 1.372 : 1;
+    // Embered Wraith (292x360 canvas, figure ~95% of its height, same fill as the plain human
+    // sheets): human height, width follows the canvas aspect (0.811 / 0.782).
+    const wraithWidthScale = u.sprite === "EmberedWraith" ? 1.037 : 1;
+    // Zombie Dog (437x321 canvas, figure ~80% of its height): the dogs' on-screen figure height
+    // (~84% of the size-2 box, same as WarDog 2), with the canvas's own aspect kept.
+    const zombieDogHeightScale = u.sprite === "zombieDog" ? 1.051 : 1;
+    const zombieDogWidthScale = u.sprite === "zombieDog" ? 1.33 : 1;
     // Rocco The Bird (639x360 canvas, figure ~79% of its height): troll2's on-screen figure
     // height (same Type 7 body), with the wide canvas's own aspect kept.
     const roccoHeightScale = u.sprite === "RoccoTheBird" ? 1.22 : 1;
@@ -9025,6 +9078,7 @@ export class BattleEngine {
       birolhoLegsHeightScale *
       troll2HeightScale *
       wardog2HeightScale *
+      zombieDogHeightScale *
       roccoHeightScale *
       familiar4HeightScale *
       kaelFinalAtkScale *
@@ -9049,6 +9103,8 @@ export class BattleEngine {
       birolhoLegsWidthScale *
       troll2WidthScale *
       wardog2WidthScale *
+      wraithWidthScale *
+      zombieDogWidthScale *
       roccoWidthScale *
       familiar4WidthScale *
       wolfFinalWidthScale *
@@ -9560,6 +9616,11 @@ export class BattleEngine {
         push(this.healRangeTiles(selected, SUMMON_FAMILIAR4.range), "rgba(180,150,235,0.45)");
         const cell = this.hover ?? this.spellAim;
         if (cell && this.spellAimValid(selected, cell)) push([cell], "rgba(200,170,245,0.55)");
+      } else if (selected && this.spellKind === "summonZombieDog") {
+        push(this.healRangeTiles(selected, SUMMON_ZOMBIE_DOG.range), "rgba(180,150,235,0.45)");
+        const cell = this.hover ?? this.spellAim;
+        // Preview the dog's whole Type 2 body, not just the anchor tile.
+        if (cell && this.spellAimValid(selected, cell)) push(footprint({ x: cell.x, y: cell.y, size: CLASSES.zombieDog!.size, footprintOffsets: CLASSES.zombieDog!.footprintOffsets }), "rgba(200,170,245,0.55)");
       } else if (selected && this.spellKind === "summonFamiliar3") {
         push(this.healRangeTiles(selected, SUMMON_FAMILIAR3.range), "rgba(180,150,235,0.45)");
         const cell = this.hover ?? this.spellAim;
