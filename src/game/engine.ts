@@ -3,7 +3,7 @@ import { isHexGroundVariant, requestSpriteArt } from "./assets";
 import { drawHexGround } from "./hexGround";
 import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
-import { placedBlockingFootprint } from "./data";
+import { placedBlockingFootprint, THREE_D_DOOR_VARIANTS } from "./data";
 import { canCounter, makeForecast, mulberry32, powerOf, protOf, rollDamage, rollDamageCustom } from "./combat";
 import {
   attackableEnemies,
@@ -6891,6 +6891,7 @@ export class BattleEngine {
     for (const p of hexNeighbors(u.x, u.y)) {
       if (!inBounds(p.x, p.y, this.cols, this.rows)) continue;
       if (tileAt(this.tiles, this.cols, p.x, p.y) === "door") return p;
+      if (this.decorations.some(d => (DECORATIONS[d.id]?.model3d === "door" || DECORATIONS[d.id]?.model3d === "secretDoor") && d.x === p.x && d.y === p.y)) return p;
       if (this.decorations.some((d) => CHEST_DECOR_IDS.has(d.id) && d.x === p.x && d.y === p.y)) return p;
     }
     return null;
@@ -7080,9 +7081,16 @@ export class BattleEngine {
     const i = target.y * this.cols + target.x;
     const chestDecorId = this.decorations.find((dec) => CHEST_DECOR_IDS.has(dec.id) && dec.x === target.x && dec.y === target.y)?.id;
     const wasChest = !!chestDecorId;
+    const architectureDoor = this.decorations.find(dec => (DECORATIONS[dec.id]?.model3d === "door" || DECORATIONS[dec.id]?.model3d === "secretDoor") && dec.x === target.x && dec.y === target.y);
     // A chest never touches the floor underneath it. Doors are terrain, so opening one
     // restores the map's normal walkable floor.
-    if (!wasChest) this.tiles[i] = this.mission.baseTile ?? "nave";
+    if (!wasChest && !architectureDoor) this.tiles[i] = this.mission.baseTile ?? "nave";
+    if (architectureDoor) {
+      const style = DECORATIONS[architectureDoor.id]?.doorStyle ?? "oak";
+      architectureDoor.id = THREE_D_DOOR_VARIANTS[style].open;
+      architectureDoor.blocksPath = undefined;
+      this.refreshDecorOverlay();
+    }
     // A chest never touches `tiles` (see DECORATIONS.locked-chest's own comment) — the real
     // floor is already sitting there, so opening it leaves it alone.
     this.terrainVersion++;
@@ -7983,7 +7991,12 @@ export class BattleEngine {
     }
     if (this.targetable(here)) {
       if (selected && !selected.acted && this.mode === "awaitOffHand") {
-        if (canHitFrom(selected, selected, here, this.tiles, this.cols, this.decorOverlay)) {
+        // Same reach as commitOffHandAction: a dagger/katar reaches by its own range, not the
+        // main-hand bow's (an archer's bow can't hit adjacent, so using it here made every
+        // adjacent target read "Fora de alcance").
+        const offHandItem = selected.offHandId ? EQUIPMENT[selected.offHandId] : null;
+        const offHandReach = offHandItem?.kind === "weapon" ? { ...selected, minRange: offHandItem.minRange ?? 1, maxRange: offHandItem.maxRange ?? 1 } : selected;
+        if (canHitFrom(offHandReach, selected, here, this.tiles, this.cols, this.decorOverlay)) {
           this.commitOffHandAction(selected, here, { x: selected.x, y: selected.y });
           return;
         }
@@ -8040,9 +8053,10 @@ export class BattleEngine {
     // (e.g. one an ally occupies), leaving a dangling parent reference that would silently
     // truncate reconstructPath before it reaches `to`. The walk only needs SOME valid route
     // through, so it gets its own unpruned pass off the same anchor.
-    const walkReach = computeReachable(this.effectiveUnitForReach(unit), this.tiles, this.cols, this.rows, this.units, false);
+    const walkReach = computeReachable(this.effectiveUnitForReach(unit), this.tiles, this.cols, this.rows, this.units, false, this.decorOverlay);
     const path = reconstructPath(walkReach, to);
-    if (path.length === 0) path.push({ x: unit.x, y: unit.y }, to);
+    // Never substitute a straight walk when the destination has become blocked.
+    if (path.length < 2 || path[0].x !== unit.x || path[0].y !== unit.y) return;
     // Cost of THIS hop, from wherever the unit currently stands — this.reach is anchored
     // there too, so this is already a per-hop delta, not a cumulative total.
     const stepCost = this.reach.get(key(to.x, to.y))?.cost ?? 0;
@@ -9099,6 +9113,28 @@ export class BattleEngine {
     const lift = this.unitLift(u, cell);
     const atk = this.attackPose(u);
     const moving = this.active?.type === "move" && this.active.id === u.id;
+    // Re-resolve Neera's facing from the live combat action every frame. The sequence
+    // start updates facing too, but wind-ups and queued off-hand strikes can preserve a
+    // stale direction if another action changed it before this pose is drawn.
+    if (u.sprite === "neera") {
+      let actorId: string | undefined;
+      let targetId: string | undefined;
+      if (this.active?.type === "combat") {
+        const counter = this.active.stage.startsWith("counter");
+        actorId = counter ? this.active.def : this.active.att;
+        targetId = counter ? this.active.att : this.active.def;
+      } else if (this.active?.type === "windup" && this.active.id === u.id && this.active.pose === "attack") {
+        const queued = this.queue[0];
+        if (queued?.type === "combat" && queued.att === u.id) {
+          actorId = queued.att;
+          targetId = queued.def;
+        }
+      }
+      if (actorId === u.id && targetId) {
+        const target = this.units.find((candidate) => candidate.id === targetId);
+        if (target && target.x !== u.x) u.facing = target.x > u.x ? 1 : -1;
+      }
+    }
     // idleAlt flips once per this unit's own turn (see beginUnitTurn) — a sprite with a
     // second idle loop (currently just Malrec's idles2) alternates into it; everyone else
     // has no idles2 entry, so this is a no-op fallback to their regular idle/stand pool.
@@ -9949,7 +9985,7 @@ export class BattleEngine {
         !this.reach.has(key(to.x, to.y)) || (to.x === selected.x && to.y === selected.y)) return [];
     const previewKey = `${selected.id}:${selected.x},${selected.y}:${to.x},${to.y}:${selected.moveBudgetUsed}`;
     if (this.previewReach !== this.reach || this.previewKey !== previewKey) {
-      const walkReach = computeReachable(this.effectiveUnitForReach(selected), this.tiles, this.cols, this.rows, this.units, false);
+      const walkReach = computeReachable(this.effectiveUnitForReach(selected), this.tiles, this.cols, this.rows, this.units, false, this.decorOverlay);
       this.previewCells = reconstructPath(walkReach, to).slice(1);
       this.previewReach = this.reach;
       this.previewKey = previewKey;

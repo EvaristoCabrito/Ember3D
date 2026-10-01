@@ -6,6 +6,7 @@ import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme
 import { BattleCanvas } from "./BattleCanvas";
 import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } from "./gfx/params";
 import { ELEMENT_FX_REGISTRY, pixelDefaults, pixelPresetsFor, type PixelElement, type PixelElementSettings } from "./gfx/three/ProceduralElementEmitter";
+import { THREE_D_DOOR_VARIANTS } from "./data";
 import { DEFAULT_AMBIENT_INTENSITY, DEFAULT_BLOOM_INTENSITY, DEFAULT_SUN_INTENSITY, TIME_OF_DAY_LIGHT } from "./gfx/three/ThreeBattleRenderer";
 import { getDevGfx, setDevGfx, subscribeDevGfx, type DevGfxSettings } from "./gfx/three/devGfx";
 import { DevGfxPreview } from "./gfx/three/DevGfxPreview";
@@ -1123,10 +1124,9 @@ export function GameApp() {
       const weapons = testMode
         ? undefined
         : Object.fromEntries(Object.entries(save.equipped).map(([hero, id]) => [hero, { id, enh: save.weapons[id] ?? 0 }]));
-      const offHand = testMode
-        ? undefined
-        : Object.fromEntries(
-            Object.entries(save.equipment)
+      // Test mode fights with the same starting off-hand kit as a new game (Neera's dagger).
+      const offHand = Object.fromEntries(
+            Object.entries(testMode ? emptySave().equipment : save.equipment)
               .map(([hero, e]) => [hero, e.offHand] as const)
               .filter((entry): entry is [string, string] => !!entry[1]),
           );
@@ -2514,7 +2514,11 @@ export function GameApp() {
               : hud.activeExit?.id === "escape-exit"
                 ? "Vocês escaparam a tempo."
                 : hud.activeExit?.id === "floor-connector"
-                  ? hud.activeExit.returnConnector
+                  ? mission.id === "estalagem"
+                    ? "Subir para o Segundo andar"
+                    : mission.id === "estalagem-andar-2"
+                      ? "Descer para o Primeiro andar"
+                      : hud.activeExit.returnConnector
                     ? "Vocês voltam ao andar anterior."
                     : "Vocês seguem mais fundo na masmorra."
                   : "O campo ficou em silêncio."
@@ -3925,7 +3929,7 @@ function ResizableEditorPanel({
   );
 }
 
-function MapEditorScreen({
+export function MapEditorScreen({
   art,
   onBack,
   onPlaytest,
@@ -3941,9 +3945,7 @@ function MapEditorScreen({
 }) {
   const [showPreview, setShowPreview] = useState(true);
   const [showTechnicalMap, setShowTechnicalMap] = useState(false);
-  // Rebuilding the preview's BattleEngine on every keystroke (typing a title, nudging a
-  // spawn's level) would be wasted work it can't even show — debounce to the pause after a
-  // real edit instead.
+  // Keep the visual preview current with placement, deletion, and orientation edits.
   const [previewMission, setPreviewMission] = useState<Mission | null>(null);
   const immediateFxPreviewDraftRef = useRef<MapDraft | null>(null);
   /** Which DialogTree the DialogEditor modal is currently open for, if any — the mission's
@@ -4072,8 +4074,7 @@ function MapEditorScreen({
       immediateFxPreviewDraftRef.current = null;
       return;
     }
-    const t = window.setTimeout(() => setPreviewMission(draftToMission(draft)), 400);
-    return () => window.clearTimeout(t);
+    setPreviewMission(draftToMission(draft));
   }, [draft, showPreview]);
 
   const [showLocations, setShowLocations] = useState(false);
@@ -4646,7 +4647,7 @@ function MapEditorScreen({
     HOUSE_DECOR_IDS.has(selectedPlacement.id) || BIG_HOUSE_DECOR_IDS.has(selectedPlacement.id) || SOLID_HOUSE_DECOR_IDS.has(selectedPlacement.id)
   );
   const selectedArchitecture = selectedPlacement ? DECORATIONS[selectedPlacement.id]?.model3d : undefined;
-  const selectedPlacementIsSolidArchitecture = selectedArchitecture === "wall" || selectedArchitecture === "door";
+  const selectedPlacementIsSolidArchitecture = selectedArchitecture === "wall" || selectedArchitecture === "door" || selectedArchitecture === "secretDoor";
   const activeWallOrientation = selectedArchitecture
     ? selectedPlacement?.wallOrientation ?? ((selectedPlacement?.rot ?? 0) % 2 ? "vertical" : "horizontal")
     : wallOrientation;
@@ -4766,6 +4767,16 @@ function MapEditorScreen({
   }, [removeSelectedDecoration]);
   const toggleDecoration = (x: number, y: number) => {
     const clicked = draft.decorations.find((p) => placedFootprint(p).some((f) => p.x + f.dx === x && p.y + f.dy === y));
+    if (clicked && DECORATIONS[clicked.id]?.model3d && DECORATIONS[decoBrush]?.model3d && clicked.id !== decoBrush) {
+      const replacement: DecorationPlacement = {
+        ...clicked, id: decoBrush, blocksPath: undefined, yieldsHighGround: undefined,
+      };
+      setDraft(d => ({ ...d, decorations: d.decorations.map(p =>
+        p.id === clicked.id && p.x === clicked.x && p.y === clicked.y ? replacement : p) }));
+      setSelectedPlacedDecoration(null);
+      setNote(`${DECORATIONS[decoBrush]?.name} colocada em ${clicked.x},${clicked.y}.`);
+      return;
+    }
     // A Waypoint (Escape/Dungeon Exit, floor connector) is a flat ground marking, not a
     // physical object — it can share a hex with anything already there, including another
     // Waypoint, instead of being blocked by it or redirecting the click to it. Placing two
@@ -4933,6 +4944,7 @@ function MapEditorScreen({
   };
 
   const selectPreviewUnit = (unit: PreviewUnitSelection) => {
+    setSelectedPlacedDecoration(null);
     setNote(`${unit.name}: pressione Delete para remover, ou arraste para outro hex pra mover.`);
   };
 
@@ -5251,7 +5263,8 @@ function MapEditorScreen({
     return [...heroes.sort((a, b) => byName(a.label, b.label)), ...rest.sort((a, b) => byName(a.label, b.label))];
   })();
   const decorOptions = Object.values(DECORATIONS).filter(dec => !dec.model3d).sort((a, b) => byName(a.name, b.name));
-  const architectureOptions = Object.values(DECORATIONS).filter(dec => !!dec.model3d);
+  const architectureOptions = Object.values(DECORATIONS).filter(dec => !!dec.model3d)
+    .sort((a, b) => Number(a.model3d === "wall") - Number(b.model3d === "wall"));
   const decorationSectionFor = (id: string) => {
     if (DECORATIONS[id]?.exitKind) return "Waypoints";
     // Everything that emits light (see LIGHT_DEFS), burning houses included, in one place.
@@ -5291,7 +5304,7 @@ function MapEditorScreen({
   useEffect(() => {
     const id = selectedPlacedDecoration?.id;
     if (!id || !DECORATIONS[id]) return;
-    setDecoBrush(id);
+    if (!DECORATIONS[id]?.model3d || mode !== "architecture") setDecoBrush(id);
     if (DECORATIONS[id]?.model3d) setMode("architecture");
     else if (mode === "architecture") setMode("decoration");
     setDecoSection(decorationSectionFor(id));
@@ -5314,7 +5327,7 @@ function MapEditorScreen({
   };
 
   return (
-    <section className="map-editor h-dvh min-h-0 flex flex-col bg-bg">
+    <section className="map-editor h-dvh min-h-0 min-w-0 w-full flex flex-col bg-bg">
       <header className="flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 border-b border-border">
         <button type="button" onClick={onBack} className="size-10 grid place-items-center rounded-md border border-border" aria-label="Voltar">
           <ChevronLeft className="size-5" />
@@ -5325,7 +5338,7 @@ function MapEditorScreen({
         </div>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
+      <div className="flex-1 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto p-4 flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Button
             variant="ghost"
@@ -5839,7 +5852,7 @@ function MapEditorScreen({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
           <label className="flex items-center gap-1">
             <span className="text-muted text-xs uppercase tracking-wide">Col</span>
             <input
@@ -6063,8 +6076,8 @@ function MapEditorScreen({
               entra no mapa se você colocar à mão.
             </p>}
 
-            <div className="ember-scrollbar overflow-x-auto overflow-y-hidden border border-border rounded-md p-1.5 bg-bg/40 h-28 min-h-[104px] min-w-[280px]">
-              <div className="grid grid-rows-2 grid-flow-col auto-cols-max gap-1.5">
+            <div className={mode === "architecture" ? "border border-border rounded-md p-1.5 bg-bg/40" : "ember-scrollbar overflow-x-auto overflow-y-hidden border border-border rounded-md p-1.5 bg-bg/40 h-28 min-h-[104px] min-w-[280px]"}>
+              <div className={mode === "architecture" ? "grid grid-cols-2 xl:grid-cols-3 gap-1.5" : "grid grid-rows-2 grid-flow-col auto-cols-max gap-1.5"}>
                 {visibleDecorOptions.map((dec) => {
                   const excluded = shuffleExclude.has(dec.id);
                   return (
@@ -6075,7 +6088,8 @@ function MapEditorScreen({
                       <button
                         type="button"
                         title={`${dec.name} · ${dec.footprint.length} hexes`}
-                        onClick={() => setDecoBrush(dec.id)}
+                        aria-pressed={decoBrush === dec.id}
+                        onClick={() => { setDecoBrush(dec.id); setSelectedPlacedDecoration(null); setTurningDeco(false); }}
                         className="flex items-center gap-1.5"
                       >
                         {dec.model3d && !dec.wallTexture ? <span className="size-6 grid place-items-center rounded-sm border border-border text-[10px] font-semibold">3D</span> : <img
@@ -6151,8 +6165,19 @@ function MapEditorScreen({
                 />
                 <span className="text-muted">Alto terreno</span>
               </label></>}
+              {mode === "architecture" && (selectedArchitecture === "door" || selectedArchitecture === "doorway" || selectedArchitecture === "secretDoor") && selectedPlacement && (
+                <Button size="sm" onClick={() => {
+                  const style = DECORATIONS[selectedPlacement.id]?.doorStyle ?? "oak";
+                  const pair = THREE_D_DOOR_VARIANTS[style];
+                  const id = selectedArchitecture === "door" || selectedArchitecture === "secretDoor" ? pair.open : pair.closed;
+                  setDraft(d => ({ ...d, decorations: d.decorations.map(p =>
+                    p.id === selectedPlacement.id && p.x === selectedPlacement.x && p.y === selectedPlacement.y
+                      ? { ...p, id, blocksPath: undefined } : p) }));
+                  setSelectedPlacedDecoration({ ...selectedPlacement, id });
+                }}>{selectedArchitecture === "door" || selectedArchitecture === "secretDoor" ? "Abrir porta" : "Fechar passagem"}</Button>
+              )}
               <p className="text-xs text-muted">
-                {mode === "architecture" ? "Escolha a orientação para colocar novas peças ou mudar a peça selecionada. Paredes e portas fechadas bloqueiam o caminho; passagens abertas permitem atravessar."
+                {mode === "architecture" ? "Escolha a orientação para colocar novas peças ou mudar a peça selecionada. Paredes, portas fechadas e passagens secretas bloqueiam o caminho; vãos abertos permitem atravessar."
                   : 'Os dois só acrescentam: desligados, o hexágono mantém a regra do terreno que está embaixo. Uma barricada segue intransponível com "Bloquear caminho" desligado, porque é a definição dela que a torna sólida.'}
               </p>
             </div>
@@ -6380,6 +6405,7 @@ function MapEditorScreen({
                 onUnitPlace={placePreviewUnit}
                 onDecorationSelect={selectPreviewDecoration}
                 onDecorationPlace={placePreviewDecoration}
+                primaryObjectDrag={!turningDeco}
               />
             ) : (
               <div className="h-full w-full grid place-items-center text-xs text-muted">Carregando prévia…</div>
@@ -8046,7 +8072,7 @@ function BattleScreen({
             size="sm"
             variant="ghost"
             className="ember-btn ember-btn-sm ember-btn-ghost"
-            disabled={((!showAct && hud.mode !== "awaitPotion") || hud.busy) && !hud.canCancelMovement}
+            disabled={((!showAct && hud.mode !== "awaitPotion" && hud.mode !== "awaitOffHand") || hud.busy) && !hud.canCancelMovement}
             onClick={() => engine.cancel()}
           >
             Cancelar

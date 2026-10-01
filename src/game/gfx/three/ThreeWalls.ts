@@ -14,11 +14,28 @@ export function configureWallDepth(material: THREE.MeshStandardMaterial, tile: n
         float wallZ = wallDepthBase + (-wallGround.y / wallTile) * wallDepthPerTile;
         vec4 wallDepthClip = projectionMatrix * viewMatrix * vec4(wallGround.xy, wallZ, 1.0);
         wallGroundDepth = wallDepthClip.z / wallDepthClip.w * 0.5 + 0.5;
+      `)
+      .replace("vViewPosition = - mvPosition.xyz;", `
+        vec4 physicalPosition = modelMatrix * vec4(transformed.x, transformed.y - transformed.z * 3.5, transformed.z, 1.0);
+        physicalPosition.z -= 1.0;
+        vViewPosition = -(viewMatrix * physicalPosition).xyz;
+      `)
+      .replace("#include <worldpos_vertex>", `#include <worldpos_vertex>
+        #ifdef USE_SHADOWMAP
+          worldPosition.y -= transformed.z * 3.5;
+          worldPosition.z -= 1.0;
+        #endif
       `);
     shader.fragmentShader = `varying float wallGroundDepth;\n${shader.fragmentShader}`
+      // Architecture stands on Z-up ground. Keep its ambient hemisphere aligned to
+      // that physical up axis instead of treating south-facing walls as underground.
+      .replace("#include <lights_pars_begin>", THREE.ShaderChunk.lights_pars_begin.replace(
+        "float dotNL = dot( normal, hemiLight.direction );",
+        "float dotNL = dot( normal, (viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz );",
+      ))
       .replace("#include <dithering_fragment>", "#include <dithering_fragment>\n gl_FragDepth = wallGroundDepth;");
   };
-  material.customProgramCacheKey = () => "architecture-ground-depth-v1";
+  material.customProgramCacheKey = () => "architecture-physical-shadows-v4";
 }
 
 /** Remove internal caps at joins so they cannot cast a seam onto a neighboring wall. */
@@ -30,11 +47,11 @@ function omitBoxFaces(box: THREE.BoxGeometry, faces: number[]): THREE.BoxGeometr
 }
 
 /** Solid joining walls, following the centers of neighboring architecture cells. */
-export function createWallGeometry(def: DecorationDef, tile: number, rotation: number, connections: { x: number; y: number }[] = [], origin = { x: 0, y: 0 }): THREE.BufferGeometry {
+export function createWallGeometry(def: DecorationDef, tile: number, rotation: number, connections: { x: number; y: number }[] = [], origin = { x: 0, y: 0 }, projectHeight = true): THREE.BufferGeometry {
   const height = tile * 0.75 * (def.heightScale ?? 1);
   let geometry: THREE.BufferGeometry;
-  if (def.model3d === "wall") {
-    const thickness = tile * 0.32;
+  if (def.model3d === "wall" || def.model3d === "secretDoor") {
+    const thickness = tile * 0.32 * (def.wallThicknessScale ?? 1);
     const parts: THREE.BufferGeometry[] = [];
     if (connections.length === 0) {
       const length = tile * ((rotation & 1) ? 1.5 : Math.sqrt(3));
@@ -61,7 +78,16 @@ export function createWallGeometry(def: DecorationDef, tile: number, rotation: n
       box(post, depth, height, (width - post) / 2, height / 2),
       box(width - post * 2, depth, height * 0.18, 0, height * 0.91),
     ];
-    if (def.model3d === "door") parts.push(box(width - post * 2, tile * 0.12, height * 0.82, 0, height * 0.41));
+    if (def.model3d === "door") {
+      // Give the closed leaf clear timber construction and readable hardware at map scale.
+      // The straps sit proud of the leaf so light catches them from either orientation.
+      parts.push(
+        box(width - post * 2, tile * 0.12, height * 0.82, 0, height * 0.41),
+        box(width - post * 2, depth * 1.12, height * 0.075, 0, height * 0.24),
+        box(width - post * 2, depth * 1.12, height * 0.075, 0, height * 0.69),
+        box(tile * 0.08, depth * 1.45, height * 0.09, width * 0.24, height * 0.49),
+      );
+    }
     geometry = mergeGeometries(parts)!;
     parts.forEach(part => part.dispose());
     geometry.rotateZ(-rotation * Math.PI / 2);
@@ -80,9 +106,10 @@ export function createWallGeometry(def: DecorationDef, tile: number, rotation: n
     else uv.setXY(i, (Math.abs(normals.getX(i)) > 0.5 ? y : x) / repeatSize, z / repeatSize);
   }
   uv.needsUpdate = true;
-  for (let i = 0; i < positions.count; i++) positions.setY(i, positions.getY(i) + positions.getZ(i) * 3.5);
+  if (projectHeight) for (let i = 0; i < positions.count; i++) positions.setY(i, positions.getY(i) + positions.getZ(i) * 3.5);
   positions.needsUpdate = true;
-  geometry.computeVertexNormals();
+  // Preserve upright surface normals: the camera shear must not turn a vertical
+  // wall face into a sun-facing slope or paint ground shadows across that face.
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   return geometry;

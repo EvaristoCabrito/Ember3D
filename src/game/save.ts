@@ -9,7 +9,7 @@ import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogAction, Dialog
 const START_HEX = OVERWORLD_START_HEX;
 
 export const SLOT_COUNT = 6;
-export const SAVE_VERSION = 17;
+export const SAVE_VERSION = 18;
 const BANK_KEY = "ember-save-bank";
 const SAVE_KEY = "ember-save";
 const SAVE_BAK_KEY = "ember-save.bak";
@@ -501,7 +501,7 @@ function starterEquipment(): { weapons: Record<string, number>; equipped: Record
     weapons[id] = 0;
     equipped[hero] = id;
   }
-  equipment.Neera = { offHand: "adaga-secundaria" };
+  equipment.Neera = { offHand: "punhal-curvo" };
   for (const [hero, classId] of Object.entries(LATE_HERO_BASE_CLASS)) {
     const id = starterWeaponFor(classId);
     if (!id) continue;
@@ -594,9 +594,41 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
       if (cleanIds.length) crossingDefeatedSpawns[missionId] = [...new Set(cleanIds)];
     }
   }
-  const weapons = cleanWeapons(raw.weapons);
+  // v18 (applied to every save, not only older ones — a save written by the running game off-hand-only equipment right after the change would carry the removed id under the new version number):
+  // daggers/katars became off-hand-only equipment (same ids, see OFFHAND_DAGGERS in data.ts)
+  // and "adaga-secundaria" was removed. Owned daggers move from the weapon list to the loose
+  // equipment stash, and the removed item becomes the weakest dagger, so nothing is lost.
+  let rawWeapons = raw.weapons;
+  let rawLoose = raw.looseEquipment;
+  let rawEquipment = raw.equipment;
+  {
+    const daggerIds = ["punhal-curvo", "katar", "adaga-sombria", "adaga-de-veneno", "adaga-viperina", "misericordia-sombria", "punhal-do-salteador", "katar-sepulcral"];
+    const loose: Record<string, unknown> = rawLoose && typeof rawLoose === "object" ? { ...(rawLoose as Record<string, unknown>) } : {};
+    const addLoose = (id: string) => { loose[id] = (typeof loose[id] === "number" ? (loose[id] as number) : 0) + 1; };
+    if (rawWeapons && typeof rawWeapons === "object") {
+      const kept: Record<string, unknown> = { ...(rawWeapons as Record<string, unknown>) };
+      for (const id of daggerIds) if (id in kept) { delete kept[id]; addLoose(id); }
+      rawWeapons = kept;
+    }
+    if (typeof loose["adaga-secundaria"] === "number") {
+      const n = loose["adaga-secundaria"] as number;
+      delete loose["adaga-secundaria"];
+      for (let i = 0; i < n; i++) addLoose("punhal-curvo");
+    }
+    rawLoose = loose;
+    if (rawEquipment && typeof rawEquipment === "object") {
+      const swapped: Record<string, unknown> = {};
+      for (const [hero, slots] of Object.entries(rawEquipment as Record<string, unknown>)) {
+        swapped[hero] = slots && typeof slots === "object" && (slots as Record<string, unknown>).offHand === "adaga-secundaria"
+          ? { ...(slots as Record<string, unknown>), offHand: "punhal-curvo" }
+          : slots;
+      }
+      rawEquipment = swapped;
+    }
+  }
+  const weapons = cleanWeapons(rawWeapons);
   const equipped = cleanEquipped(raw.equipped, weapons);
-  const equipment = cleanEquipment(raw.equipment);
+  const equipment = cleanEquipment(rawEquipment);
   // v17 removes an accidentally seeded Besta Leve from untouched new-game saves, including
   // saves that were already migrated by v15 before the cleanup covered the current version.
   // It is found or bought during play, never granted as starting equipment.
@@ -611,7 +643,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
   if (version < 14) {
     weapons["arco-composto"] = weapons["arco-composto"] ?? 0;
     equipped.Neera = "arco-composto";
-    equipment.Neera = { ...equipment.Neera, offHand: equipment.Neera?.offHand ?? "adaga-secundaria" };
+    equipment.Neera = { ...equipment.Neera, offHand: equipment.Neera?.offHand ?? "punhal-curvo" };
   }
   // Backfill: any hero with nothing equipped yet (old save, predates weapons) gets their
   // class's free starter weapon, same as a brand new save already does.
@@ -661,7 +693,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     weapons,
     equipped,
     equipment,
-    looseEquipment: cleanLooseEquipment(raw.looseEquipment),
+    looseEquipment: cleanLooseEquipment(rawLoose),
     spellUses: cleanSpellUses(raw.spellUses),
     ember,
     emberSeeded,

@@ -126,6 +126,7 @@ export function BattleCanvas({
     let mouseStartX = 0;
     let mouseStartY = 0;
     let mouseHoldTimer: number | null = null;
+    const restingCursor = canvas.style.cursor;
     const held = new Set<string>();
     const pointers = new Map<number, { x: number; y: number }>();
     // Press-and-hold on a tile reads out its terrain. It has to coexist with dragging the
@@ -369,6 +370,7 @@ export function BattleCanvas({
         mouseHoldTimer = window.setTimeout(() => {
           mouseHoldTimer = null;
           mouseArmed = true;
+          canvas.style.cursor = "url('/game/cursors/medieval-gauntlet-grab-small.svg') 13 13, grabbing";
         }, MOUSE_PAN_HOLD_MS);
         return;
       }
@@ -447,6 +449,7 @@ export function BattleCanvas({
       const wasHolding = holding;
       cancelHold();
       if (e.pointerType === "mouse") {
+        canvas.style.cursor = restingCursor;
         if (mouseHoldTimer !== null) {
           window.clearTimeout(mouseHoldTimer);
           mouseHoldTimer = null;
@@ -528,7 +531,7 @@ export function BattleCanvas({
       }
       const hud = engine.getHud();
       const showAct =
-        hud.mode === "awaitAction" || hud.mode === "awaitAttack" || hud.mode === "selected" || hud.mode === "awaitSpell";
+        hud.mode === "awaitAction" || hud.mode === "awaitAttack" || hud.mode === "selected" || hud.mode === "awaitSpell" || hud.mode === "awaitOffHand";
       if (!showAct || hud.busy) return;
       // Free exploration: right-click never undoes movement — deselect in place instead.
       if (engine.mission.explore && (hud.mode === "selected" || hud.mode === "awaitAction")) {
@@ -549,6 +552,7 @@ export function BattleCanvas({
 
     return () => {
       running = false;
+      canvas.style.cursor = restingCursor;
       cancelAnimationFrame(raf);
       ro.disconnect();
       cancelHold();

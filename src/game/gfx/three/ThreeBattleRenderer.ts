@@ -305,7 +305,7 @@ const SHADOW_RADIUS_SOFT = 4;
  * orthographic billboards (no depth relationship between sprite and ground to sample), so this
  * is a per-object ground decal sized from the art's own opaque base (see artBase) — transparent
  * sprite pixels never count as contact, and one object's decal can never darken another object
- * (decals sit at z=0.51, under every sprite/prop).
+ * (decals sit just above the floor; true 3D surfaces depth-occlude them).
  * W: decal width as a multiple of the measured opaque base width (a little spill past the edge).
  * H: decal height as a fraction of its width (ground seen at the board's 3/4 angle).
  * OPACITY: peak darkening at the contact point — a multiply, so 0.75 keeps 25% of the ground's
@@ -314,6 +314,8 @@ const CONTACT_SHADOW_W = 1.4;
 const CONTACT_SHADOW_H = 0.5;
 const CONTACT_SHADOW_OPACITY = 0.75;
 const CONTACT_SHADOW_MAX_W = 0.6;
+/** Ground decals sit just above the floor so any real 3D wall or prop depth-occludes them. */
+const CONTACT_SHADOW_Z = 0.01;
 /** Absolute cap on decal height, in hex radii — keeps a wide base (wall, log) from growing a
  * deep oval that reaches far in front of/behind the contact line. */
 const CONTACT_SHADOW_MAX_H = 0.5;
@@ -729,7 +731,7 @@ export class ThreeBattleRenderer {
   private decorShadowMatCache = new Map<string, THREE.MeshBasicMaterial>();
   private decorFogCutMatCache = new Map<string, THREE.MeshBasicMaterial>();
   private decorEntries: DecorMeshEntry[] = [];
-  private wallEntries: { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>; placement: DecorationPlacement }[] = [];
+  private wallEntries: { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>; shadowMesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>; placement: DecorationPlacement }[] = [];
   private wallGroup = new THREE.Group();
   private wallTextures = new Map<string, THREE.Texture>();
   private builtDecorKey = "";
@@ -772,7 +774,7 @@ export class ThreeBattleRenderer {
   /** Flame halos (see HALO_STRENGTH), in the air behind the props and units around them. */
   private flameHaloGroup = new THREE.Group();
   private flameHaloTexture = makeFlameHaloTexture();
-  /** Contact-shadow footprints (z=0.51 — above tiles/overlay, below decorations and units).
+  /** Contact-shadow footprints sit just above the ground; wall depth can occlude them.
    * Deliberately NOT tied to unitGroup's visibility: BattleCanvas hides the Three unit sprites
    * (units draw on the Canvas2D top layer), but these are ground marks, so they stay here. */
   private contactShadowGroup = new THREE.Group();
@@ -801,6 +803,26 @@ export class ThreeBattleRenderer {
 
   hasArchitecture(): boolean {
     return this.engine.decorations.some(p => !!DECORATIONS[p.id]?.model3d);
+  }
+
+  /** Editor edits replace gameplay data while retaining shaders, textures and targets. */
+  setPreviewEngine(engine: BattleEngine): void {
+    const previous = this.engine;
+    const groundChanged = previous.cols !== engine.cols || previous.rows !== engine.rows ||
+      previous.tiles.some((id, i) => id !== engine.tiles[i] || previous.tileVariants[i] !== engine.tileVariants[i] || previous.tileRots[i] !== engine.tileRots[i]);
+    if (groundChanged) this.builtMissionId = "";
+    this.engine.architectureRenderedInThree = false;
+    this.engine = engine;
+    engine.architectureRenderedInThree = true;
+    this.builtDecorKey = "";
+  }
+
+  pickArchitecture(x: number, y: number, width: number, height: number): DecorationPlacement | null {
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(x / width * 2 - 1, 1 - y / height * 2), this.camera);
+    const hits = ray.intersectObjects(this.wallEntries.filter(e => e.mesh.visible).map(e => e.mesh));
+    const hit = hits[0];
+    return hit ? this.wallEntries.find(e => e.mesh === hit.object)?.placement ?? null : null;
   }
 
   // MILESTONE 3 — real world-space ground mist + drift particles, owned end-to-end by
@@ -1055,7 +1077,11 @@ export class ThreeBattleRenderer {
     }
   }
 
+  private lastSize = "";
   setSize(cssW: number, cssH: number, dpr: number): void {
+    const sizeKey = `${cssW}:${cssH}:${dpr}`;
+    if (this.lastSize === sizeKey) return;
+    this.lastSize = sizeKey;
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(Math.max(1, cssW), Math.max(1, cssH), false);
     this.camera.left = 0;
@@ -1264,8 +1290,11 @@ export class ThreeBattleRenderer {
     if (key === this.builtDecorKey) return;
     for (const entry of this.wallEntries) {
       this.wallGroup.remove(entry.mesh);
+      this.wallGroup.remove(entry.shadowMesh);
       entry.mesh.geometry.dispose();
       entry.mesh.material.dispose();
+      entry.shadowMesh.geometry.dispose();
+      entry.shadowMesh.material.dispose();
     }
     this.wallEntries = [];
     for (const entry of this.decorEntries) {
@@ -1288,7 +1317,9 @@ export class ThreeBattleRenderer {
       if (!def) continue;
       if (def.model3d) {
         const { wx, wy } = architectureWorld(p.x, p.y, tile);
-        const connections = [{ x: p.x - 1, y: p.y }, { x: p.x + 1, y: p.y }, { x: p.x, y: p.y - 1 }, { x: p.x, y: p.y + 1 }].filter(n => architectureCells.has(`${n.x},${n.y}`) && (!p.wallOrientation || (p.wallOrientation === "horizontal" ? n.y === p.y : n.x === p.x))).map(n => {
+        // Connect every occupied neighboring architecture cell. Orientation determines
+        // the door opening axis; it must not prevent perpendicular wall corners from joining.
+        const connections = [{ x: p.x - 1, y: p.y }, { x: p.x + 1, y: p.y }, { x: p.x, y: p.y - 1 }, { x: p.x, y: p.y + 1 }].filter(n => architectureCells.has(`${n.x},${n.y}`)).map(n => {
           const neighbor = architectureWorld(n.x, n.y, tile);
           return { x: neighbor.wx - wx, y: wy - neighbor.wy };
         });
@@ -1307,15 +1338,24 @@ export class ThreeBattleRenderer {
             this.wallTextures.set(def.wallTexture, map);
           }
         }
-        const material = new THREE.MeshStandardMaterial({ map, color: map ? 0xffffff : def.model3d === "door" ? 0x77634b : 0x8b8b86, roughness: 0.94, metalness: 0, flatShading: true });
+        const architectureColor = def.model3d === "door" ? 0x925b32 : def.model3d === "doorway" ? 0xb7a27c : 0x8b8b86;
+        const material = new THREE.MeshStandardMaterial({ map, color: map ? 0xffffff : architectureColor, roughness: 0.94, metalness: 0, flatShading: true });
         configureWallDepth(material, tile, DEPTH_Z_BASE, DEPTH_Z_PER_TILE);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(wx, -wy, 1);
-        mesh.castShadow = true;
+        mesh.castShadow = false;
         mesh.receiveShadow = true;
         mesh.layers.enable(PROXY_LAYER);
         this.wallGroup.add(mesh);
-        this.wallEntries.push({ mesh, placement: p });
+        // Camera projection stretches the visible walls; lights need the upright volume.
+        const shadowGeometry = createWallGeometry(def, tile, p.rot ?? 0, connections, { x: wx, y: -wy }, false);
+        const shadowMaterial = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+        const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
+        shadowMesh.position.set(wx, -wy, 0);
+        shadowMesh.castShadow = true;
+        shadowMesh.layers.enable(PROXY_LAYER);
+        this.wallGroup.add(shadowMesh);
+        this.wallEntries.push({ mesh, shadowMesh, placement: p });
         continue;
       }
       const decorLayer = def.unitLayer ?? (def.foreground ? "front" : "ground");
@@ -1435,7 +1475,7 @@ export class ThreeBattleRenderer {
         const cw = (base.u1 - base.u0) * w * CONTACT_SHADOW_W;
         contactMesh = new THREE.Mesh(this.quadGeo, this.decorContactMaterial);
         const ch = Math.min(cw * CONTACT_SHADOW_H, tile * CONTACT_SHADOW_MAX_H);
-        contactMesh.position.set(wx + offsetX + sign * ((base.u0 + base.u1) / 2 - 0.5) * w, -(wy + offsetY - h / 2 + base.v * h + ch * CONTACT_SHADOW_FORWARD), 0.51);
+        contactMesh.position.set(wx + offsetX + sign * ((base.u0 + base.u1) / 2 - 0.5) * w, -(wy + offsetY - h / 2 + base.v * h + ch * CONTACT_SHADOW_FORWARD), CONTACT_SHADOW_Z);
         contactMesh.scale.set(cw, ch, 1);
         this.decorContactGroup.add(contactMesh);
       }
@@ -1634,7 +1674,24 @@ export class ThreeBattleRenderer {
       // Y negated and Z derived from row — see module comment on the Y-flip and
       // ensureDecorBuilt's own comment on z ordering vs decorations (z=1) and tiles (z=0).
       // 2.5D depth from the ground line (see DEPTH_Z_BASE) — bob/lift are visual only.
-      entry.mesh.position.set(wx, -wy, spriteDepthZ(anchor.worldY + v.footY, tile) + UNIT_DEPTH_TIE);
+      let unitDepth = spriteDepthZ(anchor.worldY + v.footY, tile) + UNIT_DEPTH_TIE;
+      for (const wall of this.wallEntries) {
+        if (!wall.mesh.visible || DECORATIONS[wall.placement.id]?.model3d !== "doorway") continue;
+        const vertical = ((wall.placement.rot ?? 0) & 1) !== 0;
+        const dx = anchor.worldX - wall.mesh.position.x;
+        const dy = anchor.worldY + wall.mesh.position.y;
+        const halfWidth = tile * (vertical ? 1.5 : Math.sqrt(3)) / 2;
+        // While crossing the opening, the whole sprite belongs behind the frame.
+        // Ground-row sorting alone puts its upper body over the lintel/posts midway through.
+        // Odd hex rows shift character anchors sideways relative to the aligned walls.
+        const crossingDepth = tile * (vertical ? 0.95 : 0.45);
+        if (Math.abs(vertical ? dy : dx) <= halfWidth + tile * 0.02 && Math.abs(vertical ? dx : dy) <= crossingDepth) {
+          const backGroundY = -wall.mesh.position.y - (vertical ? halfWidth : tile * 0.16);
+          unitDepth = Math.min(unitDepth, spriteDepthZ(backGroundY, tile) - UNIT_DEPTH_TIE);
+          entry.material.opacity = u.fade;
+        }
+      }
+      entry.mesh.position.set(wx, -wy, unitDepth);
       // A unit fading in/out is see-through, so it must not blot out what stands behind it.
       entry.occluder.visible = u.fade >= 0.999;
       entry.mesh.scale.set(v.scaleX * v.w, v.scaleY * v.h, 1);
@@ -1734,7 +1791,7 @@ export class ThreeBattleRenderer {
       const cf = entry.contactFit!;
       const cw = cf.w * (0.7 + 0.3 * liftFade);
       const ch = Math.min(cw * CONTACT_SHADOW_H, tile * CONTACT_SHADOW_MAX_H);
-      entry.contactMesh.position.set(anchor.worldX + v.sway + cf.dx, -(anchor.worldY + v.footY + cf.dy + ch * CONTACT_SHADOW_FORWARD), 0.51);
+      entry.contactMesh.position.set(anchor.worldX + v.sway + cf.dx, -(anchor.worldY + v.footY + cf.dy + ch * CONTACT_SHADOW_FORWARD), CONTACT_SHADOW_Z);
       entry.contactMesh.scale.set(cw, ch, 1);
       entry.contactMaterial.opacity = CONTACT_SHADOW_OPACITY * u.fade * liftFade;
       entry.contactMesh.visible = liftFade > 0;
@@ -1774,6 +1831,7 @@ export class ThreeBattleRenderer {
     const engine = this.engine;
     for (const entry of this.wallEntries) {
       entry.mesh.visible = !engine.fogged || engine.explored(entry.placement.x, entry.placement.y);
+      entry.shadowMesh.visible = entry.mesh.visible;
     }
     if (!engine.fogged) {
       for (const entry of this.decorEntries) {
@@ -2916,6 +2974,8 @@ export class ThreeBattleRenderer {
     for (const entry of this.wallEntries) {
       entry.mesh.geometry.dispose();
       entry.mesh.material.dispose();
+      entry.shadowMesh.geometry.dispose();
+      entry.shadowMesh.material.dispose();
     }
   }
 }

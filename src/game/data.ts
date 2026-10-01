@@ -383,18 +383,22 @@ export const DEADWOODS_DECOR_IDS = new Set([
 // Multi-hex terrain props: rendered as one image over their whole footprint instead of
 // clipped per hex (see DecorationDef). Cropped from LargeHexes1-3.jpg.
 export const DECORATIONS: Record<string, DecorationDef> = {
-  "wall-3d-dungeon": { id: "wall-3d-dungeon", name: "Parede de Masmorra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/dungeon-v2.png" },
+  "wall-3d-dungeon": { id: "wall-3d-dungeon", name: "Parede de Masmorra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallThicknessScale: 1.55, wallTexture: "/game/textures/walls/dungeon-v2.png" },
   "wall-3d-tower": { id: "wall-3d-tower", name: "Parede de Torre 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/tower-v2.png" },
   "wall-3d-tavern": { id: "wall-3d-tavern", name: "Parede de Taverna 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/tavern-v2.png" },
-  "wall-3d-crypt": { id: "wall-3d-crypt", name: "Parede de Cripta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/crypt-v2.png" },
+  "wall-3d-crypt": { id: "wall-3d-crypt", name: "Parede de Cripta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallThicknessScale: 1.55, wallTexture: "/game/textures/walls/crypt-v2.png" },
   "wall-3d-temple": { id: "wall-3d-temple", name: "Parede de Templo 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/temple-v2.png" },
-  "wall-3d-cave": { id: "wall-3d-cave", name: "Parede de Caverna 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/cave-v2.png" },
-  "wall-3d-castle": { id: "wall-3d-castle", name: "Parede de Castelo 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/castle-v2.png" },
+  "wall-3d-cave": { id: "wall-3d-cave", name: "Parede de Caverna 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallThicknessScale: 1.55, wallTexture: "/game/textures/walls/cave-v2.png" },
+  "wall-3d-castle": { id: "wall-3d-castle", name: "Parede de Castelo 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallThicknessScale: 1.55, wallTexture: "/game/textures/walls/castle-v2.png" },
   "wall-3d-city": { id: "wall-3d-city", name: "Parede de Cidade 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/city-v2.png" },
   "wall-3d-stone": { id: "wall-3d-stone", name: "Parede de pedra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall" },
   "wall-3d-low": { id: "wall-3d-low", name: "Mureta de pedra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", heightScale: 0.5 },
-  "door-3d-frame": { id: "door-3d-frame", name: "Passagem aberta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway" },
-  "door-3d-closed": { id: "door-3d-closed", name: "Porta fechada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "door" },
+  "door-3d-frame": { id: "door-3d-frame", name: "Passagem aberta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", doorStyle: "oak", wallTexture: "/game/textures/doors/medieval-oak-door.png" },
+  "door-3d-closed": { id: "door-3d-closed", name: "Porta fechada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "door", doorStyle: "oak", wallTexture: "/game/textures/doors/medieval-oak-door.png" },
+  "door-3d-reinforced-frame": { id: "door-3d-reinforced-frame", name: "Vão de porta reforçada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", doorStyle: "reinforced", wallTexture: "/game/textures/doors/reinforced-wood-door.png" },
+  "door-3d-reinforced": { id: "door-3d-reinforced", name: "Porta reforçada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "door", doorStyle: "reinforced", wallTexture: "/game/textures/doors/reinforced-wood-door.png" },
+  "secret-door-3d-frame": { id: "secret-door-3d-frame", name: "Passagem secreta aberta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", doorStyle: "secretStone", wallTexture: "/game/textures/doors/passage-stone.png" },
+  "secret-door-3d-hidden": { id: "secret-door-3d-hidden", name: "Porta secreta de pedra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "secretDoor", doorStyle: "secretStone", wallThicknessScale: 1.55, wallTexture: "/game/textures/walls/dungeon-v2.png" },
   "mountain-ridge": { id: "mountain-ridge", name: "Cordilheira", footprint: DECO_PAIR, tile: "hill" },
   "spike-rocks": { id: "spike-rocks", name: "Agulhas de Pedra", footprint: DECO_PAIR, tile: "column" },
   // No tile stamp — it used to stamp "highwood" underneath itself, which is exactly
@@ -492,6 +496,12 @@ export const DECORATIONS: Record<string, DecorationDef> = {
     noShadow: true,
   },
 };
+
+export const THREE_D_DOOR_VARIANTS = {
+  oak: { open: "door-3d-frame", closed: "door-3d-closed" },
+  reinforced: { open: "door-3d-reinforced-frame", closed: "door-3d-reinforced" },
+  secretStone: { open: "secret-door-3d-frame", closed: "secret-door-3d-hidden" },
+} as const;
 
 // Thin posts and signposts read too small against the enlarged map scenery. Keep their width
 // and gameplay footprint unchanged, but double their visible height and mirror alternating
@@ -2493,10 +2503,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "arco-elfico": wpn("arco-elfico", "Arco Élfico", ARCHER_TRIO, 3, RANGED),
   "arco-do-cacador": wpn("arco-do-cacador", "Arco do Caçador", ARCHER_TRIO, 4, RANGED),
   "besta-leve": wpn("besta-leve", "Besta Leve", ARCHER_TRIO, 5, { minRange: 1, maxRange: 4, ranged: true }),
-  "punhal-curvo": wpn("punhal-curvo", "Punhal Curvo", ARCHER_TRIO, 1),
-  "katar": wpn("katar", "Katar", ARCHER_TRIO, 2),
-  "adaga-sombria": wpn("adaga-sombria", "Adaga Sombria", ARCHER_TRIO, 3),
-  "adaga-de-veneno": wpn("adaga-de-veneno", "Adaga de Veneno", ARCHER_TRIO, 4),
+  // Punhal Curvo / Katar / Adaga Sombria / Adaga de Veneno are off-hand weapons now — see OFFHAND_DAGGERS.
 
   // Lanceiro / Sentinela / Templário — lança, exclusiva dessa linha.
   "lanca": wpn("lanca", "Lança", LANCER_TRIO, 1, SPEAR),
@@ -2528,10 +2535,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   "arco-do-cacador-sombrio": wpn("arco-do-cacador-sombrio", "Arco do Caçador Sombrio", ARCHER_TRIO, 6, RANGED),
   "arco-elfico-de-cinzas": wpn("arco-elfico-de-cinzas", "Arco Élfico de Cinzas", ARCHER_TRIO, 7, RANGED),
   "arco-longo-de-teixo": wpn("arco-longo-de-teixo", "Arco Longo de Teixo", ARCHER_TRIO, 8, RANGED_MASTERWORK),
-  "adaga-viperina": wpn("adaga-viperina", "Adaga Viperina", ARCHER_TRIO, 5),
-  "misericordia-sombria": wpn("misericordia-sombria", "Misericórdia Sombria", ARCHER_TRIO, 6),
-  "punhal-do-salteador": wpn("punhal-do-salteador", "Punhal do Salteador", ARCHER_TRIO, 7),
-  "katar-sepulcral": wpn("katar-sepulcral", "Katar Sepulcral", ARCHER_TRIO, 8),
+  // Adaga Viperina / Misericórdia Sombria / Punhal do Salteador / Katar Sepulcral: same, see OFFHAND_DAGGERS.
   "martelo-belico": wpn("martelo-belico", "Martelo Bélico", [...WARRIOR_TRIO, "cleric"], 3),
   "malho-do-juizo": wpn("malho-do-juizo", "Malho do Juízo", [...WARRIOR_TRIO, "cleric"], 4),
   "lamina-consagrada": wpn("lamina-consagrada", "Lâmina Consagrada", WARRIOR_TRIO, 3, MELEE, undefined, 1),
@@ -2678,6 +2682,22 @@ export const EQUIPMENT_SLOTS: { id: EquipSlot; label: string }[] = [
   { id: "ring2", label: "Anel 2" },
   { id: "offHand", label: "Mão Secundária" },
 ];
+
+/** Every dagger/katar of the archer line. They are never a main-hand weapon: the bow is always
+ * the main hand, and a dagger always goes in the off-hand slot (Mão Secundária attack and the
+ * adjacent counter). They keep the ids and art they had as main-hand weapons; damage is the same
+ * rung of the shared dice ladder. */
+const OFFHAND_DAGGERS: [id: string, name: string, rung: number][] = [
+  ["punhal-curvo", "Punhal Curvo", 1],
+  ["katar", "Katar", 2],
+  ["adaga-sombria", "Adaga Sombria", 3],
+  ["adaga-de-veneno", "Adaga de Veneno", 4],
+  ["adaga-viperina", "Adaga Viperina", 5],
+  ["misericordia-sombria", "Misericórdia Sombria", 6],
+  ["punhal-do-salteador", "Punhal do Salteador", 7],
+  ["katar-sepulcral", "Katar Sepulcral", 8],
+];
+const OFFHAND_DAGGER_IDS = new Set(OFFHAND_DAGGERS.map(([id]) => id));
 
 export const EQUIPMENT: Record<string, EquipmentDef> = {
   // ============ ARMADURAS ============
@@ -2899,7 +2919,10 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   "escudo-do-leao-rompante": { id: "escudo-do-leao-rompante", name: "Escudo do Leão Rompante", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 6, res: 1, dmgMul: 0.9, price: 3900 },
   "escudo-de-bandas-cruzadas": { id: "escudo-de-bandas-cruzadas", name: "Escudo de Bandas Cruzadas", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, def: 3, res: 1, dmgMul: 0.8, price: 1300 },
   "escudo-andrajoso": { id: "escudo-andrajoso", name: "Escudo Andrajoso", slot: "offHand", kind: "shield", usableBy: SHIELD_WEARERS, mag: 1, def: 1, dmgMul: 0.7, price: 380 },
-  "adaga-secundaria": { id: "adaga-secundaria", name: "Adaga Secundária", slot: "offHand", kind: "weapon", usableBy: ARCHER_TRIO, dice: 1, faces: 4, bonus: 0, minRange: 1, maxRange: 1, price: 70 },
+  ...Object.fromEntries(OFFHAND_DAGGERS.map(([id, name, rung]) => {
+    const r = WEAPON_RUNGS[rung - 1]!;
+    return [id, { id, name, slot: "offHand", kind: "weapon", usableBy: ARCHER_TRIO, dice: r.dice, faces: r.faces, bonus: r.bonus, minRange: 1, maxRange: 1, price: r.price } satisfies EquipmentDef];
+  })),
   "katar-secundario": { id: "katar-secundario", name: "Katar Secundário", slot: "offHand", kind: "weapon", usableBy: ARCHER_TRIO, dice: 1, faces: 6, bonus: 0, minRange: 1, maxRange: 1, price: 90 },
 
   // ============ ACESSÓRIOS ============
@@ -3101,6 +3124,7 @@ export function lockpickTooltip(): string {
 export function equipmentIcon(id: string): string {
   // One equipment id maps to one dedicated icon. Never collapse distinct items onto
   // a generic chest/helm/boots drawing again.
+  if (OFFHAND_DAGGER_IDS.has(id)) return `/game/icons/weapons/${id}.png`;
   return `/game/icons/equipment/${id}.png`;
 }
 

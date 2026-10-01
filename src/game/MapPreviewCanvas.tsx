@@ -40,6 +40,7 @@ export function MapPreviewCanvas({
   onUnitPlace,
   onDecorationSelect,
   onDecorationPlace,
+  primaryObjectDrag = true,
 }: {
   mission: Mission;
   art: GameArt;
@@ -54,8 +55,15 @@ export function MapPreviewCanvas({
    * placement is grabbed, before it's known where it'll be dropped. */
   onDecorationSelect?: (decoration: PreviewDecorationSelection) => void;
   onDecorationPlace?: (decoration: PreviewDecorationSelection, x: number, y: number) => void;
+  primaryObjectDrag?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const groundRendererRef = useRef<WebGL2DRenderer | null>(null);
+  const unitsRendererRef = useRef<WebGL2DRenderer | null>(null);
+  const architectureRendererRef = useRef<ThreeBattleRenderer | null>(null);
+  const rendererFxKeyRef = useRef("");
+  const highlightRef = useRef({ selectedDecorationId, selectedPlacedDecoration });
+  highlightRef.current = { selectedDecorationId, selectedPlacedDecoration };
   const onCellClickRef = useRef(onCellClick);
   onCellClickRef.current = onCellClick;
   const fxCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -71,7 +79,7 @@ export function MapPreviewCanvas({
   // a pick-up-and-hold, not a move, so releasing the button must not drop the unit back onto
   // the board. Only a real drag past the threshold (see onPointerMove) arms a drop on release.
   const unitDragRef = useRef<{ pointerId: number; unit: PreviewUnitSelection; startX: number; startY: number; moved: boolean } | null>(null);
-  const decorationDragRef = useRef<{ pointerId: number; decoration: PreviewDecorationSelection } | null>(null);
+  const decorationDragRef = useRef<{ pointerId: number; decoration: PreviewDecorationSelection; startX: number; startY: number; moved: boolean } | null>(null);
   const cameraRef = useRef<{ x: number; y: number; missionId: string; tile: number; viewW: number; viewH: number } | null>(null);
   /** CSS pixels divided by this value become preview-engine logical pixels. This preserves
    * the requested zoom while keeping the engine on one of its supported tile sizes. */
@@ -92,6 +100,7 @@ export function MapPreviewCanvas({
   const previewZoomLevel = ZOOM_RADII.reduce((best, radius, index) =>
     Math.abs(radius - targetTileRadius) < Math.abs(ZOOM_RADII[best]! - targetTileRadius) ? index : best, 0);
   const previewTileRadius = ZOOM_RADII[previewZoomLevel]!;
+  const architectureActive = !!DECORATIONS[selectedDecorationId ?? ""]?.model3d;
   const previewRenderScale = targetTileRadius / previewTileRadius;
   const previewBoardWidth = Math.ceil(previewTileRadius * Math.sqrt(3) * (mission.cols + 0.5) * previewRenderScale);
   // Keep this in step with BattleEngine.boardSize, including vertical breathing room.
@@ -122,7 +131,7 @@ export function MapPreviewCanvas({
     // extensions like drawImageLit for sprite relighting that a plain 2d context doesn't have.
     let ctx: WebGL2DRenderer;
     try {
-      ctx = new WebGL2DRenderer(canvas);
+      ctx = groundRendererRef.current ?? (groundRendererRef.current = new WebGL2DRenderer(canvas));
     } catch {
       return;
     }
@@ -133,7 +142,7 @@ export function MapPreviewCanvas({
     let unitsCtx: WebGL2DRenderer | null = null;
     if (unitsCanvas) {
       try {
-        unitsCtx = new WebGL2DRenderer(unitsCanvas);
+        unitsCtx = unitsRendererRef.current ?? (unitsRendererRef.current = new WebGL2DRenderer(unitsCanvas));
       } catch {
         unitsCtx = null;
       }
@@ -177,10 +186,18 @@ export function MapPreviewCanvas({
     // Render that battle scene for procedural placements and architectural geometry.
     let pixelRenderer: ThreeBattleRenderer | null = null;
     const pixelPlacements = engine.elementalFxPlacements.filter((placement) => placement.family === "procedural_pixel" && placement.element);
-    const hasArchitecture = engine.decorations.some(p => !!DECORATIONS[p.id]?.model3d);
+    const hasArchitecture = architectureActive || engine.decorations.some(p => !!DECORATIONS[p.id]?.model3d);
     if (pixelFxCanvas && (pixelPlacements.length || hasArchitecture)) {
       try {
-        pixelRenderer = new ThreeBattleRenderer(pixelFxCanvas, engine);
+        const fxKey = JSON.stringify(pixelPlacements);
+        if (architectureRendererRef.current && rendererFxKeyRef.current !== fxKey) {
+          architectureRendererRef.current.dispose();
+          architectureRendererRef.current = null;
+        }
+        rendererFxKeyRef.current = fxKey;
+        pixelRenderer = architectureRendererRef.current ?? new ThreeBattleRenderer(pixelFxCanvas, engine);
+        pixelRenderer.setPreviewEngine(engine);
+        architectureRendererRef.current = pixelRenderer;
         engine.architectureRenderedInThree = true;
       } catch (error) {
         console.error("Procedural Pixel preview could not start", error);
@@ -213,14 +230,16 @@ export function MapPreviewCanvas({
       const dt = Math.min(0.08, Math.max(0, (now - lastFrame) / 1000));
       lastFrame = now;
       renderScaleRef.current = previewRenderScale;
-      canvas.width = Math.max(1, Math.floor(renderW * dpr));
-      canvas.height = Math.max(1, Math.floor(renderH * dpr));
+      const bufferW = Math.max(1, Math.floor(renderW * dpr));
+      const bufferH = Math.max(1, Math.floor(renderH * dpr));
+      if (canvas.width !== bufferW) canvas.width = bufferW;
+      if (canvas.height !== bufferH) canvas.height = bufferH;
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       ctx.setSize(canvas.width, canvas.height);
       if (unitsCanvas && unitsCtx) {
-        unitsCanvas.width = Math.max(1, Math.floor(renderW * dpr));
-        unitsCanvas.height = Math.max(1, Math.floor(renderH * dpr));
+        if (unitsCanvas.width !== bufferW) unitsCanvas.width = bufferW;
+        if (unitsCanvas.height !== bufferH) unitsCanvas.height = bufferH;
         unitsCanvas.style.width = `${w}px`;
         unitsCanvas.style.height = `${h}px`;
         unitsCtx.setSize(unitsCanvas.width, unitsCanvas.height);
@@ -270,8 +289,9 @@ export function MapPreviewCanvas({
       // Drawn on the units canvas (top layer) so the highlight stays visible over units too,
       // matching where it used to land back when everything shared one canvas.
       const highlightCtx = unitsCtx ?? ctx;
-      if (selectedPlacedDecoration) engine.drawDecorationHighlight(highlightCtx, selectedPlacedDecoration.id, selectedPlacedDecoration);
-      else if (selectedDecorationId) engine.drawDecorationHighlight(highlightCtx, selectedDecorationId);
+      const highlight = highlightRef.current;
+      if (highlight.selectedPlacedDecoration) engine.drawDecorationHighlight(highlightCtx, highlight.selectedPlacedDecoration.id, highlight.selectedPlacedDecoration);
+      else if (highlight.selectedDecorationId) engine.drawDecorationHighlight(highlightCtx, highlight.selectedDecorationId);
       if (pixelFxCanvas && pixelRenderer) {
         pixelFxCanvas.style.width = `${w}px`;
         pixelFxCanvas.style.height = `${h}px`;
@@ -304,12 +324,18 @@ export function MapPreviewCanvas({
     // them), so a small self-sustaining loop keeps their animation running; it's a no-op
     // draw() call once fx.hasEffects() goes false, and stops itself right after.
     let fxRaf = 0;
-    const animateFx = () => {
-      if (!fx?.hasEffects() && !(pixelRenderer && (pixelPlacements.length > 0 || hasArchitecture))) return;
-      draw();
+    let lastAnimatedFrame = 0;
+    const animateFx = (time: number) => {
+      if (!fx?.hasEffects() && !(pixelRenderer && pixelPlacements.length > 0)) return;
+      // Leave input processing room between expensive editor frames. Direct edits,
+      // selections and pan gestures still redraw immediately.
+      if (time - lastAnimatedFrame >= 1000 / 30) { draw(); lastAnimatedFrame = time; }
       fxRaf = requestAnimationFrame(animateFx);
     };
-    if (fx?.hasEffects() || (pixelRenderer && (pixelPlacements.length > 0 || hasArchitecture))) fxRaf = requestAnimationFrame(animateFx);
+    if (fx?.hasEffects() || (pixelRenderer && pixelPlacements.length > 0)) fxRaf = requestAnimationFrame(animateFx);
+    // A texture can arrive after the first static editor draw. Refresh once loaded
+    // instead of paying for a permanent full-scene render loop on a wall-only map.
+    const textureRefresh = window.setTimeout(draw, 1200);
     if (!verticalScrollInitializedRef.current) {
       requestAnimationFrame(() => {
         const centeredTop = Math.round(Math.max(0, viewport.scrollHeight - viewport.clientHeight) / 2);
@@ -325,9 +351,9 @@ export function MapPreviewCanvas({
     ro.observe(viewport);
     return () => {
       ro.disconnect();
+      window.clearTimeout(textureRefresh);
       if (fxRaf) cancelAnimationFrame(fxRaf);
       fx?.dispose();
-      pixelRenderer?.dispose();
       const camera = engine.cameraPosition();
       const scale = renderScaleRef.current;
       cameraRef.current = {
@@ -340,11 +366,19 @@ export function MapPreviewCanvas({
       if (engineRef.current === engine) engineRef.current = null;
       if (redrawRef.current === draw) redrawRef.current = null;
     };
-  }, [mission, art, selectedDecorationId, selectedPlacedDecoration, zoom]);
+  }, [mission, art, zoom, architectureActive]);
+
+  useEffect(() => () => {
+    architectureRendererRef.current?.dispose();
+    architectureRendererRef.current = null;
+  }, []);
+
+  useEffect(() => { redrawRef.current?.(); }, [selectedDecorationId, selectedPlacedDecoration]);
 
   useEffect(() => {
     const deleteHeldUnit = (event: KeyboardEvent) => {
       if (event.key !== "Delete") return;
+      if ((event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable=true]")) return;
       const held = unitDragRef.current;
       if (!held) return;
       event.preventDefault();
@@ -354,8 +388,8 @@ export function MapPreviewCanvas({
       unitDragRef.current = null;
       setIsDragging(false);
     };
-    window.addEventListener("keydown", deleteHeldUnit);
-    return () => window.removeEventListener("keydown", deleteHeldUnit);
+    window.addEventListener("keydown", deleteHeldUnit, true);
+    return () => window.removeEventListener("keydown", deleteHeldUnit, true);
   }, [onHeldUnitDelete]);
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -375,11 +409,12 @@ export function MapPreviewCanvas({
     // Units are deliberately picked up with the secondary button. The primary button stays
     // available for the map itself: a held left-drag pans, while an ordinary left click uses
     // the active paint brush.
-    if (event.button === 2) {
+    if (event.button === 2 || (event.button === 0 && primaryObjectDrag)) {
       event.preventDefault();
       const canvas = canvasRef.current;
       const engine = engineRef.current;
       if (!canvas || !engine) return;
+      viewport.focus({ preventScroll: true });
       const rect = canvas.getBoundingClientRect();
       const scale = renderScaleRef.current;
       const px = (event.clientX - rect.left) / scale;
@@ -400,9 +435,20 @@ export function MapPreviewCanvas({
         setIsDragging(true);
         return;
       }
-      const decoration = cell ? decorationAt(cell.x, cell.y) : null;
+      const architecture = architectureRendererRef.current?.pickArchitecture(px, py, canvas.clientWidth / scale, canvas.clientHeight / scale);
+      const decoration = architecture ?? (cell ? decorationAt(cell.x, cell.y) : null);
+      if (event.button === 0 && decoration &&
+          DECORATIONS[highlightRef.current.selectedDecorationId ?? ""]?.model3d &&
+          DECORATIONS[decoration.id]?.model3d &&
+          highlightRef.current.selectedDecorationId !== decoration.id) {
+        // Painting a door onto a wall replaces its module at the wall's anchor.
+        // Picking the wall here would otherwise change the brush before placement.
+        onCellClickRef.current?.(decoration.x, decoration.y);
+        return;
+      }
       if (decoration) {
-        decorationDragRef.current = { pointerId: event.pointerId, decoration };
+        unitDragRef.current = null;
+        decorationDragRef.current = { pointerId: event.pointerId, decoration, startX: event.clientX, startY: event.clientY, moved: false };
         viewport.setPointerCapture(event.pointerId);
         onDecorationSelect?.(decoration);
         setIsDragging(true);
@@ -410,7 +456,7 @@ export function MapPreviewCanvas({
       }
       // Right-clicking empty ground is intentionally inert: map panning belongs to the
       // primary-button hold gesture below, so it never competes with moving a unit.
-      return;
+      if (event.button === 2) return;
     }
     if (event.button !== 0) return;
     dragRef.current = {
@@ -465,7 +511,10 @@ export function MapPreviewCanvas({
       return;
     }
     const decorationDrag = decorationDragRef.current;
-    if (decorationDrag?.pointerId === event.pointerId) return;
+    if (decorationDrag?.pointerId === event.pointerId) {
+      if (Math.hypot(event.clientX - decorationDrag.startX, event.clientY - decorationDrag.startY) >= 6) decorationDrag.moved = true;
+      return;
+    }
     const viewport = viewportRef.current;
     const drag = dragRef.current;
     if (!viewport || !drag || drag.pointerId !== event.pointerId) return;
@@ -531,7 +580,7 @@ export function MapPreviewCanvas({
     }
     const decorationDrag = decorationDragRef.current;
     if (decorationDrag?.pointerId === event.pointerId) {
-      if (!cancelled) {
+      if (!cancelled && decorationDrag.moved) {
         const canvas = canvasRef.current;
         const engine = engineRef.current;
         if (canvas && engine) {
@@ -615,13 +664,19 @@ export function MapPreviewCanvas({
       </div>
       <div
         ref={viewportRef}
+        tabIndex={0}
         className="h-full w-full bg-black ember-scrollbar overflow-x-auto overflow-y-scroll cursor-default"
-        style={{ scrollbarGutter: "stable both-edges" }}
+        style={{
+          scrollbarGutter: "stable both-edges",
+          cursor: isDragging || isPanning
+            ? "url('/game/cursors/medieval-gauntlet-grab-small.svg') 13 13, grabbing"
+            : undefined,
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={(event) => endDrag(event, true)}
-        onLostPointerCapture={(event) => endDrag(event, true)}
+        onLostPointerCapture={(event) => { if (event.buttons !== 0) endDrag(event, true); }}
         onPointerLeave={() => setHoverTile(null)}
         onContextMenu={(event) => event.preventDefault()}
         onScroll={onViewportScroll}

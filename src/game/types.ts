@@ -320,9 +320,13 @@ export type WinCondition = "rout" | "boss" | "escape";
  * impassable and blocks line of sight, independent of whatever terrain tile is under it. */
 export interface DecorationDef {
   /** Architecture meshes live in the editor's separate 3D Walls palette. */
-  model3d?: "wall" | "doorway" | "door";
+  model3d?: "wall" | "doorway" | "door" | "secretDoor";
+  /** Paired open/closed architecture variant, used to retain a door's appearance on opening. */
+  doorStyle?: "oak" | "reinforced" | "secretStone";
   /** Repeating albedo material for architecture; lighting remains real time. */
   wallTexture?: string;
+  /** Extra masonry depth multiplier; defaults to the standard thin wall profile. */
+  wallThicknessScale?: number;
   id: string;
   name: string;
   /** Hex offsets from the anchor cell (dx/dy in board coordinates, same convention as
