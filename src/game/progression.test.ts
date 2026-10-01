@@ -56,6 +56,26 @@ test("a mission with only an unlock rule is visible (revealed) until unlocked", 
   assert.equal(missionAccess("m", base({ chapter: 2 }), {}, false, gates), "available");
 });
 
+test("Cemetery and Watchtower campaigns require their offered quests to be accepted", () => {
+  const cases = [
+    ["cemiterio-esquecidos", "brue-birolho"],
+    ["watchtower-gate-floor", "suspeito-watchtower-captive"],
+  ] as const;
+  for (const [missionId, questId] of cases) {
+    assert.equal(missionAccess(missionId, base()), "hidden", `${missionId} stays hidden before its quest is discovered`);
+    assert.equal(
+      missionAccess(missionId, base({ questsDiscovered: [questId] })),
+      "revealed",
+      `${missionId} is visible but locked after the quest is offered`,
+    );
+    assert.equal(
+      missionAccess(missionId, base({ questsActive: [questId] })),
+      "available",
+      `${missionId} opens when its quest is accepted`,
+    );
+  }
+});
+
 test("chapters: explicit, and via effects; never goes backwards", () => {
   assert.equal(currentChapter(base()), 1);
   assert.equal(currentChapter(base({ chapter: 3 })), 3);

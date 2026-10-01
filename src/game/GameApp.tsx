@@ -1348,6 +1348,10 @@ export function GameApp() {
 
   const openMission = (id: string) => {
     bootAudio();
+    if (!testMode && isGatedMission(id)) {
+      const rec = readMapSave();
+      if (missionAccess(id, rec, progressionExtras(rec)) !== "available") return;
+    }
     const wispForest = campaignLocations.find((location) => location.id === "wisp-forest");
     const enteringWispForest = Boolean(
       wispForest &&
@@ -1839,8 +1843,9 @@ export function GameApp() {
 
       {screen === "campaign" && (
         <CampaignScreen
-          missions={campaignMissions}
+          missions={campaignMissions.filter((mission) => testMode || missionAccessFor(mission.id) !== "hidden")}
           locations={campaignLocations}
+          missionAccessFor={missionAccessFor}
           completed={save.completed}
           test={testMode}
           ember={testMode ? testEmber : (save.ember ?? 0)}
@@ -7121,6 +7126,7 @@ function MapEditorScreen({
 function CampaignScreen({
   missions = ALL_MISSIONS,
   locations = ALL_LOCATIONS,
+  missionAccessFor,
   completed,
   test,
   ember,
@@ -7129,6 +7135,7 @@ function CampaignScreen({
 }: {
   missions?: Mission[];
   locations?: WorldLocation[];
+  missionAccessFor?: MissionAccessFn;
   completed: string[];
   test: boolean;
   ember: number;
@@ -7149,7 +7156,7 @@ function CampaignScreen({
       </header>
       <ol className="flex-1 min-h-0 overflow-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col gap-2">
         {missions.map((m, campaignNumber) => {
-          const lock = lockedMission(m.id, completed, test, locations, missions.map((mission) => mission.id));
+          const lock = lockedMission(m.id, completed, test, locations, missions.map((mission) => mission.id), missionAccessFor);
           const done = completed.includes(m.id);
           const openInn = !!m.hub && !lock;
           return (

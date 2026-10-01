@@ -5,6 +5,15 @@
     { "id": 2, "name": "Capítulo 2" },
     { "id": 3, "name": "Capítulo 3" }
   ],
-  "missionGates": {},
+  "missionGates": {
+    "cemiterio-esquecidos": {
+      "visible": { "questDiscovered": "brue-birolho" },
+      "unlock": { "questActive": "brue-birolho" }
+    },
+    "watchtower-gate-floor": {
+      "visible": { "questDiscovered": "suspeito-watchtower-captive" },
+      "unlock": { "questActive": "suspeito-watchtower-captive" }
+    }
+  },
   "triggers": []
 }
