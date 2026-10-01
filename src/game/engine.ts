@@ -8331,14 +8331,14 @@ export class BattleEngine {
    * painted backdrop (thebridge-bg.jpg) needs more room to actually show above and below
    * the board than the default margin leaves. */
   private cameraMargin(tile: number): { x: number; y: number } {
-    // A centered unit may be near the board edge; allow half a viewport of camera travel
+    // A centered unit may be near the board edge; allow a quarter viewport of camera travel
     // beyond every edge so the party can still stay in the exact screen center there. The
     // editor preview opts into a small fixed rim instead: a half-viewport overscroll exposes
     // a huge black strip when a map's starting party is close to its edge.
     const previewMargin = this.previewPanMarginRadii > 0 ? this.previewPanMarginRadii * tile : null;
     return {
-      x: previewMargin ?? Math.max(this.viewW / 2, 0),
-      y: previewMargin ?? Math.max(tile * (this.mission.id === "thebridge" ? 4.5 : 3), this.viewH / 2),
+      x: previewMargin ?? Math.max(this.viewW / 4, 0),
+      y: previewMargin ?? Math.max(tile * (this.mission.id === "thebridge" ? 2.25 : 1.5), this.viewH / 4),
     };
   }
 
