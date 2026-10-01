@@ -1204,6 +1204,8 @@ export class BattleEngine {
   /** The waypoint a player unit is standing on, set alongside winAvailable by evaluateEnd.
    * The HUD and result screen use it to select the correct action and destination. */
   activeExit: DecorationPlacement | null = null;
+  /** Recheck after each player movement settles, regardless of the mission's win condition. */
+  private waypointCheckPending = false;
   banner: string | null = null;
   /** Ember found in chests opened mid-battle; folded into the save's Ember total on victory. */
   lootEmber = 0;
@@ -1879,6 +1881,7 @@ export class BattleEngine {
     }));
     this.log = [...snap.log];
     this.winAvailable = snap.winAvailable;
+    this.waypointCheckPending = true;
     this.chestLoot = snap.chestLoot
       ? { unitName: snap.chestLoot.unitName, ember: snap.chestLoot.ember, items: snap.chestLoot.items.map((i) => ({ ...i })) }
       : null;
@@ -1942,11 +1945,12 @@ export class BattleEngine {
       this.onNextIdle = null;
       fn();
     }
-    // Transversal Dungeon exit hexes have no death/damage event to hang evaluateEnd off of
-    // (see the rout/boss call sites elsewhere) — position is all that matters, so it's
-    // rechecked once the engine is fully idle/settled, same guard as onNextIdle above, rather
-    // than threaded into the move-animation stepper (movement timing stays untouched).
-    if (this.mission.win === "escape" && !this.active && this.queue.length === 0) this.evaluateEnd();
+    // Waypoints are position-driven, so recheck once a player movement sequence is fully
+    // settled. This covers rout/boss maps as well as the transversal dungeon's escape maps.
+    if (this.waypointCheckPending && !this.active && this.queue.length === 0) {
+      this.waypointCheckPending = false;
+      this.evaluateEnd();
+    }
     if (this.trauma > 0) this.trauma = Math.max(0, this.trauma - cap * 2.2);
     for (const u of this.units) {
       if (u.flash > 0) u.flash = Math.max(0, u.flash - cap * 4);
@@ -2139,11 +2143,11 @@ export class BattleEngine {
         u.sprite !== "mordavian-wolf" &&
         u.sprite !== "mordavian-wolf-final" &&
         u.sprite !== "wardog2" &&
+        u.sprite !== "RoccoTheBird" &&
         u.sprite !== "neera")
     )
       return;
     if (x > u.x) u.facing = 1;
-        u.sprite !== "RoccoTheBird" &&
     else if (x < u.x) u.facing = -1;
   }
 
@@ -2442,6 +2446,7 @@ export class BattleEngine {
         unit.y = to.y;
         unit.drawX = to.x;
         unit.drawY = to.y;
+        if (unit.side === "player") this.waypointCheckPending = true;
         this.ensureVisible(unit.x, unit.y);
         // Walking can change the world — a troll shoulders a barricade down, a hazard tile
         // bites. Either one makes the move unrewindable: undoMove can put a unit back, it
@@ -4051,10 +4056,11 @@ export class BattleEngine {
   private evaluateEnd(): void {
     if (this.result) return;
     this.collectQuestPickups();
-    // A free-roam map has nothing to win or lose; the player leaves it through the HUD.
+    const exitHit = this.exitDecorationHere();
+    // Free-roam maps have no normal win/lose condition, but authored waypoints stay usable.
     if (this.mission.explore) {
-      this.winAvailable = false;
-      this.activeExit = null;
+      this.winAvailable = !!exitHit;
+      this.activeExit = exitHit;
       return;
     }
     const p = this.units.some((u) => u.side === "player" && u.alive && !u.summoned);
@@ -4063,7 +4069,6 @@ export class BattleEngine {
     // A placed waypoint is usable on every mission. Escape markers request a 60% escape
     // attempt when confirmed; dungeon exits and floor connectors end the mission directly.
     // Without this, the markers on ordinary rout maps were silently ignored.
-    const exitHit = this.exitDecorationHere();
     const won = !!exitHit || (this.mission.win === "boss" ? !bossAlive : this.mission.win === "escape" ? false : !anyEnemy);
     // Victory doesn't end the battle by itself anymore — it just makes ending it an option
     // (see winAvailable/confirmFinish) so the player can keep taking normal turns to loot
@@ -4087,13 +4092,19 @@ export class BattleEngine {
     return null;
   }
 
+  private exitUnitHere(exit: DecorationPlacement): Unit | null {
+    const cells = placedFootprint(exit);
+    return this.units.find((unit) =>
+      unit.side === "player" && unit.alive && cells.some((cell) => exit.x + cell.dx === unit.x && exit.y + cell.dy === unit.y),
+    ) ?? null;
+  }
+
   /** Confirms the currently offered mission exit. Escape waypoints keep their explicit 60%
    * chance; on failure the active hero loses their turn and the encounter continues. */
   canConfirmFinish(): boolean {
     if (!this.winAvailable || this.result) return false;
     if (this.activeExit && DECORATIONS[this.activeExit.id]?.exitKind === "escape") {
-      const u = this.activeTurnUnit();
-      return !!u && placedFootprint(this.activeExit).some((f) => this.activeExit!.x + f.dx === u.x && this.activeExit!.y + f.dy === u.y);
+      return !!this.exitUnitHere(this.activeExit);
     }
     return true;
   }
@@ -4101,7 +4112,7 @@ export class BattleEngine {
   confirmFinish(): void {
     if (!this.canConfirmFinish()) return;
     if (this.activeExit && DECORATIONS[this.activeExit.id]?.exitKind === "escape") {
-      const u = this.activeTurnUnit();
+      const u = this.exitUnitHere(this.activeExit);
       if (!u) return;
       if (this.rng() < 0.6) {
         this.tip = `${u.name} encontrou uma saída! O grupo foge do combate.`;

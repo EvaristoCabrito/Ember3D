@@ -1660,6 +1660,11 @@
         "returnConnector": true
       },
       {
+        "id": "dungeon-exit",
+        "x": 12,
+        "y": 2
+      },
+      {
         "id": "city-stone-banner-wall",
         "x": 9,
         "y": 3,

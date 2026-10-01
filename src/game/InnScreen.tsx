@@ -213,6 +213,8 @@ export function InnScreen({
       ALL_HERO_NAMES.filter((name) => test || heroRecruited(name, save.completed, save.flags)),
     [test, save.completed, save.flags],
   );
+  const mealTargets = partyRoster.filter((name) => fullness(save.heroHunger[name]) < 120 && (save.unitHp[name] ?? 1) > 0);
+  const mealAllCost = mealTargets.length * INN_MEAL_PRICE;
 
   const total = useMemo(
     () => POTION_ORDER.reduce((n, kind) => n + cart[kind] * POTION_PRICE[kind], 0) + lockpickQty * LOCKPICK_PRICE,
@@ -510,21 +512,24 @@ export function InnScreen({
                   <Button
                     className="flex-1 ember-btn ember-btn-sm ember-btn-ghost"
                     variant="quiet"
-                    disabled={ember < INN_MEAL_PRICE || !partyRoster.some((name) => fullness(save.heroHunger[name]) < 120 && (save.unitHp[name] ?? 1) > 0)}
+                    disabled={mealTargets.length === 0 || ember < INN_MEAL_PRICE}
                     onClick={() => {
                       const fed = onBuyMealAll(partyRoster);
                       setNote(
                         fed === 0
                           ? "Ninguém comeu. Falta Gold ou já estão satisfeitos."
-                          : fed === partyRoster.length
+                          : fed === mealTargets.length
                             ? "Todos comeram. Saciedade: 120%."
-                            : `${fed} comeram · Gold não deu pros demais.`,
+                            : `${fed} comeram por ${fed * INN_MEAL_PRICE} Gold · Gold não deu pros demais.`,
                       );
                     }}
                   >
-                    Todos · {INN_MEAL_PRICE} Gold cada
+                    Todos · {mealAllCost} Gold
                   </Button>
                 </div>
+                <p className="text-xs text-muted tabular-nums">
+                  Prévia: {mealTargets.length} {mealTargets.length === 1 ? "pessoa" : "pessoas"} podem comer · total {mealAllCost} Gold
+                </p>
               </div>
               {POTION_ORDER.map((kind) => {
                 const price = POTION_PRICE[kind];
