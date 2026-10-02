@@ -3645,6 +3645,7 @@ function missionToDraft(m: Mission): MapDraft {
     tileVariants: Array.from({ length: n }, (_, i) => variants[i] ?? 0),
     terrainElevations: m.terrainElevations?.slice(),
     waterLevels: m.waterLevels?.slice(),
+    waterVersion: m.waterVersion,
     waterPatches: m.waterPatches?.map(p => ({ ...p })),
     waterFootprints: m.waterFootprints?.map(p => p ? { ...p } : null),
     baseTile: m.baseTile,
@@ -6060,6 +6061,7 @@ export function MapEditorScreen({
         {mode === "water" && <div className="flex flex-wrap items-center gap-2 text-xs">
           <Button size="sm" variant={!waterErase ? "primary" : "ghost"} onClick={() => setWaterErase(false)}>Pintar água</Button>
           <Button size="sm" variant={waterErase ? "primary" : "ghost"} onClick={() => setWaterErase(true)}>Remover água</Button>
+          <label>Versão <select aria-label="Versão da água" value={draft.waterVersion ?? "v2"} onChange={e => setDraft(d => ({ ...d, waterVersion: e.target.value as "v1" | "v2" | "v3" }))} className="bg-bg border border-border rounded px-1 py-1"><option value="v1">Água V1 — clássica</option><option value="v2">Água V2 — lago realista</option><option value="v3">3D Water V3</option></select></label>
           <label>Formato <select aria-label="Formato do pincel de água" value={waterShape} onChange={e => setWaterShape(e.target.value as "round" | "square")} className="bg-bg border border-border rounded px-1 py-1"><option value="round">Redondo</option><option value="square">Quadrado</option></select></label>
           <label>Tamanho <select aria-label="Tamanho do pincel de água" value={waterSize} onChange={e => setWaterSize(Number(e.target.value))} className="bg-bg border border-border rounded px-1 py-1">{[0.25, 0.5, 0.75, 1].map(size => <option key={size} value={size}>{size * 100}%</option>)}</select></label>
           <label>Nível <input aria-label="Nível da água" type="number" min={0} max={12} step={0.25} value={waterLevel} onChange={e => setWaterLevel(Math.max(0, Math.min(12, Number(e.target.value) || 0)))} className="w-16 bg-bg border border-border rounded px-1 py-1" /></label>

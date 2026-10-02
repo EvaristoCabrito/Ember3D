@@ -1249,6 +1249,7 @@ export class ThreeBattleRenderer {
       this.water.rebuild(engine.cols, engine.rows, tile, engine.mission.waterLevels ?? [], (col, row) =>
         tileAt(engine.tiles, engine.cols, col, row) !== "void" && (!engine.fogged || engine.explored(col, row) || engine.visible(col, row)),
         (x, y) => this.landscape?.heightAt(x, y) ?? 0, engine.mission.waterFootprints, engine.mission.waterPatches);
+    this.water.setVersion(engine.mission.waterVersion ?? "v2");
       this.scene.add(this.water.mesh);
       this.waterKey = key;
     }

@@ -566,6 +566,7 @@ export interface Mission {
   /** Free-position water strokes in tile-normalized world coordinates (Y down). */
   waterPatches?: { x: number; y: number; level: number; size: number; shape: "round" | "square" }[];
   /** Water footprint size and shape per cell; absent means the original full round brush. */
+  waterVersion?: "v1" | "v2" | "v3";
   waterFootprints?: ({ size: number; shape: "round" | "square" } | null)[];
   /** Default ground chosen in the map editor. Terrain-changing decorations restore this tile when removed. */
   baseTile?: TerrainId;

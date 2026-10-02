@@ -108,6 +108,7 @@ export interface MapDraft {
   /** Independent 3D water surface levels. Null cells have no authored water. */
   waterLevels?: (number | null)[];
   /** Free-position water strokes in tile-normalized world coordinates (Y down). */
+  waterVersion?: "v1" | "v2" | "v3";
   waterPatches?: { x: number; y: number; level: number; size: number; shape: "round" | "square" }[];
   /** Water footprint size and shape per cell; absent means the original full round brush. */
   waterFootprints?: ({ size: number; shape: "round" | "square" } | null)[];
@@ -218,6 +219,7 @@ export function draftToMission(d: MapDraft): Mission {
     layout,
     tileVariants: d.tileVariants.some((v) => v) ? d.tileVariants : undefined,
     terrainElevations: d.terrainElevations,
+    waterVersion: d.waterVersion,
     waterLevels: d.waterLevels?.slice(),
     waterPatches: d.waterPatches?.map(p => ({ ...p })),
     waterFootprints: d.waterFootprints?.map(p => p ? { ...p } : null),

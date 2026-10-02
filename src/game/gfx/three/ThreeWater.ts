@@ -45,18 +45,26 @@ export function sampleWaterPatches(x: number, y: number, patches: readonly Water
   return { coverage, level: total ? weighted/total : 0 };
 }
 
+/** 3D Water V3 texture scale: below 1 stretches one tile over more of the board. */
+const V3_TEXTURE_REPEAT = 0.5;
+
 export class ThreeWater {
   readonly time = { value: 0 };
   readonly flat = { value: 0 };
+  private version: "v1" | "v2" | "v3" | undefined;
+  private modern = { value: 1 };
+  private textureSets = new Map<string, THREE.Texture[]>();
   private scale = { value: 1 };
-  private material = new THREE.MeshStandardMaterial({ color: 0x278d9e, roughness: 0.6, metalness: 0,
-    transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false });
+  private material = new THREE.MeshStandardMaterial({ color: 0xc5d9db, roughness: 0.6, metalness: 0,
+    transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false });
   readonly mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.material);
 
   constructor() {
+    this.setVersion("v2");
     this.mesh.receiveShadow = true;
     this.material.onBeforeCompile = shader => {
       shader.uniforms.waterTime = this.time;
+      shader.uniforms.waterModern = this.modern;
       shader.uniforms.waterScale = this.scale;
       shader.uniforms.waterFlat = this.flat;
       shader.vertexShader = `uniform float waterTime; uniform float waterScale; uniform float waterFlat;
@@ -79,7 +87,7 @@ export class ThreeWater {
         transformed.z = mix(transformed.z, 0.8, waterFlat);
         vWaterCoverage = coverage; vWaterDepth = waterDepth; vWaterPoint = p;`);
       shader.fragmentShader = `varying float vWaterCoverage; varying float vWaterDepth; varying vec2 vWaterPoint;
-        uniform float waterTime;
+        uniform float waterTime; uniform float waterModern; uniform float waterFlat;
         float waterHash(vec2 p) {
           return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
         }
@@ -94,6 +102,20 @@ export class ThreeWater {
             + waterNoise(p * 4.11 + 7.2) * 0.14;
         }
         ${shader.fragmentShader}`;
+      // Two slow, crossing normal layers avoid a static painted appearance.
+      shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_maps>", `
+        #ifdef USE_NORMALMAP_TANGENTSPACE
+          vec2 flow = vec2(waterTime * 0.009, waterTime * 0.004) * waterModern;
+          vec3 rippleA = texture2D(normalMap, vNormalMapUv + flow).xyz * 2.0 - 1.0;
+          vec3 rippleB = texture2D(normalMap, vNormalMapUv * 1.73 - flow * 0.65).xyz * 2.0 - 1.0;
+          vec3 mapN = normalize(vec3((rippleA.xy + rippleB.xy * 0.38 * waterModern) * normalScale, rippleA.z));
+          normal = normalize(tbn * mapN);
+        #endif`);
+      shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", `
+        #ifdef USE_MAP
+          vec2 colorFlow = vec2(waterTime * 0.009, waterTime * 0.004) * waterModern;
+          diffuseColor *= texture2D(map, vMapUv + colorFlow);
+        #endif`);
       shader.fragmentShader = shader.fragmentShader.replace("#include <color_fragment>", `
         #include <color_fragment>
         if (vWaterCoverage < 0.05) discard;
@@ -108,19 +130,60 @@ export class ThreeWater {
         float crest = smoothstep(0.76 - aa, 0.96 + aa, wave);
         float broken = smoothstep(0.35, 0.7, waterCloud(vWaterPoint * 3.7 - drift + 51.0));
         float crossWave = sin(dot(vWaterPoint, vec2(-6.0, 15.0)) + warp.y * 5.0 - waterTime * 0.5);
-        diffuseColor.rgb *= 0.74 + 0.4 * cloud + 0.08 * detail;
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.20, 0.48, 0.49), crest * broken * 0.24);
-        diffuseColor.rgb += vec3(0.018, 0.027, 0.025) * max(0.0, crossWave) * broken;
+        diffuseColor.rgb *= mix(0.74 + 0.4 * cloud + 0.08 * detail, 0.92 + 0.13 * cloud + 0.035 * detail, waterModern);
+        diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.20, 0.48, 0.49), vec3(0.09, 0.17, 0.20), waterModern), crest * broken * mix(0.24, 0.08, waterModern));
+        diffuseColor.rgb += mix(vec3(0.018, 0.027, 0.025), vec3(0.003, 0.005, 0.007), waterModern) * max(0.0, crossWave) * broken;
         float shore = 1.0 - smoothstep(0.015, 0.16, vWaterDepth);
-        float foam = shore * (0.035 + 0.09 * crest * broken);
+        float foam = shore * (mix(0.035 + 0.09 * crest * broken, 0.015 + 0.045 * crest * broken, waterModern));
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.53, 0.67, 0.62), foam);
         diffuseColor.a *= smoothstep(0.05, 0.55, vWaterCoverage);`);
+      // Texture roughness multiplies the base value; keep tactical water from becoming mirror-like.
+      shader.fragmentShader = shader.fragmentShader.replace("#include <roughnessmap_fragment>", `
+        #include <roughnessmap_fragment>
+        roughnessFactor = max(roughnessFactor, mix(0.68, 0.4, waterFlat));`);
       // Keep water in the game's muted palette even under strong sun and full-scene bloom.
       shader.fragmentShader = shader.fragmentShader.replace("#include <opaque_fragment>", `
+        // Suppress the white sun hotspot in the tactical camera, keeping diffuse ripple detail.
+        outgoingLight = totalDiffuse + totalSpecular * mix(vec3(0.035, 0.055, 0.065), vec3(1.0), waterFlat) + totalEmissiveRadiance;
+        // Soft sky tint follows the animated normal, with stronger reflection at grazing angles.
+        float waterFacing = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+        float waterFresnel = 0.02 + 0.30 * pow(1.0 - waterFacing, 4.0);
+        vec3 waterSky = mix(vec3(0.035, 0.065, 0.08), vec3(0.22, 0.29, 0.33), smoothstep(-0.3, 0.8, normal.y));
+        outgoingLight = mix(outgoingLight, waterSky, waterFresnel * waterModern);
         float waterPeak = max(max(outgoingLight.r, outgoingLight.g), outgoingLight.b);
         outgoingLight *= 0.7 / (0.7 + waterPeak);
         #include <opaque_fragment>`);
     };
+  }
+
+  setVersion(version: "v1" | "v2" | "v3"): void {
+    if (this.version === version) return;
+    let textures = this.textureSets.get(version);
+    if (!textures) {
+      const loader = new THREE.TextureLoader();
+      const directory = version === "v1" ? "water" : version === "v3" ? "water-v3" : "water-v2";
+      textures = ["color", "normal", "roughness"].map(kind => loader.load(`/game/textures/${directory}/water-${kind}.png`));
+      textures[0]!.colorSpace = THREE.SRGBColorSpace;
+      for (const texture of textures) {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        texture.anisotropy = 8;
+        // V3's maps are a 2048px FFT ocean tile; spread it wider so wavelets read at hex scale.
+        if (version === "v3") texture.repeat.setScalar(V3_TEXTURE_REPEAT);
+      }
+      this.textureSets.set(version, textures);
+    }
+    this.material.map = textures[0]!;
+    this.material.normalMap = textures[1]!;
+    this.material.roughnessMap = textures[2]!;
+    const modern = version !== "v1";
+    const v3 = version === "v3";
+    this.material.color.setHex(v3 ? 0xffffff : modern ? 0xc5d9db : 0x278d9e);
+    this.material.opacity = v3 ? 0.94 : modern ? 0.92 : 0.8;
+    this.material.normalScale.setScalar(v3 ? 0.9 : modern ? 0.72 : 0.48);
+    this.material.roughness = v3 ? 0.9 : modern ? 0.85 : 0.42;
+    this.modern.value = modern ? 1 : 0;
+    this.version = version;
+    this.material.needsUpdate = true;
   }
 
   rebuild(cols: number, rows: number, tile: number, levels: readonly (number | null)[], allowed: (col: number, row: number) => boolean,
@@ -130,7 +193,7 @@ export class ThreeWater {
       this.mesh.geometry.dispose(); this.mesh.geometry = new THREE.BufferGeometry();
       return;
     }
-    const positions: number[] = [], coverage: number[] = [], depths: number[] = [], indices: number[] = [];
+    const positions: number[] = [], uvs: number[] = [], coverage: number[] = [], depths: number[] = [], indices: number[] = [];
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
       const level = levels[row * cols + col];
@@ -169,6 +232,8 @@ export class ThreeWater {
       const valid = bc >= 0 && br >= 0 && bc < cols && br < rows && allowed(bc, br);
       const z = (sample.level * 0.65 + 0.035) * tile;
       positions.push(x * tile, -y * tile, z);
+      // A texture repeat spans four world tiles; brush edges sample continuously.
+      uvs.push(x * 0.25, -y * 0.25);
       coverage.push(valid ? sample.coverage : 0);
       depths.push(Math.max(0, (z - ground(x * tile, -y * tile)) / tile));
     }
@@ -178,6 +243,7 @@ export class ThreeWater {
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setAttribute("coverage", new THREE.Float32BufferAttribute(coverage, 1));
     geometry.setAttribute("waterDepth", new THREE.Float32BufferAttribute(depths, 1));
     geometry.setIndex(indices); geometry.computeVertexNormals(); geometry.computeBoundingSphere();
@@ -185,5 +251,10 @@ export class ThreeWater {
     this.mesh.geometry.dispose(); this.mesh.geometry = geometry;
   }
 
-  dispose(): void { this.mesh.removeFromParent(); this.mesh.geometry.dispose(); this.material.dispose(); }
+  dispose(): void {
+    this.mesh.removeFromParent(); this.mesh.geometry.dispose();
+    for (const textures of this.textureSets.values()) for (const texture of textures) texture.dispose();
+    this.textureSets.clear();
+    this.material.dispose();
+  }
 }
