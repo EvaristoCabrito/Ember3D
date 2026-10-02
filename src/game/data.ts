@@ -440,6 +440,11 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "rocks-3d-outcrop": { id: "rocks-3d-outcrop", name: "Afloramento rochoso realista 3D", footprint: DECO_PAIR, model3d: "prop", propModel: "rocky-outcrop" },
   "tree-3d-broadleaf": { id: "tree-3d-broadleaf", name: "Árvore realista 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "tree", treeModel: "broadleaf" },
   "tree-3d-snowy-pine": { id: "tree-3d-snowy-pine", name: "Pinheiro nevado 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "tree", treeModel: "snowy-pine" },
+  // Wisp Forest dead trees in 3D (assets/blender/create_dead_trees.py), matching the 2D
+  // wilds-dead-oak, dead-tree and wilds-twisted-tree art; same height as the other 3D trees.
+  "tree-3d-dead-oak": { id: "tree-3d-dead-oak", name: "Carvalho morto 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "tree", treeModel: "dead-oak" },
+  "tree-3d-dead-snag": { id: "tree-3d-dead-snag", name: "Árvore morta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "tree", treeModel: "dead-snag" },
+  "tree-3d-twisted-stump": { id: "tree-3d-twisted-stump", name: "Árvore retorcida 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "tree", treeModel: "twisted-stump" },
   "rock-3d-layered": { id: "rock-3d-layered", name: "Rochas — parede estratificada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", rockStyle: "layered", heightScale: 0.55, wallTexture: "/game/textures/walls/rock-formation.jpg" },
   "rock-3d-arch": { id: "rock-3d-arch", name: "Rochas — arco natural 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", rockStyle: "arch", wallTexture: "/game/textures/walls/rock-formation.jpg" },
   "rock-3d-broken": { id: "rock-3d-broken", name: "Rochas — parede desmoronada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", rockStyle: "broken", heightScale: 0.75, wallTexture: "/game/textures/walls/rock-formation.jpg" },

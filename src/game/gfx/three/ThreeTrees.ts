@@ -9,7 +9,7 @@ export class ThreeTrees {
   private disposed = false;
   revision = 0;
 
-  create(kind: "broadleaf" | "snowy-pine", tile: number): THREE.Mesh | null {
+  create(kind: "broadleaf" | "snowy-pine" | "dead-oak" | "dead-snag" | "twisted-stump", tile: number): THREE.Mesh | null {
     const template = this.templates.get(kind);
     if (!template) {
       if (!this.loading.has(kind)) {

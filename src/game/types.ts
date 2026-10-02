@@ -330,7 +330,7 @@ export interface DecorationDef {
   dungeonReference?: boolean;
   templeStyle?: "plain" | "niche" | "relief";
   propModel?: "small-house" | "rocky-outcrop";
-  treeModel?: "broadleaf" | "snowy-pine";
+  treeModel?: "broadleaf" | "snowy-pine" | "dead-oak" | "dead-snag" | "twisted-stump";
   rockStyle?: "layered" | "arch" | "broken";
   /** Repeating albedo material for architecture; lighting remains real time. */
   wallTexture?: string;
