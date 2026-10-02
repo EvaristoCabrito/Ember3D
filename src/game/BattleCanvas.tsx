@@ -330,12 +330,14 @@ export function BattleCanvas({
           !!rendererThree && !drawDecorationsOverFx,
           !!rendererThree,
           !!rendererThree,
+          !!rendererThree && engine.tacticsCamera,
         );
       }
       if (unitHudCanvas && unitHudContext) {
         unitHudContext.setTransform(dpr, 0, 0, dpr, 0, 0);
         unitHudContext.clearRect(0, 0, wrap.clientWidth, wrap.clientHeight);
         rendererThree?.renderUnitHealthHud(unitHudContext, wrap.clientWidth, wrap.clientHeight);
+        if (engine.tacticsCamera) rendererThree?.renderFloatingText(unitHudContext, wrap.clientWidth, wrap.clientHeight);
       }
       const hud = engine.getHud();
       const k = [

@@ -2159,30 +2159,17 @@ export class BattleEngine {
    * side, kept whatever stale facing its last step left behind instead of turning to face
    * the fight — the "not facing the enemy" report, distinct from (and left uncaught by) the
    * earlier mirrored-attack-frame fix above familiar3Scale. */
-  private faceSpriteToward(id: string, x: number): void {
+  private faceSpriteToward(id: string, x: number, y: number): void {
     const u = this.units.find((n) => n.id === id);
-    if (
-      !u ||
-      (u.sprite !== "aldric" &&
-        u.sprite !== "defaultLancer" &&
-        u.sprite !== "lancer" &&
-        u.sprite !== "sandoval" &&
-        u.sprite !== "conjurer" &&
-        u.sprite !== "malrec" &&
-        u.sprite !== "familiar3" &&
-        u.sprite !== "familiar4" &&
-        u.sprite !== "morvenian-wolf" &&
-        u.sprite !== "mordavian-wolf" &&
-        u.sprite !== "mordavian-wolf-final" &&
-        u.sprite !== "wardog2" &&
-        u.sprite !== "RoccoTheBird" &&
-        u.sprite !== "EmberedWraith" &&
-        u.sprite !== "zombieDog" &&
-        u.sprite !== "neera")
-    )
-      return;
-    if (x > u.x) u.facing = 1;
-    else if (x < u.x) u.facing = -1;
+    if (!u) return;
+    // Every attacker, shooter and counter-attacker turns toward its target. Compare screen
+    // position, not column: same reason as stepMove's facing — on this row-staggered grid a
+    // same-column target is still left or right on screen, and comparing columns left those
+    // units facing wherever their last walk pointed them.
+    const from = this.hexCenter(u.x, u.y).cx;
+    const to = this.hexCenter(x, y).cx;
+    if (to > from) u.facing = 1;
+    else if (to < from) u.facing = -1;
   }
 
   private startSeq(step: Seq): void {
@@ -2220,8 +2207,8 @@ export class BattleEngine {
         const release = arrowSkill ? LONG_ARROW_SKILL_RELEASE_SECONDS : arrowAttack ? LONG_ARROW_RELEASE_SECONDS : LONG_ANIM_SECONDS;
         this.woundUp.set(step, release);
         this.queue.unshift(step);
-        const tx = target?.x ?? (step.type === "spell" ? step.tiles[0]?.x : undefined);
-        if (tx != null) this.faceSpriteToward(actor.id, tx);
+        const look = target ?? (step.type === "spell" ? step.tiles[0] : undefined);
+        if (look) this.faceSpriteToward(actor.id, look.x, look.y);
         this.ensureVisible(actor.x, actor.y);
         this.active = { type: "windup", id: actor.id, t: 0, dur: release, pose };
         return;
@@ -2266,8 +2253,8 @@ export class BattleEngine {
       const target = this.units.find((u) => u.id === step.def);
       if (!target || !target.alive) return;
       const attacker = this.units.find((u) => u.id === step.att);
-      this.faceSpriteToward(step.att, target.x);
-      this.faceSpriteToward(step.def, attacker?.x ?? target.x);
+      this.faceSpriteToward(step.att, target.x, target.y);
+      if (attacker) this.faceSpriteToward(step.def, attacker.x, attacker.y);
       // Bring both ends of the attack into view regardless of who's acting — this used to be
       // enemy-only (side !== "player"), which meant the camera dutifully followed every enemy
       // swing but never panned to show the PLAYER's own target when it was off past the turn's
@@ -2336,8 +2323,8 @@ export class BattleEngine {
         const look = step.ids[0]
           ? this.units.find((u) => u.id === step.ids[0])
           : null;
-        const tx = look?.x ?? step.tiles[0]?.x;
-        if (tx != null) this.faceSpriteToward(step.att, tx);
+        const at = look ?? step.tiles[0];
+        if (at) this.faceSpriteToward(step.att, at.x, at.y);
         const caster = this.units.find((u) => u.id === step.att);
         // Same fix as the combat branch above: this was enemy-only (side !== "player"), so a
         // player's own spell never panned the camera toward its target — only ever the caster,
@@ -2394,7 +2381,7 @@ export class BattleEngine {
       this.banner = CURES[step.kind].name;
       sfxPlay.ui();
       const healed = this.units.find((u) => u.id === step.def);
-      if (healed) this.faceSpriteToward(step.att, healed.x);
+      if (healed) this.faceSpriteToward(step.att, healed.x, healed.y);
       const healer = this.units.find((u) => u.id === step.att);
       // Same enemy-only fix as combat/spell above.
       if (healer) this.ensureVisible(healer.x, healer.y);
@@ -9155,7 +9142,11 @@ export class BattleEngine {
       }
       if (actorId === u.id && targetId) {
         const target = this.units.find((candidate) => candidate.id === targetId);
-        if (target && target.x !== u.x) u.facing = target.x > u.x ? 1 : -1;
+        if (target) {
+          const from = this.hexCenter(u.x, u.y).cx;
+          const to = this.hexCenter(target.x, target.y).cx;
+          if (to !== from) u.facing = to > from ? 1 : -1;
+        }
       }
     }
     // idleAlt flips once per this unit's own turn (see beginUnitTurn) — a sprite with a
@@ -10071,6 +10062,75 @@ export class BattleEngine {
     }
   }
 
+  /** Floating combat text ("Missed", damage, heals, level-up labels) for the tactics camera,
+   * drawn upright on a plain screen canvas. Same text, colors and timing as the
+   * renderUnitsAndOverlays pass; toScreen maps a top-down board point lifted `up` pixels
+   * above the ground onto the real camera view, and scale is the camera's sprite scale. */
+  renderFloatingTextHud(ctx: CanvasRenderingContext2D, toScreen: (cx: number, cy: number, up: number) => { x: number; y: number }, scale: number): void {
+    const tile = ZOOM_RADII[this.zoom]!;
+    if (this.particleLive) {
+      const dmgCell = tile * Math.sqrt(3);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for (const p of this.particles) {
+        if (!p.live || p.kind !== "text" || !p.text) continue;
+        // Anchor on the hex the text spawned over (p.x/p.y drift with vx/vy): the drifted row
+        // can round to a neighbor, which a turned camera shows off to the side of the unit.
+        const { cx, cy } = this.hexCenter(Math.round(p.x - p.vx * p.life), Math.round(p.y - p.vy * p.life));
+        const fade = 0.4;
+        ctx.globalAlpha = p.life < p.max - fade ? 1 : Math.max(0, 1 - (p.life - (p.max - fade)) / fade);
+        const fontPx = Math.max(16, Math.round(dmgCell * 0.42 * scale));
+        ctx.font = `800 ${fontPx}px Figtree, sans-serif`;
+        ctx.lineJoin = "round";
+        ctx.lineWidth = Math.max(4, fontPx * 0.22);
+        ctx.strokeStyle = "rgba(12,11,10,0.92)";
+        ctx.fillStyle = p.color;
+        const at = toScreen(cx, cy, dmgCell * 0.85);
+        const y = at.y - p.life * 16 * scale;
+        ctx.strokeText(p.text, at.x, y);
+        ctx.fillText(p.text, at.x, y);
+      }
+      ctx.globalAlpha = 1;
+    }
+    if (this.levelUpFxLive) {
+      for (const s of this.levelUpFx) {
+        if (!s.live || s.kind !== "label") continue;
+        const unit = this.units.find((u) => u.id === s.unitId);
+        if (!unit) continue;
+        const k = s.life / s.max;
+        const cellNow = tile * Math.sqrt(3);
+        const us = unitSize(unit);
+        const boss = unit.classId === "captain";
+        const isBig = unit.footprintOffsets === FOOTPRINT_TYPE_8 || unit.footprintOffsets === FOOTPRINT_TYPE_7;
+        const hh = cellNow * (us >= 4 ? 3.35 : us === 2 ? 1.72 : boss ? 1.44 : 1.42) * 1.2 * (isBig ? 0.75 : 1);
+        const footY = us >= 4 ? tile * 0.9 : cellNow * 0.42;
+        const { cx: upx, cy: upy } = this.unitPixel(unit);
+        const labelFade = k < 0.12 ? k / 0.12 : k > 0.75 ? Math.max(0, 1 - (k - 0.75) / 0.25) : 1;
+        const pop = k < 0.12 ? 1.35 - 0.35 * (k / 0.12) : 1;
+        const at = toScreen(upx, upy + footY, hh - s.dy);
+        const size = s.size * scale;
+        ctx.save();
+        ctx.globalAlpha = labelFade;
+        ctx.translate(at.x + s.dx * scale, at.y);
+        ctx.scale(pop, pop);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.font = `900 ${Math.round(size)}px Figtree, sans-serif`;
+        ctx.shadowColor = `hsla(${s.hue}, 100%, 65%, 0.95)`;
+        ctx.shadowBlur = size * 0.9;
+        ctx.lineJoin = "round";
+        ctx.lineWidth = Math.max(4, size * 0.16);
+        ctx.strokeStyle = "rgba(24,16,4,0.9)";
+        ctx.strokeText(s.text ?? "", 0, 0);
+        ctx.fillStyle = `hsl(${s.hue}, 100%, 74%)`;
+        ctx.fillText(s.text ?? "", 0, 0);
+        ctx.shadowBlur = size * 1.6;
+        ctx.fillText(s.text ?? "", 0, 0);
+        ctx.restore();
+      }
+    }
+  }
+
   /** getLightAt, when given, answers "how much extra light falls on this screen point right
    * now?" from actually-active spell casts (fire/acid/holy/darkness/webShot) — see
    * EffectsRenderer.lightBoostAt, which BattleCanvas wires this to. Positive brightens a unit
@@ -10118,6 +10178,10 @@ export class BattleEngine {
     // Under the spatial camera, health bars are drawn in a separate screen-facing pass so they
     // stay upright and follow the camera-facing character billboards.
     skipUnitHealthHud?: boolean,
+    // Same for floating combat text ("Missed", damage, heals, level-up) under the tactics
+    // camera: this canvas is warped onto the tilted ground there, so renderFloatingTextHud
+    // draws it upright in screen space instead.
+    skipFloatingText?: boolean,
   ): void {
     const tile = ZOOM_RADII[this.zoom]!;
     const sqrt3 = Math.sqrt(3);
@@ -10372,7 +10436,7 @@ export class BattleEngine {
         }
       }
       for (const p of this.particles) {
-        if (!p.live || p.kind !== "text" || !p.text) continue;
+        if (skipFloatingText || !p.live || p.kind !== "text" || !p.text) continue;
         const { cx, cy } = this.hexCenter(Math.round(p.x), Math.round(p.y));
         const fade = 0.4;
         const a = p.life < p.max - fade ? 1 : Math.max(0, 1 - (p.life - (p.max - fade)) / fade);
@@ -10419,6 +10483,7 @@ export class BattleEngine {
           continue;
         }
         if (s.kind === "label") {
+          if (skipFloatingText) continue;
           const tileNow = this.layout.tile;
           const cellNow = tileNow * Math.sqrt(3);
           const us = unitSize(unit);

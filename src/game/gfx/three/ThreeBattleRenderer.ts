@@ -2693,6 +2693,19 @@ export class ThreeBattleRenderer {
     }
   }
 
+  /** Floating combat text ("Missed", damage, heals, level-up) in screen space for the tactics
+   * camera: anchored on the terrain surface, lifted along the same up axis as the upright
+   * character cards, so it stays over the unit when the camera tilts or turns. */
+  renderFloatingText(ctx: CanvasRenderingContext2D, cssW: number, cssH: number): void {
+    const point = new THREE.Vector3();
+    this.engine.renderFloatingTextHud(ctx, (cx, cy, up) => {
+      const worldX = this.engine.camX + cx, worldY = -this.engine.camY - cy;
+      const height = this.landscape?.heightAt(worldX, worldY) ?? 0;
+      point.set(worldX, worldY, height).addScaledVector(this.unitUp, up * this.cameraSpriteScale).project(this.camera);
+      return { x: (point.x + 1) * cssW / 2, y: (1 - point.y) * cssH / 2 };
+    }, this.cameraSpriteScale);
+  }
+
   /** Persistent pixel emitters use one shared instanced-particle implementation. Prioritize
    * real PointLights near the current view; every placement keeps its emissive particles. */
   private syncPixelElementEmitters(tile: number, cssW: number, cssH: number, dt: number): void {

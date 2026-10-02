@@ -35,7 +35,29 @@ export function drawHexGround(
 export const GROUND_TEXTURE_SPAN = 0.5;
 export const GROUND_TEXTURE_INSET = (1 - GROUND_TEXTURE_SPAN) / 2;
 
+// The editor's 2D preview draws through WebGL2DRenderer, whose drawImage only takes
+// (img, x, y, w, h). Give it a cached copy already cropped to the same middle half.
+const croppedGroundTextures = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
+function croppedGroundTexture(image: HTMLImageElement): CanvasImageSource {
+  let cropped = croppedGroundTextures.get(image);
+  if (cropped) return cropped;
+  if (!image.complete || !image.naturalWidth) return image;
+  cropped = document.createElement("canvas");
+  cropped.width = Math.max(1, Math.round(image.naturalWidth * GROUND_TEXTURE_SPAN));
+  cropped.height = Math.max(1, Math.round(image.naturalHeight * GROUND_TEXTURE_SPAN));
+  cropped.getContext("2d")!.drawImage(image,
+    image.naturalWidth * GROUND_TEXTURE_INSET, image.naturalHeight * GROUND_TEXTURE_INSET,
+    image.naturalWidth * GROUND_TEXTURE_SPAN, image.naturalHeight * GROUND_TEXTURE_SPAN,
+    0, 0, cropped.width, cropped.height);
+  croppedGroundTextures.set(image, cropped);
+  return cropped;
+}
+
 export function drawGroundTexture(ctx: any, image: HTMLImageElement, x: number, y: number, width: number, height: number): void {
+  if (!(ctx instanceof CanvasRenderingContext2D)) {
+    ctx.drawImage(croppedGroundTexture(image), x, y, width, height);
+    return;
+  }
   ctx.drawImage(image,
     image.naturalWidth * GROUND_TEXTURE_INSET, image.naturalHeight * GROUND_TEXTURE_INSET,
     image.naturalWidth * GROUND_TEXTURE_SPAN, image.naturalHeight * GROUND_TEXTURE_SPAN,
