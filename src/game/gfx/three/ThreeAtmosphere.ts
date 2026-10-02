@@ -249,10 +249,10 @@ class GroundMist {
   /** Mist 2 is a viewport-filling weather layer. Keeping it camera-locked after its normal
    * board setup lets the same drifting field cover the painted mission backdrop as well as the
    * hexes, with a small overscan so no edge appears while panning. */
-  coverViewport(cssW: number, cssH: number, camX: number, camY: number): void {
+  coverViewport(cssW: number, cssH: number, camX: number, camY: number, coverW = cssW, coverH = cssH): void {
     if (!this.group.visible) return;
     for (const mesh of this.meshes) {
-      mesh.scale.set(cssW * 1.16, cssH * 1.16, 1);
+      mesh.scale.set(coverW * 1.16, coverH * 1.16, 1);
       mesh.position.x = camX + cssW / 2;
       mesh.position.y = -camY - cssH / 2;
     }
@@ -387,10 +387,10 @@ class GroundMist3 {
 
   /** Keep Mist 3's original noise treatment, but let its weather field extend over the
    * complete visible scene rather than stopping at the board edge. */
-  coverViewport(cssW: number, cssH: number, camX: number, camY: number): void {
+  coverViewport(cssW: number, cssH: number, camX: number, camY: number, coverW = cssW, coverH = cssH): void {
     if (!this.group.visible) return;
     for (const mesh of this.meshes) {
-      mesh.scale.set(cssW * 1.16, cssH * 1.16, 1);
+      mesh.scale.set(coverW * 1.16, coverH * 1.16, 1);
       mesh.position.x = camX + cssW / 2;
       mesh.position.y = -camY - cssH / 2;
     }
@@ -548,9 +548,9 @@ class GroundMist4 {
 
   /** The border mask remains anchored to the real hex-board edges, while its fog plane covers
    * the entire camera view. This also fogs the painted backdrop outside the playable map. */
-  coverViewport(cssW: number, cssH: number, camX: number, camY: number): void {
+  coverViewport(cssW: number, cssH: number, camX: number, camY: number, coverW = cssW, coverH = cssH): void {
     if (!this.group.visible) return;
-    this.mesh.scale.set(cssW * 1.16, cssH * 1.16, 1);
+    this.mesh.scale.set(coverW * 1.16, coverH * 1.16, 1);
     this.mesh.position.x = camX + cssW / 2;
     this.mesh.position.y = -camY - cssH / 2;
   }
@@ -906,11 +906,11 @@ class VolumetricFog5 {
     }
   }
 
-  coverViewport(cssW: number, cssH: number, camX: number, camY: number): void {
+  coverViewport(cssW: number, cssH: number, camX: number, camY: number, coverW = cssW, coverH = cssH): void {
     if (!this.group.visible) return;
     for (let i = 0; i < this.meshes.length; i++) {
       const mesh = this.meshes[i]!;
-      mesh.scale.set(cssW * 1.16, cssH * 1.16, 1);
+      mesh.scale.set(coverW * 1.16, coverH * 1.16, 1);
       mesh.position.x = camX + cssW / 2;
       mesh.position.y = -camY - cssH / 2;
       (this.materials[i]!.uniforms.uCam!.value as THREE.Vector2).set(camX, -camY);
@@ -1011,9 +1011,9 @@ class BoardFogArtwork {
     this.group.visible = intensity > 0;
   }
 
-  coverViewport(cssW: number, cssH: number, camX: number, camY: number): void {
+  coverViewport(cssW: number, cssH: number, camX: number, camY: number, coverW = cssW, coverH = cssH): void {
     if (!this.group.visible) return;
-    this.mesh.scale.set(cssW * 1.16, cssH * 1.16, 1);
+    this.mesh.scale.set(coverW * 1.16, coverH * 1.16, 1);
     this.mesh.position.set(camX + cssW / 2, -camY - cssH / 2, 8);
   }
 
@@ -1246,9 +1246,9 @@ class RevealFog {
     this.material.uniforms.uHasReveal!.value = 1;
   }
 
-  coverViewport(cssW: number, cssH: number, camX: number, camY: number): void {
+  coverViewport(cssW: number, cssH: number, camX: number, camY: number, coverW = cssW, coverH = cssH): void {
     if (!this.group.visible) return;
-    this.mesh.scale.set(cssW * 1.16, cssH * 1.16, 1);
+    this.mesh.scale.set(coverW * 1.16, coverH * 1.16, 1);
     this.mesh.position.set(camX + cssW / 2, -camY - cssH / 2, 8);
   }
 
@@ -1572,26 +1572,38 @@ export class ThreeAtmosphere {
     // Only the selected implementation gets a nonzero tier — the other's own rebuild() sees
     // mistIntensity <= 0 via a zeroed-out copy and tears itself down/stays hidden, the same as
     // if the author had just set the slider to 0 on that one.
+    // The tactics camera turns and tilts the board, so a ground sheet sized to the screen no
+    // longer fills it (hard diagonal edges). Size it to the screen's footprint on the ground,
+    // using the same pitch clamp as ThreeBattleRenderer.updateCamera.
+    let coverW = viewport?.cssW ?? 0, coverH = viewport?.cssH ?? 0;
+    if (viewport && engine.tacticsCamera) {
+      const pitch = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(engine.cameraTilt, 0, 55));
+      const azimuth = THREE.MathUtils.degToRad(engine.cameraTiltSide);
+      const groundH = viewport.cssH / Math.cos(pitch);
+      const cosA = Math.abs(Math.cos(azimuth)), sinA = Math.abs(Math.sin(azimuth));
+      coverW = viewport.cssW * cosA + groundH * sinA;
+      coverH = viewport.cssW * sinA + groundH * cosA;
+    }
     const mist2Tier: AtmosphereTier = { ...tier, mistIntensity: mistType === "mist2" ? worldMistIntensity : 0 };
     const mist3Tier: AtmosphereTier = { ...tier, mistIntensity: mistType === "mist3" ? worldMistIntensity : 0 };
     const mist4Tier: AtmosphereTier = { ...tier, mistIntensity: mistType === "mist4" ? worldMistIntensity : 0 };
     const fog1Tier: AtmosphereTier = { ...tier, mistIntensity: mistType === "fog1" ? worldMistIntensity : 0 };
     this.mist2.rebuild(engine.cols, engine.rows, tile, engine.mission.id, mist2Tier);
-    if (mistType === "mist2" && viewport) this.mist2.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
+    if (mistType === "mist2" && viewport) this.mist2.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY, coverW, coverH);
     this.mist2.sync(dt, sunLight, mistSpeed);
     this.mist3.rebuild(engine.cols, engine.rows, tile, engine.mission.id, mist3Tier);
-    if (mistType === "mist3" && viewport) this.mist3.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
+    if (mistType === "mist3" && viewport) this.mist3.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY, coverW, coverH);
     this.mist3.sync(dt, sunLight, mistSpeed);
     this.mist4.rebuild(engine.cols, engine.rows, tile, engine.mission.id, mist4Tier);
-    if (mistType === "mist4" && viewport) this.mist4.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
+    if (mistType === "mist4" && viewport) this.mist4.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY, coverW, coverH);
     this.mist4.sync(dt, sunLight, mistSpeed);
     this.fog5.rebuild(engine.cols, engine.rows, tile, engine.mission.id, { ...tier, mistIntensity: mistType === "fog5" ? worldMistIntensity : 0 });
-    if (mistType === "fog5" && viewport) this.fog5.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
+    if (mistType === "fog5" && viewport) this.fog5.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY, coverW, coverH);
     if (mistType === "fog5" && cellAt) this.fog5.syncDensity(engine, tile, cellAt);
     if (mistType === "fog5") this.fog5.setUnits(unitFeet ?? []);
     this.fog5.sync(dt, sunLight, mistSpeed);
     this.revealFog.rebuild(engine.cols, engine.rows, tile, engine.mission.id, fog1Tier);
-    if (mistType === "fog1" && viewport) this.revealFog.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY);
+    if (mistType === "fog1" && viewport) this.revealFog.coverViewport(viewport.cssW, viewport.cssH, viewport.camX, viewport.camY, coverW, coverH);
     if (mistType === "fog1" && cellAt) this.revealFog.syncReveal(engine, tile, cellAt);
     this.revealFog.sync(dt, sunLight, mistSpeed);
     this.fogArtwork.rebuild(engine.cols, engine.rows, tile, engine.mission.id, 0);

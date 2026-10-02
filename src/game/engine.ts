@@ -8375,6 +8375,10 @@ export class BattleEngine {
   private clampCam(): void {
     const tile = ZOOM_RADII[this.zoom]!;
     const { w, h } = this.boardSize(tile);
+    // The tactics camera is turned and tilted, so board corners swing outside the flat
+    // top-down bounds below. Give it a quarter viewport of extra travel on every edge.
+    const roomX = this.tacticsCamera ? this.viewW / 4 : 0;
+    const roomY = this.tacticsCamera ? this.viewH / 4 : 0;
     // Under fog of war, the camera stays within the playable board instead of exposing the
     // decorative dark rim around it. The first tile row starts after boardPad; keep that
     // offset out of view too. If a board is smaller than the viewport, center it as a whole.
@@ -8382,8 +8386,10 @@ export class BattleEngine {
       const maxX = w - this.viewW;
       const boardTop = this.boardPad(tile);
       const maxY = h - this.viewH;
-      this.camX = maxX < 0 ? maxX / 2 : Math.min(maxX, Math.max(0, this.camX));
-      this.camY = maxY < boardTop ? (boardTop + maxY) / 2 : Math.min(maxY, Math.max(boardTop, this.camY));
+      const loX = maxX < 0 ? maxX / 2 : 0, hiX = maxX < 0 ? maxX / 2 : maxX;
+      const loY = maxY < boardTop ? (boardTop + maxY) / 2 : boardTop, hiY = maxY < boardTop ? (boardTop + maxY) / 2 : maxY;
+      this.camX = Math.min(hiX + roomX, Math.max(loX - roomX, this.camX));
+      this.camY = Math.min(hiY + roomY, Math.max(loY - roomY, this.camY));
       return;
     }
     const margin = this.cameraMargin(tile);
@@ -8395,8 +8401,8 @@ export class BattleEngine {
     const minY = naturalMaxY < 0 ? naturalMaxY / 2 - margin.y : -margin.y;
     const maxX = naturalMaxX < 0 ? naturalMaxX / 2 + margin.x : naturalMaxX + margin.x;
     const maxY = naturalMaxY < 0 ? naturalMaxY / 2 + margin.y : naturalMaxY + margin.y;
-    this.camX = Math.min(maxX, Math.max(minX, this.camX));
-    this.camY = Math.min(maxY, Math.max(minY, this.camY));
+    this.camX = Math.min(maxX + roomX, Math.max(minX - roomX, this.camX));
+    this.camY = Math.min(maxY + roomY, Math.max(minY - roomY, this.camY));
   }
 
   ensureVisible(col: number, row: number): void {
