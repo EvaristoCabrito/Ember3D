@@ -3633,6 +3633,7 @@ function missionToDraft(m: Mission): MapDraft {
     rows: m.rows,
     tiles: parseLayout(m.layout),
     tileVariants: Array.from({ length: n }, (_, i) => variants[i] ?? 0),
+    terrainElevations: m.terrainElevations?.slice(),
     baseTile: m.baseTile,
     baseVariant: m.baseVariant,
     tileRots: Array.from({ length: n }, (_, i) => m.tileRots?.[i] ?? 0),
@@ -4026,6 +4027,10 @@ export function MapEditorScreen({
     setDraft(nextState);
   }, [draft, draftFuture]);
   const [brush, setBrush] = useState<TerrainId>("plains");
+  const [terrain3D, setTerrain3D] = useState(false);
+  const [elevationTool, setElevationTool] = useState<"raise" | "lower" | "level">("raise");
+  const [elevationLevel, setElevationLevel] = useState(0);
+  const [elevationRadius, setElevationRadius] = useState(0);
   const [variant, setVariant] = useState(0);
   const [cityMode, setCityMode] = useState(false);
   // While armed, clicking a hex in Terreno mode turns it instead of painting it.
@@ -4041,7 +4046,7 @@ export function MapEditorScreen({
   const [pixelFxBrush, setPixelFxBrush] = useState<PixelElement>("fire");
   const [pixelFxPresetId, setPixelFxPresetId] = useState("procedural_pixel_fire");
   const [pixelFxSettings, setPixelFxSettings] = useState<PixelElementSettings>(() => pixelDefaults("fire"));
-  const [mode, setMode] = useState<"paint" | "player" | "enemy" | "npc" | "summon" | "decoration" | "architecture" | "elementalFx">("paint");
+  const [mode, setMode] = useState<"paint" | "elevation" | "player" | "enemy" | "npc" | "summon" | "decoration" | "architecture" | "elementalFx">("paint");
   // Which summon class the "Invocação" brush drops. Summons live in playerSpawns alongside
   // the heroes — the class itself says which of the two a spawn is (isSummonClass), so
   // there is no third list to keep in sync and no saved map to migrate.
@@ -4858,7 +4863,28 @@ export function MapEditorScreen({
 
   const onCellClick = (x: number, y: number) => {
     const i = y * draft.cols + x;
-    if (mode === "paint") {
+    if (mode === "elevation") {
+      setDraft(d => {
+        const terrainElevations = Array.from({ length: d.cols * d.rows }, (_, index) =>
+          d.terrainElevations?.[index] ?? TERRAIN[d.tiles[index] ?? "plains"].height ?? 0);
+        let frontier = [{ x, y }];
+        const visited = new Set<number>();
+        for (let ring = 0; ring <= elevationRadius; ring++) {
+          const next: { x: number; y: number }[] = [];
+          for (const cell of frontier) {
+            if (cell.x < 0 || cell.y < 0 || cell.x >= d.cols || cell.y >= d.rows) continue;
+            const index = cell.y * d.cols + cell.x;
+            if (visited.has(index)) continue;
+            visited.add(index);
+            if (d.tiles[index] !== "void") terrainElevations[index] = elevationTool === "level" ? elevationLevel
+              : Math.max(0, Math.min(12, terrainElevations[index]! + (elevationTool === "raise" ? 1 : -1)));
+            next.push(...hexNeighbors(cell.x, cell.y));
+          }
+          frontier = next;
+        }
+        return { ...d, terrainElevations };
+      });
+    } else if (mode === "paint") {
       if (turning) {
         turnTile(i);
         const now = (((draft.tileRots?.[i] ?? 0) + 1) % 6) * 60;
@@ -4901,12 +4927,14 @@ export function MapEditorScreen({
       const tiles: TerrainId[] = [];
       const tileVariants: number[] = [];
       const tileRots: number[] = [];
+      const terrainElevations: number[] = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const inOld = r < d.rows && c < d.cols;
           tiles.push(inOld ? (d.tiles[r * d.cols + c] ?? base.tile) : base.tile);
           tileVariants.push(inOld ? (d.tileVariants[r * d.cols + c] ?? base.variant) : base.variant);
           tileRots.push(inOld ? (d.tileRots?.[r * d.cols + c] ?? 0) : 0);
+          terrainElevations.push(inOld ? (d.terrainElevations?.[r * d.cols + c] ?? TERRAIN[d.tiles[r * d.cols + c] ?? base.tile].height ?? 0) : 0);
         }
       }
       const inBounds = (s: Spawn) => s.x < cols && s.y < rows;
@@ -4922,6 +4950,7 @@ export function MapEditorScreen({
         tiles,
         tileVariants,
         tileRots,
+        terrainElevations: d.terrainElevations ? terrainElevations : undefined,
         decorations,
         elementalFx: (d.elementalFx ?? []).filter((p) => p.x >= 0 && p.y >= 0 && p.x < cols && p.y < rows),
         playerSpawns: d.playerSpawns.filter(inBounds),
@@ -5848,7 +5877,7 @@ export function MapEditorScreen({
             />
           </label>
           <p className="text-xs text-muted">
-            Estes controles só valem para a batalha de verdade (ou "Testar"/Playtest) — esta prévia usa o renderizador 2D antigo e não muda com eles.
+            A vista 3D mostra estes ajustes na prévia; Testar também usa a iluminação salva no mapa.
           </p>
         </div>
 
@@ -5890,18 +5919,19 @@ export function MapEditorScreen({
             ))}
           </div>
           <div className="flex rounded-md border border-border overflow-hidden text-xs">
-            {(["paint", "decoration", "architecture", "player", "enemy", "npc", "summon"] as const).map((m) => (
+            {(["paint", "elevation", "decoration", "architecture", "player", "enemy", "npc", "summon"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => {
                   setMode(m);
+                  if (m === "elevation") setTerrain3D(true);
                   if (m === "architecture" && !DECORATIONS[decoBrush]?.model3d) setDecoBrush("wall-3d-stone");
                   if (m === "decoration" && DECORATIONS[decoBrush]?.model3d) setDecoBrush(decorOptions[0]!.id);
                 }}
                 className={`px-2.5 py-1.5 ${mode === m ? "bg-accent text-bg" : "bg-bg text-muted"}`}
               >
-                {m === "paint" ? "Terreno" : m === "decoration" ? "Decoração" : m === "architecture" ? "3D Walls" : m === "player" ? "Herói" : m === "enemy" ? "Inimigo" : m === "npc" ? "NPC" : "Invocação"}
+                {m === "paint" ? "Terreno" : m === "elevation" ? "Elevação" : m === "decoration" ? "Decoração" : m === "architecture" ? "3D Walls" : m === "player" ? "Herói" : m === "enemy" ? "Inimigo" : m === "npc" ? "NPC" : "Invocação"}
               </button>
             ))}
           </div>
@@ -5925,6 +5955,12 @@ export function MapEditorScreen({
           <p className="text-xs text-muted ml-auto">Nível de cada um é editável na lista abaixo.</p>
         </div>
 
+        {mode === "elevation" && <div className="flex flex-wrap items-center gap-2 text-xs">
+          {(["raise", "lower", "level"] as const).map(tool => <Button key={tool} size="sm" variant={elevationTool === tool ? "primary" : "ghost"} onClick={() => setElevationTool(tool)}>{tool === "raise" ? "Elevar +1" : tool === "lower" ? "Baixar −1" : "Nivelar"}</Button>)}
+          <label>Nível <input aria-label="Nível de elevação" type="number" min={0} max={12} value={elevationLevel} onChange={e => setElevationLevel(Math.max(0, Math.min(12, Number(e.target.value) || 0)))} className="w-14 bg-bg border border-border rounded px-1 py-1" /></label>
+          <label>Área <select aria-label="Área do pincel de elevação" value={elevationRadius} onChange={e => setElevationRadius(Number(e.target.value))} className="bg-bg border border-border rounded px-1 py-1">{[0, 1, 2, 3].map(r => <option key={r} value={r}>{r === 0 ? "Uma célula" : r === 1 ? "1 anel" : `${r} anéis`}</option>)}</select></label>
+          <span className="text-muted">Clique para esculpir. Níveis 0–12; Nivelar em 0 remove a elevação. Ctrl+Z desfaz.</span>
+        </div>}
         {mode === "paint" && (
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -5978,7 +6014,7 @@ export function MapEditorScreen({
                 })}
             </div>
             {brush === "hill" && (
-              <p className="text-xs text-muted">Colina eleva o relevo contínuo na vista Tática. Pinte uma área para formar colinas e platôs; use Testar e ative Tática para ver o terreno 3D. Os hexes indicam movimento; a prévia de edição mostra o mapa por cima.</p>
+              <p className="text-xs text-muted">Colina cria relevo. Use Elevação para esculpir vários níveis e ver o resultado na prévia 3D.</p>
             )}
             <section className="flex flex-col gap-2 rounded-md border border-border bg-bg/30 p-2" aria-label="Icelands">
               <div className="flex flex-wrap items-center gap-2">
@@ -6401,6 +6437,8 @@ export function MapEditorScreen({
                 mission={previewMission}
                 art={art}
                 onCellClick={onCellClick}
+                tacticsView={terrain3D}
+                onTacticsViewChange={setTerrain3D}
                 selectedDecorationId={mode === "decoration" || mode === "architecture" ? decoBrush : undefined}
                 selectedPlacedDecoration={selectedPlacedDecoration}
                 onUnitSelect={selectPreviewUnit}
@@ -6408,7 +6446,7 @@ export function MapEditorScreen({
                 onUnitPlace={placePreviewUnit}
                 onDecorationSelect={selectPreviewDecoration}
                 onDecorationPlace={placePreviewDecoration}
-                primaryObjectDrag={!turningDeco}
+                primaryObjectDrag={mode !== "elevation" && !turningDeco}
               />
             ) : (
               <div className="h-full w-full grid place-items-center text-xs text-muted">Carregando prévia…</div>

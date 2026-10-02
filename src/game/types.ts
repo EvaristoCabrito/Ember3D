@@ -545,6 +545,8 @@ export interface Mission {
    * Missing/undefined index or omitted array entirely means variant 0 (the default) —
    * existing missions never set this and keep rendering exactly as before. */
   tileVariants?: number[];
+  /** Authored terrain levels, row-major. Missing cells retain the terrain type's height. */
+  terrainElevations?: number[];
   /** Default ground chosen in the map editor. Terrain-changing decorations restore this tile when removed. */
   baseTile?: TerrainId;
   baseVariant?: number;

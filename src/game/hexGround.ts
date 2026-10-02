@@ -3,7 +3,7 @@
  * Camera motion changes only the screen offset, never the material's board position. */
 export function drawHexGround(
   ctx: any,
-  image: CanvasImageSource,
+  image: HTMLImageElement,
   cx: number,
   cy: number,
   worldX: number,
@@ -25,9 +25,19 @@ export function drawHexGround(
       ctx.save();
       ctx.translate((x + Number(flipX)) * period, (y + Number(flipY)) * period);
       ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
-      ctx.drawImage(image, 0, 0, period, period);
+      drawGroundTexture(ctx, image, 0, 0, period, period);
       ctx.restore();
     }
   }
   ctx.restore();
+}
+/** Match the border filler: enlarge the middle half of every ground texture. */
+export const GROUND_TEXTURE_SPAN = 0.5;
+export const GROUND_TEXTURE_INSET = (1 - GROUND_TEXTURE_SPAN) / 2;
+
+export function drawGroundTexture(ctx: any, image: HTMLImageElement, x: number, y: number, width: number, height: number): void {
+  ctx.drawImage(image,
+    image.naturalWidth * GROUND_TEXTURE_INSET, image.naturalHeight * GROUND_TEXTURE_INSET,
+    image.naturalWidth * GROUND_TEXTURE_SPAN, image.naturalHeight * GROUND_TEXTURE_SPAN,
+    x, y, width, height);
 }

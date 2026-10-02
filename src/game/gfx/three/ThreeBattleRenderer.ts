@@ -39,6 +39,8 @@ import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_ROUTE, GRID_MOVE, GRI
  * only the intermediate Three.js coordinates carry the flip, nothing outside this file does. */
 
 import * as THREE from "three";
+import { isHexGroundVariant } from "../../assets";
+import { drawGroundTexture, drawHexGround, GROUND_TEXTURE_INSET, GROUND_TEXTURE_SPAN } from "../../hexGround";
 import { configureWallDepth, createWallGeometry } from "./ThreeWalls";
 import { lightTacticsMaterial, tacticsProp } from "./ThreeTacticsGeometry";
 import { buildLandscape, type LandscapeSurface } from "./ThreeLandscape";
@@ -1139,6 +1141,8 @@ export class ThreeBattleRenderer {
     tex.magFilter = THREE.LinearFilter;
     tex.wrapS = THREE.ClampToEdgeWrapping;
     tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.repeat.set(GROUND_TEXTURE_SPAN, GROUND_TEXTURE_SPAN);
+    tex.offset.set(GROUND_TEXTURE_INSET, GROUND_TEXTURE_INSET);
     const mat = new THREE.MeshLambertMaterial({ map: tex });
     this.groundAO.patch(mat);
     this.materialCache.set(key, mat);
@@ -1212,7 +1216,7 @@ export class ThreeBattleRenderer {
   private groundHeight(col: number, row: number, tile = this.builtTile): number {
     if (!this.engine.tacticsCamera) return 0;
     const point = hexWorld(col, row, tile);
-    return this.landscape?.heightAt(point.wx, -point.wy) ?? ((TERRAIN[tileAt(this.engine.tiles, this.engine.cols, col, row)].height ?? 0) * tile * 0.65);
+    return this.landscape?.heightAt(point.wx, -point.wy) ?? ((this.engine.mission.terrainElevations?.[row * this.engine.cols + col] ?? TERRAIN[tileAt(this.engine.tiles, this.engine.cols, col, row)].height ?? 0) * tile * 0.65);
   }
 
   private syncTerrainHeight(tile: number): void {
@@ -1224,13 +1228,13 @@ export class ThreeBattleRenderer {
       entry.mesh.visible = !this.engine.tacticsCamera && entry.id !== "void";
       entry.mesh.userData.cell = { col, row };
       if (entry.id !== "void") cells.push({ x: entry.mesh.position.x, y: entry.mesh.position.y,
-        height: (TERRAIN[entry.id].height ?? 0) * tile * 0.65, col, row, entry });
+        height: (this.engine.mission.terrainElevations?.[key] ?? TERRAIN[entry.id].height ?? 0) * tile * 0.65, col, row, entry });
     }
     if (!this.engine.tacticsCamera) {
       if (this.terrainSolid) this.terrainSolid.visible = false;
       return;
     }
-    const stamp = `${this.engine.cols}:${this.engine.rows}:${tile}:${this.engine.fogged ? this.engine.visVersion : "clear"}:` + cells.map(c =>
+    const stamp = `continuous-atlas-v3:${this.engine.cols}:${this.engine.rows}:${tile}:${this.engine.fogged ? this.engine.visVersion : "clear"}:` + cells.map(c =>
       `${c.col},${c.row},${c.height},${c.entry.id},${c.entry.variant},${c.entry.rot}`).join(";");
     if (stamp !== this.terrainSolidKey && cells.length) {
       if (!this.cliffMaterial) {
@@ -1294,10 +1298,7 @@ export class ThreeBattleRenderer {
       if (borderImage?.naturalWidth) {
         const repeatCanvas = document.createElement("canvas");
         repeatCanvas.width = repeatCanvas.height = Math.max(1, Math.ceil(tile * scale * 2));
-        repeatCanvas.getContext("2d")!.drawImage(borderImage,
-          borderImage.naturalWidth * 0.25, borderImage.naturalHeight * 0.25,
-          borderImage.naturalWidth * 0.5, borderImage.naturalHeight * 0.5,
-          0, 0, repeatCanvas.width, repeatCanvas.height);
+        drawGroundTexture(repeatCanvas.getContext("2d")!, borderImage, 0, 0, repeatCanvas.width, repeatCanvas.height);
         const pattern = ctx.createPattern(repeatCanvas, "repeat");
         if (pattern) {
           ctx.fillStyle = pattern;
@@ -1307,14 +1308,22 @@ export class ThreeBattleRenderer {
       for (const cell of cells) {
         const image = this.engine.art.tiles[cell.entry.id]?.[cell.entry.variant] ?? this.engine.art.tiles[cell.entry.id]?.[0];
         const px = (cell.x-bounds.minX)*scale, py = (bounds.maxY-cell.y)*scale, radius = tile*scale;
+        // Overlap atlas paint slightly past each hex edge. Linear filtering while the
+        // continuous terrain is viewed obliquely otherwise samples the underlay as seams.
+        const bleed = 1.5;
         ctx.save(); ctx.translate(px, py); ctx.beginPath();
         for (let i=0; i<6; i++) {
           const angle = (60*i-30)*Math.PI/180;
-          const x = Math.cos(angle)*radius, y = Math.sin(angle)*radius;
+          const x = Math.cos(angle)*(radius+bleed), y = Math.sin(angle)*(radius+bleed);
           if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
         }
-        ctx.closePath(); ctx.clip(); ctx.rotate(cell.entry.rot*Math.PI/3);
-        if (image?.naturalWidth) ctx.drawImage(image,-radius,-radius,radius*2,radius*2);
+        ctx.closePath(); ctx.clip();
+        if (image?.naturalWidth && isHexGroundVariant(cell.entry.id, cell.entry.variant)) {
+          drawHexGround(ctx, image, 0, 0, cell.x * scale, -cell.y * scale, radius);
+        } else {
+          ctx.rotate(cell.entry.rot*Math.PI/3);
+          if (image?.naturalWidth) drawGroundTexture(ctx, image,-radius-bleed,-radius-bleed,(radius+bleed)*2,(radius+bleed)*2);
+        }
         ctx.restore();
       }
       this.landscapeTexture?.dispose();

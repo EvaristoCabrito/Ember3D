@@ -104,6 +104,7 @@ export interface MapDraft {
   /** Art variant per tile (same indexing as tiles) — which numbered version (001, 002,
    * ...) paints there. Defaults to 0 (the "001" file, safe for existing missions). */
   tileVariants: number[];
+  terrainElevations?: number[];
   /** Ground restored beneath removable terrain props. Set by “Substituir base”. */
   baseTile?: TerrainId;
   baseVariant?: number;
@@ -209,6 +210,7 @@ export function draftToMission(d: MapDraft): Mission {
     rows: d.rows,
     layout,
     tileVariants: d.tileVariants.some((v) => v) ? d.tileVariants : undefined,
+    terrainElevations: d.terrainElevations,
     baseTile: d.baseTile,
     baseVariant: d.baseVariant,
     tileRots: d.tileRots?.some((r) => r) ? d.tileRots : undefined,

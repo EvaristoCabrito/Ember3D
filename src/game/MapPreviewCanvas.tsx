@@ -41,6 +41,8 @@ export function MapPreviewCanvas({
   onDecorationSelect,
   onDecorationPlace,
   primaryObjectDrag = true,
+  tacticsView = false,
+  onTacticsViewChange,
 }: {
   mission: Mission;
   art: GameArt;
@@ -56,6 +58,8 @@ export function MapPreviewCanvas({
   onDecorationSelect?: (decoration: PreviewDecorationSelection) => void;
   onDecorationPlace?: (decoration: PreviewDecorationSelection, x: number, y: number) => void;
   primaryObjectDrag?: boolean;
+  tacticsView?: boolean;
+  onTacticsViewChange?: (enabled: boolean) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const groundRendererRef = useRef<WebGL2DRenderer | null>(null);
@@ -89,6 +93,8 @@ export function MapPreviewCanvas({
   const verticalScrollInitializedRef = useRef(false);
   // Start at a true 75% scale. Large maps extend beyond the viewport and can be panned.
   const [zoom, setZoom] = useState(PREVIEW_ZOOM_MIN);
+  const [viewYaw, setViewYaw] = useState(30);
+  const [viewTilt, setViewTilt] = useState(45);
   const [isPanning, setIsPanning] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   // Hover readout: the painted tile under the cursor (terrain name + art file). Display only.
@@ -158,6 +164,9 @@ export function MapPreviewCanvas({
       // Keep the canvas the size of the window. The BattleEngine owns the real
       // camera, so dragging moves the board rather than an oversized empty canvas.
       engine.setZoom(previewZoomLevel);
+      engine.tacticsCamera = tacticsView;
+      engine.cameraTilt = tacticsView ? viewTilt : 0;
+      engine.cameraTiltSide = tacticsView ? viewYaw : 0;
       // Keep a small edge rim so the preview can pan without opening onto a half-window of
       // empty space when the party's starting hex is near the board boundary.
       engine.setPreviewPanMargin(3);
@@ -187,7 +196,7 @@ export function MapPreviewCanvas({
     let pixelRenderer: ThreeBattleRenderer | null = null;
     const pixelPlacements = engine.elementalFxPlacements.filter((placement) => placement.family === "procedural_pixel" && placement.element);
     const hasArchitecture = architectureActive || engine.decorations.some(p => !!DECORATIONS[p.id]?.model3d);
-    if (pixelFxCanvas && (pixelPlacements.length || hasArchitecture)) {
+    if (pixelFxCanvas && (tacticsView || pixelPlacements.length || hasArchitecture)) {
       try {
         const fxKey = JSON.stringify(pixelPlacements);
         if (architectureRendererRef.current && rendererFxKeyRef.current !== fxKey) {
@@ -247,6 +256,10 @@ export function MapPreviewCanvas({
       const drawGroundAndUnits = () => {
         ctx.clear();
         engine.renderGround(ctx, renderW, renderH, dpr);
+        if (tacticsView) {
+          unitsCtx?.clear();
+          return;
+        }
         if (unitsCtx && unitsCanvas) {
           unitsCtx.clear();
           unitsCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -290,15 +303,15 @@ export function MapPreviewCanvas({
       // matching where it used to land back when everything shared one canvas.
       const highlightCtx = unitsCtx ?? ctx;
       const highlight = highlightRef.current;
-      if (highlight.selectedPlacedDecoration) engine.drawDecorationHighlight(highlightCtx, highlight.selectedPlacedDecoration.id, highlight.selectedPlacedDecoration);
-      else if (highlight.selectedDecorationId) engine.drawDecorationHighlight(highlightCtx, highlight.selectedDecorationId);
+      if (!tacticsView && highlight.selectedPlacedDecoration) engine.drawDecorationHighlight(highlightCtx, highlight.selectedPlacedDecoration.id, highlight.selectedPlacedDecoration);
+      else if (!tacticsView && highlight.selectedDecorationId) engine.drawDecorationHighlight(highlightCtx, highlight.selectedDecorationId);
       if (pixelFxCanvas && pixelRenderer) {
         pixelFxCanvas.style.width = `${w}px`;
         pixelFxCanvas.style.height = `${h}px`;
         pixelFxCanvas.style.display = "block";
         // Keep 3D materials sharp when exact editor zoom scales the canvas up.
         pixelRenderer.setSize(renderW, renderH, dpr * Math.max(1, previewRenderScale));
-        const drawDecorationsOverFx = !hasArchitecture && !!fx?.hasEffects();
+        const drawDecorationsOverFx = !tacticsView && !hasArchitecture && !!fx?.hasEffects();
         pixelRenderer.setSpritesAndDecorationsVisible(!drawDecorationsOverFx, !drawDecorationsOverFx);
         pixelRenderer.render(renderW, renderH);
       } else if (pixelFxCanvas) pixelFxCanvas.style.display = "none";
@@ -366,7 +379,7 @@ export function MapPreviewCanvas({
       if (engineRef.current === engine) engineRef.current = null;
       if (redrawRef.current === draw) redrawRef.current = null;
     };
-  }, [mission, art, zoom, architectureActive]);
+  }, [mission, art, zoom, architectureActive, tacticsView, viewYaw, viewTilt]);
 
   useEffect(() => () => {
     architectureRendererRef.current?.dispose();
@@ -392,6 +405,30 @@ export function MapPreviewCanvas({
     return () => window.removeEventListener("keydown", deleteHeldUnit, true);
   }, [onHeldUnitDelete]);
 
+  const previewCellAt = (px: number, py: number) => {
+    const engine = engineRef.current;
+    const canvas = canvasRef.current;
+    if (!engine || !canvas) return null;
+    const renderer = architectureRendererRef.current;
+    if (tacticsView && renderer) {
+      const scale = renderScaleRef.current;
+      const point = renderer.screenToFlatScreen(px, py, canvas.clientWidth / scale, canvas.clientHeight / scale);
+      return engine.cellAt(point.x, point.y);
+    }
+    return engine.cellAt(px, py);
+  };
+  const panPreview = (dx: number, dy: number) => {
+    const engine = engineRef.current;
+    const renderer = architectureRendererRef.current;
+    const canvas = canvasRef.current;
+    if (tacticsView && renderer && canvas) {
+      const scale = renderScaleRef.current;
+      const w = canvas.clientWidth / scale, h = canvas.clientHeight / scale;
+      const a = renderer.screenToFlatScreen(w / 2, h / 2, w, h, false);
+      const b = renderer.screenToFlatScreen(w / 2 + dx, h / 2 + dy, w, h, false);
+      engine?.panBy(b.x - a.x, b.y - a.y);
+    } else engine?.panBy(dx, dy);
+  };
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -419,7 +456,7 @@ export function MapPreviewCanvas({
       const scale = renderScaleRef.current;
       const px = (event.clientX - rect.left) / scale;
       const py = (event.clientY - rect.top) / scale;
-      const cell = engine.cellAt(px, py);
+      const cell = previewCellAt(px, py);
       // Try the exact hex first, then fall back to anywhere on the unit's drawn sprite — a
       // sprite commonly extends well beyond its own hex on screen (tall creatures especially),
       // which otherwise makes some units hard to grab.
@@ -484,7 +521,7 @@ export function MapPreviewCanvas({
     if (!canvas || !engine || !outer) return;
     const rect = canvas.getBoundingClientRect();
     const scale = renderScaleRef.current;
-    const cell = engine.cellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
+    const cell = previewCellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
     const terrain = cell ? TERRAIN_BY_CHAR[mission.layout[cell.y]?.[cell.x] ?? ""] : undefined;
     if (!cell || !terrain) {
       setHoverTile(null);
@@ -494,7 +531,7 @@ export function MapPreviewCanvas({
     const outerRect = outer.getBoundingClientRect();
     setHoverTile({
       key: `${cell.x},${cell.y}`,
-      label: `${TERRAIN[terrain].name} — ${tileVariantName(terrain, variant)}`,
+      label: `${TERRAIN[terrain].name} — ${tileVariantName(terrain, variant)} · Nível ${mission.terrainElevations?.[cell.y * mission.cols + cell.x] ?? TERRAIN[terrain].height ?? 0}`,
       left: event.clientX - outerRect.left + 14,
       top: event.clientY - outerRect.top + 16,
     });
@@ -532,7 +569,7 @@ export function MapPreviewCanvas({
       const scale = renderScaleRef.current;
       const panX = -dx / scale;
       const panY = -dy / scale;
-      engineRef.current?.panBy(panX, panY);
+      panPreview(panX, panY);
       // Keep the scrollbar thumb in step with pointer panning. Updating the refs first means
       // the resulting scroll event won't apply the same camera movement a second time.
       const scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, viewport.scrollLeft + panX * scale / PREVIEW_SCROLL_PAN_RATE));
@@ -570,7 +607,7 @@ export function MapPreviewCanvas({
         if (canvas && engine) {
           const rect = canvas.getBoundingClientRect();
           const scale = renderScaleRef.current;
-          const cell = engine.cellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
+          const cell = previewCellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
           if (cell) onUnitPlace?.(unitDrag.unit, cell.x, cell.y);
         }
       }
@@ -586,7 +623,7 @@ export function MapPreviewCanvas({
         if (canvas && engine) {
           const rect = canvas.getBoundingClientRect();
           const scale = renderScaleRef.current;
-          const cell = engine.cellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
+          const cell = previewCellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
           if (cell) onDecorationPlace?.(decorationDrag.decoration, cell.x, cell.y);
         }
       }
@@ -608,7 +645,7 @@ export function MapPreviewCanvas({
       if (canvas && engine) {
         const rect = canvas.getBoundingClientRect();
         const scale = renderScaleRef.current;
-        const cell = engine.cellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
+        const cell = previewCellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
         if (cell) onCellClickRef.current?.(cell.x, cell.y);
       }
     }
@@ -625,12 +662,22 @@ export function MapPreviewCanvas({
     horizontalScrollLeftRef.current = viewport.scrollLeft;
     if (!deltaX && !deltaY) return;
     const scale = renderScaleRef.current;
-    engineRef.current?.panBy(deltaX * PREVIEW_SCROLL_PAN_RATE / scale, deltaY * PREVIEW_SCROLL_PAN_RATE / scale);
+    panPreview(deltaX * PREVIEW_SCROLL_PAN_RATE / scale, deltaY * PREVIEW_SCROLL_PAN_RATE / scale);
     redrawRef.current?.();
   };
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-black">
+      <div className="absolute top-2 left-2 z-30 flex gap-1 text-xs">
+        <button type="button" className="rounded border border-border bg-bg px-2 py-1" onClick={() => onTacticsViewChange?.(!tacticsView)}>{tacticsView ? "Vista 3D" : "Vista superior"}</button>
+        {tacticsView && <>
+          <button type="button" aria-label="Girar prévia à esquerda" className="rounded border border-border bg-bg px-2" onClick={() => setViewYaw(v => (v - 60 + 360) % 360)}>↶</button>
+          <button type="button" aria-label="Girar prévia à direita" className="rounded border border-border bg-bg px-2" onClick={() => setViewYaw(v => (v + 60) % 360)}>↷</button>
+          <button type="button" aria-label="Diminuir inclinação da prévia" className="rounded border border-border bg-bg px-2" onClick={() => setViewTilt(v => Math.max(25, v - 10))}>↓</button>
+          <button type="button" aria-label="Aumentar inclinação da prévia" className="rounded border border-border bg-bg px-2" onClick={() => setViewTilt(v => Math.min(55, v + 10))}>↑</button>
+          <button type="button" className="rounded border border-border bg-bg px-2" onClick={() => { setViewYaw(30); setViewTilt(45); }}>Reset</button>
+        </>}
+      </div>
       <div className="absolute right-2 top-2 z-10 flex overflow-hidden rounded border border-border bg-surface shadow-md">
         <button
           type="button"
