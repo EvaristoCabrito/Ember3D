@@ -358,6 +358,49 @@ const NEW_DECOR_2026: Record<string, DecorationDef> = {
   "wilds-charred-stump": { id: "wilds-charred-stump", name: "Toco Carbonizado", footprint: DECO_ONE },
   "wilds-mossy-stones": { id: "wilds-mossy-stones", name: "Pedras Musgosas Empilhadas", footprint: DECO_ONE },
   "wilds-birds-nest": { id: "wilds-birds-nest", name: "Ninho de Pássaro", footprint: DECO_ONE },
+  // 2026-10-02 art drop: individual, centered cutouts from the supplied Tomb, Dungeon,
+  // Graveyard, Cave, Inn, Winter Woods, and City sheets. Source alpha is preserved; every
+  // prop remains its own manually placed 2D decoration.
+  "dungeon-sarcophagus": { id: "dungeon-sarcophagus", name: "Sarcófago de Pedra", footprint: DECO_PAIR },
+  "dungeon-penitent-statue": { id: "dungeon-penitent-statue", name: "Estátua Penitente", footprint: DECO_ONE, heightScale: 1.35 },
+  "dungeon-funerary-urn": { id: "dungeon-funerary-urn", name: "Urna Funerária", footprint: DECO_ONE, heightScale: 1.25 },
+  "dungeon-tomb-relief": { id: "dungeon-tomb-relief", name: "Laje Tumular Ornamentada", footprint: DECO_ONE },
+  "dungeon-bones": { id: "dungeon-bones", name: "Ossos Antigos", footprint: DECO_PAIR },
+  "torture-wall-shackles": { id: "torture-wall-shackles", name: "Argola de Masmorra", footprint: DECO_ONE },
+  "torture-pillory": { id: "torture-pillory", name: "Pelourinho de Madeira", footprint: DECO_PAIR },
+  "dungeon-stone-rubble": { id: "dungeon-stone-rubble", name: "Escombros de Masmorra", footprint: DECO_PAIR },
+  "torture-brazier": { id: "torture-brazier", name: "Braseiro de Ferro", footprint: DECO_ONE },
+  "torture-chain-pile": { id: "torture-chain-pile", name: "Correntes Enferrujadas", footprint: DECO_ONE },
+  "wilds-gothic-gravestone": { id: "wilds-gothic-gravestone", name: "Lápide Gótica", footprint: DECO_ONE, heightScale: 1.2 },
+  "wilds-broken-gravestone": { id: "wilds-broken-gravestone", name: "Lápide Quebrada", footprint: DECO_ONE, heightScale: 1.15 },
+  "wilds-broken-cross": { id: "wilds-broken-cross", name: "Cruz Caída no Túmulo", footprint: DECO_ONE },
+  "wilds-grave-mound": { id: "wilds-grave-mound", name: "Monte de Sepultura", footprint: DECO_PAIR },
+  "wilds-cemetery-lantern": { id: "wilds-cemetery-lantern", name: "Lanterna de Cemitério", footprint: DECO_ONE, heightScale: 1.3 },
+  "wilds-cave-stalagmite-cluster": { id: "wilds-cave-stalagmite-cluster", name: "Formação de Estalagmites", footprint: DECO_ONE },
+  "wilds-cave-stalactites": { id: "wilds-cave-stalactites", name: "Estalactites Suspensas", footprint: DECO_ONE, heightScale: 1.2 },
+  "wilds-cave-crystal-boulder": { id: "wilds-cave-crystal-boulder", name: "Rocha com Cristais", footprint: DECO_ONE },
+  "wilds-cave-mushrooms": { id: "wilds-cave-mushrooms", name: "Cogumelos de Caverna", footprint: DECO_ONE },
+  "wilds-cave-crystal-rubble": { id: "wilds-cave-crystal-rubble", name: "Escombros com Cristais", footprint: DECO_PAIR },
+  "city-inn-barrel": { id: "city-inn-barrel", name: "Barril da Taverna", footprint: DECO_ONE, heightScale: 1.15 },
+  "city-inn-table": { id: "city-inn-table", name: "Mesa da Taverna", footprint: DECO_ONE },
+  "city-inn-chair": { id: "city-inn-chair", name: "Cadeira da Taverna", footprint: DECO_ONE, heightScale: 1.2 },
+  "city-inn-tankard": { id: "city-inn-tankard", name: "Caneca de Estanho", footprint: DECO_ONE },
+  "city-inn-candle-sconce": { id: "city-inn-candle-sconce", name: "Castiçal de Parede", footprint: DECO_ONE, heightScale: 1.25 },
+  "wilds-snowy-stump": { id: "wilds-snowy-stump", name: "Toco Nevado com Raízes", footprint: DECO_PAIR },
+  "wilds-snowy-fallen-tree": { id: "wilds-snowy-fallen-tree", name: "Árvore Caída Nevada", footprint: DECO_PAIR },
+  "wilds-snowy-roots": { id: "wilds-snowy-roots", name: "Raízes Expostas na Neve", footprint: DECO_PAIR },
+  "wilds-winter-thorn-bush": { id: "wilds-winter-thorn-bush", name: "Arbusto Espinhoso de Inverno", footprint: DECO_ONE },
+  "wilds-winter-mossy-log": { id: "wilds-winter-mossy-log", name: "Tronco Musgoso Nevado", footprint: DECO_PAIR },
+  "wilds-cave-stalagmite-formation": { id: "wilds-cave-stalagmite-formation", name: "Colunas de Pedra da Caverna", footprint: DECO_ONE },
+  "wilds-cave-stalactite-formation": { id: "wilds-cave-stalactite-formation", name: "Grande Estalactite", footprint: DECO_ONE, heightScale: 1.25 },
+  "wilds-cave-amethyst-boulder": { id: "wilds-cave-amethyst-boulder", name: "Afloramento de Ametista", footprint: DECO_ONE },
+  "wilds-cave-glowing-mushrooms": { id: "wilds-cave-glowing-mushrooms", name: "Cogumelos Luminescentes", footprint: DECO_ONE },
+  "wilds-cave-crystal-wall": { id: "wilds-cave-crystal-wall", name: "Parede de Cristais", footprint: DECO_PAIR },
+  "city-lantern-post-new": { id: "city-lantern-post-new", name: "Poste de Rua com Lanterna", footprint: DECO_ONE, heightScale: 1.8 },
+  "city-market-wagon-new": { id: "city-market-wagon-new", name: "Carroça de Feira Coberta", footprint: DECO_PAIR },
+  "city-hanging-sign": { id: "city-hanging-sign", name: "Placa Suspensa da Cidade", footprint: DECO_ONE },
+  "city-firewood-stack-new": { id: "city-firewood-stack-new", name: "Pilha Amarrada de Lenha", footprint: DECO_PAIR },
+  "city-stone-trough-fountain": { id: "city-stone-trough-fountain", name: "Bebedouro de Pedra", footprint: DECO_ONE },
 };
 
 /** The 15 "deadwoods" ids above — wilds-prefixed for the shared id namespace, but the Map
@@ -393,6 +436,10 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "castle-3d-thick": { id: "castle-3d-thick", name: "Muralha espessa com ameias 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", castleStyle: "battlement", thickWall: true, wallThicknessScale: 1.8, wallTexture: "/game/textures/walls/castle-thick.jpg" },
   "castle-3d-thick-tower": { id: "castle-3d-thick-tower", name: "Torre quadrada espessa 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", castleStyle: "tower", thickWall: true, heightScale: 1.15, wallTexture: "/game/textures/walls/castle-thick.jpg" },
   "castle-3d-thick-ruined": { id: "castle-3d-thick-ruined", name: "Muralha espessa arruinada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", castleStyle: "ruined", thickWall: true, wallThicknessScale: 1.8, wallTexture: "/game/textures/walls/castle-thick.jpg" },
+  "house-3d-vau": { id: "house-3d-vau", name: "Casa clássica do Vau 3D", footprint: DECO_BLOCK_5, model3d: "prop", propModel: "small-house" },
+  "rocks-3d-outcrop": { id: "rocks-3d-outcrop", name: "Afloramento rochoso realista 3D", footprint: DECO_PAIR, model3d: "prop", propModel: "rocky-outcrop" },
+  "tree-3d-broadleaf": { id: "tree-3d-broadleaf", name: "Árvore realista 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "tree", treeModel: "broadleaf" },
+  "tree-3d-snowy-pine": { id: "tree-3d-snowy-pine", name: "Pinheiro nevado 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "tree", treeModel: "snowy-pine" },
   "rock-3d-layered": { id: "rock-3d-layered", name: "Rochas — parede estratificada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", rockStyle: "layered", heightScale: 0.55, wallTexture: "/game/textures/walls/rock-formation.jpg" },
   "rock-3d-arch": { id: "rock-3d-arch", name: "Rochas — arco natural 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", rockStyle: "arch", wallTexture: "/game/textures/walls/rock-formation.jpg" },
   "rock-3d-broken": { id: "rock-3d-broken", name: "Rochas — parede desmoronada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", rockStyle: "broken", heightScale: 0.75, wallTexture: "/game/textures/walls/rock-formation.jpg" },
@@ -424,7 +471,7 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "secret-door-3d-frame": { id: "secret-door-3d-frame", name: "Passagem secreta aberta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", doorStyle: "secretStone", wallTexture: "/game/textures/doors/passage-stone.png" },
   "secret-door-3d-hidden": { id: "secret-door-3d-hidden", name: "Porta secreta de pedra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "secretDoor", doorStyle: "secretStone", wallThicknessScale: 1.55, wallTexture: "/game/textures/walls/dungeon-v2.png" },
   "mountain-ridge": { id: "mountain-ridge", name: "Cordilheira", footprint: DECO_PAIR, tile: "hill" },
-  "spike-rocks": { id: "spike-rocks", name: "Agulhas de Pedra", footprint: DECO_PAIR, tile: "column" },
+  "spike-rocks": { id: "spike-rocks", name: "Agulhas de Pedra", footprint: DECO_PAIR },
   // No tile stamp — it used to stamp "highwood" underneath itself, which is exactly
   // the terrain deadtree/highwood/highruin were retired for being (see
   // clearScrappedGroundTiles' own doc comment): a fallen-tree PROP re-creating a fallen-tree
@@ -468,27 +515,27 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "fallen-log": { id: "fallen-log", name: "Tronco caído", footprint: DECO_PAIR },
   "small-house": { id: "small-house", name: "Casa pequena", footprint: DECO_BLOCK_5 },
   "stone-hut": { id: "stone-hut", name: "Cabana de pedra", footprint: DECO_BLOCK_5 },
-  "rocky-outcrop": { id: "rocky-outcrop", name: "Afloramento Rochoso", footprint: DECO_PAIR, tile: "column" },
-  "boulder-pile": { id: "boulder-pile", name: "Pilha de Pedras", footprint: DECO_PAIR, tile: "column" },
-  "twin-spires": { id: "twin-spires", name: "Torres Gêmeas de Pedra", footprint: DECO_PAIR, tile: "column" },
-  "large-boulder": { id: "large-boulder", name: "Pedregulho Grande", footprint: DECO_ONE, tile: "column" },
+  "rocky-outcrop": { id: "rocky-outcrop", name: "Afloramento Rochoso", footprint: DECO_PAIR },
+  "boulder-pile": { id: "boulder-pile", name: "Pilha de Pedras", footprint: DECO_PAIR },
+  "twin-spires": { id: "twin-spires", name: "Torres Gêmeas de Pedra", footprint: DECO_PAIR },
+  "large-boulder": { id: "large-boulder", name: "Pedregulho Grande", footprint: DECO_ONE },
   "burning-house": { id: "burning-house", name: "Casa em Chamas", footprint: DECO_BLOCK_5 },
   "burnt-house-ruins": { id: "burnt-house-ruins", name: "Ruínas Queimadas", footprint: DECO_BLOCK_5, blockingFootprint: HOUSE_BLOCKING_FOOTPRINT },
   well: { id: "well", name: "Poço", footprint: DECO_ONE },
   "stone-fountain": { id: "stone-fountain", name: "Fonte de Pedra", footprint: DECO_ONE },
   // These were painted at their intended small prop size; opt out of the global 1.6x decor boost.
   tombstones: { id: "tombstones", name: "Lápides", footprint: DECO_ONE, artScale: 0.625 },
-  "spike-rocks-2": { id: "spike-rocks-2", name: "Agulhas de Pedra II", footprint: DECO_PAIR, tile: "column" },
+  "spike-rocks-2": { id: "spike-rocks-2", name: "Agulhas de Pedra II", footprint: DECO_PAIR },
   lamppost: { id: "lamppost", name: "Poste de Lampião", footprint: DECO_ONE },
-  "mossy-rocks": { id: "mossy-rocks", name: "Pedras Musgosas", footprint: DECO_PAIR, tile: "column" },
+  "mossy-rocks": { id: "mossy-rocks", name: "Pedras Musgosas", footprint: DECO_PAIR },
   "jagged-ridge": { id: "jagged-ridge", name: "Crista Irregular", footprint: DECO_PAIR, tile: "hill" },
-  "mossy-boulder": { id: "mossy-boulder", name: "Pedregulho Musgoso", footprint: DECO_ONE, tile: "column" },
+  "mossy-boulder": { id: "mossy-boulder", name: "Pedregulho Musgoso", footprint: DECO_ONE },
   "mountain-range": { id: "mountain-range", name: "Cadeia de Montanhas", footprint: DECO_TRIO, tile: "hill" },
   "rune-stone": { id: "rune-stone", name: "Menir Rúnico", footprint: DECO_ONE },
   "burning-hamlet": { id: "burning-hamlet", name: "Vilarejo em Chamas", footprint: DECO_BLOCK_5 },
-  "boulder-mound": { id: "boulder-mound", name: "Monte de Pedras", footprint: DECO_ONE, tile: "column" },
+  "boulder-mound": { id: "boulder-mound", name: "Monte de Pedras", footprint: DECO_ONE },
   "wooden-cart": { id: "wooden-cart", name: "Carroça de Madeira", footprint: DECO_PAIR },
-  "spike-crown": { id: "spike-crown", name: "Coroa de Espinhos", footprint: DECO_TRIO, tile: "column" },
+  "spike-crown": { id: "spike-crown", name: "Coroa de Espinhos", footprint: DECO_TRIO },
   ...WILDS_DECORATIONS,
   ...TORTURE_DECORATIONS,
   ...CITY_DECORATIONS,
@@ -566,6 +613,12 @@ export const BIG_HOUSE_DECOR_IDS = new Set<string>();
  * impassable and never faded by fog, same as HOUSE_DECOR_IDS. This also includes the gatehouse
  * and watchtower: both are solid buildings whose full footprint must stay out of movement range. */
 export const SOLID_HOUSE_DECOR_IDS = new Set(["burning-hamlet", "gatehouse", "watchtower"]);
+
+/** Rock props are solid decorations; their art must never replace the ground with column terrain. */
+export const SOLID_ROCK_DECOR_IDS = new Set([
+  "rocks-3d-outcrop", "spike-rocks", "rocky-outcrop", "boulder-pile", "twin-spires",
+  "large-boulder", "spike-rocks-2", "mossy-rocks", "mossy-boulder", "boulder-mound", "spike-crown",
+]);
 
 /** City props that read as a barricade/wall and should block like one — impassable, blocks
  * shots — without repainting the hex underneath to barricade terrain (that would replace
@@ -649,6 +702,7 @@ const DECORATION_ALPHA_CLEAN = new Set([
 ]);
 
 function decorationImagePath(id: string, ext: "png" | "webp"): string {
+  id = DECORATIONS[id]?.propModel ?? id;
   const file = DECORATION_ALPHA_CLEAN.has(id) ? `${id}-alpha-001` : id;
   // Both the replacement originals and their newly added side-4 files need a fresh URL:
   // browsers may have cached the previous low-res image or even the old side-4 404.

@@ -152,19 +152,20 @@ export class ThreeWater {
       // Texture roughness multiplies the base value; keep tactical water from becoming mirror-like.
       shader.fragmentShader = shader.fragmentShader.replace("#include <roughnessmap_fragment>", `
         #include <roughnessmap_fragment>
-        roughnessFactor = max(roughnessFactor, mix(mix(0.68, 0.4, waterFlat), 0.14, waterV4));`);
+        roughnessFactor = max(roughnessFactor, mix(0.68, 0.4, waterFlat));`);
       // Keep water in the game's muted palette even under strong sun and full-scene bloom.
       shader.fragmentShader = shader.fragmentShader.replace("#include <opaque_fragment>", `
         // Suppress the white sun hotspot in the tactical camera, keeping diffuse ripple detail.
-        // V4 keeps a real share of the specular so ripples glint instead of reading matte.
-        outgoingLight = totalDiffuse + totalSpecular * mix(mix(vec3(0.035, 0.055, 0.065), vec3(1.0), waterFlat), vec3(0.12), waterV4) + totalEmissiveRadiance;
+        // All versions use the tactical highlight suppression. V4 retains subtle glints
+        // in the flat view without bypassing the tactical camera's protection.
+        outgoingLight = totalDiffuse + totalSpecular * mix(vec3(0.035, 0.055, 0.065), mix(vec3(1.0), vec3(0.12), waterV4), waterFlat) + totalEmissiveRadiance;
         // Soft sky tint follows the animated normal, with stronger reflection at grazing angles.
         float waterFacing = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
         float waterFresnel = mix(0.02 + 0.30 * pow(1.0 - waterFacing, 4.0), 0.03 + 0.40 * pow(1.0 - waterFacing, 3.0), waterV4);
         vec3 waterSky = mix(vec3(0.035, 0.065, 0.08), mix(vec3(0.22, 0.29, 0.33), vec3(0.30, 0.38, 0.43), waterV4), smoothstep(-0.3, 0.8, normal.y));
         outgoingLight = mix(outgoingLight, waterSky, waterFresnel * waterModern);
         float waterPeak = max(max(outgoingLight.r, outgoingLight.g), outgoingLight.b);
-        float waterKnee = mix(0.7, 1.0, waterV4);
+        float waterKnee = 0.7;
         outgoingLight *= waterKnee / (waterKnee + waterPeak);
         #include <opaque_fragment>`);
     };

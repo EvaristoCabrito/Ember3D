@@ -185,7 +185,18 @@ export function MapPreviewCanvas({
     if (fxCanvas) {
       try {
         fx = new EffectsRenderer(fxCanvas);
-        for (const p of engine.elementalFxPlacements) if (p.family !== "procedural_pixel") fx.spawnEffect(p.kind, p.x, p.y, { radiusTiles: p.radiusTiles, rotation: p.rotation });
+        for (const p of engine.elementalFxPlacements) if (p.family !== "procedural_pixel") {
+          const water = p.kind === "water" || p.kind === "water2" || p.kind === "water3" || p.kind === "water4" || p.kind === "water5" || p.kind === "shore" || p.kind === "shore2";
+          const radius = p.radiusTiles ?? (p.kind === "water2" ? 1.7 : 1);
+          const source = engine.effectAnchor(p.x, p.y);
+          const coveredByBuilding = water && tacticsView && mission.decorations?.some(placement =>
+            !!DECORATIONS[placement.id]?.model3d && placedFootprint(placement).some(cell => {
+              const building = engine.effectAnchor(placement.x + cell.dx, placement.y + cell.dy);
+              return Math.hypot(source.worldX - building.worldX, source.worldY - building.worldY) < source.tile * (radius + 0.45);
+            }));
+          if (coveredByBuilding) continue;
+          fx.spawnEffect(p.kind, p.x, p.y, { radiusTiles: p.radiusTiles, rotation: p.rotation });
+        }
       } catch {
         fx = null;
       }
@@ -324,7 +335,14 @@ export function MapPreviewCanvas({
           // When a procedural-pixel placement is present, ThreeBattleRenderer owns the visible
           // ground canvas. Composite regular 2D FX over that rendered scene; using the base
           // Canvas2D map here would cover the pixel layer with a stale copy of the map.
-          fx.render(pixelRenderer && pixelFxCanvas ? pixelFxCanvas : canvas, dt, (col, row) => engine.effectAnchor(col, row));
+          fx.render(pixelRenderer && pixelFxCanvas ? pixelFxCanvas : canvas, dt, (col, row) => {
+            const anchor = engine.effectAnchor(col, row);
+            if (!pixelRenderer) return anchor;
+            // Match BattleCanvas: elemental FX follow the rendered camera and terrain,
+            // using logical preview pixels before the canvas's editor zoom scaling.
+            const point = pixelRenderer.projectFlatScreen(anchor.x, anchor.y, renderW, renderH, true);
+            return { ...anchor, x: point.x, y: point.y };
+          });
         } else {
           fxCanvas.style.display = "none";
         }

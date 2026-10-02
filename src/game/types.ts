@@ -321,7 +321,7 @@ export type WinCondition = "rout" | "boss" | "escape";
  * impassable and blocks line of sight, independent of whatever terrain tile is under it. */
 export interface DecorationDef {
   /** Architecture meshes live in the editor's separate 3D Walls palette. */
-  model3d?: "wall" | "doorway" | "door" | "secretDoor";
+  model3d?: "wall" | "doorway" | "door" | "secretDoor" | "tree" | "prop";
   /** Paired open/closed architecture variant, used to retain a door's appearance on opening. */
   doorStyle?: "oak" | "reinforced" | "secretStone" | "iron" | "steel" | "castle" | "stoneOak" | "dungeonOak";
   castleStyle?: "battlement" | "ruined" | "gate" | "tower";
@@ -329,6 +329,8 @@ export interface DecorationDef {
   architectureSpan?: number;
   dungeonReference?: boolean;
   templeStyle?: "plain" | "niche" | "relief";
+  propModel?: "small-house" | "rocky-outcrop";
+  treeModel?: "broadleaf" | "snowy-pine";
   rockStyle?: "layered" | "arch" | "broken";
   /** Repeating albedo material for architecture; lighting remains real time. */
   wallTexture?: string;
@@ -564,9 +566,9 @@ export interface Mission {
   /** Independent 3D water surface levels. Null cells have no authored water. */
   waterLevels?: (number | null)[];
   /** Free-position water strokes in tile-normalized world coordinates (Y down). */
+  waterVersion?: "v1" | "v2" | "v3" | "v4";
   waterPatches?: { x: number; y: number; level: number; size: number; shape: "round" | "square" }[];
   /** Water footprint size and shape per cell; absent means the original full round brush. */
-  waterVersion?: "v1" | "v2" | "v3" | "v4";
   waterFootprints?: ({ size: number; shape: "round" | "square" } | null)[];
   /** Default ground chosen in the map editor. Terrain-changing decorations restore this tile when removed. */
   baseTile?: TerrainId;

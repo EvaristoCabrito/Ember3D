@@ -1,3 +1,4 @@
+import { ThreeTrees } from "./ThreeTrees";
 import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_ROUTE, GRID_MOVE, GRID_ENEMY_TARGET, GRID_ENEMY_GLOW } from "../../tacticalGrid";
 /** MILESTONE 1 (done) — terrain, ground/behind-layer decorations, and animated unit sprites all
  * render through a real Three.js scene instead of the Canvas2D-shim WebGL renderer, as the first
@@ -246,6 +247,8 @@ interface TileMeshEntry {
  * a mismatch here means a prop is sized differently on the two renderers, not a crash, so it
  * won't show up as a type error — check against drawDecorations if a prop looks off. */
 function decorSize(id: string, def: DecorationDef, tile: number): { w: number; h: number; dy: number } {
+  if (def.propModel) return decorSize(def.propModel, DECORATIONS[def.propModel]!, tile);
+  if (def.treeModel) return { w: tile * 3.2, h: tile * 4.8, dy: 0 };
   let minDx = 0;
   let maxDx = 0;
   let minDy = 0;
@@ -756,6 +759,7 @@ export class ThreeBattleRenderer {
   // (see decorShadowMaterialFor's own comment), so it can't just reuse the visible material.
   private decorShadowMatCache = new Map<string, THREE.MeshBasicMaterial>();
   private decorFogCutMatCache = new Map<string, THREE.MeshBasicMaterial>();
+  private trees = new ThreeTrees();
   private decorEntries: DecorMeshEntry[] = [];
   private wallEntries: { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>; shadowMesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>; placement: DecorationPlacement }[] = [];
   private wallGroup = new THREE.Group();
@@ -832,6 +836,20 @@ export class ThreeBattleRenderer {
     return this.engine.decorations.some(p => !!DECORATIONS[p.id]?.model3d);
   }
 
+  /** Water FX is a screen-space layer, so keep its broad quads off tactical buildings. */
+  waterFxTouchesArchitecture(col: number, row: number, radiusTiles = 1): boolean {
+    const source = this.engine.effectAnchor(col, row);
+    const fxRadius = source.tile * radiusTiles;
+    return this.engine.decorations.some(placement => {
+      if (!DECORATIONS[placement.id]?.model3d) return false;
+      const cells = placedFootprint(placement);
+      return cells.some(cell => {
+        const anchor = this.engine.effectAnchor(placement.x + cell.dx, placement.y + cell.dy);
+        return Math.hypot(source.worldX - anchor.worldX, source.worldY - anchor.worldY) < fxRadius + source.tile * 0.45;
+      });
+    });
+  }
+
   /** Editor edits replace gameplay data while retaining shaders, textures and targets. */
   setPreviewEngine(engine: BattleEngine): void {
     const previous = this.engine;
@@ -847,9 +865,10 @@ export class ThreeBattleRenderer {
   pickArchitecture(x: number, y: number, width: number, height: number): DecorationPlacement | null {
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(x / width * 2 - 1, 1 - y / height * 2), this.camera);
-    const hits = ray.intersectObjects(this.wallEntries.filter(e => e.mesh.visible).map(e => e.mesh));
+    const entries = [...this.wallEntries, ...this.decorEntries.filter(e => !!DECORATIONS[e.placement.id]?.model3d)];
+    const hits = ray.intersectObjects(entries.filter(e => e.mesh.visible).map(e => e.mesh));
     const hit = hits[0];
-    return hit ? this.wallEntries.find(e => e.mesh === hit.object)?.placement ?? null : null;
+    return hit ? entries.find(e => e.mesh === hit.object)?.placement ?? null : null;
   }
 
   // MILESTONE 3 — real world-space ground mist + drift particles, owned end-to-end by
@@ -1244,12 +1263,12 @@ export class ThreeBattleRenderer {
 
   private syncWater(tile: number): void {
     const engine = this.engine;
+    this.water.setVersion(engine.mission.waterVersion ?? "v2");
     const key = JSON.stringify([tile, engine.cols, engine.rows, engine.mission.waterLevels, engine.mission.waterPatches, engine.mission.waterFootprints, engine.tiles, this.terrainSolidKey, engine.fogged ? engine.visVersion : "clear"]);
     if (key !== this.waterKey) {
       this.water.rebuild(engine.cols, engine.rows, tile, engine.mission.waterLevels ?? [], (col, row) =>
         tileAt(engine.tiles, engine.cols, col, row) !== "void" && (!engine.fogged || engine.explored(col, row) || engine.visible(col, row)),
         (x, y) => this.landscape?.heightAt(x, y) ?? 0, engine.mission.waterFootprints, engine.mission.waterPatches);
-    this.water.setVersion(engine.mission.waterVersion ?? "v2");
       this.scene.add(this.water.mesh);
       this.waterKey = key;
     }
@@ -1518,7 +1537,7 @@ export class ThreeBattleRenderer {
       const def = DECORATIONS[p.id];
       return `${p.id}@${p.x},${p.y},${p.rot ?? 0},${p.wallOrientation ?? "auto"},${def?.heightScale ?? 1},${def?.artScale ?? 1},${def?.mirrorAlternate ? 1 : 0},${def?.wallTexture ?? ""}`;
     }).join(";");
-    const key = `${engine.mission.id}:${tile}:${engine.tacticsCamera}:${placementKey}`;
+    const key = `${engine.mission.id}:${tile}:${engine.tacticsCamera}:${this.trees.revision}:${placementKey}`;
     if (key === this.builtDecorKey) return;
     for (const entry of this.wallEntries) {
       this.wallGroup.remove(entry.mesh);
@@ -1531,7 +1550,9 @@ export class ThreeBattleRenderer {
     this.wallEntries = [];
     for (const entry of this.decorEntries) {
       this.decorGroup.remove(entry.mesh);
-      if (entry.mesh.userData.tacticsModel) {
+      if (entry.mesh.userData.importedTree) {
+        (entry.mesh.material as THREE.Material).dispose();
+      } else if (entry.mesh.userData.tacticsModel) {
         entry.mesh.geometry.dispose();
         const materials = Array.isArray(entry.mesh.material) ? entry.mesh.material : [entry.mesh.material];
         materials.forEach(material => material.dispose());
@@ -1547,12 +1568,25 @@ export class ThreeBattleRenderer {
     }
     this.decorEntries = [];
     this.builtDecorKey = key;
-    const architectureCells = new Set(engine.decorations.filter(p => DECORATIONS[p.id]?.model3d && !DECORATIONS[p.id]?.rockStyle).map(p => `${p.x},${p.y}`));
+    const architectureCells = new Set(engine.decorations.filter(p => DECORATIONS[p.id]?.model3d && !DECORATIONS[p.id]?.rockStyle && !DECORATIONS[p.id]?.treeModel && !DECORATIONS[p.id]?.propModel).map(p => `${p.x},${p.y}`));
 
     for (const p of engine.decorations) {
       const def = DECORATIONS[p.id];
       if (!def) continue;
-      if (def.model3d) {
+      if (def.treeModel && engine.tacticsCamera) {
+        const mesh = this.trees.create(def.treeModel, tile);
+        if (mesh) {
+          const { wx, wy } = hexWorld(p.x, p.y, tile);
+          mesh.position.set(wx, -wy, engine.tacticsCamera ? this.groundHeight(p.x, p.y, tile) : 1);
+          mesh.rotation.z = -(p.rot ?? 0) * Math.PI / 2;
+          mesh.layers.enable(PROXY_LAYER);
+          this.decorGroup.add(mesh);
+          this.decorEntries.push({ mesh, placement: p, shadowMesh: null, contactMesh: null,
+            proxy: null, light: null, halo: null, fogCut: null });
+        }
+        continue;
+      }
+      if (def.model3d && !def.treeModel && !def.propModel) {
         const { wx, wy } = architectureWorld(p.x, p.y, tile);
         // Connect every occupied neighboring architecture cell. Orientation determines
         // the door opening axis; it must not prevent perpendicular wall corners from joining.
@@ -1612,7 +1646,7 @@ export class ThreeBattleRenderer {
 
       if (engine.tacticsCamera) {
         const { w, h } = decorSize(p.id, def, tile);
-        const model = tacticsProp(p.id, w, h,
+        const model = tacticsProp(def.propModel ?? p.id, w, h,
           this.tacticsTexture("/game/textures/walls/cave-v2.png"),
           this.tacticsTexture("/game/textures/doors/reinforced-wood-door.png"));
         if (model) {
@@ -2152,7 +2186,7 @@ export class ThreeBattleRenderer {
     for (const entry of this.decorEntries) {
       const anchorPoint = entry.mesh.userData.tacticsAnchor;
       const height = this.landscape?.heightAt(anchorPoint?.x ?? entry.mesh.position.x, anchorPoint?.y ?? entry.mesh.position.y) ?? 0;
-      if (entry.mesh.userData.tacticsModel) entry.mesh.position.z = height;
+      if (entry.mesh.userData.tacticsModel || entry.mesh.userData.importedTree) entry.mesh.position.z = height;
       const anchor = entry.mesh.userData.tacticsAnchor;
       if (!anchor) continue;
       anchor.z = height;
@@ -3549,12 +3583,15 @@ export class ThreeBattleRenderer {
     for (const mesh of [...this.overlayMeshPool, ...this.gridGlowMeshes]) (mesh.userData.surfaceGeometry as THREE.BufferGeometry | undefined)?.dispose();
     this.cliffMaterial?.dispose();
     for (const entry of this.decorEntries) {
-      if (entry.mesh.userData.tacticsModel) {
+      if (entry.mesh.userData.importedTree) {
+        (entry.mesh.material as THREE.Material).dispose();
+      } else if (entry.mesh.userData.tacticsModel) {
         entry.mesh.geometry.dispose();
         const materials = Array.isArray(entry.mesh.material) ? entry.mesh.material : [entry.mesh.material];
         materials.forEach(material => material.dispose());
       } else if (entry.mesh.userData.tacticsCard) (entry.mesh.material as THREE.Material).dispose();
     }
+    this.trees.dispose();
     this.quadGeo.dispose();
     this.backdropGeometry.dispose();
     this.backdropMaterial.dispose();

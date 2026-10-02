@@ -104,7 +104,12 @@ export function BattleCanvas({
     if (fxCanvas) {
       try {
         fx = new EffectsRenderer(fxCanvas);
-        for (const p of engine.elementalFxPlacements) if (p.family !== "procedural_pixel") fx.spawnEffect(p.kind, p.x, p.y, { radiusTiles: p.radiusTiles, rotation: p.rotation });
+        for (const p of engine.elementalFxPlacements) if (p.family !== "procedural_pixel") {
+          const water = p.kind === "water" || p.kind === "water2" || p.kind === "water3" || p.kind === "water4" || p.kind === "water5" || p.kind === "shore" || p.kind === "shore2";
+          const radius = p.radiusTiles ?? (p.kind === "water2" ? 1.7 : 1);
+          if (water && engine.tacticsCamera && rendererThree?.waterFxTouchesArchitecture(p.x, p.y, radius)) continue;
+          fx.spawnEffect(p.kind, p.x, p.y, { radiusTiles: p.radiusTiles, rotation: p.rotation });
+        }
       } catch {
         fx = null;
         fxCanvas.style.display = "none";
