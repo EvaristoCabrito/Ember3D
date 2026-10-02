@@ -1259,6 +1259,12 @@ export class BattleEngine {
   trauma = 0;
   hitstop = 0;
   zoom = 1;
+  /** Camera elevation above the board plane, in degrees. */
+  cameraTilt = 0;
+  /** Horizontal camera orbit around the board center, in degrees. */
+  cameraTiltSide = 0;
+  /** Opt-in spatial terrain, upright sprites and scenery for the tactics camera. */
+  tacticsCamera = false;
   /** How long a unit takes to glide across one hex — "normal" is the default, readable
    * pace; "fast" is the old, snappier speed for players who prefer it. Toggled from the
    * pause menu, applies to the very next step (mid-step changes aren't jarring since a
@@ -10088,6 +10094,9 @@ export class BattleEngine {
     // ThreeBattleRenderer draws summoning portals as a ground layer beneath units (see its
     // syncPortalFx), so this overlay — which sits above Three's units — skips them.
     skipPortalFx?: boolean,
+    // Under the spatial camera, health bars are drawn in a separate screen-facing pass so they
+    // stay upright and follow the camera-facing character billboards.
+    skipUnitHealthHud?: boolean,
   ): void {
     const tile = ZOOM_RADII[this.zoom]!;
     const sqrt3 = Math.sqrt(3);
@@ -10285,24 +10294,26 @@ export class BattleEngine {
         const bh = Math.max(4, cell * 0.07);
         const bx = px - bw / 2;
         const by = py - h + cell * 0.42 + bob - lift - Math.max(8, cell * 0.12);
-        ctx.fillStyle = "rgba(12,11,10,0.82)";
-        ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
-        ctx.fillStyle = "#2c2824";
-        ctx.fillRect(bx, by, bw, bh);
-        // Green for wild neutrals, so a beast that isn't hunting you doesn't read as an
-        // enemy — it turns red on its own the moment it is provoked and joins that side.
-        ctx.fillStyle = u.side === "player" ? "#c8c4bc" : u.side === "neutral" ? "#5f9e52" : "#b54a32";
-        ctx.fillRect(bx, by, bw * Math.max(0, u.hp / u.maxHp), bh);
-        if (cell >= 32) {
-          ctx.font = `600 ${Math.round(cell * 0.22)}px Figtree, sans-serif`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "bottom";
-          ctx.lineJoin = "round";
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = "rgba(12,11,10,0.9)";
-          ctx.fillStyle = "#f0ebe3";
-          ctx.strokeText(`${u.hp}`, px, by - 1);
-          ctx.fillText(`${u.hp}`, px, by - 1);
+        if (!skipUnitHealthHud) {
+          ctx.fillStyle = "rgba(12,11,10,0.82)";
+          ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+          ctx.fillStyle = "#2c2824";
+          ctx.fillRect(bx, by, bw, bh);
+          // Green for wild neutrals, so a beast that isn't hunting you doesn't read as an
+          // enemy — it turns red on its own the moment it is provoked and joins that side.
+          ctx.fillStyle = u.side === "player" ? "#c8c4bc" : u.side === "neutral" ? "#5f9e52" : "#b54a32";
+          ctx.fillRect(bx, by, bw * Math.max(0, u.hp / u.maxHp), bh);
+          if (cell >= 32) {
+            ctx.font = `600 ${Math.round(cell * 0.22)}px Figtree, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.lineJoin = "round";
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = "rgba(12,11,10,0.9)";
+            ctx.fillStyle = "#f0ebe3";
+            ctx.strokeText(`${u.hp}`, px, by - 1);
+            ctx.fillText(`${u.hp}`, px, by - 1);
+          }
         }
         if (u.stunned) {
           const gx = px;

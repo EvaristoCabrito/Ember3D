@@ -34,6 +34,7 @@ export function BattleCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fxCanvasRef = useRef<HTMLCanvasElement>(null);
   const unitsCanvasRef = useRef<HTMLCanvasElement>(null);
+  const unitHudCanvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hudKey = useRef("");
 
@@ -68,6 +69,8 @@ export function BattleCanvas({
     // of draw order. Splitting the ground and unit passes onto their own canvases (see
     // BattleEngine.renderGround/renderUnitsAndOverlays) puts a real layer boundary between them.
     const unitsCanvas = unitsCanvasRef.current;
+    const unitHudCanvas = unitHudCanvasRef.current;
+    const unitHudContext = unitHudCanvas?.getContext("2d") ?? null;
     let unitsRenderer: WebGL2DRenderer | null = null;
     if (unitsCanvas) {
       try {
@@ -89,7 +92,14 @@ export function BattleCanvas({
     // parked far off-screen otherwise, so a placement or spell in the dark shows nothing —
     // neither over the black of unexplored ground nor as a hint of what is happening there.
     const OFFSCREEN_ANCHOR = { x: -1e6, y: -1e6, tile: 0, worldX: -1e6, worldY: -1e6 };
-    const fxAnchor = (col: number, row: number) => (engine.fogged && !engine.visible(col, row) ? OFFSCREEN_ANCHOR : engine.effectAnchor(col, row));
+    const fxAnchorRaw = (col: number, row: number) =>
+      engine.fogged && !engine.visible(col, row) ? OFFSCREEN_ANCHOR : engine.effectAnchor(col, row);
+    const fxAnchor = (col: number, row: number) => {
+      const anchor = fxAnchorRaw(col, row);
+      if (!rendererThree || anchor === OFFSCREEN_ANCHOR) return anchor;
+      const point = rendererThree.projectFlatScreen(anchor.x, anchor.y, wrap.clientWidth, wrap.clientHeight, true);
+      return { ...anchor, x: point.x, y: point.y };
+    };
     const fxCanvas = fxCanvasRef.current;
     if (fxCanvas) {
       try {
@@ -150,12 +160,14 @@ export function BattleCanvas({
       holdTimer = window.setTimeout(() => {
         holdTimer = null;
         holding = true;
-        engine.pointerMove(px, py); // point the hover at that tile so the HUD describes it
+        const gp = gamePos({ x: px, y: py });
+        engine.pointerMove(gp.x, gp.y); // point the hover at that tile so the HUD describes it
         onTileReadout?.(true);
       }, delay);
     };
     let pinchDist = 0;
     let pinched = false;
+    let lastOverlayMatrix = "";
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -186,6 +198,12 @@ export function BattleCanvas({
         unitsCanvas.style.height = `${h}px`;
         unitsRenderer.setSize(pw, ph);
       }
+      if (unitHudCanvas) {
+        unitHudCanvas.width = pw;
+        unitHudCanvas.height = ph;
+        unitHudCanvas.style.width = `${w}px`;
+        unitHudCanvas.style.height = `${h}px`;
+      }
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -205,7 +223,17 @@ export function BattleCanvas({
         if (held.has("ArrowDown") || held.has("KeyS")) py += 1;
         if (px || py) {
           const mag = Math.hypot(px, py) || 1;
-          engine.panBy((px / mag) * speed * dt, (py / mag) * speed * dt);
+          const screenX = (px / mag) * speed * dt;
+          const screenY = (py / mag) * speed * dt;
+          const azimuth = (engine.cameraTiltSide * Math.PI) / 180;
+          const pitch = (Math.min(55, engine.cameraTilt) * Math.PI) / 180;
+          const cosAzimuth = Math.cos(azimuth);
+          const sinAzimuth = Math.sin(azimuth);
+          const verticalScale = 1 / Math.max(0.1, Math.cos(pitch));
+          engine.panBy(
+            screenX * cosAzimuth + screenY * sinAzimuth * verticalScale,
+            -screenX * sinAzimuth + screenY * cosAzimuth * verticalScale,
+          );
         }
         engine.tick(dt);
       }
@@ -213,7 +241,7 @@ export function BattleCanvas({
       // Elemental FX is a DOM canvas between the Three scene and the normal unit overlay.
       // Sprite-only maps move decorations to that overlay. Architecture maps keep actors
       // in the shared scene so the FX snapshot preserves the wall depth relationship.
-      const drawDecorationsOverFx = !!rendererThree && !rendererThree.hasArchitecture() && !!fx?.hasEffects();
+      const drawDecorationsOverFx = !!rendererThree && !engine.tacticsCamera && !rendererThree.hasArchitecture() && !!fx?.hasEffects();
       if (rendererThree) {
         // Move both Three-owned sprites and decorations into the shared upper painter's pass
         // while FX is visible. That pass has the required order: rear decor → characters →
@@ -225,6 +253,15 @@ export function BattleCanvas({
         // decoration or a unit standing on a highlighted hex stays visible on top of it instead
         // of the highlight's tint painting over it.
         rendererThree.render(wrap.clientWidth, wrap.clientHeight);
+        if (unitsCanvas) {
+          const matrix = rendererThree.overlayTransform(wrap.clientWidth, wrap.clientHeight);
+          const cssTransform = `matrix(${matrix.join(",")})`;
+          if (cssTransform !== lastOverlayMatrix) {
+            lastOverlayMatrix = cssTransform;
+            unitsCanvas.style.transformOrigin = "0 0";
+            unitsCanvas.style.transform = cssTransform;
+          }
+        }
       } else if (renderer2D) {
         renderer2D.clear();
         engine.renderGround(renderer2D, wrap.clientWidth, wrap.clientHeight, dpr);
@@ -236,9 +273,10 @@ export function BattleCanvas({
         const beam = engine.webShotBeam();
         if (beam) {
           if (webShotId === null) webShotId = fx.spawnEffect("webShot", 0, 0, { radiusTiles: 0.01 });
+          const screen = rendererThree?.projectFlatScreen(beam.x, beam.y, wrap.clientWidth, wrap.clientHeight, true);
           fx.updateOverride(webShotId, {
-            x: beam.x,
-            y: beam.y,
+            x: screen?.x ?? beam.x,
+            y: screen?.y ?? beam.y,
             worldX: beam.worldX,
             worldY: beam.worldY,
             tile: beam.tile,
@@ -282,7 +320,7 @@ export function BattleCanvas({
           unitsRenderer,
           wrap.clientWidth,
           wrap.clientHeight,
-          fx ? (px: number, py: number) => fx.lightBoostAt(px, py, fxAnchor) : undefined,
+          fx ? (px: number, py: number) => fx.lightBoostAt(px, py, fxAnchorRaw) : undefined,
           // Three normally owns its decorations. During active elemental FX, this pass redraws
           // the row-sorted ordinary scenery with sprites above the FX canvas.
           !!rendererThree && !drawDecorationsOverFx,
@@ -291,7 +329,13 @@ export function BattleCanvas({
           !!rendererThree,
           !!rendererThree && !drawDecorationsOverFx,
           !!rendererThree,
+          !!rendererThree,
         );
+      }
+      if (unitHudCanvas && unitHudContext) {
+        unitHudContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+        unitHudContext.clearRect(0, 0, wrap.clientWidth, wrap.clientHeight);
+        rendererThree?.renderUnitHealthHud(unitHudContext, wrap.clientWidth, wrap.clientHeight);
       }
       const hud = engine.getHud();
       const k = [
@@ -342,9 +386,18 @@ export function BattleCanvas({
     };
     raf = requestAnimationFrame(loop);
 
-    const pos = (e: MouseEvent) => {
+    const pointerPos = (clientX: number, clientY: number) => {
       const r = canvas.getBoundingClientRect();
-      return { x: e.clientX - r.left, y: e.clientY - r.top };
+      return { x: clientX - r.left, y: clientY - r.top };
+    };
+    const pos = (e: MouseEvent) => pointerPos(e.clientX, e.clientY);
+    const gamePos = (p: { x: number; y: number }) => rendererThree
+      ? rendererThree.screenToFlatScreen(p.x, p.y, canvas.clientWidth, canvas.clientHeight)
+      : p;
+    const panByScreen = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+      const oldPoint = rendererThree ? rendererThree.screenToFlatScreen(from.x, from.y, canvas.clientWidth, canvas.clientHeight, false) : from;
+      const newPoint = rendererThree ? rendererThree.screenToFlatScreen(to.x, to.y, canvas.clientWidth, canvas.clientHeight, false) : to;
+      engine.panBy(oldPoint.x - newPoint.x, oldPoint.y - newPoint.y);
     };
     const onDown = (e: PointerEvent) => {
       if (paused) return;
@@ -352,7 +405,8 @@ export function BattleCanvas({
       const p = pos(e);
       if (e.pointerType === "mouse") {
         if (engine.getHud().mode === "awaitSpell") {
-          engine.pointerDown(p.x, p.y, "click");
+          const gp = gamePos(p);
+          engine.pointerDown(gp.x, gp.y, "click");
           return;
         }
         // Deferred to pointerup, same as touch: a held-and-dragged mouse pans the
@@ -390,7 +444,8 @@ export function BattleCanvas({
       lastY = e.clientY;
       armReadout(p.x, p.y, 420);
       if (engine.getHud().mode === "awaitSpell") {
-        engine.pointerMove(p.x, p.y);
+        const gp = gamePos(p);
+        engine.pointerMove(gp.x, gp.y);
       }
     };
     const onMove = (e: PointerEvent) => {
@@ -413,13 +468,11 @@ export function BattleCanvas({
       // this only fires once the pointer actually stops — no button involved.
       if (e.pointerType === "mouse" && !mouseDown) armReadout(p.x, p.y, 650);
       if (e.pointerType === "mouse" && mouseDown) {
-        const dx = e.clientX - lastX;
-        const dy = e.clientY - lastY;
         if (!dragged && mouseArmed && Math.hypot(e.clientX - mouseStartX, e.clientY - mouseStartY) > 3) {
           dragged = true;
           cancelHold();
         }
-        if (dragged) engine.panBy(-dx, -dy);
+        if (dragged) panByScreen(pointerPos(lastX, lastY), pointerPos(e.clientX, e.clientY));
         lastX = e.clientX;
         lastY = e.clientY;
         return;
@@ -432,7 +485,7 @@ export function BattleCanvas({
           cancelHold();
         }
         if (dragged) {
-          engine.panBy(-dx, -dy);
+          panByScreen(pointerPos(lastX, lastY), pointerPos(e.clientX, e.clientY));
           lastX = e.clientX;
           lastY = e.clientY;
         }
@@ -442,7 +495,8 @@ export function BattleCanvas({
           const dy = e.clientY - lastY;
           if (Math.abs(dx) + Math.abs(dy) > 10) dragged = true;
         }
-        engine.pointerMove(p.x, p.y);
+        const gp = gamePos(p);
+        engine.pointerMove(gp.x, gp.y);
       }
     };
     const onUp = (e: PointerEvent) => {
@@ -460,7 +514,8 @@ export function BattleCanvas({
         dragging = false;
         if (!dragged && !paused && !wasHolding) {
           const p = pos(e);
-          engine.pointerDown(p.x, p.y, "click");
+          const gp = gamePos(p);
+          engine.pointerDown(gp.x, gp.y, "click");
         }
         dragged = false;
         return;
@@ -476,7 +531,8 @@ export function BattleCanvas({
       dragging = false;
       if (!dragged && !paused && !wasHolding) {
         const p = pos(e);
-        engine.pointerDown(p.x, p.y, "tap");
+        const gp = gamePos(p);
+        engine.pointerDown(gp.x, gp.y, "tap");
       }
     };
     const onWheel = (e: WheelEvent) => {
@@ -596,6 +652,7 @@ export function BattleCanvas({
       <canvas ref={canvasRef} className="block h-full w-full touch-none" />
       <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ display: "none" }} />
       <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
+      <canvas ref={unitHudCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
       {/* Diorama color grade + vignette: a subtle warm key-light / cool shadow wash from the
           same upper-left "sun" the unit/decoration relighting and cast shadows use (see
           WebGL2DRenderer's lightDirX/Y and BattleEngine's shadowDirX/Y), plus a soft edge

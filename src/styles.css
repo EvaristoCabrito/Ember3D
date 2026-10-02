@@ -119,6 +119,14 @@
   [role="button"]:not(:disabled) {
     cursor: url("/game/ui/pointer-large.svg") 0 0, auto;
   }
+
+  /* Disabled / maxed-out buttons keep the game pointer instead of the Windows arrow
+     (or the not-allowed / wait cursors some of them set). */
+  button:disabled,
+  [role="button"]:disabled,
+  [aria-disabled="true"] {
+    cursor: url("/game/ui/pointer-large.svg") 0 0, auto !important;
+  }
 }
 
 /* NEVER change title-hero / title-veil. Game title screen is frozen. Version lives in GameApp only. */

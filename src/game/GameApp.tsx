@@ -1,5 +1,5 @@
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ChevronDown, ChevronLeft, ChevronUp, Dices, Grip, ListOrdered, Lock, Pencil, RotateCcw, Shuffle, SlidersHorizontal, Swords, Volume2, VolumeX, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Dices, Grip, ListOrdered, Lock, Pencil, RotateCcw, Shuffle, SlidersHorizontal, Swords, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { artProgress, ensureSpriteArt, loadGameArt, portraitFor, releaseSpriteArt, subscribeArtProgress, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
 import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
@@ -5977,6 +5977,9 @@ export function MapEditorScreen({
                   );
                 })}
             </div>
+            {brush === "hill" && (
+              <p className="text-xs text-muted">Colina eleva o relevo contínuo na vista Tática. Pinte uma área para formar colinas e platôs; use Testar e ative Tática para ver o terreno 3D. Os hexes indicam movimento; a prévia de edição mostra o mapa por cima.</p>
+            )}
             <section className="flex flex-col gap-2 rounded-md border border-border bg-bg/30 p-2" aria-label="Icelands">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Icelands</h3>
@@ -7425,6 +7428,41 @@ function BattleScreen({
   const [heldTile, setHeldTile] = useState(false);
   // Keep turn order tucked away until the player opens it.
   const [showTurnOrder, setShowTurnOrder] = useState(false);
+  const [cameraTilt, setCameraTilt] = useState(engine.cameraTilt);
+  const [cameraTiltSide, setCameraTiltSide] = useState(engine.cameraTiltSide);
+  const [tacticsCamera, setTacticsCamera] = useState(false);
+  const cameraAnimation = useRef<number | null>(null);
+  const moveCamera = (tilt: number, side: number) => {
+    if (cameraAnimation.current !== null) cancelAnimationFrame(cameraAnimation.current);
+    const startTilt = engine.cameraTilt;
+    const startSide = engine.cameraTiltSide;
+    const start = performance.now();
+    setCameraTilt(tilt);
+    setCameraTiltSide(side);
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - start) / 240);
+      const eased = progress * progress * (3 - 2 * progress);
+      engine.cameraTilt = startTilt + (tilt - startTilt) * eased;
+      engine.cameraTiltSide = startSide + (side - startSide) * eased;
+      if (progress < 1) cameraAnimation.current = requestAnimationFrame(step);
+      else {
+        // Normalize only after the transition so crossing 360 degrees takes the short route.
+        engine.cameraTiltSide = ((side + 180) % 360 + 360) % 360 - 180;
+        setCameraTiltSide(engine.cameraTiltSide);
+        cameraAnimation.current = null;
+      }
+    };
+    cameraAnimation.current = requestAnimationFrame(step);
+  };
+  useEffect(() => {
+    setCameraTilt(engine.cameraTilt);
+    setCameraTiltSide(engine.cameraTiltSide);
+    setTacticsCamera(false);
+    return () => {
+      if (cameraAnimation.current !== null) cancelAnimationFrame(cameraAnimation.current);
+      cameraAnimation.current = null;
+    };
+  }, [engine]);
   const [hotbars, setHotbars] = useState<Record<string, (SlotAction | null)[]>>({});
   const [editingSlots, setEditingSlots] = useState(false);
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
@@ -7801,7 +7839,7 @@ function BattleScreen({
         )}
         <div className="pointer-events-none absolute inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-20 flex items-start justify-end gap-1">
           {showTurnOrder && !engine.mission.explore && (
-            <p className="ember-plate px-1.5 py-0.5 text-[10px] tabular-nums text-muted pointer-events-none">
+            <p className="ember-plate mr-1 px-1.5 py-0.5 text-[10px] tabular-nums text-muted pointer-events-none">
               T{hud.turn} · {hud.playerAlive}/{hud.enemyAlive}
             </p>
           )}
@@ -7811,6 +7849,71 @@ function BattleScreen({
             </p>
           )}
           <div className="flex items-center gap-1 pointer-events-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const enabled = !tacticsCamera;
+                engine.tacticsCamera = enabled;
+                setTacticsCamera(enabled);
+                moveCamera(enabled ? 45 : 0, enabled ? 30 : 0);
+              }}
+              className="h-7 px-2 ember-plate text-[10px] tracking-[0.14em] uppercase"
+              aria-pressed={tacticsCamera}
+              title="Alternar entre vista normal e vista tática diagonal"
+            >
+              {tacticsCamera ? "Tática" : "Normal"}
+            </button>
+            <button
+              type="button"
+              onClick={() => moveCamera(Math.max(tacticsCamera ? 35 : 0, cameraTilt - 5), cameraTiltSide)}
+              className="size-7 grid place-items-center ember-plate disabled:opacity-40"
+              aria-label={`Diminuir inclinação da câmera (${cameraTilt}°)`}
+              title="Diminuir inclinação da câmera"
+              disabled={cameraTilt <= (tacticsCamera ? 35 : 0)}
+            >
+              <ChevronDown className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => moveCamera(Math.min(55, cameraTilt + 5), cameraTiltSide)}
+              className="size-7 grid place-items-center ember-plate disabled:opacity-40"
+              aria-label={`Aumentar inclinação da câmera (${cameraTilt}°)`}
+              title="Aumentar inclinação da câmera"
+              disabled={cameraTilt >= 55}
+            >
+              <ChevronUp className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => moveCamera(cameraTilt, tacticsCamera ? 30 + Math.round((cameraTiltSide - 30) / 60) * 60 - 60 : cameraTiltSide - 15)}
+              className="size-7 grid place-items-center ember-plate disabled:opacity-40"
+              aria-label={`Girar câmera para a esquerda (${cameraTiltSide}°)`}
+              title="Girar câmera para a esquerda"
+            >
+              <ChevronLeft className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => moveCamera(cameraTilt, tacticsCamera ? 30 + Math.round((cameraTiltSide - 30) / 60) * 60 + 60 : cameraTiltSide + 15)}
+              className="size-7 grid place-items-center ember-plate disabled:opacity-40"
+              aria-label={`Girar câmera para a direita (${cameraTiltSide}°)`}
+              title="Girar câmera para a direita"
+            >
+              <ChevronRight className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                engine.tacticsCamera = false;
+                setTacticsCamera(false);
+                moveCamera(0, 0);
+              }}
+              className="size-7 grid place-items-center ember-plate"
+              aria-label="Voltar ao ângulo normal"
+              title="Voltar ao ângulo normal"
+            >
+              <RotateCcw className="size-3.5" />
+            </button>
             <button
               type="button"
               onClick={onMute}

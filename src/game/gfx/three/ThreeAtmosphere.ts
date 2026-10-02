@@ -3,31 +3,16 @@
  * gfx/AtmosphereRenderer.ts's own comment and THREEJS_MILESTONE2_HANDOFF.md's "Old atmosphere
  * system" section).
  *
- * WHY NOT scene.fog / THREE.Fog / THREE.FogExp2: both compute density purely from distance to
- * camera. This scene's camera is a fixed-Z (100) orthographic camera aimed straight down -Z
- * forever (see ThreeBattleRenderer.ts's module comment) — no perspective, no rotation. That makes
- * "distance to camera" a pure function of a fragment's world Z, nothing else. Every VISIBLE mesh
- * in the confirmed, shipped Milestone 1/2 scene (tiles z=0, overlay z=0.5, decor z=1, units
- * z=2..3) sits inside a 3-unit-tall band out of that 100-unit camera distance — built-in fog at
- * any density that visibly did anything to that band would be indistinguishable from a single
- * flat tint applied to literally everything at once, i.e. the exact "flat overlay" failure mode
- * the user rejected, just relocated from a canvas filter to a camera-distance formula. So real
- * height-based depth has to be AUTHORED directly into new geometry that spans real Z — the same
- * tens-of-world-px vocabulary Milestone 2 already proved out for its invisible shadow casters
- * (UNIT_SHADOW_HEIGHT_SCALE/DECOR_SHADOW_HEIGHT_SCALE in ThreeBattleRenderer.ts) — not leaned on
- * scene.fog. `scene.fog` is deliberately never set anywhere in this renderer.
+ * WHY NOT scene.fog / THREE.Fog / THREE.FogExp2: this orthographic camera now has a shallow
+ * orbit angle, so built-in fog would grade pixels by camera depth. That still gives no authored
+ * control over where the mist sits or how it layers around the board's specific props. The
+ * atmosphere stays as explicit world-space sheets and particles, with their own color, height,
+ * motion and render order. `scene.fog` is deliberately never set anywhere in this renderer.
  *
- * A consequence of the above worth stating plainly: on this camera, elevation buys no
- * foreshortening/occlusion cue the way it would on a tilted camera — a quad at Z=40 is
- * pixel-identical in size/position to one at Z=4, just composited later (closer to the camera).
- * So both systems below are placed at Z > 3, strictly above every existing visible mesh
- * (confirmed-working Milestone 1/2 tile/decor/unit sprites are NEVER touched by this file) — mist
- * and particles always draw in front of the board, never interleaved with individual units/decor,
- * which is an honest, stable trade-off (a single mist plane can't sort "behind this unit, in
- * front of that one" against many individual sprites without flicker) rather than an attempt at
- * true per-pixel height occlusion this camera can't give anyway. `renderOrder` backs this up
- * explicitly (10-12 mist layers, 13 dust, 14 embers, vs. every existing mesh's default 0) so the
- * stacking is deterministic even where Z-distance alone would be ambiguous.
+ * A consequence worth stating plainly: the orbit gives raised geometry real depth, but these
+ * atmosphere sheets intentionally remain above the ordinary board layers. Their render order
+ * (10-12 mist layers, 13 dust, 14 embers) keeps them deterministic instead of trying to interleave
+ * one broad mist volume behind some transparent sprites and in front of others.
  *
  * Neither system casts or receives shadows (both default false, left untouched) — a
  * PCF-filtered shadow lookup against a huge, additively-blended, constantly-drifting transparent
