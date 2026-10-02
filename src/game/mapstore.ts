@@ -108,7 +108,7 @@ export interface MapDraft {
   /** Independent 3D water surface levels. Null cells have no authored water. */
   waterLevels?: (number | null)[];
   /** Free-position water strokes in tile-normalized world coordinates (Y down). */
-  waterVersion?: "v1" | "v2" | "v3";
+  waterVersion?: "v1" | "v2" | "v3" | "v4";
   waterPatches?: { x: number; y: number; level: number; size: number; shape: "round" | "square" }[];
   /** Water footprint size and shape per cell; absent means the original full round brush. */
   waterFootprints?: ({ size: number; shape: "round" | "square" } | null)[];
