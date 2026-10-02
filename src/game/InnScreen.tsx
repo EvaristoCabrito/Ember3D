@@ -441,7 +441,7 @@ export function InnScreen({
             </Button>
           </div>
         )}
-        {questsFor(npc.id).map((quest) => {
+        {(npc.id === "merchant" ? [] : questsFor(npc.id)).map((quest) => {
           const status = questStatus(save, quest);
           if (status === "available" && questOffered && !questOffered(quest.id)) return null;
           const { have, total } = questProgress(save, quest);
@@ -786,7 +786,7 @@ function HealerServicePanel({
 
   return (
     <section className="shop-surface relative h-dvh min-h-0 flex flex-col overflow-hidden bg-bg">
-      {!startInMerchant && <img src="/game/assets/brief-estalagem.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />}
+      <img src="/game/assets/brief-estalagem.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-bg/85 via-bg/45 to-bg/25" />
       <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
         <button type="button" onClick={onLeave} disabled={busy} className="h-10 px-3 rounded-md ember-chip text-xs uppercase tracking-[0.14em] disabled:opacity-50">Voltar</button>

@@ -5,7 +5,11 @@
       "name": "Floresta Tropical",
       "encounterIds": [
         "random-encounter-1",
-        "random-encounter-2"
+        "random-encounter-2",
+        "random-caravan-green-road",
+        "random-broken-antler-grove",
+        "random-river-rope-ambush",
+        "random-hollow-root-den"
       ]
     },
     {
@@ -24,7 +28,11 @@
       "id": "ice",
       "name": "Gelo",
       "encounterIds": [
-        "random-frostbound-sanctuary"
+        "random-frostbound-sanctuary",
+        "random-bell-beneath-ice",
+        "random-small-toll-collector",
+        "random-walking-campfire",
+        "random-backward-hunt"
       ]
     },
     {

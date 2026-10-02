@@ -1,4 +1,5 @@
 import { TIER_KEYS } from "./types.ts";
+import { ENCOUNTER_NPC_CLASSES, ENCOUNTER_NPC_GROWTH } from "./encounter-npcs.ts";
 import { INN_FULLNESS } from "./hunger.ts";
 import type { Bag, ClassDef, ClassId, DecorationDef, DecorationPlacement, EquipmentDef, EquipSlot, HealId, Mission, PotionId, SaveData, SpellKind, TerrainDef, TerrainId, TierKey, Unit, WeaponDef, WorldLocation } from "./types.ts";
 // The attribute is what Node's ESM loader needs to import JSON, and it is what lets
@@ -800,6 +801,7 @@ export function decorationCells(placements: { id: string; x: number; y: number; 
 // class, in BattleEngine's spawnUnit (engine.ts). Do not add per-class scaling logic in
 // this table to replicate it; the one copy in spawnUnit is the whole point.
 export const CLASSES: Record<ClassId, ClassDef> = {
+  ...ENCOUNTER_NPC_CLASSES,
   swordsman: {
     id: "swordsman",
     name: "Guerreiro",
@@ -2065,6 +2067,7 @@ export const HERO_NAMES = ["Kael", "Neera", "Voss", "Salazar"] as const;
 export const ALL_HERO_NAMES = ["Kael", "Neera", "Voss", "Salazar", "Aldric", "Malrec"] as const;
 
 export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def: number; res: number }> = {
+  ...ENCOUNTER_NPC_GROWTH,
   swordsman: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   archer: { hp: 3, atk: 2, mag: 0, def: 1, res: 1 },
   mage: { hp: 3, atk: 0, mag: 3, def: 1, res: 3 },

@@ -1,5 +1,6 @@
 import { DECORATIONS, decorationImage, decorationImageWebp, decorationSideFile } from "./data";
 import type { GameArt, SpriteId, TerrainId } from "./types";
+import { ENCOUNTER_NPC_IDS } from "./encounter-npcs";
 
 // Number of art variants available per terrain, e.g. plains001.png / plains002.png.
 // Index 0 (the "001" file) is what every mission renders with unless it names a
@@ -141,6 +142,8 @@ export function portraitFor(sprite: SpriteId): { src: string; framed: boolean; p
 
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
 const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "Asherah", "pikeman", "wardog", "wardog2", "EmberedWraith", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombieDog", "zombie", "zombie2", "swamp-blue-calf", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman", "travelingMerchant"];
+
+SPRITES.push(...ENCOUNTER_NPC_IDS);
 
 // Real load progress for the title screen's loading bar: every image request counts once when it
 // is asked for and once when it settles (loaded or failed). loadGameArt requests its batches one

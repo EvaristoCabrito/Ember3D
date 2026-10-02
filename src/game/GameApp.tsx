@@ -7,6 +7,9 @@ import { BattleCanvas } from "./BattleCanvas";
 import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } from "./gfx/params";
 import { ELEMENT_FX_REGISTRY, pixelDefaults, pixelPresetsFor, type PixelElement, type PixelElementSettings } from "./gfx/three/ProceduralElementEmitter";
 import { THREE_D_DOOR_VARIANTS } from "./data";
+import { FANTOM_FORCE } from "./data";
+import { victoryRewardFor } from "./victory-reward";
+import { ENCOUNTER_NPC_IDS, encounterNpcSpawn, type EncounterNpcId } from "./encounter-npcs";
 import { DEFAULT_AMBIENT_INTENSITY, DEFAULT_BLOOM_INTENSITY, DEFAULT_SUN_INTENSITY, TIME_OF_DAY_LIGHT } from "./gfx/three/ThreeBattleRenderer";
 import { getDevGfx, setDevGfx, subscribeDevGfx, type DevGfxSettings } from "./gfx/three/devGfx";
 import { DevGfxPreview } from "./gfx/three/DevGfxPreview";
@@ -545,6 +548,7 @@ function slotIcon(action: SlotAction): string {
     case "shock":
       return spellIcon("lightning");
     case "magicMissile":
+    case "magicMissileV2":
       return spellIcon("magic-missile");
     case "longShot":
       return spellIcon("long-shot");
@@ -567,6 +571,7 @@ function slotIcon(action: SlotAction): string {
     // No dedicated art yet — reuses Magic Missile's own icon, closest in theme to a single
     // ranged magic bolt.
     case "phantasmalForce":
+    case "fantomForce":
       return spellIcon("phantasmal-force");
     // No dedicated art yet for the tier-2/3 summons — each reuses the same familiar icon.
     case "summonFamiliar2":
@@ -635,6 +640,7 @@ function slotLabel(action: SlotAction): string {
     case "shock":
       return SHOCK.name;
     case "magicMissile":
+    case "magicMissileV2":
       return MAGIC_MISSILE.name;
     case "longShot":
       return LONG_SHOT.name;
@@ -658,6 +664,8 @@ function slotLabel(action: SlotAction): string {
       return SUMMON_FAMILIAR.name;
     case "phantasmalForce":
       return PHANTASMAL_FORCE.name;
+    case "fantomForce":
+      return FANTOM_FORCE.name;
     case "summonFamiliar2":
       return SUMMON_FAMILIAR2.name;
     case "summonFamiliar3":
@@ -1293,6 +1301,8 @@ export function GameApp() {
       const heroDiseases = mergeBattleDiseases(save.heroDiseases, engine);
       const heroPoisons = mergeBattlePoisons(save.heroPoisons, engine);
       const found: string[] = [];
+      const reward = victoryRewardFor(mission, engine.units);
+      if (reward.ember > 0 || reward.rations > 0) found.push(`Recompensa por ajudar: ${reward.ember} Gold e ${reward.rations} rações`);
       // Weapon drops are already resolved and logged live, in-battle, by the engine
       // (kill drops in markDead, chest loot in useLockpick — both ownership- and
       // mission-level-aware). This just folds engine.lootWeapons into the save; it used to
@@ -1346,8 +1356,8 @@ export function GameApp() {
         // seeded from save.spellUses at battle start unless this mission reset the
         // scenario) — a straight overwrite, not a merge.
         spellUses: engine.spentTiers(),
-        ember: (save.ember ?? 0) + loot + engine.lootEmber,
-        rations: save.rations + engine.lootRations,
+        ember: (save.ember ?? 0) + loot + engine.lootEmber + reward.ember,
+        rations: save.rations + engine.lootRations + reward.rations,
         emberSeeded: true,
         muted,
         pendingMission: null,
@@ -2977,7 +2987,7 @@ const SKILL_CLASS: Partial<Record<SpellKind, ClassId>> = {
 };
 
 const SKILL_DAMAGE_ROWS: { name: string; cls: ClassId; tier: SpellTier; formula: string | ((x: number) => string); param?: "level"; note: string }[] = [
-  { name: BLESS.name, cls: "healer", tier: spellTier("bless")!, formula: "—", note: `Healer nível ${BLESS.unlockLevel}. Raio ${BLESS.radius}; +1% de acerto por nível até +10% no nível 13. Duração: 3 turnos no nível 3; 4 no 5; 5 no 7; 6 no 9; 7 no 12; 8 no 15.` },
+  { name: BLESS.name, cls: "healer" as const, tier: spellTier("bless")!, formula: "—", note: `Healer nível ${BLESS.unlockLevel}. Raio ${BLESS.radius}; +1% de acerto por nível até +10% no nível 13. Duração: 3 turnos no nível 3; 4 no 5; 5 no 7; 6 no 9; 7 no 12; 8 no 15.` },
   { name: MAGIC_MISSILE.name, cls: SKILL_CLASS.magicMissile!, tier: spellTier("magicMissile")!, formula: (mag: number) => spellFormula(mag, MAGIC_MISSILE.mul, MAGIC_MISSILE.dice, MAGIC_MISSILE.faces, MAGIC_MISSILE.bonus), note: "Nunca erra. 1 míssil, 2 no nível 3, 3 no nível 6 — um alvo cada." },
   {
     name: LONG_SHOT.name,
@@ -3647,6 +3657,7 @@ function missionToDraft(m: Mission): MapDraft {
     introDialogEnabled: m.introDialogEnabled,
     outroDialog: m.outroDialog,
     outroDialogEnabled: m.outroDialogEnabled,
+    victoryReward: m.victoryReward,
   };
 }
 
@@ -4051,6 +4062,7 @@ export function MapEditorScreen({
   // the heroes — the class itself says which of the two a spawn is (isSummonClass), so
   // there is no third list to keep in sync and no saved map to migrate.
   const [summonBrush, setSummonBrush] = useState<ClassId>(SUMMON_CLASSES[0] ?? "familiar");
+  const [npcBrush, setNpcBrush] = useState<EncounterNpcId | "breadLady">("breadLady");
   // Summons exist on every side — the Conjurer's familiar, whatever an enemy caster brings
   // up, and wild things that belong to nobody. The brush drops into whichever this points at.
   const [summonSide, setSummonSide] = useState<"player" | "enemy" | "neutral">("player");
@@ -4581,7 +4593,9 @@ export function MapEditorScreen({
           : mode === "player"
             ? { name: `Herói ${plain + 1}`, classId: "swordsman", x, y, level: DEFAULT_TEST_LEVEL }
             : mode === "npc"
-              ? { name: `Civil ${plain + 1}`, classId: "breadLady", x, y, level: enemyLevelFor(0) }
+              ? npcBrush === "breadLady"
+                ? { name: `Civil ${plain + 1}`, classId: "breadLady", x, y, level: enemyLevelFor(0) }
+                : { ...encounterNpcSpawn(npcBrush, x, y), level: enemyLevelFor(0) }
               : { name: `Inimigo ${plain + 1}`, classId: "soldier", x, y, level: enemyLevelFor(0) };
       return { ...d, [key]: [...list, spawn] };
     });
@@ -4632,7 +4646,7 @@ export function MapEditorScreen({
           if (i >= 0) tiles[i] = def.tile;
         }
       }
-      setNote(`${def.name} em ${hit.x},${hit.y}: girada para ${turned.rot * (def.model3d ? 90 : 60)}°${turned.rot === 0 ? " (de volta ao original)" : ""}.`);
+      setNote(`${def.name} em ${hit.x},${hit.y}: girada para ${(turned.rot ?? 0) * (def.model3d ? 90 : 60)}°${(turned.rot ?? 0) === 0 ? " (de volta ao original)" : ""}.`);
       if (def.model3d) setSelectedPlacedDecoration({ id: turned.id, x: turned.x, y: turned.y, rot: turned.rot });
       return { ...d, tiles, tileVariants, tileRots, decorations: d.decorations.map((p) => (p === hit ? turned : p)) };
     });
@@ -5581,6 +5595,27 @@ export function MapEditorScreen({
               onChange={(e) => setDraft((d) => ({ ...d, briefing: e.target.value }))}
             />
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-muted text-xs uppercase tracking-wide">Recompensa · Gold</span>
+            <input type="number" min={0} step={1} className="bg-bg border border-border rounded-md px-2 py-1.5" value={draft.victoryReward?.ember ?? 0}
+              onChange={(e) => setDraft((d) => ({ ...d, victoryReward: { ...d.victoryReward, ember: Math.max(0, Math.floor(Number(e.target.value) || 0)), rations: d.victoryReward?.rations ?? 0 } }))} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-muted text-xs uppercase tracking-wide">Recompensa · rações</span>
+            <input type="number" min={0} step={1} className="bg-bg border border-border rounded-md px-2 py-1.5" value={draft.victoryReward?.rations ?? 0}
+              onChange={(e) => setDraft((d) => ({ ...d, victoryReward: { ...d.victoryReward, ember: d.victoryReward?.ember ?? 0, rations: Math.max(0, Math.floor(Number(e.target.value) || 0)) } }))} />
+          </label>
+          <div className="flex flex-col gap-1 col-span-2">
+            <span className="text-muted text-xs uppercase tracking-wide">NPCs necessários para a recompensa</span>
+            {[...new Set([...(draft.neutralSpawns ?? []).filter(s => s.dialog).map(s => s.name), ...(draft.victoryReward?.requiredNpcNames ?? [])])].map(name => (
+              <label key={name} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={draft.victoryReward?.requiredNpcNames?.includes(name) ?? false}
+                  onChange={(e) => { const checked = e.target.checked; setDraft((d) => ({ ...d, victoryReward: { ember: d.victoryReward?.ember ?? 0, rations: d.victoryReward?.rations ?? 0, requiredNpcNames: checked ? [...new Set([...(d.victoryReward?.requiredNpcNames ?? []), name])] : (d.victoryReward?.requiredNpcNames ?? []).filter(value => value !== name) } })); }} />
+                {name}
+              </label>
+            ))}
+            <span className="text-muted text-[11px]">Pagamento ao concluir a vitória, com todos os inimigos derrotados e os NPCs indicados vivos.</span>
+          </div>
           <div className="flex flex-col gap-1">
             <span className="text-muted text-xs uppercase tracking-wide">Diálogo de abertura</span>
             <div className="flex items-center gap-2">
@@ -6276,6 +6311,15 @@ export function MapEditorScreen({
           </p>
         )}
 
+        {mode === "npc" && (
+          <label className="flex flex-col gap-1 text-sm">
+            Personagem
+            <select className="rounded border border-border bg-bg p-2" value={npcBrush} onChange={(event) => setNpcBrush(event.target.value as EncounterNpcId | "breadLady")}>
+              {(["breadLady", ...ENCOUNTER_NPC_IDS] as const).map((id) => <option key={id} value={id}>{CLASSES[id].name}</option>)}
+            </select>
+            <span className="text-xs text-muted">Os novos personagens têm animação de quatro quadros e diálogo próprio.</span>
+          </label>
+        )}
         {mode === "summon" && (
           <div className="flex flex-col gap-2 border border-border rounded-md p-2 bg-bg/40">
             <div className="flex flex-wrap items-center gap-2">

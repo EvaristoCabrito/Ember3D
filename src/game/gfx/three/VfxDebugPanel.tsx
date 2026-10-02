@@ -114,7 +114,8 @@ const IMPACT_GROUPS: { title: string; sliders: ImpactSlider[] }[] = [
   ] },
 ];
 
-const SLIDERS: { key: keyof FireEmitterSettings; label: string; min: number; max: number; step: number }[] = [
+type FireNumericKey = { [K in keyof FireEmitterSettings]-?: NonNullable<FireEmitterSettings[K]> extends number ? K : never }[keyof FireEmitterSettings];
+const SLIDERS: { key: FireNumericKey; label: string; min: number; max: number; step: number }[] = [
   { key: "flipbookFps", label: "Taxa do flipbook", min: 6, max: 36, step: 1 },
   { key: "particleCount", label: "Quantidade de chamas", min: 12, max: 72, step: 1 },
   { key: "particleScale", label: "Escala da chama", min: 0.55, max: 1.5, step: 0.01 },
@@ -938,8 +939,8 @@ export function VfxDebugPanel() {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {SLIDERS.map(({ key, label, min, max, step }) => (
             <label key={key} className="flex flex-col gap-1 rounded-md border border-border px-3 py-2">
-              <span className="flex items-center justify-between gap-2 text-sm"><span>{label}</span><output className="tabular-nums text-muted">{settings[key].toFixed(key === "particleCount" || key === "flipbookFps" ? 0 : 2)}</output></span>
-              <input aria-label={label} type="range" min={min} max={max} step={step} value={settings[key]} onChange={(event) => setSettings((s) => ({ ...s, [key]: Number(event.target.value) }))} />
+              <span className="flex items-center justify-between gap-2 text-sm"><span>{label}</span><output className="tabular-nums text-muted">{(settings[key] ?? DEFAULT_FIRE_EMITTER[key] ?? min).toFixed(key === "particleCount" || key === "flipbookFps" ? 0 : 2)}</output></span>
+              <input aria-label={label} type="range" min={min} max={max} step={step} value={settings[key] ?? DEFAULT_FIRE_EMITTER[key] ?? min} onChange={(event) => setSettings((s) => ({ ...s, [key]: Number(event.target.value) }))} />
             </label>
           ))}
         </div>

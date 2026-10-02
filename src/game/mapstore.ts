@@ -120,6 +120,7 @@ export interface MapDraft {
   /** Wild things on no side. Optional: map files saved before neutrals existed have no such
    * key, and every reader has to treat a missing list as an empty one. */
   neutralSpawns?: DraftSpawn[];
+  victoryReward?: Mission["victoryReward"];
   /** See Mission.introDialog/introDialogEnabled — shown once, before the player can act. */
   introDialog?: DialogTree;
   introDialogEnabled?: boolean;
@@ -239,6 +240,7 @@ export function draftToMission(d: MapDraft): Mission {
     introDialogEnabled: d.introDialogEnabled,
     outroDialog: d.outroDialog,
     outroDialogEnabled: d.outroDialogEnabled,
+    victoryReward: d.victoryReward,
   };
 }
 

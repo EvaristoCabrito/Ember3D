@@ -38,7 +38,7 @@ export type TerrainId = "plains" | "woods" | "ruins" | "water" | "ember" | "hill
  * neutral of that same class on the map — the whole species turns "enemy" at once (see
  * BattleEngine.provoke) and starts acting from the following round. Nothing turns back. */
 export type Side = "player" | "enemy" | "neutral";
-export type ClassId =
+export type ClassId = import("./encounter-npcs").EncounterNpcId
   | "ancientGolem"
   | "swordsman"
   | "archer"
@@ -127,6 +127,7 @@ export type ClassId =
   | "zombieDog"
   | "travelingMerchant";
 export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "wardog2" | "EmberedWraith" | "zombie" | "zombie2" | "troll" | "troll2" | "RoccoTheBird" | "morvenian-wolf" | "mordavian-wolf" | "mordavian-wolf-final" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "familiar4" | "zombieDog" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
+  | import("./encounter-npcs").EncounterNpcId
   // Generic-enemy "alter" sprites, split off so a plain Archer/Mage/Healer enemy (and their
   // own promotions) never renders as literally the same SpriteId as Neera/Voss/Salazar the
   // MCs — see HERO_SPRITE_BY_NAME/CLASSES in engine.ts/data.ts. Each starts as a straight
@@ -449,6 +450,13 @@ export interface ElementalFxPlacement {
   parameters?: Record<string, number | boolean>;
 }
 
+/** Authored payment for clearing a battlefield and helping named neutral NPCs. */
+export interface VictoryReward {
+  ember: number;
+  rations: number;
+  requiredNpcNames?: string[];
+}
+
 export interface Mission {
   id: string;
   index: number;
@@ -574,6 +582,7 @@ export interface Mission {
    * door/sub-area rather than just leaving out in the open. Omitted on every existing
    * mission — purely additive. */
   betterChests?: { x: number; y: number }[];
+  victoryReward?: VictoryReward;
   /** Shown once, before the player can act, right as the battle screen opens. Omitted on
    * every existing mission — purely additive. */
   introDialog?: DialogTree;
