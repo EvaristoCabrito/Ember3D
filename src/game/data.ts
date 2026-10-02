@@ -383,6 +383,25 @@ export const DEADWOODS_DECOR_IDS = new Set([
 // Multi-hex terrain props: rendered as one image over their whole footprint instead of
 // clipped per hex (see DecorationDef). Cropped from LargeHexes1-3.jpg.
 export const DECORATIONS: Record<string, DecorationDef> = {
+  "door-3d-stone-oak": { id: "door-3d-stone-oak", name: "Porta de madeira em pedra clara 3D", footprint: [{ dx: -1, dy: 0 }, { dx: 0, dy: 0 }, { dx: 1, dy: 0 }], architectureSpan: 3, model3d: "door", doorStyle: "stoneOak", wallTexture: "/game/textures/doors/stone-oak-reference.jpg" },
+  "door-3d-stone-oak-open": { id: "door-3d-stone-oak-open", name: "Vão de madeira em pedra clara 3D", footprint: [{ dx: -1, dy: 0 }, { dx: 0, dy: 0 }, { dx: 1, dy: 0 }], architectureSpan: 3, blockingFootprint: [{ dx: -1, dy: 0 }, { dx: 1, dy: 0 }], model3d: "doorway", doorStyle: "stoneOak", wallTexture: "/game/textures/doors/stone-oak-reference.jpg" },
+  "door-3d-dungeon-oak": { id: "door-3d-dungeon-oak", name: "Porta espessa de masmorra com grade 3D", footprint: [{ dx: -1, dy: 0 }, { dx: 0, dy: 0 }, { dx: 1, dy: 0 }], architectureSpan: 3, model3d: "door", doorStyle: "dungeonOak", thickWall: true, wallTexture: "/game/textures/doors/dungeon-oak-reference.jpg" },
+  "door-3d-dungeon-oak-open": { id: "door-3d-dungeon-oak-open", name: "Vão espesso de masmorra com grade 3D", footprint: [{ dx: -1, dy: 0 }, { dx: 0, dy: 0 }, { dx: 1, dy: 0 }], architectureSpan: 3, blockingFootprint: [{ dx: -1, dy: 0 }, { dx: 0, dy: 0 }], model3d: "doorway", doorStyle: "dungeonOak", thickWall: true, wallTexture: "/game/textures/doors/dungeon-oak-reference.jpg" },
+  "dungeon-3d-thick-basalt": { id: "dungeon-3d-thick-basalt", name: "Masmorra — muralha espessa de basalto 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", thickWall: true, wallThicknessScale: 2.35, wallTexture: "/game/textures/walls/dungeon-thick-basalt.png" },
+  "dungeon-3d-thick-reference": { id: "dungeon-3d-thick-reference", name: "Masmorra — muralha espessa com argolas 3D", footprint: [{ dx: -1, dy: 0 }, { dx: 0, dy: 0 }, { dx: 1, dy: 0 }], architectureSpan: 3, model3d: "wall", thickWall: true, dungeonReference: true, wallThicknessScale: 2.35, wallTexture: "/game/textures/walls/dungeon-thick-reference.jpg" },
+  "castle-3d-thick": { id: "castle-3d-thick", name: "Muralha espessa com ameias 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", castleStyle: "battlement", thickWall: true, wallThicknessScale: 1.8, wallTexture: "/game/textures/walls/castle-thick.jpg" },
+  "castle-3d-thick-tower": { id: "castle-3d-thick-tower", name: "Torre quadrada espessa 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", castleStyle: "tower", thickWall: true, heightScale: 1.15, wallTexture: "/game/textures/walls/castle-thick.jpg" },
+  "castle-3d-thick-ruined": { id: "castle-3d-thick-ruined", name: "Muralha espessa arruinada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", castleStyle: "ruined", thickWall: true, wallThicknessScale: 1.8, wallTexture: "/game/textures/walls/castle-thick.jpg" },
+  "rock-3d-layered": { id: "rock-3d-layered", name: "Rochas — parede estratificada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", rockStyle: "layered", heightScale: 0.55, wallTexture: "/game/textures/walls/rock-formation.jpg" },
+  "rock-3d-arch": { id: "rock-3d-arch", name: "Rochas — arco natural 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", rockStyle: "arch", wallTexture: "/game/textures/walls/rock-formation.jpg" },
+  "rock-3d-broken": { id: "rock-3d-broken", name: "Rochas — parede desmoronada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", rockStyle: "broken", heightScale: 0.75, wallTexture: "/game/textures/walls/rock-formation.jpg" },
+  "temple-3d-plain": { id: "temple-3d-plain", name: "Templo — muralha de pedra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", templeStyle: "plain", wallTexture: "/game/textures/walls/temple-plain.jpg" },
+  "temple-3d-niche": { id: "temple-3d-niche", name: "Templo — nicho arqueado 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", templeStyle: "niche", wallTexture: "/game/textures/walls/temple-niche.jpg" },
+  "temple-3d-relief": { id: "temple-3d-relief", name: "Templo — arco com relevo floral 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", templeStyle: "relief", wallTexture: "/game/textures/walls/temple-relief.jpg" },
+  "castle-3d-battlement": { id: "castle-3d-battlement", name: "Castelo — muralha com ameias 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", castleStyle: "battlement", wallTexture: "/game/textures/walls/castle-battlement.jpg" },
+  "castle-3d-ruined": { id: "castle-3d-ruined", name: "Castelo — muralha arruinada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", castleStyle: "ruined", wallTexture: "/game/textures/walls/castle-ruined.jpg" },
+  "castle-3d-gate": { id: "castle-3d-gate", name: "Castelo — portão arqueado 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "door", doorStyle: "castle", castleStyle: "gate", wallTexture: "/game/textures/walls/castle-gate.jpg" },
+  "castle-3d-gate-open": { id: "castle-3d-gate-open", name: "Castelo — arco aberto 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", doorStyle: "castle", castleStyle: "gate", wallTexture: "/game/textures/walls/castle-gate.jpg" },
   "wall-3d-dungeon": { id: "wall-3d-dungeon", name: "Parede de Masmorra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallThicknessScale: 1.55, wallTexture: "/game/textures/walls/dungeon-v2.png" },
   "wall-3d-tower": { id: "wall-3d-tower", name: "Parede de Torre 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/tower-v2.png" },
   "wall-3d-tavern": { id: "wall-3d-tavern", name: "Parede de Taverna 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", wallTexture: "/game/textures/walls/tavern-v2.png" },
@@ -397,6 +416,10 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "door-3d-closed": { id: "door-3d-closed", name: "Porta fechada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "door", doorStyle: "oak", wallTexture: "/game/textures/doors/medieval-oak-door.png" },
   "door-3d-reinforced-frame": { id: "door-3d-reinforced-frame", name: "Vão de porta reforçada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", doorStyle: "reinforced", wallTexture: "/game/textures/doors/reinforced-wood-door.png" },
   "door-3d-reinforced": { id: "door-3d-reinforced", name: "Porta reforçada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "door", doorStyle: "reinforced", wallTexture: "/game/textures/doors/reinforced-wood-door.png" },
+  "door-3d-iron-frame": { id: "door-3d-iron-frame", name: "Arco de ferro aberto 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", doorStyle: "iron" },
+  "door-3d-iron": { id: "door-3d-iron", name: "Porta arqueada de ferro rebitado 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "door", doorStyle: "iron" },
+  "door-3d-steel-frame": { id: "door-3d-steel-frame", name: "Arco de aço aberto 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", doorStyle: "steel" },
+  "door-3d-steel": { id: "door-3d-steel", name: "Porta arqueada de aço com painéis 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "door", doorStyle: "steel" },
   "secret-door-3d-frame": { id: "secret-door-3d-frame", name: "Passagem secreta aberta 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "doorway", doorStyle: "secretStone", wallTexture: "/game/textures/doors/passage-stone.png" },
   "secret-door-3d-hidden": { id: "secret-door-3d-hidden", name: "Porta secreta de pedra 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "secretDoor", doorStyle: "secretStone", wallThicknessScale: 1.55, wallTexture: "/game/textures/walls/dungeon-v2.png" },
   "mountain-ridge": { id: "mountain-ridge", name: "Cordilheira", footprint: DECO_PAIR, tile: "hill" },
@@ -498,8 +521,13 @@ export const DECORATIONS: Record<string, DecorationDef> = {
 };
 
 export const THREE_D_DOOR_VARIANTS = {
+  stoneOak: { open: "door-3d-stone-oak-open", closed: "door-3d-stone-oak" },
+  dungeonOak: { open: "door-3d-dungeon-oak-open", closed: "door-3d-dungeon-oak" },
+  castle: { open: "castle-3d-gate-open", closed: "castle-3d-gate" },
   oak: { open: "door-3d-frame", closed: "door-3d-closed" },
   reinforced: { open: "door-3d-reinforced-frame", closed: "door-3d-reinforced" },
+  iron: { open: "door-3d-iron-frame", closed: "door-3d-iron" },
+  steel: { open: "door-3d-steel-frame", closed: "door-3d-steel" },
   secretStone: { open: "secret-door-3d-frame", closed: "secret-door-3d-hidden" },
 } as const;
 
@@ -737,6 +765,10 @@ export function rotateFootprint(
 export function placedFootprint(p: { id: string; x: number; y: number; rot?: number }): { dx: number; dy: number }[] {
   const def = DECORATIONS[p.id];
   if (!def) return [];
+  if (def.architectureSpan) return def.footprint.map(({ dx, dy }) => {
+    const turn = (p.rot ?? 0) % 4;
+    return turn === 1 ? { dx: -dy, dy: dx } : turn === 2 ? { dx: -dx, dy: -dy } : turn === 3 ? { dx: dy, dy: -dx } : { dx, dy };
+  });
   return rotateFootprint(def.footprint, p.x, p.y, p.rot ?? 0);
 }
 
@@ -744,6 +776,14 @@ export function placedFootprint(p: { id: string; x: number; y: number; rot?: num
 export function placedBlockingFootprint(p: { id: string; x: number; y: number; rot?: number }): { dx: number; dy: number }[] {
   const def = DECORATIONS[p.id];
   if (!def) return [];
+  if (def.architectureSpan) return placedFootprint({ ...p, id: p.id }).filter(cell => {
+    if (!def.blockingFootprint) return true;
+    const turn = (p.rot ?? 0) % 4;
+    return def.blockingFootprint.some(({ dx, dy }) => {
+      const f = turn === 1 ? { dx: -dy, dy: dx } : turn === 2 ? { dx: -dx, dy: -dy } : turn === 3 ? { dx: dy, dy: -dx } : { dx, dy };
+      return f.dx === cell.dx && f.dy === cell.dy;
+    });
+  });
   return rotateFootprint(def.blockingFootprint ?? def.footprint, p.x, p.y, p.rot ?? 0);
 }
 

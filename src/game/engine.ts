@@ -1077,6 +1077,12 @@ function easeOut(t: number): number {
 }
 
 export class BattleEngine {
+  /** Stable sprite overlap order, independent of animation sway and camera depth. */
+  readonly unitActionOrder = new Map<string, number>();
+  private unitActionSerial = 0;
+  noteUnitDrawAction(id: string): void {
+    this.unitActionOrder.set(id, ++this.unitActionSerial);
+  }
   readonly mission: Mission;
   readonly tiles: TerrainId[];
   /** Art variant index per tile, same indexing as tiles. Undefined/missing = variant 0. */
@@ -3393,6 +3399,7 @@ export class BattleEngine {
    * action was taken from a position a rewind would erase.
    */
   private finishAction(u: Unit): void {
+    this.noteUnitDrawAction(u.id);
     if (u.side === "player" && !u.summoned) u.fullness = drainHunger(u.fullness, ACTION_HUNGER_COST);
     u.acted = true;
     this.pendingFoeId = null;
@@ -4451,6 +4458,7 @@ export class BattleEngine {
   wait(): void {
     const u = this.units.find((x) => x.id === this.selectedId);
     if (!u || this.phase !== "player") return;
+    this.noteUnitDrawAction(u.id);
     u.moved = true;
     u.x = Math.round(u.drawX);
     u.y = Math.round(u.drawY);

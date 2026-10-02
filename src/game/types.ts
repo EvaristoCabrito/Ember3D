@@ -322,7 +322,13 @@ export interface DecorationDef {
   /** Architecture meshes live in the editor's separate 3D Walls palette. */
   model3d?: "wall" | "doorway" | "door" | "secretDoor";
   /** Paired open/closed architecture variant, used to retain a door's appearance on opening. */
-  doorStyle?: "oak" | "reinforced" | "secretStone";
+  doorStyle?: "oak" | "reinforced" | "secretStone" | "iron" | "steel" | "castle" | "stoneOak" | "dungeonOak";
+  castleStyle?: "battlement" | "ruined" | "gate" | "tower";
+  thickWall?: boolean;
+  architectureSpan?: number;
+  dungeonReference?: boolean;
+  templeStyle?: "plain" | "niche" | "relief";
+  rockStyle?: "layered" | "arch" | "broken";
   /** Repeating albedo material for architecture; lighting remains real time. */
   wallTexture?: string;
   /** Extra masonry depth multiplier; defaults to the standard thin wall profile. */

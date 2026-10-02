@@ -66,7 +66,8 @@ export function buildDecorOverlay(
     const isChest = CHEST_DECOR_IDS.has(p.id);
     const isBarricade = BARRICADE_LIKE_DECOR.has(p.id);
     const architecture = DECORATIONS[p.id]?.model3d;
-    const solidArchitecture = architecture === "wall" || architecture === "door" || architecture === "secretDoor";
+    const solidArchitecture = architecture === "wall" || architecture === "door" || architecture === "secretDoor"
+      || (architecture === "doorway" && !!DECORATIONS[p.id]?.architectureSpan && !!DECORATIONS[p.id]?.blockingFootprint);
     const bits = (p.blocksPath || isHouse || isChest || isBarricade || solidArchitecture ? HEX_BLOCKED : 0) | (p.yieldsHighGround ? HEX_HIGH : 0);
     if (!bits) continue;
     for (const { dx, dy } of cellsOf(p)) {

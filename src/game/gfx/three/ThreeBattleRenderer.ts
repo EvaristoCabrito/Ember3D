@@ -812,6 +812,7 @@ export class ThreeBattleRenderer {
   /** Blurred white silhouettes for the rim glow, built on first use per frame image. */
   private glowTexCache = new Map<HTMLImageElement, THREE.Texture>();
   private unitEntries = new Map<string, UnitMeshEntry>();
+  private unitDrawPositions = new Map<string, { x: number; y: number }>();
 
   /** The elemental-FX canvas is intentionally between the ground renderer and the visual
    * actors/props canvas. Keep Three's copies of sprites and decorations off the ground canvas
@@ -1508,7 +1509,7 @@ export class ThreeBattleRenderer {
     }
     this.decorEntries = [];
     this.builtDecorKey = key;
-    const architectureCells = new Set(engine.decorations.filter(p => DECORATIONS[p.id]?.model3d).map(p => `${p.x},${p.y}`));
+    const architectureCells = new Set(engine.decorations.filter(p => DECORATIONS[p.id]?.model3d && !DECORATIONS[p.id]?.rockStyle).map(p => `${p.x},${p.y}`));
 
     for (const p of engine.decorations) {
       const def = DECORATIONS[p.id];
@@ -1524,7 +1525,7 @@ export class ThreeBattleRenderer {
         // Convert the overhead view's full 3.5x height projection into physical height,
         // so upright characters clear doorway lintels in tactics mode.
         const spatialDef = engine.tacticsCamera ? { ...def, heightScale: (def.heightScale ?? 1) * 3.5 } : def;
-        const geometry = createWallGeometry(spatialDef, tile, p.rot ?? 0, connections, { x: wx, y: -wy }, !engine.tacticsCamera);
+        const geometry = createWallGeometry(spatialDef, tile, p.rot ?? 0, connections, { x: wx, y: -wy }, !engine.tacticsCamera, engine.tacticsCamera ? 3.5 : 1);
         let map: THREE.Texture | undefined;
         if (def.wallTexture) {
           map = this.wallTextures.get(def.wallTexture);
@@ -1539,8 +1540,11 @@ export class ThreeBattleRenderer {
             this.wallTextures.set(def.wallTexture, map);
           }
         }
-        const architectureColor = def.model3d === "door" ? 0x925b32 : def.model3d === "doorway" ? 0xb7a27c : 0x8b8b86;
-        const material = new THREE.MeshStandardMaterial({ map, color: map ? 0xffffff : architectureColor, roughness: 0.94, metalness: 0, flatShading: true });
+        const metalDoor = def.doorStyle === "iron" || def.doorStyle === "steel";
+        const architectureColor = metalDoor ? (def.doorStyle === "iron" ? 0x555b60 : 0x9ca7b0)
+          : def.model3d === "door" ? 0x925b32 : def.model3d === "doorway" ? 0xb7a27c : 0x8b8b86;
+        const material = new THREE.MeshStandardMaterial({ map, color: map ? 0xffffff : architectureColor,
+          roughness: metalDoor ? 0.52 : 0.94, metalness: metalDoor ? 0.5 : 0, flatShading: true });
         if (!engine.tacticsCamera) configureWallDepth(material, tile, DEPTH_Z_BASE, DEPTH_Z_PER_TILE);
         else {
           material.transparent = true;
@@ -1553,7 +1557,7 @@ export class ThreeBattleRenderer {
         mesh.layers.enable(PROXY_LAYER);
         this.wallGroup.add(mesh);
         // Camera projection stretches the visible walls; lights need the upright volume.
-        const shadowGeometry = createWallGeometry(spatialDef, tile, p.rot ?? 0, connections, { x: wx, y: -wy }, false);
+        const shadowGeometry = createWallGeometry(spatialDef, tile, p.rot ?? 0, connections, { x: wx, y: -wy }, false, engine.tacticsCamera ? 3.5 : 1);
         const shadowMaterial = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
         const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
         shadowMesh.position.set(wx, -wy, this.groundHeight(p.x, p.y, tile));
@@ -1900,6 +1904,14 @@ export class ThreeBattleRenderer {
       entry.material.opacity = u.fade * (u.moved && u.side === "player" && engine.phase === "player" && !engine.isAnimating() ? 0.9 : 1);
 
       const anchor = engine.unitAnchor(u);
+      const previousDraw = this.unitDrawPositions.get(u.id);
+      if (previousDraw && (previousDraw.x !== u.drawX || previousDraw.y !== u.drawY)) engine.noteUnitDrawAction(u.id);
+      this.unitDrawPositions.set(u.id, { x: u.drawX, y: u.drawY });
+      // Explicit transparent sorting prevents animation/camera depth from
+      // repeatedly swapping two overlapping large creature cards.
+      const actionOrder = engine.unitActionOrder.get(u.id) ?? 0;
+      entry.mesh.renderOrder = footprint(u).length > 1 ? 2 + (actionOrder + 1) / (actionOrder + 2) * 0.001 : 2;
+      entry.glowMesh.renderOrder = entry.mesh.renderOrder;
       const footX = anchor.worldX + this.cameraRight.x*v.sway + this.cameraGroundDown.x*v.footY;
       const footY = -anchor.worldY + this.cameraRight.y*v.sway + this.cameraGroundDown.y*v.footY;
       const groundLift = engine.tacticsCamera ? this.landscape?.heightAt(footX, footY) ?? 0 : v.lift;
@@ -1911,6 +1923,7 @@ export class ThreeBattleRenderer {
       // (image spans -w/2..w/2) so scaleX only ever needs to flip its sign for mirroring, same
       // pattern ensureDecorBuilt already uses for a decoration's own-art facing.
       const centerYLocal = (v.footOffset - v.h / 2) * v.scaleY * this.cameraSpriteScale;
+      const base = artBase(img);
       const visualUpOffset = (engine.tacticsCamera ? 0 : v.lift) - v.bob - centerYLocal;
       // Y negated and Z derived from row — see module comment on the Y-flip and
       // ensureDecorBuilt's own comment on z ordering vs decorations (z=1) and tiles (z=0).
@@ -2030,7 +2043,6 @@ export class ThreeBattleRenderer {
       // and shrinking as the unit lifts off it.
       const liftFade = engine.tacticsCamera ? 1 : Math.max(0, 1 - v.lift / Math.max(1, tile * 0.6));
       const footW = Math.abs(v.scaleX) * v.w * this.cameraSpriteScale;
-      const base = artBase(img);
       const target = base
         ? {
             dx: ((base.u0 + base.u1) / 2 - 0.5) * v.w * v.scaleX * this.cameraSpriteScale,
@@ -2169,6 +2181,25 @@ export class ThreeBattleRenderer {
       ray.set(point.clone().addScaledVector(this.cameraBack, distance), this.cameraBack.clone().negate());
       ray.far = distance - tile * 0.04;
       for (const hit of ray.intersectObjects(candidates, false)) covering.add(hit.object);
+    }
+    // The swung timber leaf can cross an entire unit card even though the
+    // doorway itself is passable. Include passing units, not just selection.
+    for (const wall of this.wallEntries) {
+      const def = DECORATIONS[wall.placement.id];
+      if (!wall.mesh.visible || def?.doorStyle !== "stoneOak" || def.model3d !== "doorway") continue;
+      for (const unit of this.unitEntries.values()) {
+        if (!unit.mesh.visible) continue;
+        const ground = unit.mesh.position.clone().addScaledVector(this.unitUp, -Math.abs(unit.mesh.scale.y) / 2);
+        if (Math.hypot(ground.x - wall.mesh.position.x, ground.y - wall.mesh.position.y) > tile * 1.25) continue;
+        for (const height of [-0.3, 0, 0.3]) for (const side of [-0.25, 0, 0.25]) {
+          const point = unit.mesh.position.clone()
+            .addScaledVector(this.unitUp, Math.abs(unit.mesh.scale.y) * height)
+            .addScaledVector(this.cameraRight, Math.abs(unit.mesh.scale.x) * side);
+          ray.set(point.clone().addScaledVector(this.cameraBack, distance), this.cameraBack.clone().negate());
+          ray.far = distance - tile * 0.04;
+          if (ray.intersectObject(wall.mesh, false).length) covering.add(wall.mesh);
+        }
+      }
     }
     for (const mesh of candidates) {
       const goal = covering.has(mesh) ? 0.25 : 1;

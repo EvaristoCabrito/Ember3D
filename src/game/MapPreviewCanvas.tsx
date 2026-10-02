@@ -712,7 +712,8 @@ export function MapPreviewCanvas({
       <div
         ref={viewportRef}
         tabIndex={0}
-        className="h-full w-full bg-black ember-scrollbar overflow-x-auto overflow-y-scroll cursor-default"
+        // cursor-default forces the game pointer with !important, which would hide the grab hand.
+        className={`h-full w-full bg-black ember-scrollbar overflow-x-auto overflow-y-scroll${isDragging || isPanning ? "" : " cursor-default"}`}
         style={{
           scrollbarGutter: "stable both-edges",
           cursor: isDragging || isPanning

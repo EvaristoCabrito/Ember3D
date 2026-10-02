@@ -5292,7 +5292,10 @@ export function MapEditorScreen({
     return [...heroes.sort((a, b) => byName(a.label, b.label)), ...rest.sort((a, b) => byName(a.label, b.label))];
   })();
   const decorOptions = Object.values(DECORATIONS).filter(dec => !dec.model3d).sort((a, b) => byName(a.name, b.name));
-  const architectureOptions = Object.values(DECORATIONS).filter(dec => !!dec.model3d)
+  const [architectureDecorations, setArchitectureDecorations] = useState(false);
+  const [thickWalls, setThickWalls] = useState(false);
+  const architectureOptions = Object.values(DECORATIONS).filter(dec => !!dec.model3d && !!dec.rockStyle === architectureDecorations
+    && (architectureDecorations || !!dec.thickWall === thickWalls))
     .sort((a, b) => Number(a.model3d === "wall") - Number(b.model3d === "wall"));
   const decorationSectionFor = (id: string) => {
     if (DECORATIONS[id]?.exitKind) return "Waypoints";
@@ -5919,19 +5922,22 @@ export function MapEditorScreen({
             ))}
           </div>
           <div className="flex rounded-md border border-border overflow-hidden text-xs">
-            {(["paint", "elevation", "decoration", "architecture", "player", "enemy", "npc", "summon"] as const).map((m) => (
+            {(["paint", "elevation", "decoration", "architecture", "props3d", "player", "enemy", "npc", "summon"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => {
-                  setMode(m);
+                  setMode(m === "props3d" ? "architecture" : m);
+                  if (m === "architecture" || m === "props3d") {
+                    setArchitectureDecorations(m === "props3d");
+                    setDecoBrush(m === "props3d" ? "rock-3d-layered" : thickWalls ? "castle-3d-thick" : "wall-3d-stone");
+                  }
                   if (m === "elevation") setTerrain3D(true);
-                  if (m === "architecture" && !DECORATIONS[decoBrush]?.model3d) setDecoBrush("wall-3d-stone");
                   if (m === "decoration" && DECORATIONS[decoBrush]?.model3d) setDecoBrush(decorOptions[0]!.id);
                 }}
-                className={`px-2.5 py-1.5 ${mode === m ? "bg-accent text-bg" : "bg-bg text-muted"}`}
+                className={`px-2.5 py-1.5 ${(m === "props3d" ? mode === "architecture" && architectureDecorations : m === "architecture" ? mode === "architecture" && !architectureDecorations : mode === m) ? "bg-accent text-bg" : "bg-bg text-muted"}`}
               >
-                {m === "paint" ? "Terreno" : m === "elevation" ? "Elevação" : m === "decoration" ? "Decoração" : m === "architecture" ? "3D Walls" : m === "player" ? "Herói" : m === "enemy" ? "Inimigo" : m === "npc" ? "NPC" : "Invocação"}
+                {m === "paint" ? "Terreno" : m === "elevation" ? "Elevação" : m === "decoration" ? "Decoração" : m === "architecture" ? "3D Walls" : m === "props3d" ? "3D Decorations" : m === "player" ? "Herói" : m === "enemy" ? "Inimigo" : m === "npc" ? "NPC" : "Invocação"}
               </button>
             ))}
           </div>
@@ -6088,6 +6094,19 @@ export function MapEditorScreen({
         )}
         {(mode === "decoration" || mode === "architecture") && (
           <div className="flex flex-col gap-2">
+            {mode === "architecture" && !architectureDecorations && (
+              <div className="flex gap-2">
+                {[false, true].map(thick => (
+                  <Button key={String(thick)} size="sm" variant={thickWalls === thick ? "primary" : "ghost"}
+                    onClick={() => {
+                      setThickWalls(thick);
+                      setDecoBrush(thick ? "castle-3d-thick" : "wall-3d-stone");
+                    }}>
+                    {thick ? "Thick Walls" : "Regular Walls"}
+                  </Button>
+                ))}
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xs text-muted flex-1 min-w-[12rem]">
                 {mode === "architecture"
@@ -6446,7 +6465,7 @@ export function MapEditorScreen({
                 onUnitPlace={placePreviewUnit}
                 onDecorationSelect={selectPreviewDecoration}
                 onDecorationPlace={placePreviewDecoration}
-                primaryObjectDrag={mode !== "elevation" && !turningDeco}
+                primaryObjectDrag={!turningDeco}
               />
             ) : (
               <div className="h-full w-full grid place-items-center text-xs text-muted">Carregando prévia…</div>
