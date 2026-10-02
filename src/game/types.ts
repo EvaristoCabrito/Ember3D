@@ -559,8 +559,14 @@ export interface Mission {
    * Missing/undefined index or omitted array entirely means variant 0 (the default) —
    * existing missions never set this and keep rendering exactly as before. */
   tileVariants?: number[];
-  /** Authored terrain levels, row-major. Missing cells retain the terrain type's height. */
+  /** Authored terrain levels, row-major. Positive levels grant existing high-ground advantages in both views. Missing cells retain the terrain type's height. */
   terrainElevations?: number[];
+  /** Independent 3D water surface levels. Null cells have no authored water. */
+  waterLevels?: (number | null)[];
+  /** Free-position water strokes in tile-normalized world coordinates (Y down). */
+  waterPatches?: { x: number; y: number; level: number; size: number; shape: "round" | "square" }[];
+  /** Water footprint size and shape per cell; absent means the original full round brush. */
+  waterFootprints?: ({ size: number; shape: "round" | "square" } | null)[];
   /** Default ground chosen in the map editor. Terrain-changing decorations restore this tile when removed. */
   baseTile?: TerrainId;
   baseVariant?: number;

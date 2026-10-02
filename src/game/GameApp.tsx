@@ -3644,6 +3644,9 @@ function missionToDraft(m: Mission): MapDraft {
     tiles: parseLayout(m.layout),
     tileVariants: Array.from({ length: n }, (_, i) => variants[i] ?? 0),
     terrainElevations: m.terrainElevations?.slice(),
+    waterLevels: m.waterLevels?.slice(),
+    waterPatches: m.waterPatches?.map(p => ({ ...p })),
+    waterFootprints: m.waterFootprints?.map(p => p ? { ...p } : null),
     baseTile: m.baseTile,
     baseVariant: m.baseVariant,
     tileRots: Array.from({ length: n }, (_, i) => m.tileRots?.[i] ?? 0),
@@ -4042,6 +4045,11 @@ export function MapEditorScreen({
   const [elevationTool, setElevationTool] = useState<"raise" | "lower" | "level">("raise");
   const [elevationLevel, setElevationLevel] = useState(0);
   const [elevationRadius, setElevationRadius] = useState(0);
+  const [waterErase, setWaterErase] = useState(false);
+  const [waterLevel, setWaterLevel] = useState(0.5);
+  const [waterRadius, setWaterRadius] = useState(0);
+  const [waterSize, setWaterSize] = useState(1);
+  const [waterShape, setWaterShape] = useState<"round" | "square">("round");
   const [variant, setVariant] = useState(0);
   const [cityMode, setCityMode] = useState(false);
   // While armed, clicking a hex in Terreno mode turns it instead of painting it.
@@ -4057,7 +4065,7 @@ export function MapEditorScreen({
   const [pixelFxBrush, setPixelFxBrush] = useState<PixelElement>("fire");
   const [pixelFxPresetId, setPixelFxPresetId] = useState("procedural_pixel_fire");
   const [pixelFxSettings, setPixelFxSettings] = useState<PixelElementSettings>(() => pixelDefaults("fire"));
-  const [mode, setMode] = useState<"paint" | "elevation" | "player" | "enemy" | "npc" | "summon" | "decoration" | "architecture" | "elementalFx">("paint");
+  const [mode, setMode] = useState<"paint" | "elevation" | "water" | "player" | "enemy" | "npc" | "summon" | "decoration" | "architecture" | "elementalFx">("paint");
   // Which summon class the "Invocação" brush drops. Summons live in playerSpawns alongside
   // the heroes — the class itself says which of the two a spawn is (isSummonClass), so
   // there is no third list to keep in sync and no saved map to migrate.
@@ -4875,9 +4883,55 @@ export function MapEditorScreen({
     }
   };
 
-  const onCellClick = (x: number, y: number) => {
+  const onCellClick = (x: number, y: number, point?: { x: number; y: number }) => {
     const i = y * draft.cols + x;
-    if (mode === "elevation") {
+    if (mode === "water") {
+      setDraft(d => {
+        const waterLevels = Array.from({ length: d.cols * d.rows }, (_, index) => d.waterLevels?.[index] ?? null);
+        let waterPatches = (d.waterPatches ?? []).map(p => ({ ...p }));
+        const waterFootprints = Array.from({ length: d.cols * d.rows }, (_, index) => d.waterFootprints?.[index] ?? null);
+        let frontier = [{ x, y }];
+        const visited = new Set<number>();
+        for (let ring = 0; ring <= waterRadius; ring++) {
+          const next: { x: number; y: number }[] = [];
+          for (const cell of frontier) {
+            if (cell.x < 0 || cell.y < 0 || cell.x >= d.cols || cell.y >= d.rows) continue;
+            const index = cell.y * d.cols + cell.x;
+            if (visited.has(index)) continue;
+            visited.add(index);
+            if (d.tiles[index] !== "void" || waterErase) {
+              if (point) {
+                const px = point.x + Math.sqrt(3) * (cell.x - x + 0.5 * ((cell.y & 1) - (y & 1)));
+                const py = point.y + 1.5 * (cell.y - y);
+                if (waterErase) {
+                  waterPatches = waterPatches.filter(p => {
+                    const distance = waterShape === "square" ? Math.max(Math.abs(p.x-px), Math.abs(p.y-py)) : Math.hypot(p.x-px,p.y-py);
+                    return distance > (waterSize + p.size) * 1.25;
+                  });
+                  waterLevels[index] = null; waterFootprints[index] = null;
+                } else {
+                  waterPatches = waterPatches.filter(p => !(Math.hypot(p.x-px,p.y-py) < 0.001 && p.size === waterSize && p.shape === waterShape && p.level === waterLevel));
+                  waterPatches.push({ x: px, y: py, level: waterLevel, size: waterSize, shape: waterShape });
+                }
+              } else {
+                const px = Math.sqrt(3) * (cell.x + 0.5 * (cell.y & 1) + 0.5);
+                const py = 2.4 + 1.5 * cell.y + 1;
+                if (waterErase) {
+                  waterPatches = waterPatches.filter(p => Math.hypot(p.x-px,p.y-py) > (waterSize+p.size)*1.25);
+                  waterLevels[index] = null; waterFootprints[index] = null;
+                } else {
+                  waterPatches = waterPatches.filter(p => !(Math.hypot(p.x-px,p.y-py) < 0.001 && p.size === waterSize && p.shape === waterShape && p.level === waterLevel));
+                  waterPatches.push({ x: px, y: py, level: waterLevel, size: waterSize, shape: waterShape });
+                }
+              }
+            }
+            next.push(...hexNeighbors(cell.x, cell.y));
+          }
+          frontier = next;
+        }
+        return { ...d, waterLevels, waterFootprints, waterPatches };
+      });
+    } else if (mode === "elevation") {
       setDraft(d => {
         const terrainElevations = Array.from({ length: d.cols * d.rows }, (_, index) =>
           d.terrainElevations?.[index] ?? TERRAIN[d.tiles[index] ?? "plains"].height ?? 0);
@@ -4942,9 +4996,13 @@ export function MapEditorScreen({
       const tileVariants: number[] = [];
       const tileRots: number[] = [];
       const terrainElevations: number[] = [];
+      const waterLevels: (number | null)[] = [];
+      const waterFootprints: NonNullable<MapDraft["waterFootprints"]> = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const inOld = r < d.rows && c < d.cols;
+          waterFootprints.push(inOld ? (d.waterFootprints?.[r * d.cols + c] ?? null) : null);
+          waterLevels.push(inOld ? (d.waterLevels?.[r * d.cols + c] ?? null) : null);
           tiles.push(inOld ? (d.tiles[r * d.cols + c] ?? base.tile) : base.tile);
           tileVariants.push(inOld ? (d.tileVariants[r * d.cols + c] ?? base.variant) : base.variant);
           tileRots.push(inOld ? (d.tileRots?.[r * d.cols + c] ?? 0) : 0);
@@ -4965,6 +5023,9 @@ export function MapEditorScreen({
         tileVariants,
         tileRots,
         terrainElevations: d.terrainElevations ? terrainElevations : undefined,
+        waterLevels: d.waterLevels ? waterLevels : undefined,
+        waterPatches: d.waterPatches?.filter(p => p.x >= 0 && p.x < (cols + 0.5) * Math.sqrt(3) && p.y >= 2.4 && p.y < 2.4 + rows * 1.5 + 0.5),
+        waterFootprints: d.waterFootprints ? waterFootprints : undefined,
         decorations,
         elementalFx: (d.elementalFx ?? []).filter((p) => p.x >= 0 && p.y >= 0 && p.x < cols && p.y < rows),
         playerSpawns: d.playerSpawns.filter(inBounds),
@@ -5957,7 +6018,7 @@ export function MapEditorScreen({
             ))}
           </div>
           <div className="flex rounded-md border border-border overflow-hidden text-xs">
-            {(["paint", "elevation", "decoration", "architecture", "props3d", "player", "enemy", "npc", "summon"] as const).map((m) => (
+            {(["paint", "elevation", "water", "decoration", "architecture", "props3d", "player", "enemy", "npc", "summon"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -5967,12 +6028,12 @@ export function MapEditorScreen({
                     setArchitectureDecorations(m === "props3d");
                     setDecoBrush(m === "props3d" ? "rock-3d-layered" : thickWalls ? "castle-3d-thick" : "wall-3d-stone");
                   }
-                  if (m === "elevation") setTerrain3D(true);
+                  if (m === "elevation" || m === "water") setTerrain3D(true);
                   if (m === "decoration" && DECORATIONS[decoBrush]?.model3d) setDecoBrush(decorOptions[0]!.id);
                 }}
                 className={`px-2.5 py-1.5 ${(m === "props3d" ? mode === "architecture" && architectureDecorations : m === "architecture" ? mode === "architecture" && !architectureDecorations : mode === m) ? "bg-accent text-bg" : "bg-bg text-muted"}`}
               >
-                {m === "paint" ? "Terreno" : m === "elevation" ? "Elevação" : m === "decoration" ? "Decoração" : m === "architecture" ? "3D Walls" : m === "props3d" ? "3D Decorations" : m === "player" ? "Herói" : m === "enemy" ? "Inimigo" : m === "npc" ? "NPC" : "Invocação"}
+                {m === "paint" ? "Terreno" : m === "elevation" ? "Elevação" : m === "water" ? "Água 3D" : m === "decoration" ? "Decoração" : m === "architecture" ? "3D Walls" : m === "props3d" ? "3D Decorations" : m === "player" ? "Herói" : m === "enemy" ? "Inimigo" : m === "npc" ? "NPC" : "Invocação"}
               </button>
             ))}
           </div>
@@ -5996,6 +6057,15 @@ export function MapEditorScreen({
           <p className="text-xs text-muted ml-auto">Nível de cada um é editável na lista abaixo.</p>
         </div>
 
+        {mode === "water" && <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Button size="sm" variant={!waterErase ? "primary" : "ghost"} onClick={() => setWaterErase(false)}>Pintar água</Button>
+          <Button size="sm" variant={waterErase ? "primary" : "ghost"} onClick={() => setWaterErase(true)}>Remover água</Button>
+          <label>Formato <select aria-label="Formato do pincel de água" value={waterShape} onChange={e => setWaterShape(e.target.value as "round" | "square")} className="bg-bg border border-border rounded px-1 py-1"><option value="round">Redondo</option><option value="square">Quadrado</option></select></label>
+          <label>Tamanho <select aria-label="Tamanho do pincel de água" value={waterSize} onChange={e => setWaterSize(Number(e.target.value))} className="bg-bg border border-border rounded px-1 py-1">{[0.25, 0.5, 0.75, 1].map(size => <option key={size} value={size}>{size * 100}%</option>)}</select></label>
+          <label>Nível <input aria-label="Nível da água" type="number" min={0} max={12} step={0.25} value={waterLevel} onChange={e => setWaterLevel(Math.max(0, Math.min(12, Number(e.target.value) || 0)))} className="w-16 bg-bg border border-border rounded px-1 py-1" /></label>
+          <label>Área <select aria-label="Área do pincel de água" value={waterRadius} onChange={e => setWaterRadius(Number(e.target.value))} className="bg-bg border border-border rounded px-1 py-1">{[0, 1, 2, 3].map(r => <option key={r} value={r}>{r === 0 ? "Uma célula" : r === 1 ? "1 anel" : r + " anéis"}</option>)}</select></label>
+          <span className="text-muted">Superfície contínua com ondas. Use o mesmo nível para um lago; o terreno acima da água forma as margens. Ctrl+Z desfaz.</span>
+        </div>}
         {mode === "elevation" && <div className="flex flex-wrap items-center gap-2 text-xs">
           {(["raise", "lower", "level"] as const).map(tool => <Button key={tool} size="sm" variant={elevationTool === tool ? "primary" : "ghost"} onClick={() => setElevationTool(tool)}>{tool === "raise" ? "Elevar +1" : tool === "lower" ? "Baixar −1" : "Nivelar"}</Button>)}
           <label>Nível <input aria-label="Nível de elevação" type="number" min={0} max={12} value={elevationLevel} onChange={e => setElevationLevel(Math.max(0, Math.min(12, Number(e.target.value) || 0)))} className="w-14 bg-bg border border-border rounded px-1 py-1" /></label>

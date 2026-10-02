@@ -49,8 +49,15 @@ export function buildDecorOverlay(
   cols: number,
   rows: number,
   cellsOf: (p: DecorationPlacement) => { dx: number; dy: number }[],
+  terrainElevations: readonly number[] = [],
 ): DecorOverlay {
   const overlay = new Uint8Array(cols * rows);
+  // Sculpted elevations use the same existing high-ground rules in every camera mode.
+  // The level stays in the mission; bonuses do not multiply with the number of levels.
+  for (let index = 0; index < overlay.length; index++) {
+    const level = terrainElevations[index];
+    if (level != null && Number.isFinite(level) && level > 0) overlay[index]! |= HEX_HIGH;
+  }
   for (const p of decorations) {
     // A house is a real building — nothing should be able to walk through one, whether or
     // not the map author remembered to check "Bloquear caminho" for this particular

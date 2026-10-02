@@ -46,7 +46,7 @@ export function MapPreviewCanvas({
 }: {
   mission: Mission;
   art: GameArt;
-  onCellClick?: (x: number, y: number) => void;
+  onCellClick?: (x: number, y: number, point?: { x: number; y: number }) => void;
   selectedDecorationId?: string;
   selectedPlacedDecoration?: PreviewDecorationSelection | null;
   onUnitSelect?: (unit: PreviewUnitSelection) => void;
@@ -196,7 +196,7 @@ export function MapPreviewCanvas({
     let pixelRenderer: ThreeBattleRenderer | null = null;
     const pixelPlacements = engine.elementalFxPlacements.filter((placement) => placement.family === "procedural_pixel" && placement.element);
     const hasArchitecture = architectureActive || engine.decorations.some(p => !!DECORATIONS[p.id]?.model3d);
-    if (pixelFxCanvas && (tacticsView || pixelPlacements.length || hasArchitecture)) {
+    if (pixelFxCanvas && (tacticsView || pixelPlacements.length || hasArchitecture || !!mission.waterPatches?.length || mission.waterLevels?.some(level => level != null) || mission.terrainElevations?.some(level => level > 0) || engine.tiles.some(id => id !== "void" && (TERRAIN[id]?.height ?? 0) > 0))) {
       try {
         const fxKey = JSON.stringify(pixelPlacements);
         if (architectureRendererRef.current && rendererFxKeyRef.current !== fxKey) {
@@ -646,7 +646,13 @@ export function MapPreviewCanvas({
         const rect = canvas.getBoundingClientRect();
         const scale = renderScaleRef.current;
         const cell = previewCellAt((event.clientX - rect.left) / scale, (event.clientY - rect.top) / scale);
-        if (cell) onCellClickRef.current?.(cell.x, cell.y);
+        if (cell) {
+          const px = (event.clientX - rect.left) / scale, py = (event.clientY - rect.top) / scale;
+          const renderer = architectureRendererRef.current;
+          const flat = tacticsView && renderer ? renderer.screenToFlatScreen(px, py, canvas.clientWidth / scale, canvas.clientHeight / scale) : { x: px, y: py };
+          const tile = ZOOM_RADII[engine.zoom]!;
+          onCellClickRef.current?.(cell.x, cell.y, { x: (flat.x + engine.camX) / tile, y: (flat.y + engine.camY) / tile });
+        }
       }
     }
     if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);

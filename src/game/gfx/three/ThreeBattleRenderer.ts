@@ -44,6 +44,8 @@ import { drawGroundTexture, drawHexGround, GROUND_TEXTURE_INSET, GROUND_TEXTURE_
 import { configureWallDepth, createWallGeometry } from "./ThreeWalls";
 import { lightTacticsMaterial, tacticsProp } from "./ThreeTacticsGeometry";
 import { buildLandscape, type LandscapeSurface } from "./ThreeLandscape";
+import { ThreeWater } from "./ThreeWater";
+import { ThreeElevationSteps } from "./ThreeElevationSteps";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -649,6 +651,10 @@ export class ThreeBattleRenderer {
   private unitFacing = new THREE.Quaternion();
   private terrainSolid: THREE.Mesh | null = null;
   private terrainSolidKey = "";
+  private water = new ThreeWater();
+  private waterKey = "";
+  private elevationSteps = new ThreeElevationSteps();
+  private elevationStepsKey = "";
   private landscape: LandscapeSurface | null = null;
   private landscapeTexture: THREE.CanvasTexture | null = null;
   private landscapeMaterial: THREE.MeshLambertMaterial | null = null;
@@ -1218,6 +1224,37 @@ export class ThreeBattleRenderer {
     if (!this.engine.tacticsCamera) return 0;
     const point = hexWorld(col, row, tile);
     return this.landscape?.heightAt(point.wx, -point.wy) ?? ((this.engine.mission.terrainElevations?.[row * this.engine.cols + col] ?? TERRAIN[tileAt(this.engine.tiles, this.engine.cols, col, row)].height ?? 0) * tile * 0.65);
+  }
+
+  private syncElevationSteps(tile: number): void {
+    const engine = this.engine;
+    this.elevationSteps.group.visible = !engine.tacticsCamera;
+    if (engine.tacticsCamera) return;
+    const key = JSON.stringify([tile, engine.cols, engine.rows, engine.tiles, engine.mission.terrainElevations]);
+    if (key === this.elevationStepsKey) return;
+    this.elevationSteps.rebuild(engine.cols, engine.rows, tile, (col, row) => {
+      if (col < 0 || row < 0 || col >= engine.cols || row >= engine.rows) return 0;
+      const id = tileAt(engine.tiles, engine.cols, col, row);
+      if (id === "void") return 0;
+      return engine.mission.terrainElevations?.[row * engine.cols + col] ?? TERRAIN[id].height ?? 0;
+    });
+    this.scene.add(this.elevationSteps.group);
+    this.elevationStepsKey = key;
+  }
+
+  private syncWater(tile: number): void {
+    const engine = this.engine;
+    const key = JSON.stringify([tile, engine.cols, engine.rows, engine.mission.waterLevels, engine.mission.waterPatches, engine.mission.waterFootprints, engine.tiles, this.terrainSolidKey, engine.fogged ? engine.visVersion : "clear"]);
+    if (key !== this.waterKey) {
+      this.water.rebuild(engine.cols, engine.rows, tile, engine.mission.waterLevels ?? [], (col, row) =>
+        tileAt(engine.tiles, engine.cols, col, row) !== "void" && (!engine.fogged || engine.explored(col, row) || engine.visible(col, row)),
+        (x, y) => this.landscape?.heightAt(x, y) ?? 0, engine.mission.waterFootprints, engine.mission.waterPatches);
+      this.scene.add(this.water.mesh);
+      this.waterKey = key;
+    }
+    this.water.mesh.visible = true;
+    this.water.flat.value = engine.tacticsCamera ? 0 : 1;
+    this.water.time.value = performance.now() / 1000;
   }
 
   private syncTerrainHeight(tile: number): void {
@@ -2523,6 +2560,8 @@ export class ThreeBattleRenderer {
     this.ensureBuilt(tile);
     this.syncDirtyTiles();
     this.syncTerrainHeight(tile);
+    this.syncWater(tile);
+    this.syncElevationSteps(tile);
     this.ensureDecorBuilt(tile);
     this.syncGroundAO(tile);
     this.syncFog(tile);
@@ -3451,6 +3490,8 @@ export class ThreeBattleRenderer {
   }
 
   dispose(): void {
+    this.water.dispose();
+    this.elevationSteps.dispose();
     this.disposed = true;
     this.pendingMagicMissileV2VfxRequests.length = 0;
     this.activeMagicMissileV2VfxRequestId = null;

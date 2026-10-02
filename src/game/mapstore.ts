@@ -105,6 +105,12 @@ export interface MapDraft {
    * ...) paints there. Defaults to 0 (the "001" file, safe for existing missions). */
   tileVariants: number[];
   terrainElevations?: number[];
+  /** Independent 3D water surface levels. Null cells have no authored water. */
+  waterLevels?: (number | null)[];
+  /** Free-position water strokes in tile-normalized world coordinates (Y down). */
+  waterPatches?: { x: number; y: number; level: number; size: number; shape: "round" | "square" }[];
+  /** Water footprint size and shape per cell; absent means the original full round brush. */
+  waterFootprints?: ({ size: number; shape: "round" | "square" } | null)[];
   /** Ground restored beneath removable terrain props. Set by “Substituir base”. */
   baseTile?: TerrainId;
   baseVariant?: number;
@@ -212,6 +218,9 @@ export function draftToMission(d: MapDraft): Mission {
     layout,
     tileVariants: d.tileVariants.some((v) => v) ? d.tileVariants : undefined,
     terrainElevations: d.terrainElevations,
+    waterLevels: d.waterLevels?.slice(),
+    waterPatches: d.waterPatches?.map(p => ({ ...p })),
+    waterFootprints: d.waterFootprints?.map(p => p ? { ...p } : null),
     baseTile: d.baseTile,
     baseVariant: d.baseVariant,
     tileRots: d.tileRots?.some((r) => r) ? d.tileRots : undefined,

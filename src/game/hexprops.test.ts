@@ -147,3 +147,37 @@ test("a placement with neither switch contributes nothing", () => {
   const overlay = buildDecorOverlay([{ id: "x", x: 2, y: 2 }], COLS, ROWS, oneHex);
   assert.equal(overlay.every((b) => b === 0), true);
 });
+
+
+test("painted elevation grants high ground independently of terrain art and camera", () => {
+  const tiles = board();
+  const heights = Array(COLS * ROWS).fill(0);
+  heights[at(3, 2)] = 4;
+  const overlay = buildDecorOverlay([], COLS, ROWS, oneHex, heights);
+  const d = hexDef(tiles, COLS, 3, 2, overlay);
+  assert.equal(d.height, 1);
+  assert.equal(d.atk, TERRAIN.hill.atk);
+  assert.equal(d.def, TERRAIN.hill.def);
+  assert.equal(d.moveCost, TERRAIN.hill.moveCost);
+  assert.equal(tiles[at(3, 2)], "plains");
+  assert.equal(hexDef(tiles, COLS, 2, 2, overlay), TERRAIN.plains);
+});
+
+test("elevation preserves blocking and does not stack the existing high-ground bonus", () => {
+  const heights = Array(COLS * ROWS).fill(0);
+  heights[at(3, 2)] = 12;
+  const overlay = buildDecorOverlay([{ id: "x", x: 3, y: 2, blocksPath: true, yieldsHighGround: true }], COLS, ROWS, oneHex, heights);
+  const d = hexDef(board(), COLS, 3, 2, overlay);
+  assert.equal(d.passable, false);
+  assert.equal(d.blocksShot, true);
+  assert.equal(d.atk, TERRAIN.hill.atk);
+  assert.equal(d.def, TERRAIN.hill.def);
+});
+
+test("absent, zero and invalid sculpted elevations retain the original terrain rules", () => {
+  const heights = Array(COLS * ROWS).fill(0);
+  heights[at(1, 1)] = NaN; heights[at(2, 1)] = Infinity; heights[at(3, 1)] = -1;
+  const overlay = buildDecorOverlay([], COLS, ROWS, oneHex, heights);
+  assert(overlay.every(bits => bits === 0));
+  assert.equal(hexDef(board("hill"), COLS, 2, 1, overlay), TERRAIN.hill);
+});

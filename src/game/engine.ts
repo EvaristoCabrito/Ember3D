@@ -5737,7 +5737,7 @@ export class BattleEngine {
 
   /** Refold the decoration switches. Call after anything adds or removes a prop. */
   private refreshDecorOverlay(): void {
-    this.decorOverlay = buildDecorOverlay(this.decorations, this.cols, this.rows, placedBlockingFootprint);
+    this.decorOverlay = buildDecorOverlay(this.decorations, this.cols, this.rows, placedBlockingFootprint, this.mission.terrainElevations);
   }
 
   /** Who stands where, rebuilt only when the layout actually moved. See `occCache`. */
