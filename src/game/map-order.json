@@ -14,6 +14,9 @@
   "cemetery": [
     "cemiterio-esquecidos"
   ],
+  "watchtower": [
+    "watchtower-gate-floor"
+  ],
   "ruins": [
     "muralha",
     "fortaleza",
@@ -28,10 +31,6 @@
   "misty-cave": [
     "vertente",
     "portao",
-    "misty-cave-dungeon",
     "deep-mist"
-  ],
-  "watchtower": [
-    "watchtower-gate-floor"
   ]
 }
