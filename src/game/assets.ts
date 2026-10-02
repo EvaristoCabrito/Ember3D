@@ -286,7 +286,7 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   familiar: { n: 8, bust: "?v=6" },
   // Familiar 2 — the crouch/lunge strike cut from reference video (see CAST_FRAMES and
   // WALK_FRAMES below for its casting and walk cuts).
-  familiar2: { n: 12, bust: "" },
+  familiar2: { n: 32, bust: "?v=familiar2-32" },
   "ancient-golem": { n: 32, bust: "" },
   "morvenian-wolf": { n: 6, bust: "" },
   // Mordavian Wolf — the bigger cousin, sliced from its own reference sheet; the row
@@ -346,7 +346,7 @@ const CAST_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "cultist-v2": { n: 36, bust: "" },
   // Familiar 2's real rear-up/charge/beam-release windup — a distinct animation from its
   // ATT cut (the crouch/lunge), not a fallback.
-  familiar2: { n: 24, bust: "" },
+  familiar2: { n: 32, bust: "?v=familiar2-32" },
   RoccoTheBird: { n: 32, bust: "" },
   EmberedWraith: { n: 32, bust: "" },
   zombieDog: { n: 32, bust: "" },
@@ -387,7 +387,7 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // Right-facing cut; see the dedicated walksLeft.familiar2 load below for its own
   // authored left-facing cut (real distinct footage, not the CSS mirror every other
   // sprite absent from walksLeft falls back to).
-  familiar2: { n: 12, bust: "" },
+  familiar2: { n: 32, bust: "?v=familiar2-32" },
   // Shot facing left, the same "opposite of the usual facing-1-as-drawn convention" case
   // as the familiar — see computeUnitVisual's neeraWalkReversed in engine.ts, which mirrors
   // this pool for rightward travel and draws it as-is for leftward travel (backwards from
@@ -492,8 +492,8 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
       pools[key] = value;
     }));
   };
-  const n = id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" || id === "zombie" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
-  const cacheBust = id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : "";
+  const n = id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" || id === "zombie" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" || id === "familiar2" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
+  const cacheBust = id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : id === "familiar2" ? "?v=familiar2-32" : "";
   put("sprites", cut(n, (i) => (id === "conjurer" ? `talk-${i}` : `${i}`), cacheBust));
   const atk = ATTACK_FRAMES[id];
   if (atk) put("attacks", cut(atk.n, (i) => `atk-${i}`, atk.bust));

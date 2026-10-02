@@ -8907,7 +8907,9 @@ export class BattleEngine {
     if (n <= 1) return 0;
     const moving = this.active?.type === "move" && this.active.id === u.id;
     if (u.classId === "familiar" || u.classId === "familiar2") {
-      const rate = moving ? 8.0 : 5.5;
+      // Familiar 2's idle went from 12 to 32 frames over the same footage span; scaling by
+      // n / 12 keeps its loop the same length it always was.
+      const rate = (moving ? 8.0 : 5.5) * (u.classId === "familiar2" ? n / 12 : 1);
       return Math.floor(u.bob * rate) % n;
     }
     if (u.classId === "wardog" || u.classId === "swampBlueCalf") {
@@ -9366,7 +9368,11 @@ export class BattleEngine {
           ? h * 0.042
           : isNeeraCasting
             ? h * 0.045
-            : 0;
+            : u.sprite === "familiar2"
+              // The 32-frame cuts share one camera anchor so a tentacle stepping toward the
+              // camera keeps room below; resting feet sit ~2.8% above the canvas bottom.
+              ? h * 0.028
+              : 0;
     // Big creatures plant their feet at the bottom corner of their front hex (tile * 0.9,
     // matching the hex outline radius used elsewhere) instead of the smaller offset tuned
     // for normal-size sprites, so the feet don't float above the tile they stand on.
