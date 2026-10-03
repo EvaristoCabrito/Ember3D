@@ -1,7 +1,7 @@
 import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_MOVE, GRID_ROUTE, GRID_ALLY, GRID_ENEMY, GRID_ENEMY_TARGET, GRID_ENEMY_GLOW } from "./tacticalGrid";
 import { isHexGroundVariant, requestSpriteArt } from "./assets";
 import { drawGroundTexture, drawHexGround } from "./hexGround";
-import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
+import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, MINOR_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
 import { weightedWeaponPick, shieldBashFormula } from "./data";
 import { placedBlockingFootprint, THREE_D_DOOR_VARIANTS } from "./data";
@@ -115,6 +115,7 @@ export const ZOOM_RADII = [22, 34, 50, 72];
  * theme are listed; anything absent here (melee skills, arrows, heals, ...) queues no FX. */
 const SPELL_ELEMENT_FX: Partial<Record<SpellKind, { kind: ElementKind; duration: number }>> = {
   causticVenom: { kind: "acid", duration: 1.3 },
+  minorVenom: { kind: "acid", duration: 1.3 },
   // Lightning/Lightning Tier 3/Choque deliberately have NO entry here — per direct report,
   // the newer WebGL shader burst this table drives read as an odd "3D" pop layered on top
   // of the older, plain 2D bolt/spark cue (see emitLightningFx, still called separately for
@@ -236,7 +237,7 @@ interface MissileFx {
   travel: number;
   max: number;
   hue: number;
-  kind: "magicMissile" | "phantasmalForce" | "fantomForce" | "fireball" | "causticVenom" | "longShot" | "arcaneBolt" | "webOfDreams";
+  kind: "magicMissile" | "phantasmalForce" | "fantomForce" | "fireball" | "causticVenom" | "minorVenom" | "longShot" | "arcaneBolt" | "webOfDreams";
   seed: number;
 }
 
@@ -2362,6 +2363,12 @@ export class BattleEngine {
         const target = step.projectileTo ?? null;
         if (caster && target) this.emitMissileFx(caster.x, caster.y, target.x, target.y, step.spellKind);
       }
+      // Veneno Menor always flies the original 2D venom bolt (the 3D V2 smoke is Caustic only).
+      if (step.spellKind === "minorVenom") {
+        const caster = this.units.find((u) => u.id === step.att);
+        const target = step.projectileTo ?? null;
+        if (caster && target) this.emitMissileFx(caster.x, caster.y, target.x, target.y, "minorVenom");
+      }
       if (step.spellKind === "longShot") {
         const caster = this.units.find((u) => u.id === step.att);
         const target = step.tiles[0];
@@ -2918,7 +2925,7 @@ export class BattleEngine {
       if (!a.magicMissileV2Complete && a.t >= 3.2) a.magicMissileV2Complete = true;
     }
     const arrowSpell = a.spellKind === "longShot" || a.spellKind === "multiShot" || a.spellKind === "piercing";
-    const hitAt = arrowSpell ? ARROW_TRAVEL : a.spellKind === "phantasmalForce" || a.spellKind === "fantomForce" ? PHANTASMAL_FORCE_TRAVEL : a.spellKind === "magicMissile" || a.spellKind === "magicMissileV2" || a.spellKind === "fireball" || a.spellKind === "causticVenom" ? SPELL_TRAVEL : 0.18;
+    const hitAt = arrowSpell ? ARROW_TRAVEL : a.spellKind === "phantasmalForce" || a.spellKind === "fantomForce" ? PHANTASMAL_FORCE_TRAVEL : a.spellKind === "magicMissile" || a.spellKind === "magicMissileV2" || a.spellKind === "fireball" || a.spellKind === "causticVenom" || a.spellKind === "minorVenom" ? SPELL_TRAVEL : 0.18;
     if (syncMagicMissileV2Vfx && a.magicMissileV2VfxId === "") {
       if (a.t >= hitAt) a.magicMissileV2Impact = true;
     }
@@ -3061,6 +3068,7 @@ export class BattleEngine {
             a.spellKind === "cleave" ||
             a.spellKind === "piercing" ||
             a.spellKind === "causticVenom" ||
+            a.spellKind === "minorVenom" ||
             a.spellKind === "piercingThrust" ||
             a.spellKind === "sweep" ||
             a.spellKind === "divineWrath" ||
@@ -3096,6 +3104,8 @@ export class BattleEngine {
           }
         }
       }
+      // Veneno Menor keeps the original venom impact: the green burst on every splash hex.
+      if (a.spellKind === "minorVenom") this.emitFireballBurstFx(a.tiles, "causticVenom");
       const elementFx = a.spellKind ? SPELL_ELEMENT_FX[a.spellKind] : undefined;
       if (elementFx && !(a.spellKind === "burningHands" && syncBurningHandsVfx) && !(a.spellKind === "causticVenom" && syncCausticVenomVfx)) this.queueElementalFx(elementFx.kind, a.tiles, elementFx.duration);
       if (((a.spellKind === "cleave" && !a.cleaveVfxQueued) || a.spellKind === "shoulderSmash") && a.tiles.length > 0) {
@@ -3114,7 +3124,7 @@ export class BattleEngine {
     // changing the hit timing above; every other spell keeps the existing duration.
     // The slower spell bolts (SPELL_TRAVEL) need the step to outlast their flight, impact and
     // trail afterglow.
-    const boltSpell = a.spellKind === "magicMissile" || a.spellKind === "magicMissileV2" || a.spellKind === "fireball" || a.spellKind === "causticVenom" || a.spellKind === "fantomForce";
+    const boltSpell = a.spellKind === "magicMissile" || a.spellKind === "magicMissileV2" || a.spellKind === "fireball" || a.spellKind === "causticVenom" || a.spellKind === "minorVenom" || a.spellKind === "fantomForce";
     const spellEnd = Math.max(att.sprite === "conjurer" ? 0.72 : 0.55, boltSpell ? SPELL_TRAVEL + MISSILE_AFTERGLOW + 0.15 : 0, syncPhantasmalVfx ? 1.5 : 0, syncCausticVenomVfx ? SPELL_TRAVEL + 2.3 : 0);
     if (syncMagicMissileV2Vfx && a.magicMissileV2VfxId === "" && a.t >= spellEnd) a.magicMissileV2Complete = true;
     if (syncFireballVfx) {
@@ -3879,7 +3889,7 @@ export class BattleEngine {
   }
 
   /** One glowing bolt per target, hex-to-hex — see MissileFx. */
-  private emitMissileFx(fromX: number, fromY: number, toX: number, toY: number, kind: "magicMissile" | "phantasmalForce" | "fantomForce" | "fireball" | "causticVenom" | "longShot" | "arcaneBolt" | "webOfDreams"): void {
+  private emitMissileFx(fromX: number, fromY: number, toX: number, toY: number, kind: "magicMissile" | "phantasmalForce" | "fantomForce" | "fireball" | "causticVenom" | "minorVenom" | "longShot" | "arcaneBolt" | "webOfDreams"): void {
     if (this.reducedMotion) return;
     let slot = this.missileFx.find((m) => !m.live);
     if (!slot) {
@@ -3898,9 +3908,9 @@ export class BattleEngine {
     slot.toX = toX;
     slot.toY = toY;
     slot.t = 0;
-    slot.travel = kind === "longShot" ? ARROW_TRAVEL : kind === "webOfDreams" ? WEB_SHOT_TRAVEL : kind === "phantasmalForce" || kind === "fantomForce" ? PHANTASMAL_FORCE_TRAVEL : kind === "magicMissile" || kind === "fireball" || kind === "causticVenom" ? SPELL_TRAVEL : MISSILE_TRAVEL;
+    slot.travel = kind === "longShot" ? ARROW_TRAVEL : kind === "webOfDreams" ? WEB_SHOT_TRAVEL : kind === "phantasmalForce" || kind === "fantomForce" ? PHANTASMAL_FORCE_TRAVEL : kind === "magicMissile" || kind === "fireball" || kind === "causticVenom" || kind === "minorVenom" ? SPELL_TRAVEL : MISSILE_TRAVEL;
     slot.max = slot.travel + MISSILE_AFTERGLOW;
-    slot.hue = kind === "fireball" ? 22 : kind === "causticVenom" ? 104 : kind === "longShot" ? 205 : kind === "arcaneBolt" ? 2 : kind === "webOfDreams" ? 276 : kind === "phantasmalForce" || kind === "fantomForce" ? 202 : 268;
+    slot.hue = kind === "fireball" ? 22 : kind === "causticVenom" || kind === "minorVenom" ? 104 : kind === "longShot" ? 205 : kind === "arcaneBolt" ? 2 : kind === "webOfDreams" ? 276 : kind === "phantasmalForce" || kind === "fantomForce" ? 202 : 268;
     slot.kind = kind;
     slot.seed = this.rng() * Math.PI * 2;
   }
@@ -4542,6 +4552,18 @@ export class BattleEngine {
     this.spellAim = null;
     this.hover = null;
     this.tip = `${CAUSTIC_VENOM.name}: alcance ${CAUSTIC_VENOM.range}, alvo ${diceFormula(CAUSTIC_VENOM.centerDice, CAUSTIC_VENOM.centerFaces, CAUSTIC_VENOM.centerBonus)} − RES, respingo ${diceFormula(CAUSTIC_VENOM.splashDice, CAUSTIC_VENOM.splashFaces, CAUSTIC_VENOM.splashBonus)} − RES em área — envenena todos atingidos, até aliados. Toque para mirar, toque de novo para lançar.`;
+    sfxPlay.ui();
+  }
+
+  startMinorVenom(): void {
+    const u = this.units.find((x) => x.id === this.selectedId);
+    if (!u || u.acted || this.familiarSpellRemaining(u, "minorVenom") <= 0) return;
+    this.mode = "awaitSpell";
+    this.spellKind = "minorVenom";
+    this.spellArmed = false;
+    this.spellAim = null;
+    this.hover = null;
+    this.tip = `${MINOR_VENOM.name}: alcance ${MINOR_VENOM.range}, alvo ${diceFormula(MINOR_VENOM.centerDice, MINOR_VENOM.centerFaces, MINOR_VENOM.centerBonus)} − RES, respingo ${diceFormula(MINOR_VENOM.splashDice, MINOR_VENOM.splashFaces, MINOR_VENOM.splashBonus)} − RES em área de raio ${MINOR_VENOM.size} — envenena todos atingidos, até aliados. Toque para mirar, toque de novo para lançar.`;
     sfxPlay.ui();
   }
 
@@ -5248,6 +5270,10 @@ export class BattleEngine {
       this.confirmCausticVenom();
       return;
     }
+    if (this.spellKind === "minorVenom") {
+      this.confirmMinorVenom();
+      return;
+    }
     if (this.spellKind === "longShot") {
       this.castLongShot(u, cell);
       return;
@@ -5606,8 +5632,8 @@ export class BattleEngine {
       if (distance > range) return `Alvo fora de alcance (máximo ${range} hexes).`;
       if (kind === "phantasmalForce" && !clearShot(caster, cell, this.tiles, this.cols, "bolt", this.decorOverlay)) return "Linha de tiro bloqueada por terreno ou obstáculo.";
     }
-    if (kind === "fireball" || kind === "causticVenom" || kind === "webOfDreams") {
-      const range = kind === "fireball" ? FIREBALL.range : kind === "causticVenom" ? CAUSTIC_VENOM.range : WEB_OF_DREAMS.range;
+    if (kind === "fireball" || kind === "causticVenom" || kind === "minorVenom" || kind === "webOfDreams") {
+      const range = kind === "fireball" ? FIREBALL.range : kind === "causticVenom" ? CAUSTIC_VENOM.range : kind === "minorVenom" ? MINOR_VENOM.range : WEB_OF_DREAMS.range;
       if (distance > range) return `Casa fora de alcance (máximo ${range} hexes).`;
       if (!clearShot(caster, fireballOrigin(cell, this.cols, this.rows), this.tiles, this.cols, "bolt", this.decorOverlay)) return "Linha de tiro bloqueada por terreno ou obstáculo.";
     }
@@ -5825,6 +5851,10 @@ export class BattleEngine {
     }
     if (this.spellKind === "causticVenom") {
       if (manhattan(caster, cell) > CAUSTIC_VENOM.range) return false;
+      return clearShot(caster, fireballOrigin(cell, this.cols, this.rows), this.tiles, this.cols, "bolt", this.decorOverlay);
+    }
+    if (this.spellKind === "minorVenom") {
+      if (manhattan(caster, cell) > MINOR_VENOM.range) return false;
       return clearShot(caster, fireballOrigin(cell, this.cols, this.rows), this.tiles, this.cols, "bolt", this.decorOverlay);
     }
     if (this.spellKind === "longShot") {
@@ -6064,6 +6094,18 @@ export class BattleEngine {
       return;
     }
     this.castCausticVenom(u, cell);
+  }
+
+  confirmMinorVenom(): void {
+    const u = this.units.find((x) => x.id === this.selectedId);
+    const cell = this.hover;
+    if (!u || this.mode !== "awaitSpell" || !cell) return;
+    if (manhattan(u, cell) > MINOR_VENOM.range) {
+      this.tip = "Fora de alcance.";
+      sfxPlay.ui();
+      return;
+    }
+    this.castMinorVenom(u, cell);
   }
 
   private castLongShot(unit: Unit, cell: Point): void {
@@ -7565,9 +7607,11 @@ export class BattleEngine {
       }
     }
 
+    // Undead Ox — its tier4 Veneno Menor (2 per battle), then plain melee.
+    if (next.classId === "undeadOx" && this.tryAiMinorVenom(next, reach, walkReach, players)) return;
+
     // Birolho (and Birolho2) — Relâmpago outranks Caustic Venom outranks Choque outranks Magic Missile.
-    // The Undead Ox shares this branch for its tier4 Caustic Venom only (no tier1/tier2/Choque).
-    if ((next.classId === "birolho" || next.classId === "birolho2" || next.classId === "birolho3" || next.classId === "birolhoLegs" || next.classId === "birolhoLegs2" || next.classId === "undeadOx") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.spells.tier4 > 0 || next.shockCharges > 0)) {
+    if ((next.classId === "birolho" || next.classId === "birolho2" || next.classId === "birolho3" || next.classId === "birolhoLegs" || next.classId === "birolhoLegs2") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.spells.tier4 > 0 || next.shockCharges > 0)) {
       if (next.spells.tier2 > 0) {
         let bestBolt: { foe: Unit; from: Point; score: number } | null = null;
         for (const cell of reach.values()) {
@@ -8238,6 +8282,83 @@ export class BattleEngine {
       spellKind: "causticVenom",
       projectileTo: origin,
     });
+  }
+
+  /** Veneno Menor (MINOR_VENOM): Caustic Venom's dice and poison on a radius-2 splash. */
+  private castMinorVenom(unit: Unit, click: Point): void {
+    const origin = fireballOrigin(click, this.cols, this.rows);
+    this.spendFamiliarOrTier(unit, "minorVenom");
+    this.spellKind = null;
+    this.missileTargets = [];
+    this.tip = null;
+    this.mode = "locked";
+    this.queueMinorVenom(unit, origin);
+  }
+
+  private queueMinorVenom(unit: Unit, origin: Point): void {
+    const tiles = hexAreaTiles(origin, MINOR_VENOM.size, this.cols, this.rows);
+    const ids: string[] = [];
+    for (const t of tiles) {
+      const u = this.units.find((x) => x.alive && occupies(x, t.x, t.y));
+      if (u && !ids.includes(u.id)) ids.push(u.id);
+    }
+    const center = this.units.find((x) => x.alive && occupies(x, origin.x, origin.y));
+    this.queue.push({
+      type: "spell",
+      att: unit.id,
+      tiles,
+      ids,
+      dice: MINOR_VENOM.splashDice,
+      faces: MINOR_VENOM.splashFaces,
+      bonus: MINOR_VENOM.splashBonus,
+      centerId: center?.id,
+      centerDice: MINOR_VENOM.centerDice,
+      centerFaces: MINOR_VENOM.centerFaces,
+      centerBonus: MINOR_VENOM.centerBonus,
+      poison: true,
+      label: MINOR_VENOM.name,
+      spellMul: MINOR_VENOM.splashMul,
+      centerMul: MINOR_VENOM.centerMul,
+      spellKind: "minorVenom",
+      projectileTo: origin,
+    });
+  }
+
+  /** Enemy Veneno Menor (Undead Ox): the Birolho branch's venom targeting on the smaller
+   * splash. Returns true if a cast was queued so the caller can skip the rest of the AI. */
+  private tryAiMinorVenom(
+    next: Unit,
+    reach: ReturnType<typeof computeReachable>,
+    walkReach: ReturnType<typeof computeReachable>,
+    players: Unit[],
+  ): boolean {
+    if (this.tierRemaining(next, "minorVenom") <= 0) return false;
+    let best: { at: Point; from: Point; score: number } | null = null;
+    for (const cell of reach.values()) {
+      for (const foe of players) {
+        if (manhattan(cell, foe) > MINOR_VENOM.range) continue;
+        if (!clearShot(cell, { x: foe.x, y: foe.y }, this.tiles, this.cols, "bolt", this.decorOverlay)) continue;
+        let hits = 0;
+        let score = 0;
+        for (const t of hexAreaTiles({ x: foe.x, y: foe.y }, MINOR_VENOM.size, this.cols, this.rows)) {
+          const hit = players.find((p) => p.x === t.x && p.y === t.y);
+          if (!hit) continue;
+          hits += 1;
+          score += (hit.maxHp - hit.hp) + (hit.hp <= 8 ? 15 : 0);
+        }
+        if (hits === 0) continue;
+        score += hits * 10;
+        if (!best || score > best.score) best = { at: { x: foe.x, y: foe.y }, from: { x: cell.x, y: cell.y }, score };
+      }
+    }
+    if (!best) return false;
+    if (best.from.x !== next.x || best.from.y !== next.y) {
+      this.queue.push({ type: "move", id: next.id, path: reconstructPath(walkReach, best.from) });
+    }
+    this.spendTier(next, "minorVenom");
+    this.queueMinorVenom(next, best.at);
+    this.queue.push({ type: "delay", dur: 0.12 });
+    return true;
   }
 
   /** CSS-pixel screen position (matching the coordinate space `render()` just drew into) of a
@@ -9855,6 +9976,12 @@ export class BattleEngine {
         if (cell && manhattan(selected, cell) <= CAUSTIC_VENOM.range) {
           push(hexAreaTiles(fireballOrigin(cell, this.cols, this.rows), CAUSTIC_VENOM.size, this.cols, this.rows), "rgba(200,210,90,0.55)");
         }
+      } else if (selected && this.spellKind === "minorVenom") {
+        push(this.healRangeTiles(selected, MINOR_VENOM.range), "rgba(200,210,90,0.45)");
+        const cell = this.hover ?? this.spellAim;
+        if (cell && manhattan(selected, cell) <= MINOR_VENOM.range) {
+          push(hexAreaTiles(fireballOrigin(cell, this.cols, this.rows), MINOR_VENOM.size, this.cols, this.rows), "rgba(200,210,90,0.55)");
+        }
       } else if (selected && this.spellKind === "sweep") {
         push(this.sweepTiles(selected), "rgba(220,150,70,0.5)");
       } else if (selected && this.spellKind === "longShot") {
@@ -10896,7 +11023,7 @@ export class BattleEngine {
             }
             ctx.restore();
           }
-          const projectileCore = m.kind === "fireball" ? this.art.fireballCore : m.kind === "causticVenom" ? this.art.causticVenomCore : null;
+          const projectileCore = m.kind === "fireball" ? this.art.fireballCore : m.kind === "causticVenom" || m.kind === "minorVenom" ? this.art.causticVenomCore : null;
           if (m.kind === "longShot" && this.art.arrowCore) {
             // One shared approved arrow asset for normal shots, Multi Shot, Long Shot and Piercing Shot.
             const angle = Math.atan2(dyT, dxT);

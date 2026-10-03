@@ -3535,6 +3535,15 @@ export const CAUSTIC_VENOM = {
   splashBonus: 0,
 };
 
+/** Veneno Menor — the mobs' venom (Undead Ox, Zombie Dog; the Birolhos keep the full Veneno
+ * Cáustico): same range, dice and poison as Caustic Venom on a radius-2 splash, drawn with the
+ * original effect (green bolt, burst and acid patch) instead of the 3D V2 smoke. */
+export const MINOR_VENOM = {
+  ...CAUSTIC_VENOM,
+  name: "Veneno Menor",
+  size: 2,
+};
+
 export const LONG_SHOT = {
   name: "Tiro Longo",
   range: 7,
@@ -4003,7 +4012,7 @@ export const FAMILIAR_SPELL: Partial<Record<ClassId, SpellKind>> = {
   familiar2: "magicMissile",
   familiar3: "fireball",
   familiar4: "magicMissile",
-  zombieDog: "causticVenom",
+  zombieDog: "minorVenom",
 };
 
 /** Familiar Titã's own Fireball charges for the battle — set once at summon time from the
@@ -4553,6 +4562,7 @@ export const SPELL_TIER: Partial<Record<SpellKind, SpellTier>> = {
   lightningTier3: 5,
   cureDisease: 3,
   causticVenom: 4,
+  minorVenom: 4,
   multiShot: 3,
   secondWind: 3,
   cureLight: 4,
