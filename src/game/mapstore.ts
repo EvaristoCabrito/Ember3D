@@ -14,7 +14,7 @@
  * decorateOpenTerrain): those exist to dress the hand-written RAW_MISSIONS, and
  * a map arranged by hand in the editor loads exactly as it was arranged.
  */
-import { DECORATIONS, MISSIONS, TILE_CHAR, WORLD_LOCATIONS } from "./data";
+import { clearRockColumnTiles, DECORATIONS, MISSIONS, TILE_CHAR, WORLD_LOCATIONS } from "./data";
 import SLOT_CONFIG from "./map-slots.json";
 import ORDER_CONFIG from "./map-order.json";
 import LOCATION_ORDER_CONFIG from "./location-order.json";
@@ -190,6 +190,7 @@ function legacyClassId(id: string): ClassId {
 function normalizeDraft(draft: MapDraft): MapDraft {
   return {
     ...draft,
+    tiles: clearRockColumnTiles(draft.tiles, draft.cols, draft.rows, draft.decorations, draft.baseTile),
     playerSpawns: draft.playerSpawns.map((s) => ({ ...s, classId: legacyClassId(s.classId) })),
     enemySpawns: draft.enemySpawns.map((s) => ({ ...s, classId: legacyClassId(s.classId) })),
     neutralSpawns: draft.neutralSpawns?.map((s) => ({ ...s, classId: legacyClassId(s.classId) })),
@@ -197,10 +198,11 @@ function normalizeDraft(draft: MapDraft): MapDraft {
 }
 
 export function draftToMission(d: MapDraft): Mission {
+  const tiles = clearRockColumnTiles(d.tiles, d.cols, d.rows, d.decorations, d.baseTile);
   const layout: string[] = [];
   for (let r = 0; r < d.rows; r++) {
     let row = "";
-    for (let c = 0; c < d.cols; c++) row += TILE_CHAR[d.tiles[r * d.cols + c] ?? "plains"];
+    for (let c = 0; c < d.cols; c++) row += TILE_CHAR[tiles[r * d.cols + c] ?? "plains"];
     layout.push(row);
   }
   return {

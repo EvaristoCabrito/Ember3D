@@ -893,6 +893,28 @@ export function placedBlockingFootprint(p: { id: string; x: number; y: number; r
   return rotateFootprint(def.blockingFootprint ?? def.footprint, p.x, p.y, p.rot ?? 0);
 }
 
+/** Remove legacy column terrain used as collision scaffolding under solid rocks.
+ * The decoration overlay supplies collision; the tile underneath is ordinary ground. */
+export function clearRockColumnTiles(
+  tiles: readonly TerrainId[], cols: number, rows: number,
+  decorations: readonly DecorationPlacement[], baseTile?: TerrainId,
+): TerrainId[] {
+  const ground = baseTile && TERRAIN[baseTile].passable && baseTile !== "water" && baseTile !== "void"
+    ? baseTile : tiles.includes("nave") ? "nave" : tiles.includes("snow") ? "snow" : "plains";
+  const cleaned = [...tiles];
+  for (const p of decorations) {
+    const def = DECORATIONS[p.id];
+    if (!SOLID_ROCK_DECOR_IDS.has(p.id) && !(def?.rockStyle && def.model3d === "wall")) continue;
+    for (const { dx, dy } of placedFootprint(p)) {
+      const x = p.x + dx, y = p.y + dy;
+      if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
+      const index = y * cols + x;
+      if (cleaned[index] === "column") cleaned[index] = ground;
+    }
+  }
+  return cleaned;
+}
+
 export function decorationCells(placements: { id: string; x: number; y: number; rot?: number }[]): Set<string> {
   const out = new Set<string>();
   for (const p of placements) {
@@ -4208,7 +4230,7 @@ export const CURE_DISEASE = {
  * two independent breakpoint ladders: the 120%-"overfed" tier (same value a paid Inn meal
  * already grants, INN_FULLNESS) starts flat at level 10, cutting across the dice table's own
  * 9-10 pairing. */
-export const CREATE_FOOD_AND_WATER = { name: "Curar Fome e Sede", radius: 2 };
+export const CREATE_FOOD_AND_WATER = { name: "Criar Comida e Água", radius: 2 };
 
 export function createFoodAndWaterPower(level: number): { dice: number; faces: number; bonus: number; fullness: number } {
   const fullness = level >= 10 ? INN_FULLNESS : 100;
@@ -5460,8 +5482,7 @@ export function scatterTactics(m: Mission): Mission {
   return { ...m, layout };
 }
 
-// Solid props only: the mountain ridge left this list when it became climbable, since
-// rockifyColumns draws these over column tiles that stay impassable underneath.
+// Solid rock props supply collision through the decoration overlay.
 const ROCK_IDS = ["spike-rocks"];
 
 /** Replaces every "column" tile (a marble pillar rendered on its own patch of grass —
@@ -5496,12 +5517,11 @@ function rockifyColumns(mission: Mission): Mission {
       next += 1;
     }
   }
-  // Defensive fallback only — the doubling guarantee above means this should never fire,
-  // but an unpaired column left as-is would still be the exact sprite we're trying to
-  // get rid of, so any survivor becomes plain floor instead.
+  // Clear all former column terrain, including cells now occupied by rocks.
+  // The rock footprint supplies collision; no rendered pillar is needed underneath.
   for (let y = 0; y < mission.rows; y++) {
     for (let x = 0; x < mission.cols; x++) {
-      if (grid[y]![x] === "c" && !claimed.has(`${x},${y}`)) grid[y]![x] = fallbackFloor;
+      if (grid[y]![x] === "c") grid[y]![x] = fallbackFloor;
     }
   }
   return { ...mission, layout: grid.map((row) => row.join("")), decorations };

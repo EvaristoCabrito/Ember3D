@@ -1,4 +1,5 @@
 import { ThreeTrees } from "./ThreeTrees";
+import { BARRICADE_LIKE_DECOR } from "../../data";
 import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_ROUTE, GRID_MOVE, GRID_ENEMY_TARGET, GRID_ENEMY_GLOW } from "../../tacticalGrid";
 /** MILESTONE 1 (done) — terrain, ground/behind-layer decorations, and animated unit sprites all
  * render through a real Three.js scene instead of the Canvas2D-shim WebGL renderer, as the first
@@ -842,10 +843,12 @@ export class ThreeBattleRenderer {
   private glowTexCache = new Map<HTMLImageElement, THREE.Texture>();
   private unitEntries = new Map<string, UnitMeshEntry>();
   private unitDrawPositions = new Map<string, { x: number; y: number }>();
+  private architectureFxMaskKey = "";
+  private architectureFxMaskUri: string | null = null;
 
   /** The elemental-FX canvas is intentionally between the ground renderer and the visual
-   * actors/props canvas. Keep Three's copies of sprites and decorations off the ground canvas
-   * whenever that compositing path is active, otherwise an authored effect can cover them. */
+   * actors/props canvas. Toggle the two Three-owned layers independently: sprites must move
+   * above FX whenever it is active, while architectural decorations may need their scene depth. */
   setSpritesAndDecorationsVisible(unitsVisible: boolean, decorationsVisible = unitsVisible): void {
     this.unitGroup.visible = unitsVisible;
     this.decorGroup.visible = decorationsVisible;
@@ -917,7 +920,7 @@ export class ThreeBattleRenderer {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setClearColor(0x000000, 1);
     this.renderer.shadowMap.enabled = true;
-    // Sharp shadows use a single depth comparison; the low preset uses PCF filtering.
+    // Medium's lighter shadows use PCF filtering; the low preset disables shadows entirely.
     this.renderer.shadowMap.type = getDevGfx().softShadows ? THREE.PCFShadowMap : THREE.BasicShadowMap;
     this.camera = new THREE.OrthographicCamera(0, 1, 0, 1, 0.1, 20000);
     this.camera.position.z = 100;
@@ -1714,7 +1717,7 @@ export class ThreeBattleRenderer {
       let offsetX = (alphaBase ? (0.5 - (alphaBase.u0 + alphaBase.u1) / 2) : 0) * w + (def.artOffsetX ?? 0) * w;
       let offsetY = alphaBase ? (1 - alphaBase.v) * h : 0;
       if (facingMirror) offsetX = -offsetX;
-      else if (!facing.own && facing.step) {
+      else if (!facing.own && facing.step && !(engine.tacticsCamera && BARRICADE_LIKE_DECOR.has(p.id))) {
         const angle = (facing.step * Math.PI) / 3;
         [offsetX, offsetY] = [offsetX * Math.cos(angle) - offsetY * Math.sin(angle), offsetX * Math.sin(angle) + offsetY * Math.cos(angle)];
       }
@@ -1764,8 +1767,20 @@ export class ThreeBattleRenderer {
       }
       if (engine.tacticsCamera) {
         const flat = pinnedBehind || /rubble|ruins|corpse|bones|carpet|bridge|web/.test(p.id);
+        const fixed = BARRICADE_LIKE_DECOR.has(p.id);
+        if (fixed) {
+          // Barricades stand in the authored world direction instead of swivelling
+          // toward the camera independently, which breaks a continuous fence line.
+          mesh.quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -(p.rot ?? 0) * Math.PI / 3)
+            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+          mat.side = THREE.DoubleSide;
+          // The fixed panel is real world geometry: cast its own alpha silhouette
+          // so its shadow cannot drift, shorten, or rotate independently of the art.
+          mesh.castShadow = !def.noShadow;
+          mesh.layers.enable(PROXY_LAYER);
+        }
         mesh.userData.tacticsAnchor = { x: wx, y: -groundWy, z: this.groundHeight(p.x, p.y, tile),
-          offsetX, center: (alphaBase ? alphaBase.v - 0.5 : 0.5) * h, flat };
+          offsetX, center: (alphaBase ? alphaBase.v - 0.5 : 0.5) * h, flat, fixed };
         mesh.renderOrder = 0;
       }
       this.decorGroup.add(mesh);
@@ -1785,7 +1800,7 @@ export class ThreeBattleRenderer {
       // across the board rather than grounding the prop.
       const elevation = Math.max(1, h * DECOR_SHADOW_HEIGHT_SCALE);
       let shadowMesh: THREE.Mesh | null = null;
-      if (!def.noShadow) {
+      if (!def.noShadow && !mesh.userData.tacticsAnchor?.fixed) {
         const shadowMat = this.decorShadowMaterialFor(fileId, mat);
         shadowMesh = new THREE.Mesh(this.quadGeo, shadowMat);
         shadowMesh.castShadow = true;
@@ -1847,7 +1862,7 @@ export class ThreeBattleRenderer {
       // contact line. Light-source props get none — their flame sits inside their own volume.
       // A noShadow prop gets none either — this volume exists only to cast/block shadows.
       let proxy: THREE.Mesh | null = null;
-      if (!lightDef && !def.noShadow) {
+      if (!lightDef && !def.noShadow && !mesh.userData.tacticsAnchor?.fixed) {
         const pb = artBase(img);
         const sign = facing.own && facing.mirror ? -1 : 1;
         const bw = pb ? Math.max(tile * 0.3, (pb.u1 - pb.u0) * w) : w * 0.6;
@@ -2317,6 +2332,11 @@ export class ThreeBattleRenderer {
       // syncDecorVisibility still hides the entire prop until its cell is explored.
       if (DECORATIONS[entry.placement.id]?.aboveTacticalOverlays) entry.mesh.renderOrder = 101;
       if (anchor.flat) entry.mesh.position.z = anchor.z + 0.02;
+      else if (anchor.fixed) {
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(entry.mesh.quaternion);
+        entry.mesh.position.set(anchor.x, anchor.y, anchor.z + anchor.center)
+          .addScaledVector(right, anchor.offsetX);
+      }
       else {
         entry.mesh.quaternion.copy(this.unitFacing);
         entry.mesh.position.set(anchor.x, anchor.y, anchor.z)
@@ -2341,7 +2361,12 @@ export class ThreeBattleRenderer {
       if (entry.shadowMesh) {
         const caster = entry.shadowMesh;
         caster.position.z = anchor.z + caster.scale.y / 2 - DECOR_SHADOW_GROUND_INSET / 2;
-        if (!anchor.flat) {
+        if (anchor.fixed) {
+          const right = new THREE.Vector3(1, 0, 0).applyQuaternion(entry.mesh.quaternion);
+          caster.quaternion.copy(entry.mesh.quaternion);
+          caster.position.set(anchor.x, anchor.y, anchor.z + caster.scale.y / 2 - DECOR_SHADOW_GROUND_INSET / 2)
+            .addScaledVector(right, anchor.offsetX);
+        } else if (!anchor.flat) {
           caster.quaternion.copy(this.unitFacing);
           caster.position.set(anchor.x, anchor.y, anchor.z)
             .addScaledVector(this.cameraRight, anchor.offsetX)
@@ -2364,7 +2389,23 @@ export class ThreeBattleRenderer {
       const point = hexWorld(cell.x, cell.y, tile);
       targets.push(new THREE.Vector3(point.wx, -point.wy, this.groundHeight(cell.x, cell.y, tile) + tile * 0.08));
     }
-    const candidates = [...this.wallEntries.map(e => e.mesh), ...this.decorEntries.map(e => e.mesh)]
+    // Architecture is solid scenery, not a billboard that should fade to reveal
+    // a unit behind it. Keep wall meshes opaque even when a ray to the selected
+    // unit/cursor intersects them; the FX overlay mask exposes the building
+    // beneath effects without changing its material opacity.
+    for (const entry of [...this.wallEntries, ...this.decorEntries.filter(entry => entry.mesh.userData.tacticsArchitecture || BARRICADE_LIKE_DECOR.has(entry.placement.id))]) {
+      entry.mesh.userData.tacticsOpacity = 1;
+      const materials = Array.isArray(entry.mesh.material) ? entry.mesh.material : [entry.mesh.material];
+      for (const material of materials) {
+        material.opacity = 1;
+        material.depthWrite = true;
+      }
+    }
+    const fadeableDoors = this.wallEntries.filter(entry => {
+      const def = DECORATIONS[entry.placement.id];
+      return entry.mesh.visible && def?.doorStyle === "stoneOak" && def.model3d === "doorway";
+    }).map(entry => entry.mesh);
+    const candidates = [...fadeableDoors, ...this.decorEntries.filter(entry => !entry.mesh.userData.tacticsArchitecture && !BARRICADE_LIKE_DECOR.has(entry.placement.id)).map(entry => entry.mesh)]
       .filter(mesh => mesh.visible);
     const covering = new Set<THREE.Object3D>();
     const distance = this.camera.far;
@@ -2754,6 +2795,7 @@ export class ThreeBattleRenderer {
       { cssW, cssH, camX: this.engine.camX, camY: this.engine.camY },
       (x, y) => this.cellAtWorld(x, y),
       this.unitFeetForMist(),
+      getDevGfx().atmosphericFx,
     );
     // MILESTONE 2 — the sun has to re-aim every frame too, for the same reason the camera does:
     // the shadow-caster boxes are fixed in world space, only the view of them pans.
@@ -2801,6 +2843,129 @@ export class ThreeBattleRenderer {
     if (distance < 0) return { x, y };
     const groundPoint = raycaster.ray.at(distance, new THREE.Vector3());
     return { x: groundPoint.x - this.engine.camX, y: -groundPoint.y - this.engine.camY };
+  }
+
+  /**
+   * Tactical sprites are camera-facing billboards, so warping their 2D overlay canvas to the
+   * ground plane would skew them. When a screen-space elemental effect is active, draw the
+   * already-synced billboard frames into the upright HUD canvas instead, above that effect.
+   */
+  renderTacticalUnitSprites(ctx: CanvasRenderingContext2D, cssW: number, cssH: number): void {
+    if (!this.engine.tacticsCamera) return;
+    this.camera.updateMatrixWorld(true);
+    const viewHeight = Math.max(1e-6, (this.camera.top - this.camera.bottom) / this.camera.zoom);
+    const pixelsPerWorldUnit = cssH / viewHeight;
+    const sprites = [...this.unitEntries.values()]
+      .filter((entry) => entry.mesh.visible && entry.img && entry.img.naturalWidth > 0)
+      .map((entry) => {
+        const projected = entry.mesh.position.clone().project(this.camera);
+        return {
+          entry,
+          x: (projected.x + 1) * cssW / 2,
+          y: (1 - projected.y) * cssH / 2,
+        };
+      })
+      .sort((a, b) => a.entry.mesh.renderOrder - b.entry.mesh.renderOrder || a.y - b.y);
+
+    for (const { entry, x, y } of sprites) {
+      const img = entry.img;
+      if (!img) continue;
+      const w = Math.abs(entry.mesh.scale.x) * pixelsPerWorldUnit;
+      const h = Math.abs(entry.mesh.scale.y) * pixelsPerWorldUnit;
+      ctx.save();
+      ctx.globalAlpha = entry.material.opacity;
+      ctx.translate(x, y);
+      if (entry.mesh.scale.x < 0) ctx.scale(-1, 1);
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+      ctx.restore();
+    }
+  }
+
+  /** CSS alpha mask for the effects canvas: leave Three-rendered architecture visible beneath
+   * elemental FX. The mask is generated from projected architecture triangles and cached until
+   * the camera, viewport, or architecture transforms change. */
+  architectureFxMaskDataUri(cssW: number, cssH: number): string | null {
+    const cards = this.decorEntries.filter(entry => this.decorGroup?.visible !== false
+      && entry.mesh.visible && BARRICADE_LIKE_DECOR.has(entry.placement.id));
+    const meshes = [
+      ...this.wallEntries.map((entry) => entry.mesh),
+      ...this.decorEntries.filter((entry) => entry.mesh.userData.tacticsArchitecture || !!DECORATIONS[entry.placement.id]?.model3d).map((entry) => entry.mesh),
+    ].filter((mesh) => mesh.visible && mesh.geometry.getAttribute("position"));
+    if (!meshes.length && !cards.length) {
+      this.architectureFxMaskKey = "";
+      this.architectureFxMaskUri = null;
+      return null;
+    }
+
+    this.scene.updateMatrixWorld(true);
+    this.camera.updateMatrixWorld(true);
+    const matrixKey = (matrix: THREE.Matrix4) => matrix.elements.map((n) => n.toFixed(3)).join(",");
+    const key = `${cssW}x${cssH}:${matrixKey(this.camera.matrixWorld)}:${matrixKey(this.camera.projectionMatrix)}:${meshes.map((mesh) => `${mesh.geometry.id}:${mesh.geometry.getAttribute("position").count}:${matrixKey(mesh.matrixWorld)}`).join(";")}:${cards.map(({ mesh }) => `${mesh.id}:${matrixKey(mesh.matrixWorld)}`).join(";")}`;
+    if (key === this.architectureFxMaskKey) return this.architectureFxMaskUri;
+
+    const paths: string[] = [];
+    const point = new THREE.Vector3();
+    for (const mesh of meshes) {
+      const geometry = mesh.geometry;
+      const positions = geometry.getAttribute("position");
+      const index = geometry.getIndex();
+      const triangleCount = Math.floor((index?.count ?? positions.count) / 3);
+      for (let tri = 0; tri < triangleCount; tri++) {
+        const coords: [number, number][] = [];
+        for (let corner = 0; corner < 3; corner++) {
+          const vertex = index ? index.getX(tri * 3 + corner) : tri * 3 + corner;
+          point.fromBufferAttribute(positions, vertex).applyMatrix4(mesh.matrixWorld).project(this.camera);
+          const x = ((point.x + 1) * cssW) / 2;
+          const y = ((1 - point.y) * cssH) / 2;
+          if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            coords.length = 0;
+            break;
+          }
+          coords.push([x, y]);
+        }
+        if (coords.length === 3) {
+          // Front/back faces project with opposite winding. Normalize it so
+          // overlapping triangles form a solid silhouette instead of cancelling
+          // each other under SVG's nonzero fill rule.
+          const [a, b, c] = coords;
+          if ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) < 0) {
+            [coords[1], coords[2]] = [coords[2], coords[1]];
+          }
+          const points = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`);
+          paths.push(`M${points[0]}L${points[1]}L${points[2]}Z`);
+        }
+      }
+    }
+
+    const silhouettes: string[] = [];
+    for (const { mesh } of cards) {
+      const texture = (mesh.material as THREE.MeshLambertMaterial).map;
+      const img = texture?.image as HTMLImageElement | HTMLCanvasElement | undefined;
+      if (!texture || !img || !img.width || !img.height) continue;
+      // Embed the bitmap: images inside an SVG mask cannot load external URLs.
+      // Cache it on the shared texture so repeated fence segments reuse one PNG.
+      if (!texture.userData.fxMaskImage) {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        ctx.drawImage(img, 0, 0);
+        texture.userData.fxMaskImage = canvas.toDataURL();
+      }
+      const project = (x: number, y: number) => {
+        point.set(x, y, 0).applyMatrix4(mesh.matrixWorld).project(this.camera);
+        return { x: (point.x + 1) * cssW / 2, y: (1 - point.y) * cssH / 2 };
+      };
+      const a = project(-0.5, 0.5), b = project(0.5, 0.5), c = project(-0.5, -0.5);
+      const transform = [b.x - a.x, b.y - a.y, c.x - a.x, c.y - a.y, a.x, a.y];
+      if (!transform.every(Number.isFinite)) continue;
+      silhouettes.push(`<image href="${texture.userData.fxMaskImage}" width="1" height="1" preserveAspectRatio="none" transform="matrix(${transform.join(" ")})" filter="url(#black)"/>`);
+    }
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cssW}" height="${cssH}" viewBox="0 0 ${cssW} ${cssH}"><defs><filter id="black" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter><mask id="a" x="0" y="0" width="${cssW}" height="${cssH}" maskUnits="userSpaceOnUse"><rect width="${cssW}" height="${cssH}" fill="white"/><path d="${paths.join("")}" fill="black"/>${silhouettes.join("")}</mask></defs><rect width="${cssW}" height="${cssH}" fill="white" mask="url(#a)"/></svg>`;
+    this.architectureFxMaskKey = key;
+    this.architectureFxMaskUri = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    return this.architectureFxMaskUri;
   }
 
   /** Draw health bars in screen space over their camera-facing unit sprites. */
@@ -3349,6 +3514,7 @@ export class ThreeBattleRenderer {
     const requested = [1024, 2048, 4096].includes(gfx.shadowResolution) ? gfx.shadowResolution : 4096;
     const resolution = Math.min(requested, this.renderer.capabilities.maxTextureSize);
     for (const light of [this.sunLight, this.moonLight, ...this.pointLights]) {
+      light.shadow.intensity = gfx.softShadows ? 0.55 : 1;
       const size = light instanceof THREE.PointLight ? Math.max(256, resolution / 4) : resolution;
       if (light.shadow.mapSize.x === size) continue;
       light.shadow.mapSize.set(size, size);
@@ -3450,7 +3616,9 @@ export class ThreeBattleRenderer {
     if (this.engine.tacticsCamera) for (const entry of this.decorEntries) {
       const anchor = entry.mesh.userData.tacticsAnchor;
       if (anchor && !anchor.flat) {
-        (entry.mesh.material as THREE.MeshLambertMaterial).color.setRGB(...cameraExposure);
+        const exposure = anchor.fixed
+          ? exposureFor(new THREE.Vector3(0, 0, 1).applyQuaternion(entry.mesh.quaternion)) : cameraExposure;
+        (entry.mesh.material as THREE.MeshLambertMaterial).color.setRGB(...exposure);
       }
     }
   }

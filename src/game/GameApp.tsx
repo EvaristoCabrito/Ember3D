@@ -584,35 +584,30 @@ function slotIcon(action: SlotAction): string {
       return spellIcon("summon-familiar3");
     case "summonFamiliar4":
       return spellIcon("summon-familiar4");
-    // No dedicated art yet — reuses the base familiar summon icon.
     case "summonZombieDog":
-      return spellIcon("summon-familiar");
+      return spellIcon("summon-zombie-dog");
     case "webOfDreams":
       return spellIcon("web-of-dreams");
-    // Familiar Maior's own second spell — no dedicated art; reuses the cure icon since it's
-    // a heal-on-hit touch, closer in theme to a heal than to anything offensive here.
     case "lifeDrain":
-      return spellIcon("cure-wounds");
-    // No dedicated art exists yet for any of these — each reuses an existing icon whose
-    // theme is closest (a zone effect, a big melee AOE, a holy/arcane burst). secondWind is
-    // never actually shown (see PRESTIGE_SPELLS) but the switch must stay exhaustive.
+      return spellIcon("life-drain");
+    // secondWind is never actually shown (see PRESTIGE_SPELLS) but the switch stays exhaustive.
     case "multiShot":
       return spellIcon("multi-shot");
     case "secondWind":
     case "cureLight":
       return spellIcon("cure-light");
     case "bless":
-      return spellIcon("cure-light");
+      return spellIcon("bless");
     case "auraOfProtection":
-      return spellIcon("web-of-dreams");
+      return spellIcon("aura-of-protection");
     case "intimidatingPresence":
-      return spellIcon("caustic-venom");
+      return spellIcon("intimidating-presence");
     case "divineWrath":
-      return spellIcon("fireball");
+      return spellIcon("divine-wrath");
     case "shoulderSmash":
-      return spellIcon("cleave");
+      return spellIcon("shoulder-smash");
     case "stampede":
-      return spellIcon("cleave-crossed-blades");
+      return spellIcon("stampede");
     case "bullRush":
       return spellIcon("bull-rush");
     case "executionerStrike":
@@ -1873,11 +1868,11 @@ export function GameApp() {
       )}
 
       {screen === "wispForestIntro" && (
-        <CutsceneScreen src="/game/wisp-entrance.mp4" onSkip={finishWispForestIntro} />
+        <CutsceneScreen src="/game/wisp-entrance.mp4" subtitles={{ pt: "/game/subtitles/wisp-entrance.pt.vtt", en: "/game/subtitles/wisp-entrance.en.vtt" }} onSkip={finishWispForestIntro} />
       )}
 
       {screen === "innArrivalIntro" && (
-        <CutsceneScreen src="/game/inn-arrival.mp4" onSkip={finishInnArrivalIntro} />
+        <CutsceneScreen src="/game/inn-arrival.mp4" subtitles={{ pt: "/game/subtitles/inn-arrival.pt.vtt", en: "/game/subtitles/inn-arrival.en.vtt" }} onSkip={finishInnArrivalIntro} />
       )}
 
       {screen === "mapEditor" && art && (
@@ -2344,6 +2339,7 @@ export function GameApp() {
                 ? "/game/thebridge-intro.mp4"
                 : "/game/asherah-rite.mp4"
           }
+          subtitles={missionId === "aldeia" ? { pt: "/game/subtitles/aldeia-intro.pt.vtt", en: "/game/subtitles/aldeia-intro.en.vtt" } : undefined}
           onSkip={() => startBattle(missionId === "aldeia" ? "aldeia" : missionId === "thebridge" ? "thebridge" : "templo")}
         />
       )}
@@ -3157,6 +3153,53 @@ const SKILL_DAMAGE_ROWS: { name: string; cls: ClassId; tier: SpellTier; formula:
   },
 ].sort((a, b) => a.tier - b.tier);
 
+const SKILL_DAMAGE_NOTES_EN: Record<string, string> = {
+  [BLESS.name]: `Healer, level ${BLESS.unlockLevel}. Radius ${BLESS.radius}; +1% hit chance per level, up to +10% at level 13. Duration: 3 turns at level 3; 4 at 5; 5 at 7; 6 at 9; 7 at 12; 8 at 15.`,
+  [MAGIC_MISSILE.name]: "Never misses. 1 missile, 2 at level 3, 3 at level 6 — each targets one unit.",
+  [LONG_SHOT.name]: "Range 7. Damage die increases at levels 2, 3, 5, 7, 9, 12, and 14.",
+  [CURES.cureMinor.name]: "—",
+  [DOUBLE_STRIKE.name]: "Attacks twice; each hit rolls its own bonus (bonuses do not stack).",
+  [PIERCING_THRUST.name]: "Hits in a line; the second target takes half damage.",
+  [SUMMON_FAMILIAR.name]: `Summons an ally with ${Math.round(SUMMON_FAMILIAR.statScale * 100)}% of your current stats. It can cast Magic Missile on its own.`,
+  [SUMMON_FAMILIAR2.name]: `Summons a greater ally with ${Math.round(SUMMON_FAMILIAR2.statScale * 100)}% of your current stats. It can cast Magic Missile or Life Drain on its own.`,
+  [SUMMON_FAMILIAR4.name]: `Summons a radiant ally with ${Math.round(SUMMON_FAMILIAR4.statScale * 100)}% of your current stats. It can cast Magic Missile or Life Drain on its own.`,
+  [SUMMON_FAMILIAR3.name]: `Summons an ally with ${Math.round(SUMMON_FAMILIAR3.statScale * 100)}% of your current stats. It can cast Fireball on its own.`,
+  [LIGHTNING.name]: `Pierces cover and barricades. Echoes to another adjacent target for ${diceFormula(LIGHTNING.echoDice, LIGHTNING.echoFaces, LIGHTNING.echoBonus)}.`,
+  [LIGHTNING_T3.name]: `Elementalist T5. Pierces cover and barricades. Echo: ${diceFormula(LIGHTNING_T3.echoDice, LIGHTNING_T3.echoFaces, LIGHTNING_T3.echoBonus)}.`,
+  [PIERCING.name]: "Multiplier increases at levels 6, 10, and 13.",
+  [CURES.cureWounds.name]: "—",
+  [CLEAVE.name]: `Hits up to ${CLEAVE.hexes} hexes. x${CLEAVE.largeMul} against large creatures (${CLEAVE.largeHexes}+ hexes). Damage die increases at levels 9, 11, and 14.`,
+  [SWEEP.name]: `Enemies within ${SWEEP.radius} hexes; knocks them back ${SWEEP.knockback} hex. Shows the area before confirming.`,
+  [WEB_OF_DREAMS.name]: `Range ${WEB_OF_DREAMS.range}. Radius ${WEB_OF_DREAMS.size} (2 at level 7, 3 at level 12). ${Math.round(WEB_OF_DREAMS.sleepChance * 100)}% chance to sleep for ${diceFormula(WEB_OF_DREAMS.sleepDice, WEB_OF_DREAMS.sleepFaces, 0)} turns (+${Math.round(WEB_OF_DREAMS.sleepBonusDamage * 100)}% damage when awakened); movement is limited to 1 hex in the area for ${WEB_OF_DREAMS.durationRounds} turns.`,
+  [TRIP.name]: `Causes Bleeding (1D8 at the start of each action); −${Math.round(TRIP.statPenalty * 100)}% to stats for the rest of the battle.`,
+  [FIREBALL.name]: `Area radius ${FIREBALL.size}.`,
+  [CURE_DISEASE.name]: "Cleric T3. Cures disease and poison. Teal light.",
+  [CAUSTIC_VENOM.name]: `Range ${CAUSTIC_VENOM.range}. Poisons the target: 1D4 at the start of each turn until cured. Radius ${CAUSTIC_VENOM.size}; affects both sides.`,
+  [MULTI_SHOT.name]: "2 targets (3 at level 11), range 6. Damage die increases at levels 8 and 13.",
+  [SECOND_WIND.name]: `Passive: automatically heals when HP falls to ${Math.round(SECOND_WIND.badlyWoundedPct * 100)}% or lower. It is not an action-bar attack.`,
+  [CURES.cureLight.name]: "Same as the Cleric's Medium Heal; exclusive uses for the Paladin.",
+  [AURA_OF_PROTECTION.name]: "Instant, centered on self — no aiming. Scales at levels 20, 22, 24, 26, 28, and 30.",
+  [DIVINE_WRATH.name]: `Aimed straight line, range ${DIVINE_WRATH.range} — never hits allies. Damage die increases at levels 19, 22, 26, and 30.`,
+  [SHOULDER_SMASH.name]: `Requires no shield. Hex arc grows to 4; knocks targets back ${SHOULDER_SMASH.knockback} hexes.`,
+  [INTIMIDATING_PRESENCE.name]: "Instant, centered on self — no aiming. The opposite of Aura of Protection, with the same scaling.",
+  [STAMPEDE.name]: `Aimed straight line, range ${STAMPEDE.range} — hits allies too. Damage die increases at levels 21, 24, 27, and 30.`,
+};
+
+function helpFormulaText(value: string): string {
+  const english = value
+    .replaceAll("dano de arma", "weapon damage")
+    .replaceAll("arma", "weapon")
+    .replaceAll("cura", "healing")
+    .replaceAll("centro", "center")
+    .replaceAll("respingo", "splash")
+    .replaceAll("raio", "radius")
+    .replaceAll("% de RES", "% RES")
+    .replaceAll("% dano", "% damage")
+    .replaceAll("dano", "damage")
+    .replaceAll("armadura", "armor");
+  return uiText(value, { en: english });
+}
+
 function HelpModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<"basicos" | "tabelas" | "loot" | "dano">("basicos");
   return (
@@ -3165,53 +3208,52 @@ function HelpModal({ onClose }: { onClose: () => void }) {
           corners don't scroll away with the content. */}
       <div className="relative w-full max-w-lg max-h-[85dvh] flex flex-col ember-panel p-6">
         <div className="flex items-start justify-between gap-4 mb-4 shrink-0">
-          <h2 className="font-display text-2xl leading-none ember-title">Como jogar</h2>
-          <button type="button" onClick={onClose} className="size-8 grid place-items-center ember-icon-btn" aria-label="Fechar">
+          <h2 className="font-display text-2xl leading-none ember-title">{uiText("Como jogar")}</h2>
+          <button type="button" onClick={onClose} className="size-8 grid place-items-center ember-icon-btn" aria-label={uiText("Fechar")}>
             <X className="size-4" />
           </button>
         </div>
         <div className="grid grid-cols-4 gap-1 mb-4 shrink-0">
           <Button size="sm" variant={tab === "basicos" ? undefined : "quiet"} className={`ember-btn ember-btn-sm ${tab === "basicos" ? "ember-btn-primary" : "ember-btn-ghost"}`} onClick={() => setTab("basicos")}>
-            Básicos
+            {uiText("Básicos")}
           </Button>
           <Button size="sm" variant={tab === "tabelas" ? undefined : "quiet"} className={`ember-btn ember-btn-sm ${tab === "tabelas" ? "ember-btn-primary" : "ember-btn-ghost"}`} onClick={() => setTab("tabelas")}>
-            Usos
+            {uiText("Usos")}
           </Button>
           <Button size="sm" variant={tab === "dano" ? undefined : "quiet"} className={`ember-btn ember-btn-sm ${tab === "dano" ? "ember-btn-primary" : "ember-btn-ghost"}`} onClick={() => setTab("dano")}>
-            Dano
+            {uiText("Dano")}
           </Button>
           <Button size="sm" variant={tab === "loot" ? undefined : "quiet"} className={`ember-btn ember-btn-sm ${tab === "loot" ? "ember-btn-primary" : "ember-btn-ghost"}`} onClick={() => setTab("loot")}>
-            Loot
+            {uiText("Loot")}
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto ember-scrollbar pr-1">
         {tab === "basicos" ? (
           <ul className="space-y-3 text-sm text-muted leading-relaxed">
-            <li>Toque numa aliada para ver movimento (azul) e ataque (vermelho).</li>
-            <li>Toque num inimigo para ver HP, alcance e a área vermelha de perigo.</li>
-            <li>Golpe de arma: AT − DF, dentro do alcance da ficha.</li>
-            <li>Magia ofensiva: o dado − RES, no alcance da magia.</li>
-            <li>Todo mundo tem AT, MAG, DF, RES, Mov e Alc. Nada fica de fora da ficha.</li>
-            <li>Terreno alto (barranco, tronco morto, casa abandonada): +2 de dano. A arqueira também ganha +1 de alcance. No alto, outro hex alto na frente não corta a flecha.</li>
-            <li>Barricada (estacas, 3 hexes): ninguém passa. De trás você atira. Projéteis não acertam quem está atrás.</li>
-            <li>Depois de mover, dois cliques no personagem = Esperar e passa ao próximo.</li>
+            <li>{uiText("Toque numa aliada para ver movimento (azul) e ataque (vermelho).")}</li>
+            <li>{uiText("Toque num inimigo para ver HP, alcance e a área vermelha de perigo.")}</li>
+            <li>{uiText("Golpe de arma: AT − DF, dentro do alcance da ficha.")}</li>
+            <li>{uiText("Magia ofensiva: o dado − RES, no alcance da magia.")}</li>
+            <li>{uiText("Todo mundo tem AT, MAG, DF, RES, Mov e Alc. Nada fica de fora da ficha.")}</li>
+            <li>{uiText("Terreno alto (barranco, tronco morto, casa abandonada): +2 de dano. A arqueira também ganha +1 de alcance. No alto, outro hex alto na frente não corta a flecha.")}</li>
+            <li>{uiText("Barricada (estacas, 3 hexes): ninguém passa. De trás você atira. Projéteis não acertam quem está atrás.")}</li>
+            <li>{uiText("Depois de mover, dois cliques no personagem = Esperar e passa ao próximo.")}</li>
           </ul>
         ) : tab === "tabelas" ? (
           <div className="space-y-5">
             <p className="text-sm text-muted leading-relaxed">
-              Cada classe tem uma velocidade de conjuração — ela decide quantos usos de cada tier (1 a 5) a
-              classe tem em cada nível. As tabelas abaixo mostram os números exatos, nível a nível.
+              {uiText("Cada classe tem uma velocidade de conjuração — ela decide quantos usos de cada tier (1 a 5) a classe tem em cada nível. As tabelas abaixo mostram os números exatos, nível a nível.")}
             </p>
             {SKILL_SPEED_GROUPS.map((g) => (
               <div key={g.label}>
                 <p className="text-sm font-medium">
-                  {g.label} <span className="text-muted font-normal">· {g.classes}</span>
+                  {uiText(g.label)} <span className="text-muted font-normal">· {g.classes.split(", ").map((name) => uiText(name)).join(", ")}</span>
                 </p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs tabular-nums border-collapse">
                     <thead>
                       <tr className="text-muted">
-                        <th className="text-left font-normal pr-2 py-1">Nv</th>
+                        <th className="text-left font-normal pr-2 py-1">{uiText("Nv")}</th>
                         {Array.from({ length: g.maxTier }, (_, i) => i + 1).map((t) => (
                           <th key={t} className="text-right font-normal px-1.5 py-1">
                             T{t}
@@ -3240,29 +3282,24 @@ function HelpModal({ onClose }: { onClose: () => void }) {
           <div className="space-y-5">
             <div className="space-y-2">
               <p className="text-sm leading-relaxed">
-                <span className="text-accent">Ataque normal</span> = metade do seu ATK (ou MAG, se for
-                conjurador) + dados da arma + terreno − metade da DEF do alvo (RES, contra magia).
-                Metades não contam: arredonda pra baixo. Mínimo 1 de dano.
+                <span className="text-accent">{uiText("Ataque normal")}</span> = {uiText("metade do seu ATK (ou MAG, se for conjurador) + dados da arma + terreno − metade da DEF do alvo (RES, contra magia). Metades não contam: arredonda pra baixo. Mínimo 1 de dano.")}
               </p>
               <p className="text-sm leading-relaxed">
-                <span className="text-accent">Magia</span> = a mesma conta, com a sua metade de MAG
-                multiplicada pelo peso da magia e os dados dela no lugar da arma. Todo peso é maior que 1,
-                e o resultado nunca fica abaixo de um ataque normal — conjurar sempre vale mais que bater.
+                <span className="text-accent">{uiText("Magia")}</span> = {uiText("a mesma conta, com a sua metade de MAG multiplicada pelo peso da magia e os dados dela no lugar da arma. Todo peso é maior que 1, e o resultado nunca fica abaixo de um ataque normal — conjurar sempre vale mais que bater.")}
               </p>
               <p className="text-xs text-muted leading-relaxed">
-                Por isso a tabela abaixo mostra a fórmula por MAG, não por nível: uma magia cresce junto
-                com quem conjura, não numa tabela própria.
+                {uiText("Por isso a tabela abaixo mostra a fórmula por MAG, não por nível: uma magia cresce junto com quem conjura, não numa tabela própria.")}
               </p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="text-muted">
-                    <th className="text-left font-normal pr-2 py-1">Habilidade</th>
-                    <th className="text-left font-normal px-1.5 py-1">Classe</th>
+                    <th className="text-left font-normal pr-2 py-1">{uiText("Habilidade")}</th>
+                    <th className="text-left font-normal px-1.5 py-1">{uiText("Classe")}</th>
                     <th className="text-center font-normal px-1.5 py-1">Tier</th>
-                    <th className="text-left font-normal px-1.5 py-1">Fórmula</th>
-                    <th className="text-left font-normal pl-1.5 py-1">Efeito</th>
+                    <th className="text-left font-normal px-1.5 py-1">{uiText("Fórmula")}</th>
+                    <th className="text-left font-normal pl-1.5 py-1">{uiText("Efeito")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3273,22 +3310,22 @@ function HelpModal({ onClose }: { onClose: () => void }) {
                       <td className="text-center px-1.5 py-1 text-muted">T{row.tier}</td>
                       <td className="text-left px-1.5 py-1 tabular-nums">
                         {typeof row.formula === "string" ? (
-                          row.formula
+                          helpFormulaText(row.formula)
                         ) : row.param === "level" ? (
                           <span className="space-x-1.5">
-                            <span>Nv1: {row.formula(1)}</span>
-                            <span className="text-muted">· Nv7: {row.formula(7)}</span>
-                            <span className="text-muted">· Nv14: {row.formula(14)}</span>
+                            <span>{uiText("Nv1")}: {helpFormulaText(row.formula(1))}</span>
+                            <span className="text-muted">· {uiText("Nv7")}: {helpFormulaText(row.formula(7))}</span>
+                            <span className="text-muted">· {uiText("Nv14")}: {helpFormulaText(row.formula(14))}</span>
                           </span>
                         ) : (
                           <span className="space-x-1.5">
-                            <span>MAG 10: {row.formula(10)}</span>
-                            <span className="text-muted">· MAG 20: {row.formula(20)}</span>
-                            <span className="text-muted">· MAG 40: {row.formula(40)}</span>
+                            <span>{uiText("MAG 10")}: {helpFormulaText(row.formula(10))}</span>
+                            <span className="text-muted">· {uiText("MAG 20")}: {helpFormulaText(row.formula(20))}</span>
+                            <span className="text-muted">· {uiText("MAG 40")}: {helpFormulaText(row.formula(40))}</span>
                           </span>
                         )}
                       </td>
-                      <td className="text-left pl-1.5 py-1 text-muted">{row.note}</td>
+                      <td className="text-left pl-1.5 py-1 text-muted">{uiText(row.note, { en: SKILL_DAMAGE_NOTES_EN[row.name] })}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3298,21 +3335,19 @@ function HelpModal({ onClose }: { onClose: () => void }) {
         ) : (
           <div className="space-y-5">
             <p className="text-sm text-muted leading-relaxed">
-              Chances de drop, do jeito que estão programadas agora.
+              {uiText("Chances de drop, do jeito que estão programadas agora.")}
             </p>
             <div>
-              <p className="text-sm font-medium">Poções em baú (por baú)</p>
+              <p className="text-sm font-medium">{uiText("Poções em baú (por baú)")}</p>
               <p className="text-xs text-muted leading-relaxed mb-2">
-                Todo baú dá Gold + uma poção garantida (sorteada abaixo) + uma chance separada de item. Se quem abriu já
-                estiver no máximo daquela poção (5), ela passa para o próximo personagem que vai agir; se todos estiverem
-                cheios, é descartada.
+                {uiText("Todo baú dá Gold + uma poção garantida (sorteada abaixo) + uma chance separada de item. Se quem abriu já estiver no máximo daquela poção (5), ela passa para o próximo personagem que vai agir; se todos estiverem cheios, é descartada.")}
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs tabular-nums border-collapse">
                   <thead>
                     <tr className="text-muted">
-                      <th className="text-left font-normal pr-2 py-1">Poção</th>
-                      <th className="text-right font-normal pl-1.5 py-1">Chance</th>
+                      <th className="text-left font-normal pr-2 py-1">{uiText("Poção")}</th>
+                      <th className="text-right font-normal pl-1.5 py-1">{uiText("Chance")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3327,26 +3362,25 @@ function HelpModal({ onClose }: { onClose: () => void }) {
               </div>
             </div>
             <div className="text-sm text-muted leading-relaxed space-y-1">
-              <p className="text-fg font-medium text-sm">Gold e item de baú</p>
+              <p className="text-fg font-medium text-sm">{uiText("Gold e item de baú")}</p>
               <p>
-                Gold: {CHEST_LOOT.emberBase}–{CHEST_LOOT.emberBase + CHEST_LOOT.emberDice - 1} por baú.
+                {uiText("Gold:")} {CHEST_LOOT.emberBase}–{CHEST_LOOT.emberBase + CHEST_LOOT.emberDice - 1} {uiText("por baú.")}
               </p>
-              <p>Chance extra de arma ou equipamento: {Math.round(CHEST_LOOT.gearChance * 100)}%.</p>
+              <p>{uiText("Chance extra de arma ou equipamento:")} {Math.round(CHEST_LOOT.gearChance * 100)}%.</p>
             </div>
             <div className="text-sm text-muted leading-relaxed space-y-1">
-              <p className="text-fg font-medium text-sm">Drop ao matar inimigo</p>
-              <p>Inimigo comum: {(KILL_DROP_CHANCE * 100).toFixed(0)}% de chance de largar uma arma.</p>
-              <p>Chefes nomeados (drop garantido): sempre largam arma ou equipamento ao morrer.</p>
+              <p className="text-fg font-medium text-sm">{uiText("Drop ao matar inimigo")}</p>
+              <p>{uiText("Inimigo comum:")} {(KILL_DROP_CHANCE * 100).toFixed(0)}% {uiText("de chance de largar uma arma.")}</p>
+              <p>{uiText("Chefes nomeados (drop garantido): sempre largam arma ou equipamento ao morrer.")}</p>
             </div>
             <p className="text-xs text-muted leading-relaxed">
-              Toda arma/equipamento largado é sorteado por preço — quanto mais caro, mais raro — e limitado ao
-              nível de itens da missão atual, então cada trecho da campanha só solta o que faz sentido pra ele.
+              {uiText("Toda arma/equipamento largado é sorteado por preço — quanto mais caro, mais raro — e limitado ao nível de itens da missão atual, então cada trecho da campanha só solta o que faz sentido pra ele.")}
             </p>
           </div>
         )}
         </div>
         <Button className="mt-5 w-full shrink-0 ember-btn ember-btn-primary" onClick={onClose}>
-          Entendi
+          {uiText("Entendi")}
         </Button>
       </div>
     </div>
@@ -8901,6 +8935,16 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
   const familiar2 = unit.classId === "familiar2";
   const familiar3 = unit.classId === "familiar3";
   const familiar4 = unit.classId === "familiar4";
+  const paladin = unit.classId === "paladin";
+  const heavyKnight = unit.classId === "heavyKnight";
+  const spellStatusRow = (spell: SpellKind, label: string) => (
+    <div key={spell} className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
+      <img src={slotIcon({ kind: "spell", spell })} alt="" className="size-5 rounded-sm object-cover shrink-0" />
+      <p className="text-xs truncate">
+        {uiText(label)} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier(spell)!)] ?? 0}</span>
+      </p>
+    </div>
+  );
   const condition = characterCondition(unit);
 
   return (
@@ -9072,32 +9116,35 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
           ))}
         </div>
 
-        {unit.side === "player" && (swordsman || mage || conjurer || archer || healer || lancer || familiar1 || familiar2 || familiar3 || familiar4) && (
+        {unit.side === "player" && (swordsman || mage || conjurer || archer || healer || lancer || familiar1 || familiar2 || familiar3 || familiar4 || paladin || heavyKnight) && (
           <>
             <p className="text-xs ember-kicker mb-2">Magias e habilidades</p>
             <div className="grid grid-cols-1 gap-1.5">
                   {swordsman && (
                     <>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
-                        <img src={spellIcon("cleave")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
+                        <img src={slotIcon({ kind: "spell", spell: "doubleStrike" })} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs truncate">
                           {uiText(DOUBLE_STRIKE.name)} {doubleStrikeFormula(unit.level)}{" "}
                           <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("doubleStrike")!)]}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
-                        <img src={spellIcon("cleave-crossed-blades")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
+                        <img src={slotIcon({ kind: "spell", spell: "cleave" })} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs truncate">
                           {uiText(CLEAVE.name)} {CLEAVE.hexes} hex, {cleaveFormula(unit.level)} · x{CLEAVE.largeMul} vs 3+ hex{" "}
                           <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("cleave")!)]}</span>
                         </p>
                       </div>
+                      {spellStatusRow("bullRush", BULL_RUSH.name)}
+                      {spellStatusRow("shieldBash", SHIELD_BASH.name)}
+                      {spellStatusRow("executionerStrike", EXECUTIONER_STRIKE.name)}
                     </>
                   )}
                   {mage && (
                     <>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
-                        <img src={spellIcon("phantasmal-force")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
+                        <img src={slotIcon({ kind: "spell", spell: "magicMissile" })} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs leading-snug">
                           {uiText(MAGIC_MISSILE.name)} {damageFormula(unit.mag, MAGIC_MISSILE.mul, MAGIC_MISSILE.dice, MAGIC_MISSILE.faces, MAGIC_MISSILE.bonus)}{" "}
                           <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("magicMissile")!)]}</span>
@@ -9142,13 +9189,13 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                   {conjurer && (
                     <>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
-                        <img src={spellIcon("summon-familiar2")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
+                        <img src={slotIcon({ kind: "spell", spell: "summonFamiliar" })} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs truncate">
                           {uiText(SUMMON_FAMILIAR.name)} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("summonFamiliar")!)]}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
-                        <img src={spellIcon("magic-missile")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
+                        <img src={slotIcon({ kind: "spell", spell: "phantasmalForce" })} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs leading-snug">
                           {uiText(PHANTASMAL_FORCE.name)} {phantasmalForceFormula(unit.level, unit.mag)}{" "}
                           <span className="tabular-nums text-muted">×{unit.level >= PHANTASMAL_FORCE_UNLOCK_LEVEL ? unit.spells[tierKey(spellTier("phantasmalForce")!)] : 0}</span>
@@ -9162,7 +9209,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
-                        <img src={spellIcon("summon-familiar2")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
+                        <img src={slotIcon({ kind: "spell", spell: "summonFamiliar2" })} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs truncate">
                           {SUMMON_FAMILIAR2.name} <span className="tabular-nums text-muted">×{unit.level >= SUMMON_FAMILIAR2_UNLOCK_LEVEL ? unit.spells[tierKey(spellTier("summonFamiliar2")!)] : 0}</span>
                           {unit.level < SUMMON_FAMILIAR2_UNLOCK_LEVEL && <span className="text-muted"> · nível {SUMMON_FAMILIAR2_UNLOCK_LEVEL}+</span>}
@@ -9180,6 +9227,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                           {SUMMON_FAMILIAR3.name} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("summonFamiliar3")!)]}</span>
                         </p>
                       </div>
+                      {spellStatusRow("summonZombieDog", SUMMON_ZOMBIE_DOG.name)}
                     </>
                   )}
                   {(familiar1 || familiar2 || familiar4) && (
@@ -9193,7 +9241,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                   )}
                   {(familiar2 || familiar4) && (
                     <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
-                      <img src={spellIcon("cure-wounds")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
+                      <img src={slotIcon({ kind: "spell", spell: "lifeDrain" })} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                       <p className="text-xs leading-snug">
                         {uiText(LIFE_DRAIN.name)} {lifeDrainFormula(unit.level, unit.mag)} · cura {Math.round(lifeDrainHealMul(unit.level) * 100)}% do dano{" "}
                         <span className="tabular-nums text-muted">×{unit.lifeDrainCharges ?? 0}</span>
@@ -9227,6 +9275,9 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                   )}
                   {healer && (
                     <>
+                      {spellStatusRow("bless", BLESS.name)}
+                      {spellStatusRow("burningHands", BURNING_HANDS.name)}
+                      {spellStatusRow("createFoodAndWater", CREATE_FOOD_AND_WATER.name)}
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("cure-minor")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs leading-snug">
@@ -9275,6 +9326,19 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                           </p>
                         </div>
                       )}
+                    </>
+                  )}
+                  {paladin && (
+                    <>
+                      {spellStatusRow("auraOfProtection", AURA_OF_PROTECTION.name)}
+                      {spellStatusRow("divineWrath", DIVINE_WRATH.name)}
+                    </>
+                  )}
+                  {heavyKnight && (
+                    <>
+                      {spellStatusRow("shoulderSmash", SHOULDER_SMASH.name)}
+                      {spellStatusRow("intimidatingPresence", INTIMIDATING_PRESENCE.name)}
+                      {spellStatusRow("stampede", STAMPEDE.name)}
                     </>
                   )}
                 </div>

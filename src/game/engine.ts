@@ -4,7 +4,7 @@ import { drawGroundTexture, drawHexGround } from "./hexGround";
 import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, MINOR_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
 import { weightedWeaponPick, shieldBashFormula } from "./data";
-import { placedBlockingFootprint, THREE_D_DOOR_VARIANTS } from "./data";
+import { clearRockColumnTiles, placedBlockingFootprint, THREE_D_DOOR_VARIANTS } from "./data";
 import { canCounter, makeForecast, mulberry32, powerOf, protOf, rollDamage, rollDamageCustom } from "./combat";
 import {
   attackableEnemies,
@@ -1394,6 +1394,7 @@ export class BattleEngine {
     this.tileVariants = mission.tileVariants ?? [];
     this.tileRots = mission.tileRots ?? [];
     this.decorations = (mission.decorations ?? []).map((d) => ({ ...d }));
+    this.tiles = clearRockColumnTiles(this.tiles, this.cols, this.rows, this.decorations, mission.baseTile);
     this.elementalFxPlacements = (mission.elementalFx ?? []).map((p) => ({ ...p }));
     // A tile under a full-coverage water FX placement (water/water2) skips its own photo
     // tile art entirely — see renderGround. That art is one of 22 independently-centered
@@ -1888,6 +1889,9 @@ export class BattleEngine {
       this.terrainVersion++;
     }
     this.decorations.splice(0, this.decorations.length, ...snap.decorations.map((d) => ({ ...d })));
+    // Old in-progress saves can carry the same column scaffolding as old maps.
+    const cleanedTiles = clearRockColumnTiles(this.tiles, this.cols, this.rows, this.decorations, this.mission.baseTile);
+    for (let i = 0; i < cleanedTiles.length; i++) this.tiles[i] = cleanedTiles[i]!;
     this.refreshDecorOverlay();
     const needsOpeningInitiative = snap.units.some((unit) => unit.initiative == null || unit.initiativeRoll == null);
     this.units = snap.units.map(unitFromSnap);

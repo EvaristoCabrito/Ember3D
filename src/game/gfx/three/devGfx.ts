@@ -6,7 +6,7 @@ export interface DevGfxSettings {
   realShadows: boolean;
   /** Directional shadow depth-map edge; point lights use a quarter of this. */
   shadowResolution: 1024 | 2048 | 4096;
-  /** Widens the PCF filter radius so shadow edges soften instead of stair-stepping.
+  /** Widens the PCF filter radius and reduces shadow strength for lighter, softer edges.
    * (PCFSoftShadowMap was removed in this Three.js version — radius is the knob now.) */
   softShadows: boolean;
   /** Ground receiver shadow comparison closes the bias gap using the full caster silhouette. */
@@ -23,6 +23,8 @@ export interface DevGfxSettings {
   /** Environmental light from map light sources (braziers, burning houses, lanterns...) on
    * terrain, decorations and characters — see lighting.ts. */
   localLights: boolean;
+  /** Mission mist, fog, wisps, embers, and screen-space fog vignettes. */
+  atmosphericFx: boolean;
   /** Sun position: azimuth = screen direction its shadows fall (deg, 0 = right, 90 = down);
    * elevation = height above the horizon (deg). Defaults are the game's standing sun. */
   sunAzimuth: number;
@@ -33,7 +35,7 @@ export interface DevGfxSettings {
 }
 
 const KEY = "emberash:devGfx";
-const DEFAULTS: DevGfxSettings = { realShadows: true, shadowResolution: 4096, softShadows: false, contactShadows: true, ambientOcclusion: true, fogOfWar: true, fogDebug: false, localLights: true, sunAzimuth: 53.13, sunElevation: 45, moonAzimuth: 140, moonElevation: 35 };
+const DEFAULTS: DevGfxSettings = { realShadows: true, shadowResolution: 4096, softShadows: false, contactShadows: true, ambientOcclusion: true, fogOfWar: true, fogDebug: false, localLights: true, atmosphericFx: true, sunAzimuth: 53.13, sunElevation: 45, moonAzimuth: 140, moonElevation: 35 };
 
 function load(): DevGfxSettings {
   try {

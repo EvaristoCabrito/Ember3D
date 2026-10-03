@@ -352,11 +352,9 @@ export interface DecorationDef {
   blockingFootprint?: { dx: number; dy: number }[];
   /** The terrain this prop means, if it means one.
    *
-   * Decorations are art: every rule — whether a hex can be walked, shot through or stood
-   * on top of — comes from the tile underneath, which is why the rocks that rockifyColumns
-   * draws leave their column tile in place. A ridge you can climb is a mountain-ridge prop
-   * sitting on "hill". Naming it here lets the editor lay the tile with the prop, so the
-   * picture and the rules cannot drift apart. */
+   * A ridge you can climb sits on "hill". Naming terrain here lets the editor lay
+   * that tile with the prop. Solid decorations such as rocks instead block through
+   * their own footprints without changing the ground underneath. */
   tile?: TerrainId;
   /** Draw this prop after character sprites so near-side scenery can naturally occlude
    * them. This is visual-only: it does not change movement, line of sight, or terrain. */

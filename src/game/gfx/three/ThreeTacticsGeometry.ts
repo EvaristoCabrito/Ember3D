@@ -130,5 +130,6 @@ export function tacticsProp(id: string, w: number, h: number, stone: THREE.Textu
   const mesh = new THREE.Mesh(geometry, materials);
   mesh.castShadow = mesh.receiveShadow = true;
   mesh.userData.tacticsModel = true;
+  mesh.userData.tacticsArchitecture = HOUSES.has(id);
   return mesh;
 }

@@ -10,6 +10,7 @@ import { playTheme, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { fullness, INN_MEAL_PRICE } from "./hunger";
 import { HungerBar } from "./HungerBar";
 import { questProgress, questStatus, questsFor } from "./quests";
+import { useGamePreferences } from "./gamePreferences";
 
 const BAG_ICON = pouchIcon(null);
 export const HEALER_CAST_PRICE = 5;
@@ -1247,6 +1248,13 @@ function SmithPanel({
 
 function SmithIntroScreen({ muted, onSkip }: { muted: boolean; onSkip: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const prefs = useGamePreferences();
+  const selectedSubtitle = prefs.subtitles ? prefs.subtitleLanguage : "off";
+  const setTrack = (track: TextTrack) => { track.mode = track.language === selectedSubtitle ? "showing" : "disabled"; };
+  useEffect(() => {
+    const tracks = ref.current?.textTracks;
+    if (tracks) for (const track of Array.from(tracks)) setTrack(track);
+  }, [selectedSubtitle]);
   const [portrait, setPortrait] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(max-width: 720px) and (orientation: portrait)").matches,
   );
@@ -1278,7 +1286,10 @@ function SmithIntroScreen({ muted, onSkip }: { muted: boolean; onSkip: () => voi
   return (
     <section className="relative h-dvh w-dvw bg-black overflow-hidden">
       <div className="cutscene-stage">
-        <video ref={ref} src="/game/smith-intro.mp4" playsInline autoPlay preload="auto" onEnded={onSkip} onError={onSkip} />
+        <video ref={ref} src="/game/smith-intro.mp4" playsInline autoPlay preload="auto" onEnded={onSkip} onError={onSkip}>
+          <track kind="subtitles" src="/game/subtitles/smith-intro.pt.vtt" srcLang="pt" label="Português" default={selectedSubtitle === "pt"} onLoad={(event) => setTrack(event.currentTarget.track)} />
+          <track kind="subtitles" src="/game/subtitles/smith-intro.en.vtt" srcLang="en" label="English" default={selectedSubtitle === "en"} onLoad={(event) => setTrack(event.currentTarget.track)} />
+        </video>
       </div>
       {portrait && (
         <p className="pointer-events-none absolute inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] text-center text-[11px] tracking-[0.16em] uppercase text-muted">

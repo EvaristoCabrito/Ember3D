@@ -1529,7 +1529,10 @@ export class ThreeAtmosphere {
     viewport?: { cssW: number; cssH: number; camX: number; camY: number },
     cellAt?: (x: number, y: number) => number,
     unitFeet?: { x: number; y: number; halfW: number; band: number }[],
+    enabled = true,
   ): void {
+    this.group.visible = enabled;
+    if (!enabled) return;
     // Mission-authored, not a hardcoded per-id table (see Mission.mistIntensity/wispIntensity/
     // wispSpeed in types.ts) — the Map Editor's "Névoa"/"Wisps"/"Velocidade" sliders are the one
     // real source of this. Full range, deliberately: sliders go from "off" to genuinely extreme

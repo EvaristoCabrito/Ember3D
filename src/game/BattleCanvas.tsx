@@ -1,9 +1,10 @@
 import { graphicsDpr, subscribeGraphicsQuality } from "./graphicsQuality";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { BattleEngine } from "./engine";
 import { EffectsRenderer } from "./gfx/EffectsRenderer";
 import { WebGL2DRenderer } from "./gfx/WebGL2DRenderer";
 import { ThreeBattleRenderer } from "./gfx/three/ThreeBattleRenderer";
+import { getDevGfx, subscribeDevGfx } from "./gfx/three/devGfx";
 import type { HudSnapshot } from "./types";
 
 /** Three.js is now the default ground/terrain renderer (see ThreeBattleRenderer's module
@@ -32,8 +33,10 @@ export function BattleCanvas({
    * false as soon as the pointer moves off, lifts, or leaves the canvas. */
   onTileReadout?: (showing: boolean) => void;
 }) {
+  const atmosphericFx = useSyncExternalStore(subscribeDevGfx, () => getDevGfx().atmosphericFx, () => true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const tacticalUnitsCanvasRef = useRef<HTMLCanvasElement>(null);
   const unitsCanvasRef = useRef<HTMLCanvasElement>(null);
   const unitHudCanvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -70,6 +73,8 @@ export function BattleCanvas({
     // of draw order. Splitting the ground and unit passes onto their own canvases (see
     // BattleEngine.renderGround/renderUnitsAndOverlays) puts a real layer boundary between them.
     const unitsCanvas = unitsCanvasRef.current;
+    const tacticalUnitsCanvas = tacticalUnitsCanvasRef.current;
+    const tacticalUnitsContext = tacticalUnitsCanvas?.getContext("2d") ?? null;
     const unitHudCanvas = unitHudCanvasRef.current;
     const unitHudContext = unitHudCanvas?.getContext("2d") ?? null;
     let unitsRenderer: WebGL2DRenderer | null = null;
@@ -204,6 +209,12 @@ export function BattleCanvas({
         unitsCanvas.style.height = `${h}px`;
         unitsRenderer.setSize(pw, ph);
       }
+      if (tacticalUnitsCanvas) {
+        tacticalUnitsCanvas.width = pw;
+        tacticalUnitsCanvas.height = ph;
+        tacticalUnitsCanvas.style.width = `${w}px`;
+        tacticalUnitsCanvas.style.height = `${h}px`;
+      }
       if (unitHudCanvas) {
         unitHudCanvas.width = pw;
         unitHudCanvas.height = ph;
@@ -246,14 +257,19 @@ export function BattleCanvas({
       }
       const dpr = graphicsDpr();
       // Elemental FX is a DOM canvas between the Three scene and the normal unit overlay.
-      // Sprite-only maps move decorations to that overlay. Architecture maps keep actors
-      // in the shared scene so the FX snapshot preserves the wall depth relationship.
-      const drawDecorationsOverFx = !!rendererThree && !engine.tacticsCamera && !rendererThree.hasArchitecture() && !!fx?.hasEffects();
+      // Keep actor sprites above it in either camera mode. Tactical billboards use their own
+      // upright projected overlay; ordinary decorations move up only on sprite-only maps, while
+      // projected architecture masks keep 3D props visible. Include pending requests so the
+      // first frame of a spell is layered too.
+      const fxPending = !!fx && (fx.hasEffects() || engine.elementalFxRequests.length > 0 || !!engine.webShotBeam());
+      const drawUnitsOverFx = !!rendererThree && !engine.tacticsCamera && fxPending;
+      const drawTacticalUnitsOverFx = !!rendererThree && engine.tacticsCamera && fxPending;
+      const drawSpritesOverFx = drawUnitsOverFx || drawTacticalUnitsOverFx;
+      const drawDecorationsOverFx = !!rendererThree && drawUnitsOverFx && !rendererThree.hasArchitecture();
       if (rendererThree) {
-        // Move both Three-owned sprites and decorations into the shared upper painter's pass
-        // while FX is visible. That pass has the required order: rear decor → characters →
-        // foreground decor, all above the elemental-FX canvas.
-        rendererThree.setSpritesAndDecorationsVisible(!drawDecorationsOverFx, !drawDecorationsOverFx);
+        // Move actor sprites above the FX canvas. Decorations also move there on sprite-only
+        // maps, in the painter order rear decor → characters → foreground decor.
+        rendererThree.setSpritesAndDecorationsVisible(!drawSpritesOverFx, !drawDecorationsOverFx);
         // Movement/attack/spell-range highlight and the active-turn ring are drawn as part of
         // this call now (see ThreeBattleRenderer.syncOverlay) — real world-space hex meshes
         // ordered between terrain and decorations, not a separate 2D overlay, so a blocking
@@ -311,11 +327,27 @@ export function BattleCanvas({
         // whenever nothing — editor-placed or live spell FX — is actually active, so an
         // ordinary fight never pays for it.
         if (fx.hasEffects()) {
-          if (fxCanvas) fxCanvas.style.display = "block";
+          if (fxCanvas) {
+            const architectureMask = rendererThree?.architectureFxMaskDataUri(wrap.clientWidth, wrap.clientHeight) ?? "none";
+            fxCanvas.style.setProperty("mask-image", architectureMask);
+            fxCanvas.style.setProperty("-webkit-mask-image", architectureMask);
+            fxCanvas.style.setProperty("mask-size", "100% 100%");
+            fxCanvas.style.setProperty("-webkit-mask-size", "100% 100%");
+            fxCanvas.style.setProperty("mask-repeat", "no-repeat");
+            fxCanvas.style.setProperty("-webkit-mask-repeat", "no-repeat");
+            fxCanvas.style.display = "block";
+          }
           fx.render(canvas, dt, fxAnchor);
         } else if (fxCanvas) {
           fxCanvas.style.display = "none";
+          fxCanvas.style.setProperty("mask-image", "none");
+          fxCanvas.style.setProperty("-webkit-mask-image", "none");
         }
+      }
+      if (tacticalUnitsCanvas && tacticalUnitsContext) {
+        tacticalUnitsContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+        tacticalUnitsContext.clearRect(0, 0, wrap.clientWidth, wrap.clientHeight);
+        if (drawTacticalUnitsOverFx) rendererThree?.renderTacticalUnitSprites(tacticalUnitsContext, wrap.clientWidth, wrap.clientHeight);
       }
       // Drawn on its own transparent canvas above the FX layer, so units/HP-bars/foreground
       // decorations always read in front of a Water/Fire/etc placement instead of being
@@ -328,11 +360,12 @@ export function BattleCanvas({
           wrap.clientWidth,
           wrap.clientHeight,
           fx ? (px: number, py: number) => fx.lightBoostAt(px, py, fxAnchorRaw) : undefined,
-          // Three normally owns its decorations. During active elemental FX, this pass redraws
-          // the row-sorted ordinary scenery with sprites above the FX canvas.
+          // Three normally owns its decorations and sprites. During active elemental FX, move
+          // sprites above the effect on every non-tactical map; redraw decorations there only
+          // when there is no architecture whose depth order needs to stay in the Three scene.
           !!rendererThree && !drawDecorationsOverFx,
-          !!rendererThree && !drawDecorationsOverFx,
-          !!rendererThree && !drawDecorationsOverFx,
+          !!rendererThree && !drawUnitsOverFx,
+          !!rendererThree && !drawSpritesOverFx,
           !!rendererThree,
           !!rendererThree && !drawDecorationsOverFx,
           !!rendererThree,
@@ -662,6 +695,7 @@ export function BattleCanvas({
       <canvas ref={canvasRef} className="block h-full w-full touch-none" />
       <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ display: "none" }} />
       <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
+      <canvas ref={tacticalUnitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
       <canvas ref={unitHudCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
       {/* Diorama color grade + vignette: a subtle warm key-light / cool shadow wash from the
           same upper-left "sun" the unit/decoration relighting and cast shadows use (see
@@ -678,7 +712,7 @@ export function BattleCanvas({
       />
       {/* A screen vignette belongs to the viewport rather than the world: it therefore covers the
           complete painted backdrop and stays fixed while the map pans. */}
-      {isVignette2Mist && (
+      {atmosphericFx && isVignette2Mist && (
         <>
           <style>{`
             @keyframes vignetteMistPulse { 0%, 100% { opacity: 0.88; } 50% { opacity: 1; } }
@@ -733,7 +767,7 @@ export function BattleCanvas({
           </div>
         </>
       )}
-      {isVignetteMist && (
+      {atmosphericFx && isVignetteMist && (
         <>
           <style>{`
             @keyframes vignetteMistPulse { 0%, 100% { opacity: 0.88; } 50% { opacity: 1; } }
@@ -771,7 +805,7 @@ export function BattleCanvas({
           </div>
         </>
       )}
-      {isVignette3Mist && (
+      {atmosphericFx && isVignette3Mist && (
         <>
           <style>{`
             @keyframes vinheta3Drift { 0%, 100% { transform: scale(1.025) translate3d(-1.2%, 0.8%, 0); } 50% { transform: scale(1.07) translate3d(1.2%, -0.8%, 0); } }
@@ -792,7 +826,7 @@ export function BattleCanvas({
           </div>
         </>
       )}
-      {isVignette4Mist && (
+      {atmosphericFx && isVignette4Mist && (
         <>
           <style>{`
             @keyframes vinheta4Drift { 0%, 100% { transform: scale(1.02) translate3d(-0.8%, 0.6%, 0); opacity: .72; } 50% { transform: scale(1.06) translate3d(0.8%, -0.6%, 0); opacity: 1; } }

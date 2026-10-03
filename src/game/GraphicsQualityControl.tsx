@@ -13,7 +13,7 @@ export function GraphicsQualityControl() {
     <div className="flex gap-2">{([['low', 'Baixa'], ['medium', 'Média'], ['high', 'Alta']] as const).map(([id, label]) =>
       <button key={id} type="button" aria-pressed={!custom && quality === id} onClick={() => setGraphicsQuality(id)}
         className={`flex-1 rounded border px-3 py-2 text-sm ${!custom && quality === id ? 'border-accent bg-accent/20' : 'border-border'}`}>{t(label)}</button>)}</div>
-    <p className="mt-2 text-xs text-muted">{t("Baixa: sombras 1024 suaves. Média: 2048 nítidas. Alta: 4096 nítidas.")}</p>
+    <p className="mt-2 text-xs text-muted">{t("Baixa: sem sombras ou FX atmosféricos. Média: sombras 2048 sem contato. Alta: sombras 4096 com contato.")}</p>
     {custom && <p className="mt-2 text-xs">{t("Personalizada")} · {gfx.shadowResolution}</p>}
     <p className="mt-2 text-xs text-muted">{t("Ajusta resolução, sombras e iluminação. Mantém os modelos e as regras do jogo.")}</p>
   </fieldset>;
