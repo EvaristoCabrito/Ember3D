@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { BookOpen, Check, ChevronLeft, Lock, MapPin, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
+import { BookOpen, Check, ChevronLeft, Lock, MapPin, Save, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
 import { isCrossingDungeon, missionsForLocation } from "./mapstore";
 import type { EquipSlot, Mission, PotionId, SaveData, WorldLocation } from "./types";
 import { PartyInventoryOverlay } from "./InventoryScreens";
@@ -81,6 +81,7 @@ export function OverworldMapScreen({
   onStep,
   onTeleport,
   onBack,
+  onSave,
   onPick,
 }: {
   locations: WorldLocation[];
@@ -128,6 +129,7 @@ export function OverworldMapScreen({
    * clock and rations stay visible and testable even in test mode. */
   onTeleport?: (col: number, row: number) => void;
   onBack: () => void;
+  onSave?: () => void;
   onPick: (missionId: string) => void;
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
@@ -361,6 +363,18 @@ export function OverworldMapScreen({
           <BookOpen className="size-4" />
           <span>Missões</span>
         </button>
+        {!test && onSave && (
+          <button
+            type="button"
+            onClick={onSave}
+            aria-label="Salvar jogo em outro slot"
+            title="Salvar jogo"
+            className="h-9 inline-flex items-center gap-1.5 ember-plate px-2.5 text-xs sm:text-sm"
+          >
+            <Save className="size-3.5" />
+            <span>Salvar</span>
+          </button>
+        )}
         <p className="text-sm text-muted ember-plate px-2 py-1">Dia <span className="text-fg tabular-nums">{gameClock}</span></p>
         <p className="text-sm text-muted ember-plate px-2 py-1">Rações <span className="text-fg tabular-nums">{rations}</span></p>
         {hungerStreak > 0 && (

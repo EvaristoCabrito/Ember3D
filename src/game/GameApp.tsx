@@ -1939,6 +1939,12 @@ export function GameApp() {
             unlockAudio();
             setMutedUi((v) => !v);
           }}
+          onSave={() => {
+            setOverwrite(null);
+            setSlotReturnScreen("overworldMap");
+            setSlotMode("save");
+            setScreen("saveSlots");
+          }}
           overworldPos={overworldSave.overworldPos}
           gameClock={overworldSave.gameClock}
           rations={overworldSave.rations}
