@@ -2147,6 +2147,7 @@ export function GameApp() {
           startInSmith={innEntry === "smith"}
           startInHealer={innEntry === "healer"}
           startInMerchant={innEntry === "merchant"}
+          startInMerchantGear={innEntry === "merchantGear"}
           onLeave={
             innEntry
               ? () => {

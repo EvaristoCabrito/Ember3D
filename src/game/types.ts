@@ -266,7 +266,7 @@ export interface DialogReply {
 }
 
 /** A handoff a dialog reply can trigger: an Inn or merchant shop, or a story recruitment. */
-export type DialogAction = "tavern" | "smith" | "healer" | "merchant" | "recruitAldric" | "acceptSuspectHostageQuest";
+export type DialogAction = "tavern" | "smith" | "healer" | "merchant" | "merchantGear" | "recruitAldric" | "acceptSuspectHostageQuest";
 
 /** One screen of the dialog popup: a speaker, an optional portrait, and the line itself.
  * Either it links straight to the next line (`next`, plain "OK" to continue) or it branches

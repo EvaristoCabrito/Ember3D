@@ -5950,7 +5950,16 @@ export const WORLD_LOCATIONS: WorldLocation[] = [
   { id: "misty-cave", name: "Misty Cave", x: 51.96, y: 45, missionIds: [] },
   { id: "cemetery", name: "Cemetery", x: 86, y: 52, missionIds: [] },
   // x/y is the RPG hex map's own hex(6,10) center, same treatment as vertente above.
-  { id: "frozen-swamp", name: "Frozen Swamp", x: 51.96, y: 75, missionIds: [] },
+  { id: "frozen-swamp", name: "Frozen Swamp", x: 51.96, y: 75, missionIds: ["frozen-swamp-crossing-1"], openAccess: true, submaps: [
+    { missionId: "frozen-swamp-crossing-2", floor: 2 },
+    { missionId: "frozen-swamp-crossing-3", floor: 3 },
+    { missionId: "frozen-swamp-1-sunk-vault", floor: 1 },
+    { missionId: "frozen-swamp-1-hidden-cellar", floor: 1 },
+    { missionId: "frozen-swamp-2-sunk-vault", floor: 2 },
+    { missionId: "frozen-swamp-2-hidden-cellar", floor: 2 },
+    { missionId: "frozen-swamp-3-sunk-vault", floor: 3 },
+    { missionId: "frozen-swamp-3-hidden-cellar", floor: 3 },
+  ] },
   // x/y is the RPG hex map's own hex(9,11) center, same treatment as vertente above.
   { id: "forest", name: "The Verdant Refuge", x: 82.27, y: 82.5, missionIds: [] },
   // x/y is the RPG hex map's own hex(4,8) center, same treatment as vertente above.

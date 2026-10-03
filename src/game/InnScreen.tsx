@@ -122,6 +122,7 @@ export function InnScreen({
   startInSmith = false,
   startInHealer = false,
   startInMerchant = false,
+  startInMerchantGear = false,
   healerTargets = [],
   onHealerCast,
   onHealerCureAilments,
@@ -145,6 +146,8 @@ export function InnScreen({
   startInHealer?: boolean;
   /** Opens the limited roadside merchant inventory instead of the inn menus. */
   startInMerchant?: boolean;
+  /** Roadside equipment selection priced between 320 and 1300 Gold. */
+  startInMerchantGear?: boolean;
   healerTargets?: HealerTarget[];
   /** Applies one paid Cura Média cast and returns the HP actually restored. */
   onHealerCast?: (hero: string) => number | false;
@@ -186,10 +189,10 @@ export function InnScreen({
   onSellWeapon: (weaponId: string) => number | false;
   onSeenSmithIntro: () => void;
 }) {
-  const [view, setView] = useState<"npc" | "smith" | "healer">(startInHealer ? "healer" : startInSmith && save.seenSmithIntro ? "smith" : "npc");
+  const [view, setView] = useState<"npc" | "smith" | "healer">(startInMerchantGear ? "smith" : startInHealer ? "healer" : startInSmith && save.seenSmithIntro ? "smith" : "npc");
   const [smithIntro, setSmithIntro] = useState(startInSmith && !save.seenSmithIntro);
-  const [npc, setNpc] = useState<(typeof NPCS)[number]>(startInMerchant ? NPCS[NPCS.length - 1] : NPCS[0]);
-  const npcOptions = startInMerchant ? [NPCS[NPCS.length - 1]] : NPCS.slice(0, -1);
+  const [npc, setNpc] = useState<(typeof NPCS)[number]>(startInMerchant || startInMerchantGear ? NPCS[NPCS.length - 1] : NPCS[0]);
+  const npcOptions = startInMerchant || startInMerchantGear ? [NPCS[NPCS.length - 1]] : NPCS.slice(0, -1);
   const [hero, setHero] = useState<string>("Kael");
   useEffect(() => {
     onTalkToNpc?.(npc.id);
@@ -324,7 +327,8 @@ export function InnScreen({
         save={save}
         test={test}
         onMute={onMute}
-        onBack={startInSmith ? onLeave : () => setView("npc")}
+        merchantGear={startInMerchantGear}
+        onBack={startInSmith || startInMerchantGear ? onLeave : () => setView("npc")}
         onBuyWeapon={onBuyWeapon}
         onBuyEquipment={onBuyEquipment}
         onEquipWeapon={onEquipWeapon}
@@ -873,6 +877,7 @@ function SmithPanel({
   heroClass,
   save,
   test,
+  merchantGear = false,
   onMute,
   onBack,
   onBuyWeapon,
@@ -895,6 +900,7 @@ function SmithPanel({
   heroClass: Record<string, ClassId>;
   save: SaveData;
   test?: boolean;
+  merchantGear?: boolean;
   onMute: () => void;
   onBack: () => void;
   onBuyWeapon: (hero: string, weaponId: string) => boolean;
@@ -928,14 +934,15 @@ function SmithPanel({
   const pool = useMemo(
     () =>
       Object.values(WEAPONS)
-        .filter((weapon) => test || weapon.price > 0)
+        .filter((weapon) => merchantGear ? weapon.price >= 320 && weapon.price <= 1300 : test || weapon.price > 0)
         .filter((weapon) => weapon.usableBy.includes(classId))
         .sort((a, b) => weaponPower(a) - weaponPower(b)),
-    [classId, test],
+    [classId, test, merchantGear],
   );
   const smithEquipment = useMemo(() => {
     const bySlot = new Map<string, (typeof EQUIPMENT)[string][]>();
     for (const item of Object.values(EQUIPMENT)) {
+      if (merchantGear && ((item.price ?? 0) < 320 || (item.price ?? 0) > 1300)) continue;
       if (!test && (item.price ?? 0) <= 0) continue;
       if (!test && isPouch(item.id)) continue;
       if (item.slot === "ring1" || item.slot === "ring2") continue;
@@ -945,17 +952,17 @@ function SmithPanel({
     }
     return [...bySlot.values()].flatMap((items) => {
       const ranked = items.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-      return test ? ranked : ranked.slice(0, Math.ceil(ranked.length / 2));
+      return test || merchantGear ? ranked : ranked.slice(0, Math.ceil(ranked.length / 2));
     }).sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-  }, [classId, test]);
+  }, [classId, test, merchantGear]);
   const smithRings = useMemo(
     () =>
       Object.values(EQUIPMENT)
         .filter((item) => item.slot === "ring1" || item.slot === "ring2")
-        .filter((item) => test || (item.price ?? 0) > 0)
+        .filter((item) => merchantGear ? (item.price ?? 0) >= 320 && (item.price ?? 0) <= 1300 : test || (item.price ?? 0) > 0)
         .filter((item) => !item.usableBy || item.usableBy.includes(classId))
         .sort((a, b) => (a.price ?? 0) - (b.price ?? 0)),
-    [classId, test],
+    [classId, test, merchantGear],
   );
   const equippedId = equipped[hero];
   const equippedWeapon = equippedId ? WEAPONS[equippedId] : null;
@@ -970,7 +977,7 @@ function SmithPanel({
       return;
     }
     if (!onBuyWeapon(hero, weaponId)) {
-      setNote("Vargan recusou. Falta Gold.");
+      setNote(merchantGear ? "Elias recusou. Falta Gold." : "Vargan recusou. Falta Gold.");
       return;
     }
     sfxPlay.purchase();
@@ -983,7 +990,7 @@ function SmithPanel({
       return;
     }
     if (!onBuyEquipment(itemId)) {
-      setNote("Vargan recusou. Falta Gold.");
+      setNote(merchantGear ? "Elias recusou. Falta Gold." : "Vargan recusou. Falta Gold.");
       return;
     }
     sfxPlay.purchase();
@@ -999,7 +1006,7 @@ function SmithPanel({
     if (!equippedId) return;
     setNote(null);
     if (!onUpgradeWeapon(equippedId)) {
-      setNote("Vargan recusou. Falta Gold ou já está no máximo.");
+      setNote(merchantGear ? "Elias recusou. Falta Gold ou já está no máximo." : "Vargan recusou. Falta Gold ou já está no máximo.");
       return;
     }
     setNote(`${equippedWeapon?.name} aprimorada.`);
@@ -1024,8 +1031,8 @@ function SmithPanel({
           <ChevronLeft className="size-4 inline -mt-0.5" /> Voltar
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-xs ember-kicker">A forja no porão</p>
-          <h1 className="font-display text-2xl leading-none ember-title">Vargan, o Ferreiro</h1>
+          <p className="text-xs ember-kicker">{merchantGear ? "Equipamentos de viagem · 320–1300 Gold" : "A forja no porão"}</p>
+          <h1 className="font-display text-2xl leading-none ember-title">{merchantGear ? "Elias, Mercador das Três Rotas" : "Vargan, o Ferreiro"}</h1>
         </div>
         <button
           type="button"
