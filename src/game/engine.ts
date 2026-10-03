@@ -477,7 +477,7 @@ const LONG_WALK_SECONDS = 1.5;
 // Give the heavy Ox time to settle into each pose; all of its clocks share this pace.
 const BIG_BLUE_OX_PACE = 0.75;
 // Sums of the supplied Minor Horror atlas JSON frame durations.
-const MINOR_HORROR_SECONDS = { idle: 2.844, attack: 2.844, cast: 3.168, walk: 3.456 };
+const MINOR_HORROR_SECONDS = { idle: 3.240, attack: 2.844, cast: 3.168, walk: 3.456 };
 /** Bow shots on a long sheet, per direct instruction: a normal ATT shot leaves only once the
  * whole attack sheet has played; a bow skill (Special sheet — Long Shot, Multi Shot,
  * Piercing) releases mid-sheet and the archer plays the rest of it while the arrow flies. */
