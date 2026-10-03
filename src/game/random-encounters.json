@@ -11,7 +11,9 @@
         "random-river-rope-ambush",
         "random-hollow-root-den",
         "random-mora-rootwatch",
-        "random-mora-hollow-stream"
+        "random-mora-hollow-stream",
+        "random-amanita-glade",
+        "random-blightwood-verge"
       ]
     },
     {
@@ -22,7 +24,9 @@
         "random-hollow-pine-basin",
         "random-cairnkeepers-rise",
         "random-splintered-trunk-pass",
-        "random-rimewater-shrine"
+        "random-rimewater-shrine",
+        "random-stoneshelf-pass",
+        "random-greycairn-plateau"
       ]
     },
     {
@@ -82,7 +86,13 @@
       "id": "plains",
       "name": "Planície",
       "encounterIds": [
-        "random-whispering-reeds"
+        "random-whispering-reeds",
+        "random-plains-windgrass",
+        "random-plains-broken-caravan",
+        "random-plains-sunken-ford",
+        "random-plains-old-stones",
+        "random-plains-silent-harvest",
+        "random-plains-hill-patrol"
       ]
     }
   ]

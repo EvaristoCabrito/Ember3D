@@ -1549,10 +1549,14 @@ export function GameApp() {
     playMenuMusic();
   }, [screen, muted, missionId, innEntry, save.seenSmithIntro]);
 
-  // Reuse the selected travel style whenever the map opens. Campaign saves persist it;
-  // test mode keeps it in memory for this session.
+  // Campaign maps reuse the mode stored in that save. Debug always opens the chooser so
+  // each test run can select the kind of map independently of the last Debug session.
   const goToMap = useCallback(() => {
-    const mode = testMode ? mapMode : (save.mapMode ?? mapMode);
+    if (testMode) {
+      setScreen("mapChoice");
+      return;
+    }
+    const mode = save.mapMode ?? mapMode;
     if (mode) {
       setMapMode(mode);
       setScreen(mode === "classic" ? "worldMap" : "overworldMap");
