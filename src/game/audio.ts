@@ -333,6 +333,9 @@ export const sfxPlay = {
   // Cultist V2's own authored cues (see attachments/Cultist-V2), one per animation set —
   // played instead of the (now silent) generic attack/cast/move cues whenever the acting
   // unit's sprite is "cultist-v2" (see stepCombat/stepSpell/startSeq in engine.ts).
+  minorHorrorAttack: () => playSfxFileExclusive("MinorHorrorATT001.mp3", 0.55),
+  minorHorrorCast: () => playSfxFileExclusive("MinorHorrorCasting001.mp3", 0.55),
+  minorHorrorWalk: () => playSfxFileExclusive("MinorHorrorWalk001.mp3", 0.45),
   cultistV2Attack: () => playSfxFile("CultistV2Attack.mp3", 0.55),
   cultistV2Spellcast: () => playSfxFile("CultistV2Spellcast.mp3", 0.55),
   cultistV2WalkLeft: () => playSfxFile("CultistV2WalkLeft.mp3", 0.45),

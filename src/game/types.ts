@@ -49,6 +49,7 @@ export type ClassId = import("./encounter-npcs").EncounterNpcId
   | "captain"
   | "cultist"
   | "cultistV2"
+  | "minorHorror"
   | "horror"
   | "asherah"
   | "pikeman"
@@ -128,7 +129,7 @@ export type ClassId = import("./encounter-npcs").EncounterNpcId
   // Conjurer tier 5 (Invocar Cão Zumbi): a summoned zombie dog — see SUMMON_ZOMBIE_DOG.
   | "zombieDog"
   | "travelingMerchant";
-export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "wardog2" | "EmberedWraith" | "zombie" | "zombie2" | "undeadOx" | "troll" | "troll2" | "RoccoTheBird" | "morvenian-wolf" | "mordavian-wolf" | "mordavian-wolf-final" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "familiar4" | "zombieDog" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
+export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "minor-horror-001" | "Asherah" | "pikeman" | "wardog" | "wardog2" | "EmberedWraith" | "zombie" | "zombie2" | "undeadOx" | "troll" | "troll2" | "RoccoTheBird" | "morvenian-wolf" | "mordavian-wolf" | "mordavian-wolf-final" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "familiar4" | "zombieDog" | "swamp-blue-calf" | "big-blue-ox-002" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
   | import("./encounter-npcs").EncounterNpcId
   // Generic-enemy "alter" sprites, split off so a plain Archer/Mage/Healer enemy (and their
   // own promotions) never renders as literally the same SpriteId as Neera/Voss/Salazar the

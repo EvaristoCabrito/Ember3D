@@ -24,3 +24,20 @@ log.txt
 /*.png
 /*.gif
 /*.mp4
+
+# Local video decoding dependencies
+/work/video-tools/
+
+/work/ox-ai-gpu/
+
+# Creature extraction intermediates and local visual checks
+/work/big-blue-ox*/
+/work/big-blue-ox*.py
+/work/ox-*.py
+/work/test-ox-*.py
+/work/qa-ox-*.mjs
+/work/minor-horror/
+/work/*minor-horror.py
+/work/repository-script-tests.log
+/work/creature-commit-prep.py
+/work/minor-horror-timing.py

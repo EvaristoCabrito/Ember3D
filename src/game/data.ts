@@ -1312,6 +1312,11 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     size: 1,
     init: 5,
   },
+  minorHorror: {
+    id: "minorHorror", name: "Minor Horror", role: "Abominação",
+    hp: 42, atk: 9, mag: 7, def: 3, res: 4, mov: 4,
+    minRange: 1, maxRange: 1, sprite: "minor-horror-001", size: 1, init: 5,
+  },
   horror: {
     id: "horror",
     name: "Horror",
@@ -1520,11 +1525,11 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     size: 1,
     init: 6,
   },
-  // Big Blue Calf is a separate enemy class that shares the new calf art. Keep the
+  // Big Blue Ox has its own preserved animation set. Keep the
   // older Swamp Blue Calf's identity, stats, water rules and existing spawns intact.
   bigBlueCalf: {
     id: "bigBlueCalf",
-    name: "Big Blue Calf",
+    name: "Big Blue Ox",
     role: "Fera",
     hp: 22,
     atk: 7,
@@ -1534,8 +1539,9 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     mov: 5,
     minRange: 1,
     maxRange: 1,
-    sprite: "swamp-blue-calf",
-    size: 1,
+    sprite: "big-blue-ox-002",
+    size: 2,
+    footprintOffsets: FOOTPRINT_TYPE_2,
     init: 6,
   },
   // Classes novas — nome, papel e arte ainda são provisórios (sprite reaproveita
@@ -2263,6 +2269,7 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   birolhoLegs2: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
   cultist: { hp: 3, atk: 0, mag: 2, def: 1, res: 2 },
   cultistV2: { hp: 3, atk: 0, mag: 2, def: 1, res: 2 },
+  minorHorror: { hp: 3, atk: 1, mag: 1, def: 1, res: 1 },
   horror: { hp: 4, atk: 2, mag: 0, def: 2, res: 2 },
   asherah: { hp: 5, atk: 2, mag: 0, def: 2, res: 2 },
   troll: { hp: 5, atk: 2, mag: 0, def: 2, res: 1 },
@@ -3443,6 +3450,7 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   cultist: 4,
   cultistV2: 4,
   captain: 6,
+  minorHorror: 5,
   horror: 10,
   asherah: 12,
   troll: 8,
@@ -4184,6 +4192,7 @@ export const SHOCK = {
 };
 
 const ENEMY_MAGE_IDS: ReadonlySet<ClassId> = new Set([
+  "minorHorror",
   "cultist",
   "cultistV2",
   "mage",

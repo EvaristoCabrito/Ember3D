@@ -474,6 +474,10 @@ const DEATH_HOLD_SECONDS = 1;
 const HIT_ANIM_SECONDS = 3;
 /** Walk cycles run faster than the rest: one full pass of a long walk sheet takes this long. */
 const LONG_WALK_SECONDS = 1.5;
+// Give the heavy Ox time to settle into each pose; all of its clocks share this pace.
+const BIG_BLUE_OX_PACE = 0.75;
+// Sums of the supplied Minor Horror atlas JSON frame durations.
+const MINOR_HORROR_SECONDS = { idle: 2.844, attack: 2.844, cast: 3.168, walk: 3.456 };
 /** Bow shots on a long sheet, per direct instruction: a normal ATT shot leaves only once the
  * whole attack sheet has played; a bow skill (Special sheet — Long Shot, Multi Shot,
  * Piercing) releases mid-sheet and the archer plays the rest of it while the arrow flies. */
@@ -897,7 +901,9 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
       // tier1/tier2/tier4 uses — see cultistSpellUses/brigandSpellUses/birolhoSpellUses and
       // runAiFor's cultist/brigand/birolho branches.
       tier1:
-        cls.id === "roccoTheBird"
+        cls.id === "bigBlueCalf"
+          ? 3
+          : cls.id === "roccoTheBird"
           ? 2
           : cls.id === "emberedWraith"
             ? 0
@@ -2205,7 +2211,7 @@ export class BattleEngine {
       const frames = actor
         ? pose === "cast"
           ? (this.art.casts[actor.sprite] ?? this.art.attacks[actor.sprite])
-          : actor.idleAlt
+          : actor.classId !== "bigBlueCalf" && actor.idleAlt
             ? (this.art.attacks2[actor.sprite] ?? this.art.attacks[actor.sprite])
             : this.art.attacks[actor.sprite]
         : undefined;
@@ -2213,7 +2219,7 @@ export class BattleEngine {
       if (actor && ranged && targetAlive && (frames?.length ?? 0) >= LONG_SHEET_FRAMES) {
         const arrowAttack = step.type === "combat" && this.isArrowAttack(actor);
         const arrowSkill = step.type === "spell" && (step.spellKind === "longShot" || step.spellKind === "multiShot" || step.spellKind === "piercing");
-        const release = arrowSkill ? LONG_ARROW_SKILL_RELEASE_SECONDS : arrowAttack ? LONG_ARROW_RELEASE_SECONDS : LONG_ANIM_SECONDS;
+        const release = arrowSkill ? LONG_ARROW_SKILL_RELEASE_SECONDS : arrowAttack ? LONG_ARROW_RELEASE_SECONDS : actor.classId === "minorHorror" ? MINOR_HORROR_SECONDS.cast : LONG_ANIM_SECONDS;
         this.woundUp.set(step, release);
         this.queue.unshift(step);
         const look = target ?? (step.type === "spell" ? step.tiles[0] : undefined);
@@ -2252,7 +2258,9 @@ export class BattleEngine {
       // cut) — play whichever matches this move's own first step instead of the generic
       // footstep beep every other sprite uses.
       const mover = this.units.find((u) => u.id === step.id);
-      if (mover?.sprite === "cultist-v2" && step.path.length >= 2) {
+      if (mover?.sprite === "minor-horror-001") {
+        sfxPlay.minorHorrorWalk();
+      } else if (mover?.sprite === "cultist-v2" && step.path.length >= 2) {
         if (step.path[1]!.x < step.path[0]!.x) sfxPlay.cultistV2WalkLeft();
         else sfxPlay.cultistV2WalkRight();
       } else {
@@ -2555,7 +2563,8 @@ export class BattleEngine {
           else sfxPlay.magicAttack();
           this.emitMissileFx(actor.x, actor.y, target.x, target.y, "arcaneBolt");
         } else {
-          sfxPlay.meleeAttack();
+          if (actor.sprite === "minor-horror-001") sfxPlay.minorHorrorAttack();
+          else sfxPlay.meleeAttack();
         }
         a.t = 0;
         a.stage = a.stage === "lunge" ? "hit" : "counterHit";
@@ -2940,6 +2949,7 @@ export class BattleEngine {
     if (!a.hit && (syncFireballVfx ? a.fireballImpact === true : syncCausticVenomVfx ? a.causticVenomImpact === true : syncPhantasmalVfx ? a.phantasmalImpact === true : syncMagicMissileV2Vfx ? a.magicMissileV2Impact === true : syncBurningHandsVfx ? a.burningHandsReleased === true : a.t >= hitAt)) {
       a.hit = true;
       if (a.spellKind === "webOfDreams") sfxPlay.dreamingWeb();
+      else if (att.sprite === "minor-horror-001") sfxPlay.minorHorrorCast();
       else if (att.sprite === "cultist-v2") sfxPlay.cultistV2Spellcast();
       // Long Shot/Multi Shot/Piercing are bow skills — the blunt melee cue is wrong for them,
       // same reasoning as arrowAttack in stepCombat's plain bow attack.
@@ -4675,7 +4685,7 @@ export class BattleEngine {
   startBullRush(): void {
     const u = this.units.find((x) => x.id === this.selectedId);
     if (!u || u.acted || this.tierRemaining(u, "bullRush") <= 0) return;
-    if (u.level < BULL_RUSH_UNLOCK_LEVEL) {
+    if (u.classId !== "bigBlueCalf" && u.level < BULL_RUSH_UNLOCK_LEVEL) {
       this.tip = `${BULL_RUSH.name} disponível a partir do nível ${BULL_RUSH_UNLOCK_LEVEL}.`;
       sfxPlay.ui();
       return;
@@ -4745,8 +4755,14 @@ export class BattleEngine {
     for (let i = 0; i < line.length; i++) {
       const pt = line[i]!;
       if (this.chargeTerrainBlocked(pt.x, pt.y)) return null;
-      const who = occ.get(key(pt.x, pt.y));
+      const body = footprint({ ...caster, ...pt });
+      if (caster.classId === "bigBlueCalf" && body.some((c) => this.chargeTerrainBlocked(c.x, c.y))) return null;
+      const who = caster.classId === "bigBlueCalf"
+        ? body.map((c) => occ.get(key(c.x, c.y))).find((u) => u != null && u.id !== caster.id)
+        : occ.get(key(pt.x, pt.y));
       if (!who || who.id === caster.id) {
+        if (caster.classId === "bigBlueCalf" && footprint({ ...caster, ...pt }).some((c) =>
+          this.chargeTerrainBlocked(c.x, c.y) || (occ.get(key(c.x, c.y)) != null && occ.get(key(c.x, c.y))!.id !== caster.id))) return null;
         run.push(pt);
         at = pt;
         continue;
@@ -4756,7 +4772,7 @@ export class BattleEngine {
       if (!dir) return null;
       // The charger's landing hex for this leg (and only that one), so pushes never land on it.
       for (const [k, u] of occ) if (u === caster) occ.delete(k);
-      occ.set(key(at.x, at.y), caster);
+      for (const c of footprint({ ...caster, ...at })) occ.set(key(c.x, c.y), caster);
       if (who.id !== target.id) {
         // In the way: shove it aside, off the rest of the line, then keep charging.
         const di = CUBE_DIRS.findIndex((d) => d.q === dir.q && d.r === dir.r && d.s === dir.s);
@@ -4808,6 +4824,7 @@ export class BattleEngine {
   }
 
   private castBullRush(unit: Unit, cell: Point): void {
+    if (!unit.alive || unit.acted || this.tierRemaining(unit, "bullRush") <= 0) return;
     const p = bullRushPower(unit.level);
     const charge = this.bullRushCharge(unit, cell);
     if (!charge) {
@@ -7510,6 +7527,18 @@ export class BattleEngine {
     const walkReach = computeReachable(this.effectiveUnitForReach(next), this.tiles, this.cols, this.rows, this.units, false, this.decorOverlay);
     const players = this.units.filter((u) => u.side === "player" && u.alive);
 
+    // The Ox spends its own three per-battle tier-1 charges on warrior Bull Rush.
+    if (next.classId === "bigBlueCalf" && !next.acted && this.tierRemaining(next, "bullRush") > 0) {
+      const targets = players.flatMap((foe) => footprint(foe).map((cell) => ({ foe, cell })))
+        .sort((a, b) => hexDist(next, a.cell) - hexDist(next, b.cell) || a.foe.hp - b.foe.hp);
+      const target = targets.find(({ cell }) => this.bullRushCharge(next, cell) !== null);
+      if (target) {
+        this.castBullRush(next, target.cell);
+        return;
+      }
+    }
+
+
     // Cultist ("Feiticeiro") and Cultist V2 ("Cultista Ancestral") — same kit, same priority:
     // Relâmpago outranks Choque outranks Magic Missile. Choque ignores cover the same way
     // Relâmpago does; Magic Missile still needs line of sight.
@@ -8513,9 +8542,12 @@ export class BattleEngine {
     // editor preview opts into a small fixed rim instead: a half-viewport overscroll exposes
     // a huge black strip when a map's starting party is close to its edge.
     const previewMargin = this.previewPanMarginRadii > 0 ? this.previewPanMarginRadii * tile : null;
+    // The Inn (both floors) gets half of that rim, per direct request: zoomed out, the full
+    // quarter viewport showed too much of its painted background around the board.
+    const innScale = this.mission.id === "estalagem" || this.mission.id === "estalagem-andar-2" ? 0.5 : 1;
     return {
-      x: previewMargin ?? Math.max(this.viewW / 4, 0),
-      y: previewMargin ?? Math.max(tile * (this.mission.id === "thebridge" ? 2.25 : 1.5), this.viewH / 4),
+      x: previewMargin ?? Math.max(this.viewW / 4, 0) * innScale,
+      y: previewMargin ?? Math.max(tile * (this.mission.id === "thebridge" ? 2.25 : 1.5), this.viewH / 4) * innScale,
     };
   }
 
@@ -8961,7 +8993,8 @@ export class BattleEngine {
   private moveStepDur(a?: MoveAnim): number {
     const walk = this.speedMode === "fast" ? 0.12 : this.speedMode === "slow" ? 0.36 : 0.22;
     // A Bull Rush charge is a burst, about 3x walking pace.
-    return a?.charge ? walk * 0.5 : walk;
+    const ox = a && this.units.find((u) => u.id === a.id)?.classId === "bigBlueCalf";
+    return (a?.charge ? walk * 0.5 : walk) / (ox ? BIG_BLUE_OX_PACE : 1);
   }
 
   private unitPixel(u: Unit): { cx: number; cy: number } {
@@ -9016,7 +9049,12 @@ export class BattleEngine {
   private walkFrame(u: Unit, n: number): number {
     const a = this.active;
     if (n <= 1 || !a || a.type !== "move" || a.id !== u.id) return 0;
-    const dur = this.speedMode === "fast" ? 0.12 : this.speedMode === "slow" ? 0.36 : 0.22;
+    const ox = u.classId === "bigBlueCalf";
+    if (u.sprite === "minor-horror-001") {
+      const dur = this.moveStepDur(a);
+      return Math.floor((a.i * dur + Math.min(a.t, dur)) * n / MINOR_HORROR_SECONDS.walk) % n;
+    }
+    const dur = ox ? this.moveStepDur(a) : this.speedMode === "fast" ? 0.12 : this.speedMode === "slow" ? 0.36 : 0.22;
     const steps = a.i + Math.min(1, a.t / dur);
     // A sheet's full loop used to always take exactly 2 hexes no matter its frame count, so a
     // 36-frame sheet (Aldric, Malrec, Cultist V2, Kael Final, Conjurer, The Butcher) flipped
@@ -9024,7 +9062,7 @@ export class BattleEngine {
     // them. Capping the frames-per-hex rate at what a 12-frame sheet already gets leaves every
     // sheet at n<=12 untouched and only slows the oversized ones down to match its pace.
     const framesPerHex =
-      n >= LONG_SHEET_FRAMES ? (n / LONG_WALK_SECONDS) * dur : Math.min(n / 2, 6) * (u.sprite === "conjurer" || u.sprite === "malrec" ? 0.9 : 1);
+      n >= LONG_SHEET_FRAMES ? (n / LONG_WALK_SECONDS) * (ox ? BIG_BLUE_OX_PACE : 1) * dur : Math.min(n / 2, 6) * (u.sprite === "conjurer" || u.sprite === "malrec" ? 0.9 : 1);
     return Math.floor(steps * framesPerHex) % n;
   }
 
@@ -9045,13 +9083,15 @@ export class BattleEngine {
    * lying still on its last frame — its fade-out waits until this is over. */
   private deathSheetPlaying(u: Unit): boolean {
     if (u.alive || u.diedAt == null || !this.art.deaths[u.sprite]) return false;
-    const hitLead = this.art.hits[u.sprite] ? HIT_ANIM_SECONDS : 0;
-    return this.time - u.diedAt < hitLead + DEATH_ANIM_SECONDS + DEATH_HOLD_SECONDS;
+    const hitLead = u.classId !== "bigBlueCalf" && this.art.hits[u.sprite] ? HIT_ANIM_SECONDS : 0;
+    return this.time - u.diedAt < hitLead + DEATH_ANIM_SECONDS / (u.classId === "bigBlueCalf" ? BIG_BLUE_OX_PACE : 1) + DEATH_HOLD_SECONDS;
   }
 
   private idleFrame(u: Unit, n: number): number {
     if (n <= 1) return 0;
     const moving = this.active?.type === "move" && this.active.id === u.id;
+    if (u.sprite === "minor-horror-001") return Math.floor(u.bob * n / MINOR_HORROR_SECONDS.idle) % n;
+    if (u.sprite === "big-blue-ox-002") return Math.floor(u.bob * (moving ? 8 * BIG_BLUE_OX_PACE : n / 5.5)) % n;
     if (u.classId === "familiar" || u.classId === "familiar2") {
       // Familiar 2's idle went from 12 to 32 frames over the same footage span; scaling by
       // n / 12 keeps its loop the same length it always was.
@@ -9088,6 +9128,7 @@ export class BattleEngine {
   private longSheetActionPace(a: Active, speedScale: number): number {
     let frames: unknown[] | undefined;
     let span: number;
+    let seconds = LONG_ANIM_SECONDS;
     if (a.type === "combat") {
       if (a.stage === "fade") return 1;
       const counter = a.stage.startsWith("counter");
@@ -9096,6 +9137,8 @@ export class BattleEngine {
       if (counter && a.counterWindAt != null) return 1;
       const sprite = this.units.find((u) => u.id === (counter ? a.def : a.att))?.sprite;
       if (!sprite) return 1;
+      if (sprite === "big-blue-ox-002") seconds /= BIG_BLUE_OX_PACE;
+      if (sprite === "minor-horror-001") seconds = MINOR_HORROR_SECONDS.attack;
       frames = (this.offHandStrike(a) ? this.art.attacksShort[sprite] : undefined) ?? (counter ? this.art.counters[sprite] : undefined) ?? this.art.attacks[sprite];
       // stepCombat's lunge + hit + recover clocks, which attackPose spreads the sheet across.
       span = 0.2 + 0.18 + 0.16;
@@ -9103,13 +9146,15 @@ export class BattleEngine {
       if (a.held) return 1;
       const sprite = this.units.find((u) => u.id === a.att)?.sprite;
       if (!sprite) return 1;
+      if (sprite === "big-blue-ox-002") seconds /= BIG_BLUE_OX_PACE;
+      if (sprite === "minor-horror-001") seconds = MINOR_HORROR_SECONDS.cast;
       frames = this.art.casts[sprite] ?? this.art.attacks[sprite];
       // attackPose's castDuration.
       span = sprite === "conjurer" || sprite === "malrec" ? 0.65 : 0.4;
     } else return 1;
     const n = frames?.length ?? 0;
     if (n < LONG_SHEET_FRAMES) return 1;
-    return Math.min(1, span / speedScale / LONG_ANIM_SECONDS);
+    return Math.min(1, span / speedScale / seconds);
   }
 
   /** After a wind-up: carry on from where it stopped (a bow's follow-through after the
@@ -9140,12 +9185,12 @@ export class BattleEngine {
       const frames =
         a.pose === "cast"
           ? (this.art.casts[u.sprite] ?? this.art.attacks[u.sprite])
-          : u.idleAlt
+          : u.classId !== "bigBlueCalf" && u.idleAlt
             ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite])
             : this.art.attacks[u.sprite];
       const n = frames?.length ?? 0;
       if (n < 1) return null;
-      return Math.min(n - 1, Math.floor((a.t / LONG_ANIM_SECONDS) * n));
+      return Math.min(n - 1, Math.floor((a.t / (u.sprite === "minor-horror-001" ? MINOR_HORROR_SECONDS.cast : LONG_ANIM_SECONDS)) * n));
     }
     // Visual-only pacing: the Conjurer holds each authored pose 10% longer. Every stage
     // duration below (cast lead-in and the lunge/hit/recover splits) has to scale by the
@@ -9182,14 +9227,16 @@ export class BattleEngine {
     if (a.type === "combat") {
       // Bull Rush has its own charge animation and impact FX (rushTrail/rushImpact) —
       // it never plays the ATT swing sheet, unlike every other combat step.
-      if (a.spellKind === "bullRush") return null;
+      if (a.spellKind === "bullRush" && u.classId !== "bigBlueCalf") return null;
       const counter = a.stage.startsWith("counter");
       const actor = counter ? a.def : a.att;
       if (u.id !== actor) return null;
       // Familiar 3's second, distinct attack cut (currently the only sprite with one) —
       // Unit.idleAlt (the same once-per-turn flip Malrec's idles2 uses) alternates it in for
       // its own attack stages, same idea as idles2 but for the swing instead of the stand.
-      const attackPool = u.idleAlt ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite];
+      const attackPool = u.classId === "bigBlueCalf"
+        ? (a.spellKind === "bullRush" && !counter ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite])
+        : u.idleAlt ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite];
       // A dedicated counter pose (currently just theButcher's counter-*.png) for the
       // defender's stages only — falls back to the same attacks cut every sprite without
       // one already used for countering, same as before this existed.
@@ -9332,7 +9379,10 @@ export class BattleEngine {
       (u.walkPose === "back" ? this.art.walksUp[u.sprite] : u.walkPose === "front" ? this.art.walksDown[u.sprite] : undefined) ?? sideWalkPool;
     // Same idleAlt alternation attackPose applies to pick its index (see that function's
     // attackPool) — mirrored here so the frame actually drawn comes from the same array.
-    const atkBase = u.idleAlt ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite];
+    const oxRush = u.classId === "bigBlueCalf" && this.active?.type === "combat" && this.active.spellKind === "bullRush" && this.active.att === u.id && !this.active.stage.startsWith("counter");
+    const atkBase = u.classId === "bigBlueCalf"
+      ? (oxRush ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite])
+      : u.idleAlt ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite];
     const offHandSwing =
       this.active?.type === "combat" &&
       (this.active.stage.startsWith("counter") ? this.active.def : this.active.att) === u.id &&
@@ -9353,16 +9403,21 @@ export class BattleEngine {
     // Hit reaction (GameArt.hits): plays for HIT_ANIM_SECONDS after taking damage, unless the
     // unit is attacking or walking. On a killing blow it plays first, then the death sheet.
     const hitPool = this.art.hits[u.sprite];
+    const oxPosePace = u.classId === "bigBlueCalf" ? BIG_BLUE_OX_PACE : 1;
+    // The Ox hit cut ends at source frame 75 instead of 83; retain its playback pace.
+    const hitSeconds = HIT_ANIM_SECONDS / oxPosePace * (u.classId === "bigBlueCalf" ? 75 / 83 : 1);
+    const deathSeconds = DEATH_ANIM_SECONDS / oxPosePace;
     const sinceHit = hitPool && u.hitAt != null ? this.time - u.hitAt : Infinity;
-    const hitPlaying = sinceHit < HIT_ANIM_SECONDS && (!u.alive || (atk == null && !moving));
+    const directOxDeath = u.classId === "bigBlueCalf" && !u.alive && this.art.deaths[u.sprite] != null;
+    const hitPlaying = !directOxDeath && sinceHit < hitSeconds && (!u.alive || (atk == null && !moving));
     const deathPool = !hitPlaying && !u.alive && u.diedAt != null ? ((u.deathAlt ? this.art.deaths2[u.sprite] : undefined) ?? this.art.deaths[u.sprite]) : undefined;
-    const deathT = u.diedAt != null ? this.time - u.diedAt - (hitPool ? HIT_ANIM_SECONDS : 0) : 0;
+    const deathT = u.diedAt != null ? this.time - u.diedAt - (hitPool && !directOxDeath ? HIT_ANIM_SECONDS : 0) : 0;
     const frames = hitPlaying ? hitPool : deathPool ?? (atk != null ? (casting ? (castPool ?? atkPool) : countering ? (counterPool ?? atkPool) : atkPool) : walk ?? idle ?? this.art.sprites[u.sprite]);
     const n = frames?.length ?? 0;
     const fi = hitPlaying
-      ? Math.min(n - 1, Math.floor((sinceHit / HIT_ANIM_SECONDS) * n))
+      ? Math.min(n - 1, Math.floor((sinceHit / hitSeconds) * n))
       : deathPool
-        ? Math.min(n - 1, Math.max(0, Math.floor((deathT / DEATH_ANIM_SECONDS) * n)))
+        ? Math.min(n - 1, Math.max(0, Math.floor((deathT / deathSeconds) * n)))
         : atk != null ? atk : walk ? this.walkFrame(u, n) : this.idleFrame(u, n || 4);
     const walkDirs = moving ? this.art.walkDirs[u.sprite] : undefined;
     const img = (walkDirs ? walkDirs[u.walkPose] : undefined) ?? frames?.[fi] ?? frames?.[0];
@@ -9433,7 +9488,7 @@ export class BattleEngine {
     const wardog2WidthScale = u.sprite === "wardog2" ? 1.372 : 1;
     // Embered Wraith (292x360 canvas, figure ~95% of its height, same fill as the plain human
     // sheets): human height, width follows the canvas aspect (0.811 / 0.782).
-    const wraithWidthScale = u.sprite === "EmberedWraith" ? 1.037 : 1;
+    const wraithWidthScale = u.sprite === "minor-horror-001" ? 1.163 : u.sprite === "EmberedWraith" ? 1.037 : 1;
     // Zombie Dog (437x321 canvas, figure ~80% of its height): the dogs' on-screen figure height
     // (~84% of the size-2 box, same as WarDog 2), with the canvas's own aspect kept.
     const zombieDogHeightScale = u.sprite === "zombieDog" ? 1.051 : 1;
@@ -9462,8 +9517,8 @@ export class BattleEngine {
     // Undead Ox (640x404 canvas, standing figure ~81% of its height, 44px headroom for the
     // hit rear-up and the cast's venom orb): ~2.15 cells tall, a head taller than a human and
     // bigger than WarDog 2, with the canvas's own aspect kept (1.584).
-    const undeadOxHeightScale = u.sprite === "undeadOx" ? 1.283 : 1;
-    const undeadOxWidthScale = u.sprite === "undeadOx" ? 1.889 : 1;
+    const undeadOxHeightScale = u.sprite === "big-blue-ox-002" ? 0.85 : u.sprite === "undeadOx" ? 1.283 : 1;
+    const undeadOxWidthScale = u.sprite === "big-blue-ox-002" ? 1.49 : u.sprite === "undeadOx" ? 1.889 : 1;
     const h =
       cell *
       (s >= 4 ? 3.35 : s === 2 ? 1.72 : boss ? 1.44 : 1.42) *
