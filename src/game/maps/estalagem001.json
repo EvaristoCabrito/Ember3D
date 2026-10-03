@@ -1225,6 +1225,16 @@
         "y": 2
       },
       {
+        "id": "inn-herb-shelf",
+        "x": 4,
+        "y": 2
+      },
+      {
+        "id": "inn-provisions-display",
+        "x": 8,
+        "y": 2
+      },
+      {
         "id": "light-wall-torch",
         "x": 1,
         "y": 1
@@ -1235,7 +1245,7 @@
         "y": 1
       },
       {
-        "id": "light-fireplace",
+        "id": "inn-fireplace",
         "x": 18,
         "y": 1
       },

@@ -1,7 +1,10 @@
+import { OptionsButton } from "./OptionsMenu";
+import { uiText, useGamePreferences, type Translations } from "./gamePreferences";
+import { GraphicsQualityControl } from "./GraphicsQualityControl";
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Dices, Grip, ListOrdered, Lock, Pencil, RotateCcw, Shuffle, SlidersHorizontal, Swords, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { artProgress, ensureSpriteArt, loadGameArt, portraitFor, releaseSpriteArt, subscribeArtProgress, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
+import { artProgress, ensureDecorationArt, ensureTerrainArt, ensureSpriteArt, loadGameArt, portraitFor, releaseSpriteArt, subscribeArtProgress, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
 import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { BattleCanvas } from "./BattleCanvas";
 import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } from "./gfx/params";
@@ -20,7 +23,7 @@ import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
 import { LIGHT_DEFS } from "./lighting";
 import { DialogEditor } from "./DialogEditor";
-import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, SOLID_ROCK_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
+import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, SOLID_ROCK_DECOR_IDS, CAUSTIC_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, FOREST_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
 import { QUESTS, activePickupsFor, questById, questProgress, questStatus, questsFor } from "./quests";
 import { advanceProgression, evaluate, isGatedMission, missionAccess, type MissionAccess, type ProgressExtras } from "./progression";
 import { BattleEngine, heroSpriteFor } from "./engine";
@@ -808,6 +811,7 @@ function battleSpriteIds(battle: BattleEngine): SpriteId[] {
 }
 
 export function GameApp() {
+  useGamePreferences();
   const [resumeEditorDraft] = useState<MapDraft | null>(() => (typeof window === "undefined" ? null : readEditorResume()));
   const [screen, setScreen] = useState<ScreenId>(() => (resumeEditorDraft ? "mapEditor" : "title"));
   const loadingCurtain = useLoadingCurtain(screen);
@@ -1167,7 +1171,11 @@ export function GameApp() {
       // units (and the familiars, with a conjurer in the party) are loaded. If another
       // startBattle comes in meanwhile, the newer one wins.
       const load = ++battleLoadRef.current;
-      void ensureSpriteArt(art, [...battleSpriteIds(battle), ...(partyHasConjurer ? FAMILIAR_SPRITES : [])]).then(() => {
+      void Promise.all([
+        ensureSpriteArt(art, [...battleSpriteIds(battle), ...(partyHasConjurer ? FAMILIAR_SPRITES : [])]),
+        ensureDecorationArt(art, battle.decorations.map(p => p.id)),
+        ensureTerrainArt(art, battle.tiles, battle.tileVariants),
+      ]).then(() => {
         if (load !== battleLoadRef.current) return;
         awardedRef.current = null;
         setEngine(battle);
@@ -2690,12 +2698,19 @@ export function GameApp() {
 
 function CutsceneScreen({
   src,
+  subtitles,
   onSkip,
 }: {
   src: string;
+  subtitles?: Translations;
   onSkip: () => void;
 }) {
+  const prefs = useGamePreferences();
   const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const tracks = ref.current?.textTracks;
+    if (tracks) for (const track of Array.from(tracks)) track.mode = prefs.subtitles && track.language === (subtitles?.[prefs.subtitleLanguage] ? prefs.subtitleLanguage : subtitles?.pt ? "pt" : "en") ? "showing" : "disabled";
+  }, [prefs.subtitles, prefs.subtitleLanguage, subtitles]);
   const [portrait, setPortrait] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(max-width: 720px) and (orientation: portrait)").matches,
   );
@@ -2758,16 +2773,18 @@ function CutsceneScreen({
   return (
     <section className="relative h-dvh w-dvw bg-black overflow-hidden">
       <div className="cutscene-stage">
-        <video ref={ref} src={src} playsInline autoPlay preload="auto" onEnded={onSkip} onError={onSkip} />
+        <video ref={ref} src={src} playsInline autoPlay preload="auto" onEnded={onSkip} onError={onSkip}>
+          {Object.entries(subtitles ?? {}).map(([language, url]) => <track key={language} kind="subtitles" src={url} srcLang={language} label={language === "pt" ? "Português" : "English"} onLoad={() => { const tracks = ref.current?.textTracks; if (tracks) for (const track of Array.from(tracks)) track.mode = prefs.subtitles && track.language === (subtitles?.[prefs.subtitleLanguage] ? prefs.subtitleLanguage : subtitles?.pt ? "pt" : "en") ? "showing" : "disabled"; }} />)}
+        </video>
       </div>
       {portrait && (
         <p className="pointer-events-none absolute inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] text-center text-[11px] tracking-[0.16em] uppercase text-muted">
-          Deite o telefone
+          {uiText("Deite o telefone")}
         </p>
       )}
       <div className="absolute inset-x-0 bottom-0 z-10 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex justify-end">
         <Button size="md" variant="ghost" onClick={onSkip}>
-          Pular
+          {uiText("Pular")}
         </Button>
       </div>
     </section>
@@ -2797,6 +2814,7 @@ function TitleScreen({
   onContinue: () => void;
   onTest: () => void;
 }) {
+  useGamePreferences();
   const progress = useArtLoadProgress(ready);
   return (
     <section className="relative min-h-dvh flex flex-col overflow-hidden">
@@ -2807,7 +2825,7 @@ function TitleScreen({
           type="button"
           onClick={onMute}
           className="size-11 grid place-items-center ember-icon-btn"
-          aria-label={muted ? "Ativar som" : "Silenciar"}
+          aria-label={uiText(muted ? "Ativar som" : "Silenciar")}
         >
           {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
         </button>
@@ -2825,25 +2843,26 @@ function TitleScreen({
       {/* Menu column lifted to leave room for the loading bar underneath it; the tiny "Modo teste"
           button stays where it was, bottom-left. */}
       <div className="relative z-10 flex flex-1 flex-col justify-end px-5 pb-[max(6.5rem,calc(env(safe-area-inset-bottom)+5.5rem))] max-w-xl mx-auto w-full">
-        <p className="text-sm tracking-[0.28em] uppercase text-muted mb-3">Táticas em cinzas</p>
+        <p className="text-sm tracking-[0.28em] uppercase text-muted mb-3">{uiText("Táticas em cinzas")}</p>
         <h1 className="font-display text-5xl sm:text-7xl font-medium tracking-tight leading-none mb-4">Ember</h1>
         <p className="text-[11px] tracking-[0.18em] uppercase text-muted -mt-3 mb-4">Version {DISPLAY_VERSION}</p>
         <p className="text-muted text-base leading-relaxed mb-8 max-w-md">
-          Seis sobreviventes. Um tabuleiro de guerra. Cada casa conta.
+          {uiText("Seis sobreviventes. Um tabuleiro de guerra. Cada casa conta.")}
         </p>
         <div className="flex flex-col gap-3">
           <Button size="xl" className="ember-btn ember-btn-primary" disabled={!ready} onClick={onNew}>
-            {ready ? "Nova campanha" : "Carregando…"}
+            {uiText(ready ? "Nova campanha" : "Carregando…")}
           </Button>
           {hasProgress && (
             <Button size="lg" variant="ghost" className="ember-btn ember-btn-ghost" disabled={!ready} onClick={onContinue}>
-              Continuar
+              {uiText("Continuar")}
             </Button>
           )}
           <Button size="lg" variant="quiet" className="ember-btn ember-btn-ghost" onClick={onHelp}>
-            Como jogar
+            {uiText("Como jogar")}
           </Button>
         </div>
+        <div className="mt-3"><OptionsButton muted={muted} onMute={onMute} /></div>
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}
       </div>
       <TitleLoader progress={progress} ready={ready} />
@@ -3246,8 +3265,8 @@ function HelpModal({ onClose }: { onClose: () => void }) {
                 <tbody>
                   {SKILL_DAMAGE_ROWS.map((row) => (
                     <tr key={row.name} className="border-t border-border/60 align-top">
-                      <td className="text-left py-1 pr-2 font-medium whitespace-nowrap">{row.name}</td>
-                      <td className="text-left px-1.5 py-1 text-muted whitespace-nowrap">{CLASSES[row.cls].name}</td>
+                      <td className="text-left py-1 pr-2 font-medium whitespace-nowrap">{uiText(row.name)}</td>
+                      <td className="text-left px-1.5 py-1 text-muted whitespace-nowrap">{uiText(CLASSES[row.cls].name)}</td>
                       <td className="text-center px-1.5 py-1 text-muted">T{row.tier}</td>
                       <td className="text-left px-1.5 py-1 tabular-nums">
                         {typeof row.formula === "string" ? (
@@ -3296,7 +3315,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
                   <tbody>
                     {POTION_LOOT_ROWS.map((r) => (
                       <tr key={r.name} className="border-t border-border/60">
-                        <td className="text-left py-0.5 pr-2">{r.name}</td>
+                        <td className="text-left py-0.5 pr-2">{uiText(r.name)}</td>
                         <td className="text-right pl-1.5 py-0.5">{((r.weight / POTION_LOOT_TOTAL) * 100).toFixed(0)}%</td>
                       </tr>
                     ))}
@@ -3422,6 +3441,7 @@ function DevControlsScreen({ onBack }: { onBack: () => void }) {
         </div>
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 p-5 max-w-3xl mx-auto w-full">
+        <GraphicsQualityControl />
         <VfxDebugPanel />
         <DevGfxPreview />
         <button type="button" onClick={() => setHd2dTest(true)} className="rounded-xl border border-accent bg-bg/40 px-5 py-4 text-left font-display text-xl hover:bg-accent/10">
@@ -5379,6 +5399,7 @@ export function MapEditorScreen({
     if (LIGHT_DEFS[id]) return "Lights";
     if (HOUSE_DECOR_IDS.has(id) || BIG_HOUSE_DECOR_IDS.has(id)) return "Houses";
     if (DEADWOODS_DECOR_IDS.has(id)) return "Madeira Morta";
+    if (FOREST_DECOR_IDS.has(id)) return "Forest";
     if (
       id === "barricade" ||
       id === "wooden-barricade-1" ||
@@ -5394,6 +5415,7 @@ export function MapEditorScreen({
     )
       return "Barricada";
     if (id.startsWith("wilds-")) return "Wilds";
+    if (id.startsWith("cave-")) return "Cave";
     if (id.startsWith("torture-")) return "Torture";
     if (id.startsWith("city-")) return "City";
     if (id.includes("bridge") || id.includes("ember-channels")) return "Pontes";
@@ -5404,7 +5426,7 @@ export function MapEditorScreen({
   };
   // "Todas" stays pinned first (it's the "show everything" reset, not a real category);
   // every actual category below it is kept in alphabetical order.
-  const decorationSections = ["Todas", "Barricada", "City", "Houses", "Lights", "Madeira Morta", "Natureza", "Objetos", "Pedras e relevo", "Pontes", "Ruínas e construções", "Torture", "Waypoints", "Wilds"];
+  const decorationSections = ["Todas", "Barricada", "Cave", "City", "Forest", "Houses", "Lights", "Madeira Morta", "Natureza", "Objetos", "Pedras e relevo", "Pontes", "Ruínas e construções", "Torture", "Waypoints", "Wilds"];
   const visibleDecorOptions = mode === "architecture" ? architectureOptions : decoSection === "Todas" ? decorOptions : decorOptions.filter((dec) => decorationSectionFor(dec.id) === decoSection);
 
   // Clicking a placed prop is also a lookup action: open its palette section and arm the
@@ -6387,7 +6409,7 @@ export function MapEditorScreen({
           <label className="flex flex-col gap-1 text-sm">
             Personagem
             <select className="rounded border border-border bg-bg p-2" value={npcBrush} onChange={(event) => setNpcBrush(event.target.value as EncounterNpcId | "breadLady")}>
-              {(["breadLady", ...ENCOUNTER_NPC_IDS] as const).map((id) => <option key={id} value={id}>{CLASSES[id].name}</option>)}
+              {(["breadLady", ...ENCOUNTER_NPC_IDS] as const).map((id) => <option key={id} value={id}>{uiText(CLASSES[id].name)}</option>)}
             </select>
             <span className="text-xs text-muted">Os novos personagens têm animação de quatro quadros e diálogo próprio.</span>
           </label>
@@ -7317,7 +7339,7 @@ export function MapEditorScreen({
                 return (
                   <div key={region.id} className="border border-border rounded-md p-2.5">
                     <div className="flex items-center gap-2 mb-2">
-                      <p className="flex-1 text-xs uppercase tracking-wide text-muted">{region.name} · {maps.length} encontro{maps.length === 1 ? "" : "s"}</p>
+                      <p className="flex-1 text-xs uppercase tracking-wide text-muted">{uiText(region.name)} · {maps.length} encontro{maps.length === 1 ? "" : "s"}</p>
                       <button
                         type="button"
                         onClick={() => {
@@ -7974,7 +7996,7 @@ function BattleScreen({
                 {hud.turnQueue.map((q, i) => (
                   <span key={q.id} title={`${q.name}${q.active ? " · agora" : q.acted ? " · já agiu" : ""}`} aria-label={`${q.name}${q.active ? ", agora" : q.acted ? ", já agiu" : ""}`} className={`flex shrink-0 items-center gap-1 rounded border px-1 py-1 ${q.active ? "border-[#dce2eb]/60 bg-[#dce2eb]/10 text-[#dce2eb]" : q.acted ? "border-transparent text-slate-500" : "border-white/10 text-slate-300"}`}>
                     <span className="shrink-0 text-[9px] tabular-nums text-slate-500">{i + 1}</span>
-                    <span className="max-w-32 truncate">{q.name}</span>
+                    <span className="max-w-32 truncate">{uiText(q.name)}</span>
                     {q.active && <span className="size-1 shrink-0 rounded-full bg-current" aria-hidden="true" />}
                     {q.side === "enemy" && !q.active && <span className="size-1.5 rounded-full bg-[#e78573]" aria-label="Inimigo" />}
                   </span>
@@ -7988,7 +8010,7 @@ function BattleScreen({
             <div className="ember-plate px-3 py-2 max-w-sm">
               {hud.terrain.spellZone ? (
                 <>
-                  <p className="font-display text-base leading-tight">{WEB_OF_DREAMS.name}</p>
+                  <p className="font-display text-base leading-tight">{uiText(WEB_OF_DREAMS.name)}</p>
                   <p className="text-xs text-muted tabular-nums mt-0.5">
                     {hud.terrain.spellZone.roundsLeft} {hud.terrain.spellZone.roundsLeft === 1 ? "rodada restante" : "rodadas restantes"} · movimento limitado a {hud.terrain.spellZone.movementCap} hex
                   </p>
@@ -7998,7 +8020,7 @@ function BattleScreen({
                 </>
               ) : (
                 <>
-                  <p className="font-display text-base leading-tight">{hud.terrain.name}</p>
+                  <p className="font-display text-base leading-tight">{uiText(hud.terrain.name)}</p>
                   <p className="text-xs text-muted tabular-nums mt-0.5">
                     {hud.terrain.passable ? `Mov ${hud.terrain.moveCost}` : "Intransponível"} · Def +{hud.terrain.def} · Atk +{hud.terrain.atk}
                     {hud.terrain.blocksShot ? " · bloqueia tiro/visão" : ""}
@@ -8171,7 +8193,7 @@ function BattleScreen({
                   <li key={i}>
                     <ItemTip text={item.tip ?? item.name} className="text-sm flex items-center gap-2">
                       <img src={item.icon} alt="" className="size-8 rounded-sm object-cover bg-bg shrink-0" />
-                      <span>{item.name}</span>
+                      <span>{uiText(item.name)}</span>
                     </ItemTip>
                   </li>
                 ))}
@@ -8530,6 +8552,7 @@ function BattleScreen({
               )}
             </div>
             <div className="flex flex-col gap-2">
+              <OptionsButton muted={muted} onMute={onMute} />
               <Button className="ember-btn ember-btn-primary" onClick={onResume}>Continuar</Button>
               <Button variant="quiet" className="ember-btn ember-btn-ghost" onClick={onSave}>
                 Save
@@ -8906,7 +8929,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
               {unit.side === "player" && <HungerBar name={unit.name} value={unit.fullness} />}
             </div>
             <div className="min-w-0">
-              <p className="font-display text-xl leading-tight truncate ember-title">{unit.name}</p>
+              <p className="font-display text-xl leading-tight truncate ember-title">{uiText(unit.name)}</p>
               <p className={`text-xs ${unit.side === "enemy" ? "text-danger" : "text-muted"}`}>
                 <span className="text-[13px]">{unit.className}</span> · Nv {unit.level}
               </p>
@@ -9052,14 +9075,14 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("cleave")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs truncate">
-                          {DOUBLE_STRIKE.name} {doubleStrikeFormula(unit.level)}{" "}
+                          {uiText(DOUBLE_STRIKE.name)} {doubleStrikeFormula(unit.level)}{" "}
                           <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("doubleStrike")!)]}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("cleave-crossed-blades")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs truncate">
-                          {CLEAVE.name} {CLEAVE.hexes} hex, {cleaveFormula(unit.level)} · x{CLEAVE.largeMul} vs 3+ hex{" "}
+                          {uiText(CLEAVE.name)} {CLEAVE.hexes} hex, {cleaveFormula(unit.level)} · x{CLEAVE.largeMul} vs 3+ hex{" "}
                           <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("cleave")!)]}</span>
                         </p>
                       </div>
@@ -9070,7 +9093,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("phantasmal-force")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs leading-snug">
-                          {MAGIC_MISSILE.name} {damageFormula(unit.mag, MAGIC_MISSILE.mul, MAGIC_MISSILE.dice, MAGIC_MISSILE.faces, MAGIC_MISSILE.bonus)}{" "}
+                          {uiText(MAGIC_MISSILE.name)} {damageFormula(unit.mag, MAGIC_MISSILE.mul, MAGIC_MISSILE.dice, MAGIC_MISSILE.faces, MAGIC_MISSILE.bonus)}{" "}
                           <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("magicMissile")!)]}</span>
                         </p>
                       </div>
@@ -9094,7 +9117,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                         <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                           <img src={spellIcon("caustic-venom")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                           <p className="text-xs leading-snug">
-                            {CAUSTIC_VENOM.name} {damageFormula(unit.mag, CAUSTIC_VENOM.centerMul, CAUSTIC_VENOM.centerDice, CAUSTIC_VENOM.centerFaces, CAUSTIC_VENOM.centerBonus)}{" "}
+                            {uiText(CAUSTIC_VENOM.name)} {damageFormula(unit.mag, CAUSTIC_VENOM.centerMul, CAUSTIC_VENOM.centerDice, CAUSTIC_VENOM.centerFaces, CAUSTIC_VENOM.centerBonus)}{" "}
                             <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("causticVenom")!)]}</span>
                           </p>
                         </div>
@@ -9115,13 +9138,13 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("summon-familiar2")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs truncate">
-                          {SUMMON_FAMILIAR.name} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("summonFamiliar")!)]}</span>
+                          {uiText(SUMMON_FAMILIAR.name)} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("summonFamiliar")!)]}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("magic-missile")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs leading-snug">
-                          {PHANTASMAL_FORCE.name} {phantasmalForceFormula(unit.level, unit.mag)}{" "}
+                          {uiText(PHANTASMAL_FORCE.name)} {phantasmalForceFormula(unit.level, unit.mag)}{" "}
                           <span className="tabular-nums text-muted">×{unit.level >= PHANTASMAL_FORCE_UNLOCK_LEVEL ? unit.spells[tierKey(spellTier("phantasmalForce")!)] : 0}</span>
                           {unit.level < PHANTASMAL_FORCE_UNLOCK_LEVEL && <span className="text-muted"> · nível {PHANTASMAL_FORCE_UNLOCK_LEVEL}+</span>}
                         </p>
@@ -9129,7 +9152,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("web-of-dreams")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs truncate">
-                          {WEB_OF_DREAMS.name} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("webOfDreams")!)]}</span>
+                          {uiText(WEB_OF_DREAMS.name)} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("webOfDreams")!)]}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
@@ -9157,7 +9180,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                     <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                       <img src={spellIcon("magic-missile")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                       <p className="text-xs leading-snug">
-                        {MAGIC_MISSILE.name} {damageFormula(unit.mag, MAGIC_MISSILE.mul, MAGIC_MISSILE.dice, MAGIC_MISSILE.faces, MAGIC_MISSILE.bonus)}{" "}
+                        {uiText(MAGIC_MISSILE.name)} {damageFormula(unit.mag, MAGIC_MISSILE.mul, MAGIC_MISSILE.dice, MAGIC_MISSILE.faces, MAGIC_MISSILE.bonus)}{" "}
                         <span className="tabular-nums text-muted">×{unit.spellCharges ?? 0}</span>
                       </p>
                     </div>
@@ -9166,7 +9189,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                     <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                       <img src={spellIcon("cure-wounds")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                       <p className="text-xs leading-snug">
-                        {LIFE_DRAIN.name} {lifeDrainFormula(unit.level, unit.mag)} · cura {Math.round(lifeDrainHealMul(unit.level) * 100)}% do dano{" "}
+                        {uiText(LIFE_DRAIN.name)} {lifeDrainFormula(unit.level, unit.mag)} · cura {Math.round(lifeDrainHealMul(unit.level) * 100)}% do dano{" "}
                         <span className="tabular-nums text-muted">×{unit.lifeDrainCharges ?? 0}</span>
                       </p>
                     </div>
@@ -9201,20 +9224,20 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("cure-minor")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs leading-snug">
-                          {CURES.cureMinor.name} {damageFormula(unit.mag, CURES.cureMinor.mul, CURES.cureMinor.dice, CURES.cureMinor.faces, CURES.cureMinor.bonus)} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("cureMinor")!)]}</span>
+                          {uiText(CURES.cureMinor.name)} {damageFormula(unit.mag, CURES.cureMinor.mul, CURES.cureMinor.dice, CURES.cureMinor.faces, CURES.cureMinor.bonus)} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("cureMinor")!)]}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("cure-wounds")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs leading-snug">
-                          {CURES.cureWounds.name} {damageFormula(unit.mag, CURES.cureWounds.mul, CURES.cureWounds.dice, CURES.cureWounds.faces, CURES.cureWounds.bonus)} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("cureWounds")!)]}</span>
+                          {uiText(CURES.cureWounds.name)} {damageFormula(unit.mag, CURES.cureWounds.mul, CURES.cureWounds.dice, CURES.cureWounds.faces, CURES.cureWounds.bonus)} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("cureWounds")!)]}</span>
                         </p>
                       </div>
                       {unit.spells[tierKey(spellTier("cureDisease")!)] > 0 && (
                         <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                           <img src={spellIcon("cure-disease")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                           <p className="text-xs leading-snug">
-                            {CURE_DISEASE.name} · remove doença e veneno <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("cureDisease")!)]}</span>
+                            {uiText(CURE_DISEASE.name)} · remove doença e veneno <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("cureDisease")!)]}</span>
                           </p>
                         </div>
                       )}
@@ -9225,7 +9248,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("piercing-thrust")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs leading-snug">
-                          {PIERCING_THRUST.name} dano de arma, −{Math.round(PIERCING_THRUST.armorIgnore * 100)}% armadura{" "}
+                          {uiText(PIERCING_THRUST.name)} dano de arma, −{Math.round(PIERCING_THRUST.armorIgnore * 100)}% armadura{" "}
                           <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("piercingThrust")!)]}</span>
                         </p>
                       </div>
@@ -9233,7 +9256,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                         <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                           <img src={spellIcon("sweep")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                           <p className="text-xs leading-snug">
-                            {SWEEP.name} dano de arma <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("sweep")!)]}</span>
+                            {uiText(SWEEP.name)} dano de arma <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("sweep")!)]}</span>
                           </p>
                         </div>
                       )}
@@ -9241,7 +9264,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                         <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                           <img src={spellIcon("trip")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                           <p className="text-xs leading-snug">
-                            {TRIP.name} arma +{diceFormula(1, TRIP.bonusFaces, TRIP.bonusBonus)}{" "}
+                            {uiText(TRIP.name)} arma +{diceFormula(1, TRIP.bonusFaces, TRIP.bonusBonus)}{" "}
                             <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("trip")!)]}</span>
                           </p>
                         </div>
@@ -9483,7 +9506,7 @@ function PromotionScreen({
     <div className="absolute inset-0 z-50 bg-bg/90 flex items-end sm:items-center justify-center p-4">
       <div className="w-full max-w-md ember-window rounded-xl p-5 max-h-[90dvh] overflow-y-auto">
         <p className="text-xs uppercase tracking-[0.18em] text-muted">Nível {PROMOTE_LEVEL}</p>
-        <h2 className="font-display text-2xl leading-none mt-1 mb-2">{current.name} pode se promover</h2>
+        <h2 className="font-display text-2xl leading-none mt-1 mb-2">{uiText(current.name)} pode se promover</h2>
         <p className="text-sm text-muted mb-4">
           Escolha um caminho. {current.name} não perde as magias que já tem — as novas se somam a partir de agora.
         </p>
@@ -9497,7 +9520,7 @@ function PromotionScreen({
                 onClick={() => onPick(current.name, classId)}
                 className="w-full text-left rounded-xl border border-border bg-bg/40 px-4 py-3 hover:border-accent"
               >
-                <p className="font-display text-xl leading-tight">{cls.name}</p>
+                <p className="font-display text-xl leading-tight">{uiText(cls.name)}</p>
                 <p className="text-sm text-muted">{sheetLine(statsFor(classId, PROMOTE_LEVEL))}</p>
               </button>
             );

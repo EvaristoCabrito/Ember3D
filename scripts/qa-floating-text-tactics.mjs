@@ -6,7 +6,7 @@ import { checkedUrl } from './browser-guard.mjs';
 import { mkdirSync } from 'node:fs';
 
 mkdirSync('screenshots/floating-text-tactics', { recursive: true });
-const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1400, height: 860 } });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));

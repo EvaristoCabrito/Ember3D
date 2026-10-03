@@ -105,7 +105,9 @@ const ABOVE_GROUND_MIST_ORDER = 15;
  * was. Not a bias fix — this is geometry-only, per direct instruction to leave `bias`/`normalBias`
  * alone. Units and decorations get their OWN value each (not one shared constant) — sharing one
  * and bumping it for units visibly broke decorations, since they don't have the same proportions. */
-const UNIT_SHADOW_GROUND_INSET = 3;
+const UNIT_SHADOW_GROUND_INSET = 0.5;
+const SHADOW_UP_AXIS = new THREE.Vector3(0, 0, 1);
+const STANDING_SHADOW_CARD = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
 const DECOR_SHADOW_GROUND_INSET = 3;
 
 /** Direction the sun travels (not where it sits) — X/Y chosen so a shadow cast from height H
@@ -247,7 +249,7 @@ interface TileMeshEntry {
  * a mismatch here means a prop is sized differently on the two renderers, not a crash, so it
  * won't show up as a type error — check against drawDecorations if a prop looks off. */
 function decorSize(id: string, def: DecorationDef, tile: number): { w: number; h: number; dy: number } {
-  if (def.propModel) return decorSize(def.propModel, DECORATIONS[def.propModel]!, tile);
+  if (def.propModel && !def.propModel.startsWith("tavern-")) return decorSize(def.propModel === "grey-outcrop" ? "rocky-outcrop" : def.propModel, DECORATIONS[def.propModel === "grey-outcrop" ? "rocky-outcrop" : def.propModel]!, tile);
   if (def.treeModel) return { w: tile * 3.2, h: tile * 4.8, dy: 0 };
   let minDx = 0;
   let maxDx = 0;
@@ -324,7 +326,7 @@ const CONTACT_SHADOW_H = 0.5;
 const CONTACT_SHADOW_OPACITY = 0.75;
 const CONTACT_SHADOW_MAX_W = 0.6;
 /** Ground decals sit just above the floor so any real 3D wall or prop depth-occludes them. */
-const CONTACT_SHADOW_Z = 0.01;
+const CONTACT_SHADOW_Z = 0.15;
 /** Absolute cap on decal height, in hex radii — keeps a wide base (wall, log) from growing a
  * deep oval that reaches far in front of/behind the contact line. */
 const CONTACT_SHADOW_MAX_H = 0.5;
@@ -494,17 +496,33 @@ function makeContactShadowTexture(): THREE.CanvasTexture {
 /** dst * (1 - srcAlpha): can only darken what is already on the ground, never lighten or tint it.
  * The previous alpha-blended dark-grey gradient measured as LIGHTENING dark grass by up to +45
  * luminance (a grey film, not a shadow) — its "dark" color landed mid-grey after output encoding. */
-function makeContactShadowMaterial(map: THREE.Texture): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({
+function makeContactShadowMaterial(map: THREE.Texture): THREE.MeshLambertMaterial {
+  const material = new THREE.MeshLambertMaterial({
     map,
     opacity: CONTACT_SHADOW_OPACITY,
     transparent: true,
+    side: THREE.DoubleSide,
     depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -4,
     blending: THREE.CustomBlending,
     blendEquation: THREE.AddEquation,
     blendSrc: THREE.ZeroFactor,
     blendDst: THREE.OneMinusSrcAlphaFactor,
   });
+  material.onBeforeCompile = (shader) => {
+    const mask = THREE.ShaderChunk.shadowmask_pars_fragment
+      .replace("receiveShadow ? getShadow( directionalShadowMap", "receiveShadow && dot(directionalLights[ i ].color, vec3(1.0)) > 0.001 ? getShadow( directionalShadowMap")
+      .replace("receiveShadow ? getPointShadow( pointShadowMap", "receiveShadow && dot(pointLights[ i ].color, vec3(1.0)) > 0.001 ? getPointShadow( pointShadowMap")
+      .replace("directionalLight.shadowBias,", "max(-0.00005, directionalLight.shadowBias * 0.03),");
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <shadowmap_pars_fragment>",
+      `#include <shadowmap_pars_fragment>\n${mask}`,
+    ).replace("#include <opaque_fragment>", "diffuseColor.a *= getShadowMask();\n#include <opaque_fragment>");
+  };
+  material.customProgramCacheKey = () => "contact-gap-only-v1";
+  return material;
 }
 
 /** Where an image's opaque art actually meets the ground, normalized to the image (u across,
@@ -611,7 +629,7 @@ interface UnitMeshEntry {
   /** Dev Controls "contact shadows" footprint — owned per unit (its opacity tracks this unit's
    * own fade/lift); the gradient texture itself is shared (contactShadowTexture). */
   contactMesh: THREE.Mesh;
-  contactMaterial: THREE.MeshBasicMaterial;
+  contactMaterial: THREE.MeshLambertMaterial;
   /** Smoothed decal center/width in world units — the base is re-measured from each animation
    * frame, so this eases between frames instead of snapping (null until first placed). */
   contactFit: { dx: number; dy: number; w: number } | null;
@@ -652,6 +670,7 @@ export class ThreeBattleRenderer {
   private cameraSpriteScale = 1;
   private unitUp = new THREE.Vector3(0, 1, 0);
   private unitFacing = new THREE.Quaternion();
+  private shadowFootOffset = new THREE.Vector3();
   private terrainSolid: THREE.Mesh | null = null;
   private terrainSolidKey = "";
   private water = new ThreeWater();
@@ -898,9 +917,8 @@ export class ThreeBattleRenderer {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setClearColor(0x000000, 1);
     this.renderer.shadowMap.enabled = true;
-    // PCFSoftShadowMap was removed from this Three.js version (falls back to PCFShadowMap with a
-    // console warning) — request PCFShadowMap directly instead.
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // Sharp shadows use a single depth comparison; the low preset uses PCF filtering.
+    this.renderer.shadowMap.type = getDevGfx().softShadows ? THREE.PCFShadowMap : THREE.BasicShadowMap;
     this.camera = new THREE.OrthographicCamera(0, 1, 0, 1, 0.1, 20000);
     this.camera.position.z = 100;
     // Author-controlled lighting (Mission.environment/sunIntensity/ambientIntensity, editable in
@@ -1120,6 +1138,12 @@ export class ThreeBattleRenderer {
     for (const m of this.shadowCasterGroup.children) {
       if (!m.userData.baseQuat) m.userData.baseQuat = m.quaternion.clone();
       m.quaternion.copy(m.userData.baseQuat as THREE.Quaternion).premultiply(spin);
+      // Turning a silhouette towards the sun/moon must pivot about its opaque feet,
+      // not the image rectangle's center (asymmetric sprites otherwise slide sideways).
+      if (m.userData.contactLocal && m.userData.contactAnchor) {
+        const offset = this.shadowFootOffset.copy(m.userData.contactLocal as THREE.Vector3).multiply(m.scale).applyQuaternion(m.quaternion);
+        m.position.copy(m.userData.contactAnchor as THREE.Vector3).sub(offset);
+      }
     }
   }
 
@@ -1573,8 +1597,8 @@ export class ThreeBattleRenderer {
     for (const p of engine.decorations) {
       const def = DECORATIONS[p.id];
       if (!def) continue;
-      if (def.treeModel && engine.tacticsCamera) {
-        const mesh = this.trees.create(def.treeModel, tile);
+      if ((def.treeModel || def.propModel === "grey-outcrop" || def.propModel?.startsWith("tavern-")) && engine.tacticsCamera) {
+        const mesh = this.trees.create(def.treeModel ?? (def.propModel as "grey-outcrop" | "tavern-barrel" | "tavern-chair" | "tavern-candlestick" | "tavern-mug" | "tavern-table"), tile);
         if (mesh) {
           const { wx, wy } = hexWorld(p.x, p.y, tile);
           mesh.position.set(wx, -wy, engine.tacticsCamera ? this.groundHeight(p.x, p.y, tile) : 1);
@@ -1853,6 +1877,65 @@ export class ThreeBattleRenderer {
     }
   }
 
+  private unitContactMasks = new Map<HTMLImageElement, { texture: THREE.Texture; top: number; bottom: number }>();
+  private unitContactMask(img: HTMLImageElement): { texture: THREE.Texture; top: number; bottom: number } {
+    const cached = this.unitContactMasks.get(img);
+    if (cached) return cached;
+    const width = img.naturalWidth, height = img.naturalHeight;
+    const footRow = Math.ceil((artBase(img)?.v ?? 1) * height);
+    const bottom = footRow + Math.ceil(height * 0.06);
+    const top = Math.max(0, footRow - Math.ceil(height * 0.08));
+    const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = bottom - top;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(img, 0, -top);
+    const pixels = ctx.getImageData(0, 0, width, bottom - top), original = pixels.data.slice();
+    // Extend each opaque foot column to the support edge. A raised painted boot
+    // still contacts the ground; empty columns between feet remain empty.
+    for (let x = 0; x < width; x++) {
+      let supported = false;
+      for (let y = 0; y < canvas.height; y++) {
+        const i = (y * width + x) * 4;
+        supported ||= original[i + 3] > 128;
+        pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = 255;
+        pixels.data[i + 3] = supported ? 255 : 0;
+      }
+    }
+    ctx.putImageData(pixels, 0, 0);
+    const texture = new THREE.CanvasTexture(canvas); texture.minFilter = texture.magFilter = THREE.LinearFilter;
+    const result = { texture, top: top / height, bottom: bottom / height };
+    this.unitContactMasks.set(img, result); return result;
+  }
+
+  private unitFootShadowTextures = new Map<HTMLImageElement, THREE.Texture>();
+
+  /** Shadow-only foot support: extend opaque columns in the bottom foot band to
+   * its lowest row. The visible sprite remains untouched; gaps between legs remain clear. */
+  private unitFootShadowTexture(img: HTMLImageElement): THREE.Texture {
+    const cached = this.unitFootShadowTextures.get(img);
+    if (cached) return cached;
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    const context = canvas.getContext("2d", { willReadFrequently: true })!;
+    context.drawImage(img, 0, 0);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    const { width, height, data } = pixels;
+    let bottom = -1;
+    for (let y = height - 1; y >= 0 && bottom < 0; y--)
+      for (let x = 0; x < width; x++) if (data[(y * width + x) * 4 + 3] > 128) { bottom = y; break; }
+    const bandTop = Math.max(0, bottom - Math.round(height * 0.12));
+    for (let x = 0; x < width; x++) {
+      let foot = -1;
+      for (let y = bottom; y >= bandTop; y--) if (data[(y * width + x) * 4 + 3] > 128) { foot = y; break; }
+      if (foot < 0) continue;
+      for (let y = foot + 1; y <= bottom; y++) data[(y * width + x) * 4 + 3] = 255;
+    }
+    context.putImageData(pixels, 0, 0);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = texture.magFilter = THREE.LinearFilter;
+    this.unitFootShadowTextures.set(img, texture);
+    return texture;
+  }
+
   private unitTextureFor(img: HTMLImageElement): THREE.Texture {
     const hit = this.unitTexCache.get(img);
     if (hit) return hit;
@@ -1936,12 +2019,13 @@ export class ThreeBattleRenderer {
         // alongside the visible sprite, same scale as it so the cast silhouette actually matches.
         // side: DoubleSide — see decorShadowMaterialFor's identical comment: a flat plane needs
         // this to cast any shadow at all, since Three's shadow pass renders back-faces by default.
-        const shadowMaterial = new THREE.MeshBasicMaterial({ map: this.unitTextureFor(img), alphaTest: 0.5, colorWrite: false, depthWrite: false, side: THREE.DoubleSide });
+        const shadowMaterial = new THREE.MeshBasicMaterial({ map: this.unitFootShadowTexture(img), alphaTest: 0.5, colorWrite: false, depthWrite: false, side: THREE.DoubleSide });
         const shadowMesh = new THREE.Mesh(this.quadGeo, shadowMaterial);
         shadowMesh.castShadow = true;
         this.shadowCasterGroup.add(shadowMesh);
         const contactMaterial = makeContactShadowMaterial(this.contactShadowTexture);
         const contactMesh = new THREE.Mesh(this.quadGeo, contactMaterial);
+        contactMesh.receiveShadow = true;
         this.contactShadowGroup.add(contactMesh);
         const proxy = new THREE.Mesh(this.proxyCylinder, this.proxyMaterial);
         proxy.layers.set(PROXY_LAYER);
@@ -1964,7 +2048,7 @@ export class ThreeBattleRenderer {
       if (entry.img !== img) {
         entry.material.map = this.unitTextureFor(img);
         entry.material.needsUpdate = true;
-        entry.shadowMaterial.map = this.unitTextureFor(img);
+        entry.shadowMaterial.map = this.unitFootShadowTexture(img);
         entry.shadowMaterial.needsUpdate = true;
         entry.occluder.material = this.unitOccluderMaterialFor(this.unitTextureFor(img));
         entry.fogCut.material = this.unitFogCutMaterialFor(this.unitTextureFor(img));
@@ -1996,7 +2080,8 @@ export class ThreeBattleRenderer {
       // pattern ensureDecorBuilt already uses for a decoration's own-art facing.
       const centerYLocal = (v.footOffset - v.h / 2) * v.scaleY * this.cameraSpriteScale;
       const base = artBase(img);
-      const visualUpOffset = (engine.tacticsCamera ? 0 : v.lift) - v.bob - centerYLocal;
+      const transparentFootPadding = (1 - (base?.v ?? 1)) * v.h * v.scaleY * this.cameraSpriteScale;
+      const visualUpOffset = (engine.tacticsCamera ? -transparentFootPadding : v.lift) - v.bob - centerYLocal;
       // Y negated and Z derived from row — see module comment on the Y-flip and
       // ensureDecorBuilt's own comment on z ordering vs decorations (z=1) and tiles (z=0).
       // 2.5D depth from the ground line (see DEPTH_Z_BASE) — bob/lift are visual only.
@@ -2092,14 +2177,29 @@ export class ThreeBattleRenderer {
       // exactly at the ground (z=0) at the foot anchor and its top at `elevation`, same span the
       // old box caster used — except the caster is now the real silhouette, not a box.
       const elevation = Math.max(1, v.h * this.cameraSpriteScale * UNIT_SHADOW_HEIGHT_SCALE + v.lift * 0.6);
-      entry.shadowMesh.rotation.set(Math.PI / 2, 0, THREE.MathUtils.degToRad(this.engine.cameraTiltSide));
-      entry.shadowMesh.scale.set(v.scaleX * v.w * this.cameraSpriteScale, elevation + UNIT_SHADOW_GROUND_INSET, 1);
-      entry.shadowMesh.position.set(anchor.worldX + v.sway, -(anchor.worldY + v.footY), elevation / 2 - UNIT_SHADOW_GROUND_INSET / 2 + (engine.tacticsCamera ? groundLift : 0));
+      // Euler XYZ rotates the card's horizontal axis into Z when yaw is nonzero,
+      // lifting one boot (especially Aldric's off-center stance). Yaw around world Z
+      // after standing the card upright, so the entire foot row remains level.
+      entry.shadowMesh.quaternion.setFromAxisAngle(SHADOW_UP_AXIS, THREE.MathUtils.degToRad(this.engine.cameraTiltSide))
+        .multiply(STANDING_SHADOW_CARD);
+      (entry.shadowMesh.userData.baseQuat ??= new THREE.Quaternion()).copy(entry.shadowMesh.quaternion);
+      // Sprite frames contain transparent padding below their actual feet. Anchor the
+      // opaque foot row, not the bottom of the image rectangle, to the receiver.
+      const footRow = Math.max(0.1, base?.v ?? 1);
+      const casterHeight = (elevation + UNIT_SHADOW_GROUND_INSET) / footRow;
+      const casterCenter = (footRow - 0.5) * casterHeight - UNIT_SHADOW_GROUND_INSET;
+      entry.shadowMesh.scale.set(v.scaleX * v.w * this.cameraSpriteScale, casterHeight, 1);
+      const flatFootOffset = (v.footOffset - (1 - footRow) * v.h) * v.scaleY * this.cameraSpriteScale;
+      entry.shadowMesh.position.set(anchor.worldX + v.sway, -(anchor.worldY + v.footY + (engine.tacticsCamera ? 0 : flatFootOffset)), casterCenter + (engine.tacticsCamera ? groundLift : 0));
       if (engine.tacticsCamera) {
         entry.shadowMesh.position.set(entry.mesh.position.x - this.unitUp.x * visualUpOffset,
           entry.mesh.position.y - this.unitUp.y * visualUpOffset,
-          groundLift + elevation / 2 - UNIT_SHADOW_GROUND_INSET / 2);
+          groundLift + casterCenter);
       }
+      const contactLocal = (entry.shadowMesh.userData.contactLocal ??= new THREE.Vector3()) as THREE.Vector3;
+      contactLocal.set(((base?.u0 ?? 0) + (base?.u1 ?? 1)) / 2 - 0.5, 0.5 - footRow, 0);
+      (entry.shadowMesh.userData.contactAnchor ??= new THREE.Vector3()).copy(contactLocal).multiply(entry.shadowMesh.scale)
+        .applyQuaternion(entry.shadowMesh.quaternion).add(entry.shadowMesh.position);
       entry.shadowMesh.visible = true;
       // Hidden upright cylinder at the feet: the character's physical body for point lights.
       const bodyR = Math.max(tile * 0.18, Math.abs(v.scaleX) * v.w * 0.22);
@@ -2147,6 +2247,26 @@ export class ThreeBattleRenderer {
         this.landscape.heightAt(entry.contactMesh.position.x, entry.contactMesh.position.y) + CONTACT_SHADOW_Z;
       entry.contactMaterial.opacity = CONTACT_SHADOW_OPACITY * u.fade * liftFade;
       entry.contactMesh.visible = liftFade > 0;
+      if (engine.tacticsCamera) {
+        const contact = this.unitContactMask(img);
+        if (entry.contactMaterial.map !== contact.texture) {
+          entry.contactMaterial.map = contact.texture; entry.contactMaterial.needsUpdate = true;
+        }
+        // Project the actual visible boot band onto the receiver along the camera
+        // ray. Its screen position therefore meets the painted boots exactly.
+        const bandCenter = (0.5 - (contact.top + contact.bottom) / 2) * entry.mesh.scale.y;
+        const center = entry.contactMesh.position.copy(entry.mesh.position).addScaledVector(this.unitUp, bandCenter);
+        const floor = this.landscape?.heightAt(center.x, center.y) ?? groundLift;
+        center.addScaledVector(this.cameraBack, -(center.z - floor) / Math.max(0.1, this.cameraBack.z));
+        center.z = (this.landscape?.heightAt(center.x, center.y) ?? floor) + CONTACT_SHADOW_Z;
+        const projectedUp = this.unitUp.clone().addScaledVector(this.cameraBack, -this.unitUp.z / Math.max(0.1, this.cameraBack.z));
+        const heightScale = projectedUp.length(); projectedUp.normalize();
+        entry.contactMesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(this.cameraRight, projectedUp, SHADOW_UP_AXIS));
+        entry.contactMesh.scale.set(entry.mesh.scale.x, entry.mesh.scale.y * (contact.bottom - contact.top) * heightScale, 1);
+        entry.contactMaterial.opacity = 0.5 * u.fade;
+        entry.contactMaterial.alphaTest = 0.1;
+        entry.contactMesh.visible = getDevGfx().contactShadows && getDevGfx().realShadows;
+      }
     }
 
     for (const [id, entry] of this.unitEntries) {
@@ -3221,10 +3341,26 @@ export class ThreeBattleRenderer {
   /** Dev Controls toggles (see devGfx.ts) — read every frame so a flip applies immediately. */
   private applyDevGfx(): void {
     const gfx = getDevGfx();
+    const shadowType = gfx.softShadows ? THREE.PCFShadowMap : THREE.BasicShadowMap;
+    if (this.renderer.shadowMap.type !== shadowType) {
+      this.renderer.shadowMap.type = shadowType;
+      this.renderer.shadowMap.needsUpdate = true;
+    }
+    const requested = [1024, 2048, 4096].includes(gfx.shadowResolution) ? gfx.shadowResolution : 4096;
+    const resolution = Math.min(requested, this.renderer.capabilities.maxTextureSize);
+    for (const light of [this.sunLight, this.moonLight, ...this.pointLights]) {
+      const size = light instanceof THREE.PointLight ? Math.max(256, resolution / 4) : resolution;
+      if (light.shadow.mapSize.x === size) continue;
+      light.shadow.mapSize.set(size, size);
+      light.shadow.map?.dispose(); light.shadow.map = null;
+      light.shadow.mapPass?.dispose(); light.shadow.mapPass = null;
+      light.shadow.needsUpdate = true;
+    }
     this.sunLight.shadow.radius = gfx.softShadows ? SHADOW_RADIUS_SOFT : SHADOW_RADIUS_HARD;
-    this.contactShadowGroup.visible = gfx.contactShadows;
-    this.decorContactGroup.visible = gfx.contactShadows && this.decorGroup.visible;
+    this.contactShadowGroup.visible = this.engine.tacticsCamera && gfx.contactShadows && gfx.realShadows;
+    this.decorContactGroup.visible = false;
     this.groundAO.setEnabled(gfx.ambientOcclusion);
+    this.groundAO.uniforms.groundContactStrength.value = gfx.contactShadows ? 1 : 0;
   }
 
   /** Occluders for the ground AO field: every decoration footprint cell, plus raised/blocking
@@ -3616,6 +3752,10 @@ export class ThreeBattleRenderer {
     // already disposed above/below, so only the material itself needs disposing here.
     for (const mat of this.decorShadowMatCache.values()) mat.dispose();
     for (const tex of this.unitTexCache.values()) tex.dispose();
+    for (const tex of this.unitFootShadowTextures.values()) tex.dispose();
+    this.unitFootShadowTextures.clear();
+    for (const mask of this.unitContactMasks.values()) mask.texture.dispose();
+    this.unitContactMasks.clear();
     for (const tex of this.glowTexCache.values()) tex.dispose();
     this.webMat?.map?.dispose();
     this.webMat?.dispose();

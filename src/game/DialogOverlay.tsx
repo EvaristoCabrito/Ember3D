@@ -1,3 +1,4 @@
+import { useGamePreferences, translatedText, uiText } from "./gamePreferences";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { portraitFor } from "./assets";
@@ -10,6 +11,7 @@ import type { DialogAction, DialogTree } from "./types";
  * `next`. No click-outside-to-dismiss — same as the chest-loot/promotion popups, a
  * conversation only advances when the player deliberately presses a button. */
 export function DialogOverlay({ tree, onClose, onAction }: { tree: DialogTree; onClose: () => void; onAction?: (action: DialogAction) => void }) {
+  const prefs = useGamePreferences();
   const [lineId, setLineId] = useState(tree.startId);
   const line = tree.lines.find((l) => l.id === lineId);
   // Missing line id (a hand-edited/corrupt tree) closes rather than soft-locking the battle.
@@ -36,9 +38,9 @@ export function DialogOverlay({ tree, onClose, onAction }: { tree: DialogTree; o
             className={portrait.framed ? "h-24 w-20 object-cover rounded-lg border border-border shrink-0" : "h-20 w-20 object-contain shrink-0"}
           />
         )}
-        <div className="flex-1 min-w-0">
-          <p className="text-xs ember-kicker">{line.speaker}</p>
-          <p className="mt-1 text-base leading-relaxed text-fg whitespace-pre-line">{line.text}</p>
+        <div className="flex-1 min-w-0" style={{ fontSize: `${prefs.dialogueScale}rem` }}>
+          <p className="text-xs ember-kicker">{translatedText(line.speaker, line.speakerTranslations, prefs.dialogueLanguage)}</p>
+          <p className="mt-1 text-[1em] leading-relaxed text-fg whitespace-pre-line">{translatedText(line.text, line.translations, prefs.dialogueLanguage)}</p>
           <div className="mt-4 flex flex-col gap-2">
             {line.replies && line.replies.length > 0 ? (
               line.replies.map((reply, i) => (
@@ -55,12 +57,12 @@ export function DialogOverlay({ tree, onClose, onAction }: { tree: DialogTree; o
                     advance(reply.next);
                   }}
                 >
-                  {reply.text}
+                  {translatedText(reply.text, reply.translations, prefs.dialogueLanguage)}
                 </Button>
               ))
             ) : (
               <Button className="w-full ember-btn ember-btn-primary" onClick={() => advance(line.next)}>
-                {line.next ? "Próximo" : "Ok"}
+                {uiText(line.next ? "Próximo" : "Ok")}
               </Button>
             )}
           </div>

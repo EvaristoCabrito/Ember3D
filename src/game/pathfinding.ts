@@ -1,6 +1,6 @@
 import { effectiveMaxRange, isProjectile, isRangedWeapon } from "./data.ts";
 import type { Point, TerrainId, Unit } from "./types.ts";
-import { EMPTY_OVERLAY, effectiveMaxRangeAt, hexDef, type DecorOverlay } from "./hexprops.ts";
+import { EMPTY_OVERLAY, HEX_BLOCKED, effectiveMaxRangeAt, hexDef, type DecorOverlay } from "./hexprops.ts";
 
 export function key(x: number, y: number): string {
   return `${x},${y}`;
@@ -8,6 +8,14 @@ export function key(x: number, y: number): string {
 
 export function inBounds(x: number, y: number, cols: number, rows: number): boolean {
   return x >= 0 && y >= 0 && x < cols && y < rows;
+}
+
+/** Only these two classes fly over water in the current roster. Blocking decorations still
+ * stop them; this exception applies to water terrain itself, not to obstacles placed on it. */
+export function canTraverseWater(unit: Pick<Unit, "classId">, terrain: { id: TerrainId }, overlay: DecorOverlay, x: number, y: number, cols: number): boolean {
+  if (terrain.id !== "water" || (unit.classId !== "swampBlueCalf" && unit.classId !== "roccoTheBird")) return false;
+  const index = y * cols + x;
+  return overlay.length === 0 || ((overlay[index] ?? 0) & HEX_BLOCKED) === 0;
 }
 
 export function tileAt(tiles: TerrainId[], cols: number, x: number, y: number): TerrainId {
@@ -438,10 +446,11 @@ export function footprintCost(
   for (const p of cells) {
     if (!inBounds(p.x, p.y, cols, rows)) return null;
     const terr = hexDef(tiles, cols, p.x, p.y, overlay);
-    if (!terr.passable) {
+    const fliesOverWater = canTraverseWater(self, terr, overlay, p.x, p.y, cols);
+    if (!terr.passable && !fliesOverWater) {
       if (!(terr.id === "barricade" && (self.classId === "troll" || self.classId === "troll2"))) return null;
     }
-    const costHere = terr.id === "barricade" && (self.classId === "troll" || self.classId === "troll2") ? 2 : terr.moveCost;
+    const costHere = fliesOverWater ? 1 : terr.id === "barricade" && (self.classId === "troll" || self.classId === "troll2") ? 2 : terr.moveCost;
     if (costHere > cost) cost = costHere;
     const who = occ.get(key(p.x, p.y));
     if (!who || who.id === self.id) continue;

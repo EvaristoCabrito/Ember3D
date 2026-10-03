@@ -266,6 +266,9 @@ function deriveAlphaFromBlack(img: HTMLImageElement): HTMLCanvasElement {
 // set was last republished under. attackPose spreads whatever count it finds across the
 // lunge/hit/recover stages, so a set only has to be listed here to animate.
 const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
+  // Big Blue Calf (swampBlueCalf) — right-facing frames cut from the user's video.
+  // The renderer mirrors this pool for the opposite direction.
+  "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
   // The generic/default warrior look (CLASSES.swordsman's own sprite), its own distinct
   // on-disk cut (kael-v2 — an old internal folder name, kept as-is on disk) — the MC
   // himself is a different unit entirely and plays as kaelFinal instead.
@@ -386,6 +389,7 @@ const COUNTER_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
 // Walk cycles: move-*.png, same shape as the attack table. A sprite absent from here has
 // no walk cut and falls back to its idle loop played faster, as every sprite used to.
 const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
+  "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
   familiar: { n: 8, bust: "?v=6" },
   // Right-facing cut; see the dedicated walksLeft.familiar2 load below for its own
   // authored left-facing cut (real distinct footage, not the CSS mirror every other
@@ -460,6 +464,7 @@ const HIT_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
 
 // Death sheets: death-*.png, played once when the unit dies (see GameArt.deaths).
 const DEATH_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
+  "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
   "mordavian-wolf-final": { n: 32, bust: "" },
   wardog2: { n: 32, bust: "" },
   EmberedWraith: { n: 32, bust: "" },
@@ -601,48 +606,63 @@ export function releaseSpriteArt(art: GameArt, keep: Iterable<SpriteId>): void {
   }
 }
 
+/** Wait for the painted variants before opening a battle; editor variants load on access. */
+export async function ensureTerrainArt(art: GameArt, tiles: readonly TerrainId[], variants: readonly number[]): Promise<void> {
+  const images = new Set(tiles.map((id, index) => art.tiles[id][variants[index] ?? 0] ?? art.tiles[id][0]));
+  await Promise.all([...images].map(image => {
+    if (image.complete) return Promise.resolve();
+    return new Promise<void>(resolve => {
+      const finish = () => { image.removeEventListener("load", finish); image.removeEventListener("error", finish); resolve(); };
+      image.addEventListener("load", finish); image.addEventListener("error", finish);
+    });
+  }));
+}
+
+/** Load only placed decorations, including their optional mirrored-facing artwork.
+ * Reuse renderer-started image requests instead of fetching each asset twice. */
+export async function ensureDecorationArt(art: GameArt, ids: Iterable<string>): Promise<void> {
+  const files = new Set<string>();
+  for (const id of ids) {
+    files.add(id);
+    if (DECORATIONS[id]?.mirrorAlternate) files.add(decorationSideFile(id, 3));
+  }
+  await Promise.all([...files].map(async id => {
+    const existing = art.decorations[id];
+    if (existing?.naturalWidth) return;
+    if (existing && !existing.complete) {
+      await new Promise<void>(resolve => {
+        const finish = () => { existing.removeEventListener("load", finish); existing.removeEventListener("error", finish); resolve(); };
+        existing.addEventListener("load", finish);
+        existing.addEventListener("error", finish);
+      });
+      if (existing.naturalWidth) return;
+    }
+    art.decorations[id] = await loadImage(decorationImage(id))
+      .catch(() => loadImage(decorationImageWebp(id)))
+      .catch(() => new Image());
+  }));
+}
+
 export async function loadGameArt(): Promise<GameArt> {
   const tiles = {} as Record<TerrainId, HTMLImageElement[]>;
   await Promise.all(
     TILES.map(async (id) => {
       const n = TILE_VARIANT_COUNT[id];
-      tiles[id] = await Promise.all(Array.from({ length: n }, (_, i) => loadImage(tileVariantSrc(id, i))));
+      const variants: HTMLImageElement[] = [];
+      variants[0] = await loadImage(tileVariantSrc(id, 0));
+      for (let i = 1; i < n; i++) {
+        Object.defineProperty(variants, i, { configurable: true, enumerable: true, get() {
+          const image = new Image();
+          image.src = tileVariantSrc(id, i);
+          Object.defineProperty(variants, i, { configurable: true, enumerable: true, writable: true, value: image });
+          return image;
+        } });
+      }
+      tiles[id] = variants;
     }),
   );
   const decorations = {} as Record<string, HTMLImageElement>;
-  await Promise.all(
-    Object.keys(DECORATIONS).map(async (id) => {
-      if (DECORATIONS[id]?.model3d) return;
-      // PNG first (every existing decoration ships as one); a prop supplied as WebP with real
-      // alpha baked in (see decorationImage's own note) falls back to that automatically.
-      decorations[id] = await loadImage(decorationImage(id))
-        .catch(() => loadImage(decorationImageWebp(id)))
-        .catch(() => {
-          // Registered-but-not-shipped optional decor should not prevent the whole game from
-          // loading; callers already skip images with naturalWidth 0.
-          const placeholder = new Image();
-          placeholder.width = 1;
-          placeholder.height = 1;
-          return placeholder;
-        });
-    }),
-  );
-  // Side-specific art is optional for most props. Explicitly preload the baked mirrored
-  // variants for the tall posts so ThreeBattleRenderer can select them on its first build;
-  // otherwise a lazy image could finish after the decor mesh cache had already settled on
-  // the base-facing sprite.
-  const mirroredPostIds = Object.keys(DECORATIONS).filter((id) => DECORATIONS[id]?.mirrorAlternate);
-  await Promise.all(
-    mirroredPostIds.map(async (id) => {
-      const fileId = decorationSideFile(id, 3);
-      decorations[fileId] = await loadImage(decorationImage(fileId)).catch(() => {
-        const placeholder = new Image();
-        placeholder.width = 1;
-        placeholder.height = 1;
-        return placeholder;
-      });
-    }),
-  );
+  // Decorations load for the current map through ensureDecorationArt.
   // Unit sprites are NOT loaded here: every sprite pool starts empty and each battle loads
   // only the sprites its own units use (see ensureSpriteArt/requestSpriteArt above), instead
   // of every sprite in the game at the title screen.

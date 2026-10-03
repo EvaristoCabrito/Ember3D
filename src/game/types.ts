@@ -70,6 +70,7 @@ export type ClassId = import("./encounter-npcs").EncounterNpcId
   | "birolhoLegs"
   | "birolhoLegs2"
   | "swampBlueCalf"
+  | "bigBlueCalf"
   // Weak, killable flavor civilians (see SpriteId's own note) — random encounters and regular
   // maps, deliberately not the (not yet built) city hubs, where a civilian instance would carry
   // Spawn.dialog instead and never be a combat target at all.
@@ -253,6 +254,7 @@ export interface ClassDef {
 /** One reply choice inside a branching DialogLine. Picking it jumps to `next`, or ends the
  * tree if `next` is absent/null — same convention as DialogLine.next below. */
 export interface DialogReply {
+  translations?: Partial<Record<"pt" | "en", string>>;
   text: string;
   next?: string | null;
   /** Opens one of the Inn's menus after the popup closes — see DialogAction. */
@@ -266,6 +268,8 @@ export type DialogAction = "tavern" | "smith" | "healer" | "merchant" | "recruit
  * Either it links straight to the next line (`next`, plain "OK" to continue) or it branches
  * (`replies`, one button per reply) — never both; `replies` wins if somehow both are set. */
 export interface DialogLine {
+  translations?: Partial<Record<"pt" | "en", string>>;
+  speakerTranslations?: Partial<Record<"pt" | "en", string>>;
   id: string;
   speaker: string;
   /** A SpriteId to resolve a portrait image from (see resolveDialogPortrait) — omitted shows
@@ -329,7 +333,7 @@ export interface DecorationDef {
   architectureSpan?: number;
   dungeonReference?: boolean;
   templeStyle?: "plain" | "niche" | "relief";
-  propModel?: "small-house" | "rocky-outcrop";
+  propModel?: "small-house" | "rocky-outcrop" | "grey-outcrop" | "tavern-barrel" | "tavern-chair" | "tavern-candlestick" | "tavern-mug" | "tavern-table";
   treeModel?: "broadleaf" | "snowy-pine" | "dead-oak" | "dead-snag" | "twisted-stump";
   rockStyle?: "layered" | "arch" | "broken";
   /** Repeating albedo material for architecture; lighting remains real time. */

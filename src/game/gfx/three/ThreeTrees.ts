@@ -5,21 +5,24 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 /** Renderer-owned cache: each placed tree has one draw and shared immutable geometry. */
 export class ThreeTrees {
   private templates = new Map<string, THREE.BufferGeometry>();
+  private maps = new Map<string, THREE.Texture>();
   private loading = new Set<string>();
   private disposed = false;
   revision = 0;
 
-  create(kind: "broadleaf" | "snowy-pine" | "dead-oak" | "dead-snag" | "twisted-stump", tile: number): THREE.Mesh | null {
+  create(kind: "broadleaf" | "snowy-pine" | "dead-oak" | "dead-snag" | "twisted-stump" | "grey-outcrop" | "tavern-barrel" | "tavern-chair" | "tavern-candlestick" | "tavern-mug" | "tavern-table", tile: number): THREE.Mesh | null {
     const template = this.templates.get(kind);
     if (!template) {
       if (!this.loading.has(kind)) {
         this.loading.add(kind);
-        new GLTFLoader().load(`/game/models/trees/${kind}.glb`, gltf => {
+        new GLTFLoader().load(`/game/models/${kind.startsWith("tavern-") ? "props" : kind === "grey-outcrop" ? "rocks" : "trees"}/${kind}.glb`, gltf => {
           const parts: THREE.BufferGeometry[] = [];
           gltf.scene.updateMatrixWorld(true);
           gltf.scene.traverse(object => {
             if (!(object instanceof THREE.Mesh)) return;
             const source = object.geometry;
+            const map = (object.material as THREE.MeshStandardMaterial).map;
+            if (map) this.maps.set(kind, map);
             const geometry = source.index ? source.toNonIndexed() : source.clone();
             geometry.applyMatrix4(object.matrixWorld);
             geometry.rotateX(Math.PI / 2); // glTF Y-up -> battle Z-up.
@@ -32,7 +35,7 @@ export class ThreeTrees {
               colors[i * 3 + 1] = color.g * (original?.getY(i) ?? 1);
               colors[i * 3 + 2] = color.b * (original?.getZ(i) ?? 1);
             }
-            for (const name of Object.keys(geometry.attributes)) if (name !== "position" && name !== "normal") geometry.deleteAttribute(name);
+            for (const name of Object.keys(geometry.attributes)) if (name !== "position" && name !== "normal" && name !== "uv") geometry.deleteAttribute(name);
             if (!geometry.getAttribute("normal")) geometry.computeVertexNormals();
             geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
             parts.push(geometry);
@@ -55,8 +58,8 @@ export class ThreeTrees {
       }
       return null;
     }
-    const mesh = new THREE.Mesh(template, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }));
-    mesh.scale.setScalar(tile * 4.8);
+    const mesh = new THREE.Mesh(template, new THREE.MeshStandardMaterial({ vertexColors: true, map: this.maps.get(kind), metalness: kind === "tavern-mug" ? 0.8 : 0, roughness: kind === "tavern-mug" ? 0.5 : 0.9, side: THREE.DoubleSide }));
+    mesh.scale.setScalar(tile * (kind === "grey-outcrop" ? 2.3 : kind === "tavern-mug" ? 0.7 : kind === "tavern-candlestick" ? 1.1 : kind.startsWith("tavern-") ? 2 : 4.8));
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.userData.importedTree = true;
     return mesh;
@@ -66,5 +69,7 @@ export class ThreeTrees {
     this.disposed = true;
     for (const geometry of this.templates.values()) geometry.dispose();
     this.templates.clear();
+    for (const map of this.maps.values()) map.dispose();
+    this.maps.clear();
   }
 }

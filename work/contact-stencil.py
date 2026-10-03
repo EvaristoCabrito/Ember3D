@@ -1,0 +1,2 @@
+from pathlib import Path
+p=Path('src/game/gfx/three/ThreeBattleRenderer.ts');s=p.read_text(encoding='utf-8').replace('new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false })','new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, stencil: true })').replace('new EffectComposer(this.renderer);','new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, stencilBuffer: true }));');p.write_text(s,encoding='utf-8')

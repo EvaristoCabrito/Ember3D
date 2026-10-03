@@ -1,3 +1,4 @@
+import { graphicsDpr, subscribeGraphicsQuality } from "./graphicsQuality";
 import { useEffect, useRef } from "react";
 import type { BattleEngine } from "./engine";
 import { EffectsRenderer } from "./gfx/EffectsRenderer";
@@ -175,7 +176,7 @@ export function BattleCanvas({
     let lastOverlayMatrix = "";
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = graphicsDpr();
       const w = wrap.clientWidth;
       const h = wrap.clientHeight;
       const pw = Math.max(1, Math.floor(w * dpr));
@@ -211,6 +212,7 @@ export function BattleCanvas({
       }
     };
     resize();
+    const unsubscribeQuality = subscribeGraphicsQuality(resize);
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
 
@@ -242,7 +244,7 @@ export function BattleCanvas({
         }
         engine.tick(dt);
       }
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = graphicsDpr();
       // Elemental FX is a DOM canvas between the Three scene and the normal unit overlay.
       // Sprite-only maps move decorations to that overlay. Architecture maps keep actors
       // in the shared scene so the FX snapshot preserves the wall depth relationship.
@@ -617,6 +619,7 @@ export function BattleCanvas({
       running = false;
       canvas.style.cursor = restingCursor;
       cancelAnimationFrame(raf);
+      unsubscribeQuality();
       ro.disconnect();
       cancelHold();
       if (mouseHoldTimer !== null) window.clearTimeout(mouseHoldTimer);

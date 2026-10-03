@@ -59,6 +59,7 @@ export const LIGHT_DEFS: Record<string, LightDef> = {
   "light-wall-torch": { ...NORMAL_FIRE, intensity: 11 },
   "light-brazier-bowl": NORMAL_FIRE,
   "light-fireplace": { ...NORMAL_FIRE, intensity: 14, flicker: 0.8 },
+  "inn-fireplace": { ...NORMAL_FIRE, intensity: 14, flicker: 0.8 },
 };
 
 /** Reach multiplier for every light-emitting decoration in LIGHT_DEFS, applied in

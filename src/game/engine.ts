@@ -29,6 +29,7 @@ import {
   piercingLine,
   shotKind,
   allAxisRays,
+  canTraverseWater,
   reconstructPath,
   terrainDistanceField,
   tileAt,
@@ -3489,7 +3490,7 @@ export class BattleEngine {
 
   private nudgeOffHazard(unit: Unit): void {
     const here = this.hexAt(unit.x, unit.y);
-    if (here.passable) return;
+    if (here.passable || canTraverseWater(unit, here, this.decorOverlay, unit.x, unit.y, this.cols)) return;
     const occ = this.occ();
     const seen = new Set<string>([key(unit.x, unit.y)]);
     const q: Point[] = [{ x: unit.x, y: unit.y }];
@@ -3502,7 +3503,7 @@ export class BattleEngine {
         seen.add(k);
         const terr = this.hexAt(n.x, n.y);
         const who = occ.get(k);
-        if (terr.passable && (!who || who.id === unit.id)) {
+        if ((terr.passable || canTraverseWater(unit, terr, this.decorOverlay, n.x, n.y, this.cols)) && (!who || who.id === unit.id)) {
           unit.x = n.x;
           unit.y = n.y;
           unit.drawX = n.x;
@@ -4309,7 +4310,12 @@ export class BattleEngine {
       !this.active &&
       this.queue.length === 0 &&
       (u.x !== this.turnStart.x || u.y !== this.turnStart.y) &&
-      (this.mode === "selected" || this.mode === "awaitAction" || this.mode === "awaitAttack")
+      (this.mode === "selected" ||
+        this.mode === "awaitAction" ||
+        this.mode === "awaitAttack" ||
+        this.mode === "awaitOffHand" ||
+        this.mode === "awaitSpell" ||
+        this.mode === "awaitPotion")
     );
   }
 
@@ -4347,6 +4353,11 @@ export class BattleEngine {
     this.pendingFoeId = null;
     this.inspectedId = null;
     this.threat = [];
+    this.spellArmed = false;
+    this.spellAim = null;
+    this.spellKind = null;
+    this.potionAim = null;
+    this.missileTargets = [];
     this.selectedId = u.id;
     this.mode = "selected";
     this.reach = computeReachable(this.effectiveUnitForReach(u), this.tiles, this.cols, this.rows, this.units, true, this.decorOverlay);
@@ -4355,6 +4366,7 @@ export class BattleEngine {
     this.centerOn(u.x, u.y);
     this.tip = `${u.name} voltou ao ponto de partida — ${u.mov} de movimento de volta.`;
     sfxPlay.ui();
+    this.emit();
   }
 
   deselect(commit = false): void {
@@ -4414,6 +4426,14 @@ export class BattleEngine {
       this.emit();
       return;
     }
+    // Before an action resolves, Cancel has the same full-turn movement rewind as
+    // Undo Movement: return to turn start, restore the whole movement budget, and keep
+    // the unit selected so another move or action can be chosen. With no movement to
+    // rewind, the individual action-mode handlers below simply return to selection.
+    if (this.canUndoMove()) {
+      this.undoMove();
+      return;
+    }
     if (this.mode === "awaitSpell") {
       this.spellArmed = false;
       this.spellAim = null;
@@ -4470,6 +4490,14 @@ export class BattleEngine {
     this.mode = "awaitOffHand";
     this.tip = "Toque no alvo.";
     sfxPlay.ui();
+  }
+
+  /** Shared by off-hand highlighting and target validation so both use identical reach. */
+  private offHandReach(unit: Unit): Unit {
+    const item = unit.offHandId ? EQUIPMENT[unit.offHandId] : null;
+    return item?.kind === "weapon"
+      ? { ...unit, minRange: item.minRange ?? 1, maxRange: item.maxRange ?? 1 }
+      : unit;
   }
 
   /** `kind`'s remaining casts for `u` this battle: a familiar casting its OWN spell (see
@@ -7996,8 +8024,7 @@ export class BattleEngine {
         // Same reach as commitOffHandAction: a dagger/katar reaches by its own range, not the
         // main-hand bow's (an archer's bow can't hit adjacent, so using it here made every
         // adjacent target read "Fora de alcance").
-        const offHandItem = selected.offHandId ? EQUIPMENT[selected.offHandId] : null;
-        const offHandReach = offHandItem?.kind === "weapon" ? { ...selected, minRange: offHandItem.minRange ?? 1, maxRange: offHandItem.maxRange ?? 1 } : selected;
+        const offHandReach = this.offHandReach(selected);
         if (canHitFrom(offHandReach, selected, here, this.tiles, this.cols, this.decorOverlay)) {
           this.commitOffHandAction(selected, here, { x: selected.x, y: selected.y });
           return;
@@ -8122,7 +8149,7 @@ export class BattleEngine {
   private commitOffHandAction(unit: Unit, foe: Unit, from: Point): void {
     const item = unit.offHandId ? EQUIPMENT[unit.offHandId] : null;
     // A dagger/katar reaches only as far as the off-hand weapon itself, not the main bow.
-    const reach = item?.kind === "weapon" ? { ...unit, minRange: item.minRange ?? 1, maxRange: item.maxRange ?? 1 } : unit;
+    const reach = this.offHandReach(unit);
     if (!item || !canHitFrom(reach, from, foe, this.tiles, this.cols, this.decorOverlay)) {
       this.mode = "awaitAction";
       this.tip = "Fora de alcance.";
@@ -8900,7 +8927,7 @@ export class BattleEngine {
       const rate = (moving ? 8.0 : 5.5) * (u.classId === "familiar2" ? n / 12 : 1);
       return Math.floor(u.bob * rate) % n;
     }
-    if (u.classId === "wardog" || u.classId === "swampBlueCalf") {
+    if (u.classId === "wardog" || u.classId === "swampBlueCalf" || u.classId === "bigBlueCalf") {
       const rate = moving ? 4.2 : 2.6;
       return Math.floor(u.bob * rate) % n;
     }
@@ -9088,7 +9115,7 @@ export class BattleEngine {
         breath: 0.02 + Math.sin(t * 1.6) * 0.02,
       };
     }
-    if (u.classId === "wardog" || u.classId === "swampBlueCalf") {
+    if (u.classId === "wardog" || u.classId === "swampBlueCalf" || u.classId === "bigBlueCalf") {
       return {
         bob: Math.sin(t * 2.2) * 1.15,
         sway: 0,
@@ -9952,7 +9979,7 @@ export class BattleEngine {
       }
     }
 
-    if (this.mode === "selected" || this.mode === "awaitAttack" || this.mode === "awaitAction") {
+    if (this.mode === "selected" || this.mode === "awaitAttack" || this.mode === "awaitAction" || this.mode === "awaitOffHand") {
       // Free roam reaches the whole floor; tinting all of it would just wash the map blue.
       if (this.mode === "selected" && !this.mission.explore) {
         // computeReachable always keeps the unit's starting cell so it can build paths out
@@ -9966,6 +9993,7 @@ export class BattleEngine {
         if (inWeb.length) push(inWeb, GRID_MOVE, false);
       }
       const selected = this.units.find((u) => u.id === this.selectedId);
+      const offHandReach = selected && this.mode === "awaitOffHand" ? this.offHandReach(selected) : null;
       const atkTiles: Point[] = [];
       for (const foe of this.units) {
         if (!foe.alive || foe.side === "player") continue;
@@ -9973,6 +10001,9 @@ export class BattleEngine {
         if ((this.mission.hub || this.mission.explore) && foe.side === "neutral") continue;
         if (this.mode === "selected" && this.attackFrom.has(foe.id)) atkTiles.push(...footprint(foe));
         if ((this.mode === "awaitAttack" || this.mode === "awaitAction") && selected && canHitFrom(selected, selected, foe, this.tiles, this.cols, this.decorOverlay)) {
+          atkTiles.push(...footprint(foe));
+        }
+        if (offHandReach && selected && this.targetable(foe) && canHitFrom(offHandReach, selected, foe, this.tiles, this.cols, this.decorOverlay)) {
           atkTiles.push(...footprint(foe));
         }
       }

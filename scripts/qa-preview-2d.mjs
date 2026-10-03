@@ -9,7 +9,7 @@ const mapStem = process.argv[2] ?? 'aldeia009';
 const prefix = process.argv[3] ?? 'preview2d';
 const baseUrl = 'http://localhost:8080';
 mkdirSync('screenshots/preview-2d', { recursive: true });
-const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1500, height: 1100 } });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));

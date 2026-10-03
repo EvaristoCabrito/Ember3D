@@ -4,11 +4,12 @@
 export interface DevGfxSettings {
   /** The sun's real cast shadows (units + props) at all — off gives a clean A/B baseline. */
   realShadows: boolean;
+  /** Directional shadow depth-map edge; point lights use a quarter of this. */
+  shadowResolution: 1024 | 2048 | 4096;
   /** Widens the PCF filter radius so shadow edges soften instead of stair-stepping.
    * (PCFSoftShadowMap was removed in this Three.js version — radius is the knob now.) */
   softShadows: boolean;
-  /** A short, darken-only grounding decal at every unit's and prop's opaque base, independent of
-   * the shadow map (see CONTACT_SHADOW_* in ThreeBattleRenderer.ts). */
+  /** Ground receiver shadow comparison closes the bias gap using the full caster silhouette. */
   contactShadows: boolean;
   /** Environmental ambient occlusion in the terrain's lighting, from props and raised/
    * blocking terrain (see ThreeGroundAO.ts). */
@@ -32,7 +33,7 @@ export interface DevGfxSettings {
 }
 
 const KEY = "emberash:devGfx";
-const DEFAULTS: DevGfxSettings = { realShadows: true, softShadows: true, contactShadows: true, ambientOcclusion: true, fogOfWar: true, fogDebug: false, localLights: true, sunAzimuth: 53.13, sunElevation: 45, moonAzimuth: 140, moonElevation: 35 };
+const DEFAULTS: DevGfxSettings = { realShadows: true, shadowResolution: 4096, softShadows: false, contactShadows: true, ambientOcclusion: true, fogOfWar: true, fogDebug: false, localLights: true, sunAzimuth: 53.13, sunElevation: 45, moonAzimuth: 140, moonElevation: 35 };
 
 function load(): DevGfxSettings {
   try {

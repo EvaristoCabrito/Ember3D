@@ -262,6 +262,39 @@ const NEW_DECOR_2026: Record<string, DecorationDef> = {
   "light-wall-torch": { id: "light-wall-torch", name: "Tocha de Parede", footprint: DECO_ONE },
   "light-brazier-bowl": { id: "light-brazier-bowl", name: "Braseiro II", footprint: DECO_ONE },
   "light-fireplace": { id: "light-fireplace", name: "Lareira", footprint: DECO_ONE, artScale: 2, unitLayer: "behind" },
+  "inn-fireplace": { id: "inn-fireplace", name: "Lareira de Pedra da Estalagem", footprint: DECO_ONE, artScale: 2, unitLayer: "behind" },
+  "inn-herb-shelf": { id: "inn-herb-shelf", name: "Prateleira de Ervas e Jarras", footprint: DECO_ONE, artScale: 0.85, unitLayer: "behind" },
+  "inn-provisions-display": { id: "inn-provisions-display", name: "Mantimentos Pendentes da Estalagem", footprint: DECO_ONE, artScale: 0.9, unitLayer: "behind" },
+  // 2026-10-02 cave art drop: each prop is a separate alpha-cropped 2D decoration.
+  // 2026-10-02 forest art drop: preserve the supplied transparent cutouts as separate props.
+  "forest-mossy-stump": { id: "forest-mossy-stump", name: "Toco Musgoso com Raízes", footprint: DECO_ONE, heightScale: 0.84 },
+  "forest-amanitas": { id: "forest-amanitas", name: "Grupo de Amanitas", footprint: DECO_ONE, heightScale: 1.08 },
+  "forest-mossy-trunk": { id: "forest-mossy-trunk", name: "Tronco Caído Musgoso", footprint: DECO_ONE, heightScale: 0.68 },
+  "cave-stalagmites": { id: "cave-stalagmites", name: "Grupo de Estalagmites", footprint: DECO_ONE },
+  "cave-blue-crystals": { id: "cave-blue-crystals", name: "Cristais Azuis", footprint: DECO_ONE },
+  "cave-hanging-bat": { id: "cave-hanging-bat", name: "Morcego Pendurado", footprint: DECO_ONE, unitLayer: "behind", heightScale: 1.2 },
+  "cave-mossy-rocks": { id: "cave-mossy-rocks", name: "Rocha Coberta de Musgo", footprint: DECO_ONE },
+  "cave-bones": { id: "cave-bones", name: "Ossos e Crânio", footprint: DECO_ONE },
+  "cave-rock-pile": { id: "cave-rock-pile", name: "Monte de Pedras", footprint: DECO_ONE },
+  "cave-stalactite": { id: "cave-stalactite", name: "Estalactite", footprint: DECO_ONE, unitLayer: "behind", heightScale: 1.25 },
+  "cave-cracked-stone": { id: "cave-cracked-stone", name: "Pedra Rachada com Luz Azul", footprint: DECO_ONE },
+  "cave-amethyst-geode": { id: "cave-amethyst-geode", name: "Geodo de Ametista", footprint: DECO_ONE },
+  "cave-underground-pool": { id: "cave-underground-pool", name: "Poço Subterrâneo", footprint: DECO_ONE },
+  "cave-hanging-roots": { id: "cave-hanging-roots", name: "Raízes Suspensas", footprint: DECO_ONE, unitLayer: "behind", heightScale: 1.2 },
+  "cave-ammonite-fossil": { id: "cave-ammonite-fossil", name: "Fóssil de Amonite", footprint: DECO_ONE },
+  "cave-stone-rubble": { id: "cave-stone-rubble", name: "Entulho de Pedras", footprint: DECO_ONE },
+  "cave-boulder": { id: "cave-boulder", name: "Pedregulho", footprint: DECO_ONE },
+  "cave-glowing-mushrooms": { id: "cave-glowing-mushrooms", name: "Cogumelos Luminescentes", footprint: DECO_ONE },
+  "cave-carved-stone-block": { id: "cave-carved-stone-block", name: "Bloco de Pedra Entalhado", footprint: DECO_ONE },
+  "cave-barred-stone-opening": { id: "cave-barred-stone-opening", name: "Abertura de Pedra Gradeada", footprint: DECO_ONE, unitLayer: "behind" },
+  "cave-rusty-lantern": { id: "cave-rusty-lantern", name: "Lanterna Enferrujada", footprint: DECO_ONE },
+  "cave-webbed-chest": { id: "cave-webbed-chest", name: "Baú Coberto por Teias", footprint: DECO_ONE },
+  "cave-wall-ring": { id: "cave-wall-ring", name: "Argola de Ferro na Pedra", footprint: DECO_ONE, unitLayer: "behind" },
+  "cave-candle-stand": { id: "cave-candle-stand", name: "Candelabro de Velas", footprint: DECO_ONE },
+  "cave-spiked-gate": { id: "cave-spiked-gate", name: "Grade com Pontas", footprint: DECO_ONE, unitLayer: "behind" },
+  "cave-wall-brazier": { id: "cave-wall-brazier", name: "Braseiro de Parede", footprint: DECO_ONE, unitLayer: "behind" },
+  "cave-hanging-chains": { id: "cave-hanging-chains", name: "Correntes Suspensas", footprint: DECO_ONE, unitLayer: "behind", heightScale: 1.2 },
+  "cave-rusty-keys": { id: "cave-rusty-keys", name: "Chaves Enferrujadas", footprint: DECO_ONE },
   Brazier3: { id: "Brazier3", name: "Braseiro III", footprint: DECO_ONE, artScale: 1.05 },
   Chandelier: { id: "Chandelier", name: "Lustre", footprint: DECO_ONE, artScale: 1.1, heightScale: 1.25, unitLayer: "behind", noShadow: true },
   "city-root-shrine": { id: "city-root-shrine", name: "Santuário Coberto de Raízes", footprint: DECO_PAIR },
@@ -424,6 +457,13 @@ export const DEADWOODS_DECOR_IDS = new Set([
   "wilds-birds-nest",
 ]);
 
+/** Supplied forest cutouts, grouped in their own editor section. */
+export const FOREST_DECOR_IDS = new Set([
+  "forest-mossy-stump",
+  "forest-amanitas",
+  "forest-mossy-trunk",
+]);
+
 // Multi-hex terrain props: rendered as one image over their whole footprint instead of
 // clipped per hex (see DecorationDef). Cropped from LargeHexes1-3.jpg.
 export const DECORATIONS: Record<string, DecorationDef> = {
@@ -438,6 +478,12 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "castle-3d-thick-ruined": { id: "castle-3d-thick-ruined", name: "Muralha espessa arruinada 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "wall", castleStyle: "ruined", thickWall: true, wallThicknessScale: 1.8, wallTexture: "/game/textures/walls/castle-thick.jpg" },
   "house-3d-vau": { id: "house-3d-vau", name: "Casa clássica do Vau 3D", footprint: DECO_BLOCK_5, model3d: "prop", propModel: "small-house" },
   "rocks-3d-outcrop": { id: "rocks-3d-outcrop", name: "Afloramento rochoso realista 3D", footprint: DECO_PAIR, model3d: "prop", propModel: "rocky-outcrop" },
+  "rocks-3d-grey-outcrop": { id: "rocks-3d-grey-outcrop", name: "Afloramento rochoso cinzento 3D II", footprint: DECO_PAIR, model3d: "prop", propModel: "grey-outcrop" },
+  "prop-3d-tavern-barrel": { id: "prop-3d-tavern-barrel", name: "Barril da taverna 3D", footprint: DECO_ONE, model3d: "prop", propModel: "tavern-barrel" },
+  "prop-3d-tavern-chair": { id: "prop-3d-tavern-chair", name: "Cadeira da taverna 3D", footprint: DECO_ONE, model3d: "prop", propModel: "tavern-chair" },
+  "prop-3d-tavern-candlestick": { id: "prop-3d-tavern-candlestick", name: "Castiçal de parede 3D", footprint: DECO_ONE, model3d: "prop", propModel: "tavern-candlestick" },
+  "prop-3d-tavern-mug": { id: "prop-3d-tavern-mug", name: "Caneca de metal 3D", footprint: DECO_ONE, model3d: "prop", propModel: "tavern-mug" },
+  "prop-3d-tavern-table": { id: "prop-3d-tavern-table", name: "Mesa redonda da taverna 3D", footprint: DECO_ONE, model3d: "prop", propModel: "tavern-table" },
   "tree-3d-broadleaf": { id: "tree-3d-broadleaf", name: "Árvore realista 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "tree", treeModel: "broadleaf" },
   "tree-3d-snowy-pine": { id: "tree-3d-snowy-pine", name: "Pinheiro nevado 3D", footprint: [{ dx: 0, dy: 0 }], model3d: "tree", treeModel: "snowy-pine" },
   // Wisp Forest dead trees in 3D (assets/blender/create_dead_trees.py), matching the 2D
@@ -621,7 +667,7 @@ export const SOLID_HOUSE_DECOR_IDS = new Set(["burning-hamlet", "gatehouse", "wa
 
 /** Rock props are solid decorations; their art must never replace the ground with column terrain. */
 export const SOLID_ROCK_DECOR_IDS = new Set([
-  "rocks-3d-outcrop", "spike-rocks", "rocky-outcrop", "boulder-pile", "twin-spires",
+  "rocks-3d-grey-outcrop", "rocks-3d-outcrop", "spike-rocks", "rocky-outcrop", "boulder-pile", "twin-spires",
   "large-boulder", "spike-rocks-2", "mossy-rocks", "mossy-boulder", "boulder-mound", "spike-crown",
 ]);
 
@@ -1432,6 +1478,24 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     size: 1,
     init: 6,
   },
+  // Big Blue Calf is a separate enemy class that shares the new calf art. Keep the
+  // older Swamp Blue Calf's identity, stats, water rules and existing spawns intact.
+  bigBlueCalf: {
+    id: "bigBlueCalf",
+    name: "Big Blue Calf",
+    role: "Fera",
+    hp: 22,
+    atk: 7,
+    mag: 0,
+    def: 3,
+    res: 2,
+    mov: 5,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "swamp-blue-calf",
+    size: 1,
+    init: 6,
+  },
   // Classes novas — nome, papel e arte ainda são provisórios (sprite reaproveita
   // um já existente até a arte definitiva chegar).
   assassin: {
@@ -2164,6 +2228,7 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   // of 1 rounds back to 1.
   ancientGolem: { hp: 7, atk: 3, mag: 0, def: 3, res: 1 },
   swampBlueCalf: { hp: 3, atk: 2, mag: 0, def: 1, res: 1 },
+  bigBlueCalf: { hp: 3, atk: 2, mag: 0, def: 1, res: 1 },
   assassin: { hp: 3, atk: 3, mag: 0, def: 1, res: 1 },
   rogue: { hp: 3, atk: 2, mag: 0, def: 1, res: 1 },
   lancer: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
@@ -3329,6 +3394,7 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   birolhoLegs: 9,
   birolhoLegs2: 9,
   swampBlueCalf: 2,
+  bigBlueCalf: 2,
   cultist: 4,
   cultistV2: 4,
   captain: 6,

@@ -1,3 +1,4 @@
+import { graphicsDpr } from "./graphicsQuality";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { DECORATIONS, placedFootprint, TERRAIN, TILE_CHAR } from "./data";
 import { tileVariantName } from "./assets";
@@ -226,7 +227,7 @@ export function MapPreviewCanvas({
     let lastFrame = performance.now();
 
     const draw = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = graphicsDpr();
       const w = Math.max(1, Math.floor(viewport.clientWidth));
       const h = Math.max(1, Math.floor(viewport.clientHeight));
       if (w <= 0 || h <= 0) return;
