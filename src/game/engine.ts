@@ -924,6 +924,9 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
       tier4:
         cls.id === "birolho" || cls.id === "birolho2" || cls.id === "birolho3" || cls.id === "birolhoLegs" || cls.id === "birolhoLegs2"
           ? birolhoSpellUses(level).causticVenom
+          // Undead Ox: 2 Veneno Cáustico per battle (it joins runAiFor's birolho branch).
+          : cls.id === "undeadOx"
+            ? 2
           : remainingTier(cls.id, 4, "tier4", level, side, roster, spawn.name),
       tier5: remainingTier(cls.id, 5, "tier5", level, side, roster, spawn.name),
       tier6: remainingTier(cls.id, 6, "tier6", level, side, roster, spawn.name),
@@ -3195,7 +3198,7 @@ export class BattleEngine {
 
   /** A wardog's bite (20%) or a zombie's hit (30%) can inflict disease on a surviving target. */
   private maybeInflictDisease(actor: Unit, target: Unit): void {
-    const chance = actor.classId === "wardog" || actor.classId === "wardog2" ? DISEASE.biteChance : (actor.classId === "zombie" || actor.classId === "zombie2") ? DISEASE.zombieChance : 0;
+    const chance = actor.classId === "wardog" || actor.classId === "wardog2" ? DISEASE.biteChance : (actor.classId === "zombie" || actor.classId === "zombie2" || actor.classId === "undeadOx") ? DISEASE.zombieChance : 0;
     if (chance <= 0 || !target.alive || target.diseased) return;
     if (this.rng() >= chance) return;
     target.diseased = true;
@@ -3227,6 +3230,8 @@ export class BattleEngine {
   private markDead(u: Unit): void {
     u.alive = false;
     u.diedAt = this.time;
+    // About one death in three plays the alternate death sheet, for sprites that have one.
+    u.deathAlt = !!this.art.deaths2[u.sprite] && Math.random() < 1 / 3;
     sfxPlay.death();
     this.pushLog(`${u.name} foi derrotado.`);
     if (u.side === "enemy" && u.guaranteedDrop) {
@@ -7561,7 +7566,8 @@ export class BattleEngine {
     }
 
     // Birolho (and Birolho2) — Relâmpago outranks Caustic Venom outranks Choque outranks Magic Missile.
-    if ((next.classId === "birolho" || next.classId === "birolho2" || next.classId === "birolho3" || next.classId === "birolhoLegs" || next.classId === "birolhoLegs2") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.spells.tier4 > 0 || next.shockCharges > 0)) {
+    // The Undead Ox shares this branch for its tier4 Caustic Venom only (no tier1/tier2/Choque).
+    if ((next.classId === "birolho" || next.classId === "birolho2" || next.classId === "birolho3" || next.classId === "birolhoLegs" || next.classId === "birolhoLegs2" || next.classId === "undeadOx") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.spells.tier4 > 0 || next.shockCharges > 0)) {
       if (next.spells.tier2 > 0) {
         let bestBolt: { foe: Unit; from: Point; score: number } | null = null;
         for (const cell of reach.values()) {
@@ -9224,7 +9230,7 @@ export class BattleEngine {
     const hitPool = this.art.hits[u.sprite];
     const sinceHit = hitPool && u.hitAt != null ? this.time - u.hitAt : Infinity;
     const hitPlaying = sinceHit < HIT_ANIM_SECONDS && (!u.alive || (atk == null && !moving));
-    const deathPool = !hitPlaying && !u.alive && u.diedAt != null ? this.art.deaths[u.sprite] : undefined;
+    const deathPool = !hitPlaying && !u.alive && u.diedAt != null ? ((u.deathAlt ? this.art.deaths2[u.sprite] : undefined) ?? this.art.deaths[u.sprite]) : undefined;
     const deathT = u.diedAt != null ? this.time - u.diedAt - (hitPool ? HIT_ANIM_SECONDS : 0) : 0;
     const frames = hitPlaying ? hitPool : deathPool ?? (atk != null ? (casting ? (castPool ?? atkPool) : countering ? (counterPool ?? atkPool) : atkPool) : walk ?? idle ?? this.art.sprites[u.sprite]);
     const n = frames?.length ?? 0;
@@ -9307,6 +9313,12 @@ export class BattleEngine {
     // (~84% of the size-2 box, same as WarDog 2), with the canvas's own aspect kept.
     const zombieDogHeightScale = u.sprite === "zombieDog" ? 1.051 : 1;
     const zombieDogWidthScale = u.sprite === "zombieDog" ? 1.33 : 1;
+    // Its hit-*.png and new death-*.png are cut on a wider 528x321 canvas (same height, same
+    // figure scale) so the tail swing fits — widen the box by the same ratio (528/437) for
+    // those two sheets only, so the dog stays exactly its usual size. death2-*.png (the old
+    // cut) keeps the regular 437x321 canvas.
+    const zombieDogWideSheet = u.sprite === "zombieDog" && (hitPlaying || (!!deathPool && deathPool === this.art.deaths[u.sprite]));
+    const zombieDogWideSheetScale = zombieDogWideSheet ? 528 / 437 : 1;
     // Rocco The Bird (639x360 canvas, figure ~79% of its height): troll2's on-screen figure
     // height (same Type 7 body), with the wide canvas's own aspect kept.
     const roccoHeightScale = u.sprite === "RoccoTheBird" ? 1.22 : 1;
@@ -9322,6 +9334,11 @@ export class BattleEngine {
     // height stays the human box, width follows the canvas aspect (1.333 / 0.782) so the wide
     // lunge frames aren't squeezed. Idle, walk and ATT share this one canvas, so nothing shrinks.
     const zombieWidthScale = u.sprite === "zombie" ? 1.705 : u.sprite === "zombie2" ? 1.085 : 1;
+    // Undead Ox (640x404 canvas, standing figure ~81% of its height, 44px headroom for the
+    // hit rear-up and the cast's venom orb): ~2.15 cells tall, a head taller than a human and
+    // bigger than WarDog 2, with the canvas's own aspect kept (1.584).
+    const undeadOxHeightScale = u.sprite === "undeadOx" ? 1.283 : 1;
+    const undeadOxWidthScale = u.sprite === "undeadOx" ? 1.889 : 1;
     const h =
       cell *
       (s >= 4 ? 3.35 : s === 2 ? 1.72 : boss ? 1.44 : 1.42) *
@@ -9339,6 +9356,7 @@ export class BattleEngine {
       troll2HeightScale *
       wardog2HeightScale *
       zombieDogHeightScale *
+      undeadOxHeightScale *
       roccoHeightScale *
       familiar4HeightScale *
       kaelFinalAtkScale *
@@ -9365,10 +9383,12 @@ export class BattleEngine {
       wardog2WidthScale *
       wraithWidthScale *
       zombieDogWidthScale *
+      zombieDogWideSheetScale *
       roccoWidthScale *
       familiar4WidthScale *
       wolfFinalWidthScale *
       zombieWidthScale *
+      undeadOxWidthScale *
       kaelFinalAtkScale *
       neeraAtkScale *
       neeraCastScale;

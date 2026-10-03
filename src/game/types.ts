@@ -56,6 +56,7 @@ export type ClassId = import("./encounter-npcs").EncounterNpcId
   | "wardog2"
   | "emberedWraith"
   | "zombie" | "zombie2"
+  | "undeadOx"
   | "troll"
   | "troll2"
   | "roccoTheBird"
@@ -127,7 +128,7 @@ export type ClassId = import("./encounter-npcs").EncounterNpcId
   // Conjurer tier 5 (Invocar Cão Zumbi): a summoned zombie dog — see SUMMON_ZOMBIE_DOG.
   | "zombieDog"
   | "travelingMerchant";
-export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "wardog2" | "EmberedWraith" | "zombie" | "zombie2" | "troll" | "troll2" | "RoccoTheBird" | "morvenian-wolf" | "mordavian-wolf" | "mordavian-wolf-final" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "familiar4" | "zombieDog" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
+export type SpriteId = "defaultWarrior" | "neera" | "voss" | "salazar" | "aldric" | "malrec" | "defaultLancer" | "soldier" | "brigand" | "captain" | "sorcerer" | "horror" | "Asherah" | "pikeman" | "wardog" | "wardog2" | "EmberedWraith" | "zombie" | "zombie2" | "undeadOx" | "troll" | "troll2" | "RoccoTheBird" | "morvenian-wolf" | "mordavian-wolf" | "mordavian-wolf-final" | "punisher" | "theButcher" | "birolho" | "birolho2" | "birolho3" | "BirolhoLegs" | "BirolhoLegs2" | "familiar" | "familiar2" | "familiar3" | "familiar4" | "zombieDog" | "swamp-blue-calf" | "ancient-golem" | "lancer" | "sandoval" | "kaelFinal" | "kaelEarly" | "conjurer" | "cultist-v2"
   | import("./encounter-npcs").EncounterNpcId
   // Generic-enemy "alter" sprites, split off so a plain Archer/Mage/Healer enemy (and their
   // own promotions) never renders as literally the same SpriteId as Neera/Voss/Salazar the
@@ -696,6 +697,9 @@ export interface Unit {
   /** Engine time (BattleEngine.time) at which this unit died — drives its death sheet (see
    * GameArt.deaths) and holds off the fade-out until that sheet has played. */
   diedAt?: number;
+  /** Rolled at death: plays the alternate death sheet (GameArt.deaths2) instead, for the
+   * sprites that have one. */
+  deathAlt?: boolean;
   /** Engine time at which this unit last took damage — drives its hit-reaction sheet (see
    * GameArt.hits). */
   hitAt?: number;
@@ -1087,6 +1091,9 @@ export interface GameArt {
    * holds the last frame for a moment, then the unit fades out as usual. Sprites without one
    * just fade out on death, exactly as before. */
   deaths: Partial<Record<SpriteId, HTMLImageElement[]>>;
+  /** Alternate death sheet (death2-*.png), played instead of `deaths` about one death in
+   * three (Unit.deathAlt), for variety. */
+  deaths2: Partial<Record<SpriteId, HTMLImageElement[]>>;
   /** Hit-reaction sheet (hit-*.png), for the sprites that have one: plays once whenever the
    * unit takes damage, unless it is attacking or walking at that moment. On a killing blow it
    * plays first and the death sheet follows. Sprites without one just flash, as before. */

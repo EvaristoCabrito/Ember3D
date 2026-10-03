@@ -1410,6 +1410,26 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     size: 1,
     init: 2,
   },
+  // Undead Ox: ~2.5x the Zombie, Type 3 body like the War Hound. Its hit sickens like a
+  // zombie's (DISEASE.zombieChance) and it spits Veneno Cáustico twice per battle (tier4,
+  // runAiFor's birolho branch). Sheets cut from reference video (sprites/undeadOx/README.md).
+  undeadOx: {
+    id: "undeadOx",
+    name: "Boi Morto-vivo",
+    role: "Morto-vivo",
+    hp: 95,
+    atk: 20,
+    mag: 10,
+    def: 7,
+    res: 3,
+    mov: 4,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "undeadOx",
+    size: 2,
+    footprintOffsets: FOOTPRINT_TYPE_3,
+    init: 3,
+  },
   troll: {
     id: "troll",
     name: "Troll da caverna",
@@ -2203,6 +2223,8 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   wardog2: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
   zombie: { hp: 4, atk: 2, mag: 0, def: 1, res: 1 },
   zombie2: { hp: 4, atk: 2, mag: 0, def: 1, res: 1 },
+  // ~2.5x the Zombie's growth.
+  undeadOx: { hp: 10, atk: 5, mag: 2, def: 3, res: 2 },
   // Twice the Zombie's growth, MAG growing with ATK.
   emberedWraith: { hp: 8, atk: 4, mag: 4, def: 2, res: 2 },
   morvenianWolf: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
@@ -3381,6 +3403,7 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   wardog2: 2,
   zombie: 3,
   zombie2: 3,
+  undeadOx: 8,
   emberedWraith: 6,
   morvenianWolf: 3,
   mordavianWolf: 5,
