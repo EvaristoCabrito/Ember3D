@@ -2771,6 +2771,176 @@
         "x": 30,
         "y": 13,
         "targetMapId": "mordavian-woods-floor-1"
+      },
+      {
+        "id": "tree-3d-dead-oak",
+        "x": 23,
+        "y": 21
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 25,
+        "y": 6
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 23,
+        "y": 3
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 16,
+        "y": 20
+      },
+      {
+        "id": "tree-3d-dead-oak",
+        "x": 22,
+        "y": 5
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 5,
+        "y": 18
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 25,
+        "y": 19
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 18,
+        "y": 16
+      },
+      {
+        "id": "tree-3d-dead-oak",
+        "x": 17,
+        "y": 22
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 22,
+        "y": 3
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 22,
+        "y": 6
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 18,
+        "y": 15
+      },
+      {
+        "id": "tree-3d-dead-oak",
+        "x": 23,
+        "y": 8
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 28,
+        "y": 20
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 10,
+        "y": 17
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 26,
+        "y": 19
+      },
+      {
+        "id": "tree-3d-dead-oak",
+        "x": 15,
+        "y": 21
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 13,
+        "y": 15
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 16,
+        "y": 18
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 4,
+        "y": 3
+      },
+      {
+        "id": "tree-3d-dead-oak",
+        "x": 11,
+        "y": 17
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 30,
+        "y": 21
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 22,
+        "y": 18
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 29,
+        "y": 18
+      },
+      {
+        "id": "tree-3d-dead-oak",
+        "x": 22,
+        "y": 9
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 26,
+        "y": 20
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 14,
+        "y": 5
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 26,
+        "y": 21
+      },
+      {
+        "id": "tree-3d-dead-oak",
+        "x": 17,
+        "y": 5
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 11,
+        "y": 14
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 15,
+        "y": 3
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 10,
+        "y": 20
+      },
+      {
+        "id": "tree-3d-dead-oak",
+        "x": 6,
+        "y": 16
+      },
+      {
+        "id": "tree-3d-broadleaf",
+        "x": 4,
+        "y": 19
       }
     ],
     "playerSpawns": [

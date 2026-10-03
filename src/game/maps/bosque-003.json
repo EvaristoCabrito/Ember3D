@@ -6,7 +6,7 @@
     "index": 1,
     "title": "Bosque Morto",
     "place": "Troncos secos",
-    "briefing": "As árvores não têm folhas há duas estações. O bosque aperta o passo e esconde besteiros. No charco fareja um Swamp Blue Calf. Não deixem Kael sozinho na frente.",
+    "briefing": "As árvores não têm folhas há duas estações. O bosque aperta o passo e esconde besteiros. No charco fareja um Cobalt Blue Deer. Não deixem Kael sozinho na frente.",
     "objective": "Derrote todos os inimigos",
     "win": "rout",
     "hub": false,
@@ -1020,14 +1020,14 @@
         "level": 1
       },
       {
-        "name": "Swamp Blue Calf",
+        "name": "Cobalt Blue Deer",
         "classId": "swampBlueCalf",
         "x": 12,
         "y": 4,
         "level": 1
       },
       {
-        "name": "Swamp Blue Calf",
+        "name": "Cobalt Blue Deer",
         "classId": "swampBlueCalf",
         "x": 16,
         "y": 8,

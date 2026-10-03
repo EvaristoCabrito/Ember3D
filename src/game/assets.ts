@@ -141,7 +141,7 @@ export function portraitFor(sprite: SpriteId): { src: string; framed: boolean; p
 }
 
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
-const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "minor-horror-001", "Asherah", "pikeman", "wardog", "wardog2", "EmberedWraith", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombieDog", "zombie", "zombie2", "undeadOx", "swamp-blue-calf", "big-blue-ox-002", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman", "travelingMerchant"];
+const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "minor-horror-001", "Asherah", "pikeman", "wardog", "wardog2", "EmberedWraith", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombieDog", "zombie", "zombie2", "undeadOx", "swamp-blue-calf", "cobalt-blue-deer", "big-blue-ox-002", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman", "travelingMerchant"];
 
 SPRITES.push(...ENCOUNTER_NPC_IDS);
 
@@ -268,9 +268,10 @@ function deriveAlphaFromBlack(img: HTMLImageElement): HTMLCanvasElement {
 const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "minor-horror-001": { n: 36, bust: "?v=minor-horror-003" },
   "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
-  // Big Blue Calf (swampBlueCalf) — right-facing frames cut from the user's video.
+  // Legacy Calf (swampBlueCalf) — right-facing frames cut from the user's video.
   // The renderer mirrors this pool for the opposite direction.
   "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
+  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-001" },
   // The generic/default warrior look (CLASSES.swordsman's own sprite), its own distinct
   // on-disk cut (kael-v2 — an old internal folder name, kept as-is on disk) — the MC
   // himself is a different unit entirely and plays as kaelFinal instead.
@@ -363,6 +364,7 @@ const CAST_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   zombieDog: { n: 36, bust: "?v=f36" },
   // Undead Ox: green rib-glow and breath, played for its Veneno Cáustico.
   undeadOx: { n: 36, bust: "?v=ox-36" },
+  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-001" },
   // Familiar 3's spellcasting windup (cast-*.png) — plays for its Fireball cast only
   // (attackPose falls back to `attacks` for a plain melee swing); see ATTACK_FRAMES/
   // ATTACK2_FRAMES above for its two melee attack cuts.
@@ -400,6 +402,7 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "minor-horror-001": { n: 36, bust: "?v=minor-horror-003" },
   "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
+  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-001" },
   familiar: { n: 8, bust: "?v=6" },
   // Right-facing cut; see the dedicated walksLeft.familiar2 load below for its own
   // authored left-facing cut (real distinct footage, not the CSS mirror every other
@@ -483,6 +486,7 @@ const DEATH_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "minor-horror-001": { n: 36, bust: "?v=minor-horror-003" },
   "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
+  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-001" },
   "mordavian-wolf-final": { n: 32, bust: "" },
   wardog2: { n: 36, bust: "?v=f36" },
   EmberedWraith: { n: 36, bust: "?v=f36" },
@@ -558,7 +562,7 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
   // The Butcher, Cultist V2, Familiar 2 and Familiar 3 each have their own authored
   // left-facing walk cut (same frame count as their right-facing one) but no dedicated
   // left-facing attack cut — their attack keeps mirroring the right-facing pool.
-  if (walk && (id === "theButcher" || id === "cultist-v2" || id === "familiar2" || id === "familiar3")) put("walksLeft", cut(walk.n, (i) => `move-left-${i}`, walk.bust));
+  if (walk && (id === "theButcher" || id === "cultist-v2" || id === "familiar2" || id === "familiar3" || id === "cobalt-blue-deer")) put("walksLeft", cut(walk.n, (i) => `move-left-${i}`, walk.bust));
   // Mordavian Puppy's WALK LEFT row has 7 frames vs its right-facing row's 6.
   if (id === "morvenian-wolf") put("walksLeft", cut(7, (i) => `move-left-${i}`, ""));
   // Malrec's sliced move-left-*.png frames are deliberately unused: the render loop's usual

@@ -3085,6 +3085,46 @@
         "id": "locked-chest",
         "x": 28,
         "y": 8
+      },
+      {
+        "id": "dungeon-ossuary",
+        "x": 8,
+        "y": 6
+      },
+      {
+        "id": "wilds-brazier-tripod",
+        "x": 17,
+        "y": 5
+      },
+      {
+        "id": "rune-stone",
+        "x": 27,
+        "y": 7
+      },
+      {
+        "id": "wilds-candle-menhir",
+        "x": 7,
+        "y": 20
+      },
+      {
+        "id": "dungeon-ossuary",
+        "x": 18,
+        "y": 21
+      },
+      {
+        "id": "wilds-brazier-tripod",
+        "x": 29,
+        "y": 20
+      },
+      {
+        "id": "mossy-rocks",
+        "x": 13,
+        "y": 9
+      },
+      {
+        "id": "mossy-rocks",
+        "x": 23,
+        "y": 17
       }
     ],
     "playerSpawns": [

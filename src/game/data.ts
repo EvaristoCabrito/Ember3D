@@ -1511,8 +1511,8 @@ export const CLASSES: Record<ClassId, ClassDef> = {
   },
   swampBlueCalf: {
     id: "swampBlueCalf",
-    name: "Swamp Blue Calf",
-    role: "Profano",
+    name: "Cobalt Blue Deer",
+    role: "Fera",
     hp: 22,
     atk: 7,
     mag: 0,
@@ -1521,12 +1521,12 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     mov: 5,
     minRange: 1,
     maxRange: 1,
-    sprite: "swamp-blue-calf",
+    sprite: "cobalt-blue-deer",
     size: 1,
     init: 6,
   },
   // Big Blue Ox has its own preserved animation set. Keep the
-  // older Swamp Blue Calf's identity, stats, water rules and existing spawns intact.
+  // original class id, stats, water rules and existing spawns intact.
   bigBlueCalf: {
     id: "bigBlueCalf",
     name: "Big Blue Ox",
@@ -4795,7 +4795,7 @@ const RAW_MISSIONS: Mission[] = [
     title: "Bosque Morto",
     place: "Troncos secos",
     briefing:
-      "As árvores não têm folhas há duas estações. O bosque aperta o passo e esconde besteiros. No charco fareja um Swamp Blue Calf. Não deixem Kael sozinho na frente.",
+      "As árvores não têm folhas há duas estações. O bosque aperta o passo e esconde besteiros. No charco fareja um Cobalt Blue Deer. Não deixem Kael sozinho na frente.",
     objective: "Derrote todos os inimigos",
     win: "rout",
     cols: 9,
@@ -4820,8 +4820,8 @@ const RAW_MISSIONS: Mission[] = [
       { name: "Soldado", classId: "soldier", x: 7, y: 0 },
       { name: "Besteiro", classId: "brigand", x: 4, y: 1 },
       { name: "Besteiro", classId: "brigand", x: 2, y: 2 },
-      { name: "Swamp Blue Calf", classId: "swampBlueCalf", x: 6, y: 2 },
-      { name: "Swamp Blue Calf", classId: "swampBlueCalf", x: 8, y: 4 },
+      { name: "Cobalt Blue Deer", classId: "swampBlueCalf", x: 6, y: 2 },
+      { name: "Cobalt Blue Deer", classId: "swampBlueCalf", x: 8, y: 4 },
     ],
   },
   {

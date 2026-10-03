@@ -9608,7 +9608,7 @@ export class BattleEngine {
     const footY = s >= 4 ? tile * 0.9 : cell * 0.42;
     // Dedicated left/right walk+attack cuts already face the enemy, so flipping
     // them would put the spear/staff on the wrong side. Idle still flips.
-    const dirActionWalk = (u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval" || u.sprite === "theButcher" || u.sprite === "familiar2" || u.sprite === "familiar3" || u.sprite === "cultist-v2") && moving;
+    const dirActionWalk = (u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval" || u.sprite === "theButcher" || u.sprite === "familiar2" || u.sprite === "familiar3" || u.sprite === "cultist-v2" || u.sprite === "cobalt-blue-deer") && moving;
     const dirActionAttack = (u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval") && atk != null;
     const dirAction = dirActionWalk || dirActionAttack;
     // The familiar's art is drawn facing left by default — the opposite of every other
