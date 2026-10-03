@@ -5926,6 +5926,8 @@ export const WORLD_LOCATIONS: WorldLocation[] = [
   { id: "ruins", name: "Ruins", x: 77.94, y: 30, missionIds: ["muralha", "fortaleza", "templo", "cripta"] },
   // x/y is the RPG hex map's own hex(6,8) center, same treatment as vertente above.
   { id: "estalagem", name: "Inn", x: 51.96, y: 60, missionIds: ["estalagem"] },
+  // Inn hex(6,8) → E → E → NE: entrance at hex(8,7).
+  { id: "ashen-forest", name: "Ashen Forest Crossing", x: 73.61215932167728, y: 52.5, missionIds: ["ashen-forest-crossing"], openAccess: true },
   // x/y is the RPG hex map's own hex(1,11) center, same treatment as vertente above.
   { id: "dungeon", name: "The Sunken Ruins", x: 12.99, y: 82.5, missionIds: ["colina", "passagem", "profundezas"] },
   { id: "watchtower", name: "Watchtower", x: 24, y: 50, missionIds: ["bosque"] },
@@ -5936,6 +5938,14 @@ export const WORLD_LOCATIONS: WorldLocation[] = [
   { id: "vertente", name: "Fortified Temple Complex", x: 51.96, y: 15, missionIds: [] },
   { id: "village", name: "Village", x: 22, y: 25, missionIds: [] },
   { id: "farm", name: "Farm", x: 14, y: 38, missionIds: [] },
+  // Mordavian Woods is one northwest hex from the Farm (odd-r overworld coordinate 1,4).
+  { id: "mordavian-woods", name: "Mordavian Woods", x: 8.66, y: 30, missionIds: ["mordavian-woods"], encountersAllowed: true, openAccess: true, submaps: [
+    { missionId: "mordavian-woods-floor-1", floor: 1 },
+    { missionId: "mordavian-woods-floor-2", floor: 2 },
+    { missionId: "mordavian-woods-floor-3", floor: 3 },
+    { missionId: "mordavian-woods-floor-4", floor: 4 },
+    { missionId: "mordavian-woods-floor-5", floor: 5 },
+  ] },
   // x/y is the RPG hex map's own hex(6,6) center, same treatment as vertente above.
   { id: "misty-cave", name: "Misty Cave", x: 51.96, y: 45, missionIds: [] },
   { id: "cemetery", name: "Cemetery", x: 86, y: 52, missionIds: [] },

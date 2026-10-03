@@ -1,4 +1,6 @@
 import { ThreeTrees } from "./ThreeTrees";
+import { vauBackdropBounds } from "../../vauBackdrop";
+import { MagicMissileForeground } from "./MagicMissileForeground";
 import { BARRICADE_LIKE_DECOR } from "../../data";
 import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_ROUTE, GRID_MOVE, GRID_ENEMY_TARGET, GRID_ENEMY_GLOW } from "../../tacticalGrid";
 /** MILESTONE 1 (done) — terrain, ground/behind-layer decorations, and animated unit sprites all
@@ -651,6 +653,8 @@ export class ThreeBattleRenderer {
   private phantasmalForceVfx: PhantasmalForceVFX | null = null;
   private blessVfx: BlessVFX | null = null;
   private magicMissileV2Vfx: MagicMissileV2VFX | null = null;
+  private magicMissileForeground: MagicMissileForeground | null = null;
+  private magicMissileForegroundCanvas: HTMLCanvasElement | null = null;
   private webOfDreamsVfx: WebOfDreamsVFX | null = null;
   private readonly burningHandsVfx: BurningHandsV2VFX[] = [];
   private readonly pixelElementEmitters: { placement: ElementalFxPlacement; emitter: ProceduralElementEmitter }[] = [];
@@ -2558,14 +2562,9 @@ export class ThreeBattleRenderer {
       // O Vau's river occupies rows 5–6 (with shore rows 4 and 7). The supplied panorama's
       // water band sits at ~56% down the frame. Anchor those two centers together in world
       // space; unlike a decorative screen background, it now moves exactly with the map.
-      const boardWidth = tile * SQRT3 * this.engine.cols;
-      const width = Math.max(boardWidth * 1.35, cssW, cssH * imageRatio);
-      const height = width / imageRatio;
-      const mapRiverY = tile * (2.4 + 1.5 * 5.5 + 1);
-      const panoramaRiverY = 0.56;
-      const centerY = mapRiverY - (panoramaRiverY - 0.5) * height;
-      this.backdropMesh.position.set(boardWidth / 2, -centerY, -2);
-      this.backdropMesh.scale.set(width, height, 1);
+      const bounds = vauBackdropBounds(tile, this.engine.cols, cssW, cssH, imageRatio);
+      this.backdropMesh.position.set(bounds.left + bounds.width / 2, -bounds.top - bounds.height / 2, -2);
+      this.backdropMesh.scale.set(bounds.width, bounds.height, 1);
       return;
     }
     const viewRatio = cssW / Math.max(1, cssH);
@@ -3249,6 +3248,25 @@ export class ThreeBattleRenderer {
     if (requests.length) system.update(0);
   }
 
+  hasMagicMissileV2Vfx(): boolean {
+    return !!this.activeMagicMissileV2VfxRequestId || this.pendingMagicMissileV2VfxRequests.length > 0 || this.engine.magicMissileV2VfxRequests.length > 0;
+  }
+
+  attachMagicMissileForeground(canvas: HTMLCanvasElement): void {
+    this.magicMissileForeground?.dispose();
+    this.magicMissileForeground = null;
+    this.magicMissileForegroundCanvas = canvas;
+    this.magicMissileV2Vfx?.setRenderLayer(MagicMissileForeground.layer);
+  }
+
+  renderMagicMissileForeground(cssW: number, cssH: number): void {
+    const active = this.hasMagicMissileV2Vfx();
+    if (active && !this.magicMissileForeground && this.magicMissileForegroundCanvas) {
+      this.magicMissileForeground = new MagicMissileForeground(this.magicMissileForegroundCanvas, this.scene, this.camera);
+    }
+    this.magicMissileForeground?.render(this.scene, this.camera, cssW, cssH, this.renderer.getPixelRatio(), active, this.bloomPass);
+  }
+
   private syncMagicMissileV2Vfx(dt: number, tile: number): void {
     const system = this.magicMissileV2Vfx;
     if (!system) return;
@@ -3337,8 +3355,8 @@ export class ThreeBattleRenderer {
     const targetVisual = this.engine.unitVisual(target, tile);
     const targetGroundY = targetAnchor.worldY + targetVisual.footY;
     const targetCenterY = (targetVisual.footOffset - targetVisual.h * 0.48) * targetVisual.scaleY;
-    // Keep the spell just in front of both endpoint sprite planes. Depth testing stays enabled,
-    // so nearer scene geometry can still occlude the missile normally.
+    // Keep the spell close to the endpoint sprite planes for its world-space lighting.
+    // Its foreground materials render above character cards independently of scene depth.
     const missileDepth = Math.max(
       spriteDepthZ(casterGroundY, tile) + UNIT_DEPTH_TIE,
       spriteDepthZ(targetGroundY, tile) + UNIT_DEPTH_TIE,
@@ -3862,6 +3880,9 @@ export class ThreeBattleRenderer {
     this.blessVfx?.dispose();
     this.blessVfx = null;
     this.magicMissileV2Vfx?.dispose();
+    this.magicMissileForeground?.dispose();
+    this.magicMissileForeground = null;
+    this.magicMissileForegroundCanvas = null;
     this.magicMissileV2Vfx = null;
     this.webOfDreamsVfx?.dispose();
     this.webOfDreamsVfx = null;

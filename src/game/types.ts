@@ -618,6 +618,10 @@ export interface Mission {
 export interface WorldLocation {
   id: string;
   name: string;
+  /** Location and first mission ignore the campaign's previous-location prerequisite. */
+  openAccess?: boolean;
+  /** Travel encounters can also roll on this named location's hex. */
+  encountersAllowed?: boolean;
   /** Position on the world map image, in percent (0-100) of its width/height. */
   x: number;
   y: number;
@@ -1317,11 +1321,11 @@ export interface SaveData {
    * really is out there, whether or not it's crossed your path yet. Decrements by one every
    * travel day, 0 = normal odds. */
   alertStreak: number;
-  /** The road encounter's mission id from the last time one triggered — excluded from the
-   * very next pick (see roadEncounterIds/stepOverworld in overworld.ts) so the same fight
+  /** The travel encounter's mission id from the last time one triggered — excluded from the
+   * very next pick (see travelEncounterIds/stepOverworld in overworld.ts) so the same fight
    * never repeats twice in a row. null before the first one ever fires. */
   lastRoadEncounterId: string | null;
-  /** Road battle maps seen during this campaign; each saved slot keeps its own encounter history. */
+  /** Travel battle maps seen during this campaign; legacy name retained for existing saves. */
   roadEncountersSeen?: string[];
 }
 

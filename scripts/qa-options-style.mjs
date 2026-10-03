@@ -1,0 +1,42 @@
+import { createServer } from 'vite';
+import { chromium } from 'playwright';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const server = await createServer({ mode: 'development', server: { host: '127.0.0.1', port: 0 } });
+let browser;
+try {
+  await server.listen();
+  browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.route('**/__options-style', route => route.fulfill({ contentType: 'text/html', body: '<html><body><div id="app"></div></body></html>' }));
+  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__options-style`);
+  await page.evaluate(async () => {
+    const refresh = await import('/@react-refresh'); refresh.default.injectIntoGlobalHook(window);
+    window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => t => t;
+    window.__vite_plugin_react_preamble_installed__ = true;
+    await import('/src/styles.css');
+    const R = await import('/node_modules/.vite/deps/react.js');
+    const D = await import('/node_modules/.vite/deps/react-dom_client.js');
+    const { OptionsButton } = await import('/src/game/OptionsMenu.tsx');
+    (D.createRoot ?? D.default.createRoot)(document.getElementById('app')).render((R.createElement ?? R.default.createElement)(OptionsButton, { muted: false, onMute: () => {} }));
+  });
+  await page.getByRole('button', { name: 'Opções', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor();
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('dialog')).position === 'fixed');
+  await page.evaluate(() => document.fonts.ready);
+  fs.mkdirSync('artifacts/options', { recursive: true });
+  await page.screenshot({ path: 'artifacts/options/desktop.png' });
+  await page.getByRole('button', { name: 'Média', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: 'Média', exact: true }).getAttribute('aria-pressed'), 'true');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const fit = await dialog.evaluate(el => ({ width: el.getBoundingClientRect().width, overflow: el.scrollWidth > el.clientWidth }));
+  assert.ok(fit.width <= 390 && !fit.overflow, 'Dialog must fit mobile viewport');
+  await page.screenshot({ path: 'artifacts/options/mobile.png' });
+  await page.keyboard.press('Escape');
+  assert.equal(await dialog.isVisible(), false);
+  assert.deepEqual(errors, []);
+  console.log('Options: desktop/mobile layout, quality selection, Escape and runtime verified.');
+} finally { await browser?.close(); await server.close(); }

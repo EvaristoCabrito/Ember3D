@@ -6,6 +6,16 @@
     { "id": 3, "name": "Capítulo 3" }
   ],
   "missionGates": {
+    "mordavian-woods": {
+      "visible": {
+        "any": [
+          { "questCompleted": "mudo-medalhoes" },
+          { "questCompleted": "suspeito-watchtower-captive" },
+          { "questCompleted": "porao-caliches" },
+          { "questCompleted": "brue-birolho" }
+        ]
+      }
+    },
     "cemiterio-esquecidos": {
       "unlock": { "questActive": "brue-birolho" }
     },

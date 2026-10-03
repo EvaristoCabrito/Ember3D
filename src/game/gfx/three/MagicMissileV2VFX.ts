@@ -106,11 +106,24 @@ export class MagicMissileV2VFX {
       this.impactFractures.push(fractures); this.arcaneFilaments.push(filaments);
       const trail = this.createTrail(); this.trailMeshes.push(trail); this.root.add(trail);
     }
-    // Render missile pieces after character sprites, while preserving normal scene depth occlusion.
+    // This spell is explicitly a foreground effect, including trails and impact fragments.
+    // Render order alone cannot defeat the depth written by character cards.
     this.root.traverse((object) => {
       object.renderOrder = MAGIC_MISSILE_VFX_RENDER_ORDER;
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          material.depthTest = false;
+          material.depthWrite = false;
+          material.transparent = true;
+        }
+      }
     });
     this.root.visible = false; this.movingLight.visible = false; for (const light of this.impactLights) light.visible = false;
+  }
+
+  setRenderLayer(layer: number): void {
+    this.root.traverse(object => object.layers.set(layer));
   }
 
   setSettings(settings: MagicMissileV2Settings): void {

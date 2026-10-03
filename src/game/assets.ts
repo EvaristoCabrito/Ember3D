@@ -294,8 +294,8 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   familiar: { n: 8, bust: "?v=6" },
   // Familiar 2 — the crouch/lunge strike cut from reference video (see CAST_FRAMES and
   // WALK_FRAMES below for its casting and walk cuts).
-  familiar2: { n: 32, bust: "?v=familiar2-32" },
-  "ancient-golem": { n: 32, bust: "" },
+  familiar2: { n: 36, bust: "?v=familiar2-36" },
+  "ancient-golem": { n: 36, bust: "" },
   "morvenian-wolf": { n: 6, bust: "" },
   // Mordavian Wolf — the bigger cousin, sliced from its own reference sheet; the row
   // labeled "8 frames" only actually has 7 distinct poses (two columns share the "07" tag,
@@ -304,20 +304,20 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   birolho: { n: 4, bust: "" },
   birolho2: { n: 4, bust: "" },
   // BirolhoLegs has no ATT footage of its own — atk-*.png is a copy of its cast cut.
-  BirolhoLegs: { n: 32, bust: "" },
-  BirolhoLegs2: { n: 32, bust: "" },
-  troll2: { n: 32, bust: "" },
-  RoccoTheBird: { n: 32, bust: "" },
-  EmberedWraith: { n: 32, bust: "" },
-  zombieDog: { n: 32, bust: "" },
-  wardog2: { n: 32, bust: "" },
+  BirolhoLegs: { n: 36, bust: "" },
+  BirolhoLegs2: { n: 36, bust: "" },
+  troll2: { n: 36, bust: "" },
+  RoccoTheBird: { n: 36, bust: "?v=f36" },
+  EmberedWraith: { n: 36, bust: "?v=f36" },
+  zombieDog: { n: 36, bust: "?v=f36" },
+  wardog2: { n: 36, bust: "?v=f36" },
   // Zombie ATT: video 2 from 5 s, mirrored so the whole strike faces right (see its README).
   zombie: { n: 32, bust: "" },
   zombie2: { n: 10, bust: "" },
   // Undead Ox: head-down lunge from the Idle/ATT video (see its README).
-  undeadOx: { n: 32, bust: "" },
-  familiar4: { n: 32, bust: "" },
-  "mordavian-wolf-final": { n: 32, bust: "" },
+  undeadOx: { n: 36, bust: "?v=ox-36" },
+  familiar4: { n: 36, bust: "" },
+  "mordavian-wolf-final": { n: 36, bust: "" },
   punisher: { n: 4, bust: "" },
   // The Butcher — real 36-frame axe swing, a distinct unit/sprite from punisher/Carrasco
   // above (see WALK_FRAMES.theButcher below for the matching walk cut).
@@ -342,8 +342,8 @@ const CAST_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   birolho3: { n: 18, bust: "" },
   // 32 authored cast frames + 12 closing frames (the unfurl played in reverse) so he folds
   // his arms back in after the charge, the same way his ATT ends.
-  BirolhoLegs: { n: 44, bust: "" },
-  BirolhoLegs2: { n: 32, bust: "" },
+  BirolhoLegs: { n: 48, bust: "" },
+  BirolhoLegs2: { n: 36, bust: "" },
   // Neera's supplied Special cut plays for spell-type archer skills; physical attacks
   // stay on her dedicated ATT cut above.
   neera: { n: 36, bust: "" },
@@ -357,12 +357,12 @@ const CAST_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "cultist-v2": { n: 36, bust: "" },
   // Familiar 2's real rear-up/charge/beam-release windup — a distinct animation from its
   // ATT cut (the crouch/lunge), not a fallback.
-  familiar2: { n: 32, bust: "?v=familiar2-32" },
-  RoccoTheBird: { n: 32, bust: "" },
-  EmberedWraith: { n: 32, bust: "" },
-  zombieDog: { n: 32, bust: "" },
+  familiar2: { n: 36, bust: "?v=familiar2-36" },
+  RoccoTheBird: { n: 36, bust: "?v=f36" },
+  EmberedWraith: { n: 36, bust: "?v=f36" },
+  zombieDog: { n: 36, bust: "?v=f36" },
   // Undead Ox: green rib-glow and breath, played for its Veneno Cáustico.
-  undeadOx: { n: 32, bust: "" },
+  undeadOx: { n: 36, bust: "?v=ox-36" },
   // Familiar 3's spellcasting windup (cast-*.png) — plays for its Fireball cast only
   // (attackPose falls back to `attacks` for a plain melee swing); see ATTACK_FRAMES/
   // ATTACK2_FRAMES above for its two melee attack cuts.
@@ -404,14 +404,14 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // Right-facing cut; see the dedicated walksLeft.familiar2 load below for its own
   // authored left-facing cut (real distinct footage, not the CSS mirror every other
   // sprite absent from walksLeft falls back to).
-  familiar2: { n: 32, bust: "?v=familiar2-32" },
+  familiar2: { n: 36, bust: "?v=familiar2-36" },
   // Shot facing left, the same "opposite of the usual facing-1-as-drawn convention" case
   // as the familiar — see computeUnitVisual's neeraWalkReversed in engine.ts, which mirrors
   // this pool for rightward travel and draws it as-is for leftward travel (backwards from
   // every other sprite's own walk pool). A plain CSS mirror-on-left-only treatment (as if
   // this were right-facing footage) used to read as walking backwards in BOTH directions.
   neera: { n: 36, bust: "" },
-  "ancient-golem": { n: 32, bust: "" },
+  "ancient-golem": { n: 36, bust: "" },
   aldric: { n: 36, bust: "?v=aldric-final-001" },
   defaultLancer: { n: 6, bust: "?v=sheet2" },
   lancer: { n: 6, bust: "?v=3" },
@@ -430,27 +430,27 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   birolho3: { n: 12, bust: "" },
   // Walk Left footage only; move-*.png is its mirror, and the renderer mirrors this pool
   // for left-facing movement like any sprite with one authored direction.
-  BirolhoLegs: { n: 32, bust: "" },
-  BirolhoLegs2: { n: 32, bust: "" },
+  BirolhoLegs: { n: 36, bust: "" },
+  BirolhoLegs2: { n: 36, bust: "" },
   // Walk Left footage only; move-*.png is its mirror, same as BirolhoLegs above.
-  troll2: { n: 32, bust: "" },
-  RoccoTheBird: { n: 32, bust: "" },
-  EmberedWraith: { n: 32, bust: "" },
-  zombieDog: { n: 32, bust: "" },
+  troll2: { n: 36, bust: "" },
+  RoccoTheBird: { n: 36, bust: "?v=f36" },
+  EmberedWraith: { n: 36, bust: "?v=f36" },
+  zombieDog: { n: 36, bust: "?v=f36" },
   // Walk Left footage only; move-*.png is its mirror, same as troll2.
-  wardog2: { n: 32, bust: "" },
+  wardog2: { n: 36, bust: "?v=f36" },
   // Zombie: side-on walk from video 2 (2.05-3.9 s, two real strides), 32 frames like every
   // other long sheet; move-*.png is its mirror and the renderer mirrors it back for
   // left-facing movement.
   zombie: { n: 32, bust: "" },
   zombie2: { n: 12, bust: "" },
   // Undead Ox: right-facing walk; the renderer mirrors it for leftward travel.
-  undeadOx: { n: 32, bust: "" },
+  undeadOx: { n: 36, bust: "?v=ox-36" },
   // Right-facing dash (the video has no walk loop); the renderer mirrors it for leftward travel.
-  familiar4: { n: 32, bust: "" },
+  familiar4: { n: 36, bust: "" },
   // Mordavian Wolf Final: right-facing walk (mirrored from the Walk Left footage); the
   // renderer mirrors it back for leftward travel.
-  "mordavian-wolf-final": { n: 32, bust: "" },
+  "mordavian-wolf-final": { n: 36, bust: "" },
   // Right-facing cut; see the dedicated walksLeft.theButcher load below for its own
   // authored left-facing cut (not the CSS mirror every other sprite here falls back to).
   theButcher: { n: 36, bust: "?v=the-butcher-001" },
@@ -473,9 +473,9 @@ const DIR_LEFT: SpriteId[] = ["aldric", "defaultLancer", "lancer", "sandoval"];
 const HIT_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   "mordavian-wolf-final": { n: 32, bust: "" },
-  undeadOx: { n: 32, bust: "" },
+  undeadOx: { n: 36, bust: "?v=ox-36" },
   // 528x321, wider than its other sheets — see computeUnitVisual's zombieDogWideSheet.
-  zombieDog: { n: 32, bust: "?v=zd-hit-death-2" },
+  zombieDog: { n: 36, bust: "?v=zd-hit-death-36" },
 };
 
 // Death sheets: death-*.png, played once when the unit dies (see GameArt.deaths).
@@ -484,26 +484,26 @@ const DEATH_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
   "mordavian-wolf-final": { n: 32, bust: "" },
-  wardog2: { n: 32, bust: "" },
-  EmberedWraith: { n: 32, bust: "" },
+  wardog2: { n: 36, bust: "?v=f36" },
+  EmberedWraith: { n: 36, bust: "?v=f36" },
   // New 528x321 cut (same file names as the old one, hence the bust); the old cut lives on
   // as death2-*.png below.
-  zombieDog: { n: 32, bust: "?v=zd-hit-death-2" },
-  undeadOx: { n: 32, bust: "" },
+  zombieDog: { n: 36, bust: "?v=zd-hit-death-36" },
+  undeadOx: { n: 36, bust: "?v=ox-36" },
 };
 
 // Alternate death sheets: death2-*.png, played about one death in three (see GameArt.deaths2).
 const DEATH2_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
-  zombieDog: { n: 32, bust: "" },
+  zombieDog: { n: 36, bust: "?v=f36" },
 };
 
 // Up/down walk cycles (move-up-*.png / move-down-*.png), opt-in per sprite — see
 // GameArt.walksUp/walksDown. A sprite with only one of the two keeps its left/right walk
 // for the other direction.
 const WALK_UP_DOWN_FRAMES: Partial<Record<SpriteId, { up?: number; down?: number; bust: string }>> = {
-  BirolhoLegs: { up: 32, down: 32, bust: "" },
-  "mordavian-wolf-final": { up: 32, down: 32, bust: "" },
-  troll2: { up: 32, down: 32, bust: "" },
+  BirolhoLegs: { up: 36, down: 36, bust: "" },
+  "mordavian-wolf-final": { up: 36, down: 36, bust: "" },
+  troll2: { up: 36, down: 36, bust: "" },
 };
 
 // Cosmetic alternate walk (see GameArt.walks2): its own right- and left-facing cuts.
@@ -526,8 +526,8 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
       pools[key] = value;
     }));
   };
-  const n = id === "minor-horror-001" ? 36 : id === "big-blue-ox-002" ? 36 : id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" || id === "zombie" || id === "undeadOx" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" || id === "familiar2" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
-  const cacheBust = id === "minor-horror-001" ? "?v=minor-horror-003" : id === "big-blue-ox-002" ? "?v=big-blue-ox-ai-006" : id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : id === "familiar2" ? "?v=familiar2-32" : "";
+  const n = id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" ? 36 : id === "undeadOx" ? 36 : id === "minor-horror-001" ? 36 : id === "big-blue-ox-002" ? 36 : id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" || id === "familiar2" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "zombie" ? 32 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 36 : HERO_IDLE.has(id) ? 12 : 4;
+  const cacheBust = id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" ? "?v=f36" : id === "undeadOx" ? "?v=ox-36" : id === "minor-horror-001" ? "?v=minor-horror-003" : id === "big-blue-ox-002" ? "?v=big-blue-ox-ai-006" : id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : id === "familiar2" ? "?v=familiar2-36" : "";
   put("sprites", cut(n, (i) => (id === "conjurer" ? `talk-${i}` : `${i}`), cacheBust));
   const atk = ATTACK_FRAMES[id];
   if (atk) put("attacks", cut(atk.n, (i) => `atk-${i}`, atk.bust));

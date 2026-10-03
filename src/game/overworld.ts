@@ -1,6 +1,7 @@
 import { CHEST_LOOT, EMPTY_BAG, EQUIPMENT, heroRecruited, MAX_LEVEL, partyBagHasRoom, POTION_CARRY_MAX, POTIONS, statsFor, weightedLootPick, weightedPotionPick, WEAPONS, WORLD_LOCATIONS } from "./data";
 import { DAILY_HUNGER_COST, drainHunger } from "./hunger";
 import { missionsForLocation, RANDOM_ENCOUNTER_REGIONS } from "./mapstore";
+import ENCOUNTER_ZONES from "./random-encounter-zones.json";
 import { cubeRound, cubeToOddr, hexNeighbors, key, oddrToCube } from "./pathfinding";
 import type { ClassId, Point, SaveData, TierKey, WorldLocation } from "./types";
 
@@ -46,10 +47,14 @@ export const OVERWORLD_WEST_EDGE_COL = OVERWORLD_START_HEX.x;
 
 const STONE_BRIDGE_MISSION_IDS = WORLD_LOCATIONS.find((location) => location.id === "stonebridge")?.missionIds ?? [];
 
+export const ASHEN_FOREST_ENTRANCE = worldToHex(73.61215932167728, 52.5);
+export const ASHEN_FOREST_BLOCKED_HEX = { x: ASHEN_FOREST_ENTRANCE.x + 1, y: ASHEN_FOREST_ENTRANCE.y + 1 };
+
 /** The opening is deliberately linear: leave the western edge by the east hex, complete
  * the full Stone Bridge mission set, then the full three-way travel choice opens up. Kept in the logic layer so a
  * click or a future renderer cannot bypass the tutorial route. */
 export function canStepOverworld(save: SaveData, from: Point, to: Point, test = false): boolean {
+  if (to.x === ASHEN_FOREST_BLOCKED_HEX.x && to.y === ASHEN_FOREST_BLOCKED_HEX.y) return false;
   // Modo teste: full freedom to walk anywhere, same as every other test-mode override —
   // testing movement range/random encounters needs the whole grid open, not just the
   // linear tutorial route out of Stone Bridge.
@@ -170,6 +175,7 @@ const OVERWORLD_OFF_MAP_HEXES = new Set<string>([
 /** Finite logical board, independent of the map's rendered dimensions and zoom. */
 export function isOverworldCell(col: number, row: number): boolean {
   if (!Number.isInteger(col) || !Number.isInteger(row)) return false;
+  if (col === ASHEN_FOREST_BLOCKED_HEX.x && row === ASHEN_FOREST_BLOCKED_HEX.y) return false;
   if (OVERWORLD_OFF_MAP_HEXES.has(key(col, row))) return false;
   const p = hexToWorld(col, row);
   return col >= OVERWORLD_WEST_EDGE_COL && p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100;
@@ -201,8 +207,7 @@ export function locationExpired(location: WorldLocation, gameClock: number): boo
  * that day (see `fed` in stepOverworld). */
 const RECOVERY_PCT = 0.08;
 /** Chance a step onto open wild ground (no location) triggers a real battle, pulled from
- * the "road" random-encounter region — the only region mapped to actual overworld travel
- * so far (see RANDOM_ENCOUNTER_REGIONS in mapstore.ts). Checked before the flavor-text
+ * that hex's encounter region (road outside authored zones). Checked before the flavor-text
  * roll below, so the two can never both fire on the same step. */
 const BATTLE_ENCOUNTER_CHANCE = 0.15;
 /** Chance a step onto open wild ground (no location, and no battle rolled above) triggers
@@ -263,10 +268,21 @@ export interface OverworldEvent {
   missionId?: string;
 }
 
-/** Every encounter id assigned to the "road" region in random-encounters.json — the only
- * region wired to real overworld travel so far (see BATTLE_ENCOUNTER_CHANCE above). */
-function roadEncounterIds(): string[] {
-  return RANDOM_ENCOUNTER_REGIONS.find((region) => region.id === "road")?.encounterIds ?? [];
+/** A destination hex selects its authored biome pool. An exhausted regional pool never
+ * falls back to road encounters; outside any zone the existing road pool still applies. */
+export function travelEncounterIds(col: number, row: number): string[] {
+  // Explicitly prioritized routes (such as a road through woods) win overlaps; equal
+  // priorities use the later zone so authored additions can refine earlier boundaries.
+  let regionId = "road";
+  let priority = Number.NEGATIVE_INFINITY;
+  for (const zone of ENCOUNTER_ZONES.zones) {
+    const nextPriority = zone.priority ?? 0;
+    if (nextPriority >= priority && zone.hexes.some((hex) => hex.col === col && hex.row === row)) {
+      regionId = zone.regionId;
+      priority = nextPriority;
+    }
+  }
+  return RANDOM_ENCOUNTER_REGIONS.find((region) => region.id === regionId)?.encounterIds ?? [];
 }
 
 const ENCOUNTERS: { text: string; rationsDice?: number; ember?: number; goldLossDice?: number; lootBag?: boolean; losePotion?: boolean; loseLockpick?: boolean; diseaseChance?: number; alertDays?: number }[] = [
@@ -376,20 +392,21 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
     diseaseText = `${hero} contraiu uma doença na estrada (−10% nos atributos até ser curado).`;
   }
   const landedLocation = locationAt(locations, toCol, toRow);
-  // Every road map is one-time per campaign slot except the traveling merchant.
+  // Regional encounters share the existing per-slot history. Each is one-time except
+  // the traveling merchant; keep the saved field names compatible with older campaigns.
   const repeatableRoadEncounter = "random-encounter-11";
   const seenRoadEncounters = save.roadEncountersSeen ?? [];
-  const roadIds = roadEncounterIds().filter((id) => id === repeatableRoadEncounter || (!save.completed.includes(id) && !seenRoadEncounters.includes(id)));
+  const travelIds = travelEncounterIds(toCol, toRow).filter((id) => id === repeatableRoadEncounter || (!save.completed.includes(id) && !seenRoadEncounters.includes(id)));
   // Doubled, not just flat-boosted, while the "large tracks" alert is active — same relative
   // read on the odds regardless of what BATTLE_ENCOUNTER_CHANCE itself is tuned to later.
   const battleChance = save.alertStreak > 0 ? BATTLE_ENCOUNTER_CHANCE * 2 : BATTLE_ENCOUNTER_CHANCE;
   let alertStreak = Math.max(0, save.alertStreak - 1);
   let lastRoadEncounterId = save.lastRoadEncounterId;
   let roadEncountersSeen = seenRoadEncounters;
-  if (!event && !landedLocation && roadIds.length > 0 && Math.random() < battleChance) {
-    // Never the same road encounter twice in a row — drop last time's pick from the pool
+  if (!event && (!landedLocation || landedLocation.encountersAllowed) && travelIds.length > 0 && Math.random() < battleChance) {
+    // Never the same travel encounter twice in a row — drop last time's pick from the pool
     // unless it's the only one there is, in which case a repeat is unavoidable.
-    const pool = roadIds.length > 1 ? roadIds.filter((id) => id !== save.lastRoadEncounterId) : roadIds;
+    const pool = travelIds.length > 1 ? travelIds.filter((id) => id !== save.lastRoadEncounterId) : travelIds;
     const missionId = pool[Math.floor(Math.random() * pool.length)]!;
     lastRoadEncounterId = missionId;
     roadEncountersSeen = [...new Set([...roadEncountersSeen, missionId])];

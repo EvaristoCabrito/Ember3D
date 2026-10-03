@@ -355,6 +355,7 @@ function lockedMission(
   if (access && isGatedMission(id)) return access(id) !== "available";
 
   const location = locations.find((candidate) => candidate.missionIds.includes(id));
+  if (location?.openAccess) return false;
   if (!location) {
     const at = fallbackOrder.indexOf(id);
     return at < 0 || (at > 0 && !fallbackOrder.slice(0, at).every((previousId) => completed.includes(previousId)));
@@ -1779,6 +1780,13 @@ export function GameApp() {
     [readMapSave, writeMapSave],
   );
 
+  // A location with no visible missions stays off both map views until its gate reveals one.
+  // The overworld simulation still receives campaignLocations so hidden sites retain their
+  // authored hex encounter biome before the marker is discovered.
+  const mapVisibleLocations = campaignLocations.filter((location) =>
+    testMode || location.missionIds.length === 0 || location.missionIds.some((id) => missionAccessFor(id) !== "hidden"),
+  );
+
   return (
     <main className="relative h-dvh min-h-0 bg-bg text-fg overflow-hidden">
       <LoadingCurtain visible={loadingCurtain} />
@@ -1895,7 +1903,7 @@ export function GameApp() {
       {screen === "campaign" && (
         <CampaignScreen
           missions={campaignMissions.filter((mission) => testMode || missionAccessFor(mission.id) !== "hidden")}
-          locations={campaignLocations}
+          locations={mapVisibleLocations}
           missionAccessFor={missionAccessFor}
           completed={save.completed}
           test={testMode}
@@ -1907,7 +1915,7 @@ export function GameApp() {
 
       {screen === "worldMap" && (
         <WorldMapScreen
-          locations={campaignLocations}
+          locations={mapVisibleLocations}
           status={(loc) => locationStatus(loc, save.completed, testMode, campaignLocations, missionAccessFor)}
           missionStatus={(id) => missionStatus(id, save.completed, testMode, campaignLocations, campaignMissions.map((mission) => mission.id), missionAccessFor)}
           missionsOf={visibleMissionsOf}
@@ -1919,7 +1927,7 @@ export function GameApp() {
             setMutedUi((v) => !v);
           }}
           autoOpenLocationId={openLocationOnMap}
-          centerLocationId={campaignLocations.find((location) => location.missionIds.some((id) => !save.completed.includes(id)))?.id ?? null}
+          centerLocationId={mapVisibleLocations.find((location) => location.missionIds.some((id) => !save.completed.includes(id)))?.id ?? null}
           onBack={() => setScreen(testMode ? "testMenu" : "title")}
           onPick={openMission}
           onOpenList={() => setScreen("campaign")}
@@ -1928,7 +1936,7 @@ export function GameApp() {
 
       {screen === "overworldMap" && (
         <OverworldMapScreen
-          locations={campaignLocations}
+          locations={mapVisibleLocations}
           status={(loc) => locationStatus(loc, save.completed, testMode, campaignLocations, missionAccessFor)}
           missionStatus={(id) => missionStatus(id, save.completed, testMode, campaignLocations, campaignMissions.map((mission) => mission.id), missionAccessFor)}
           missionsOf={visibleMissionsOf}

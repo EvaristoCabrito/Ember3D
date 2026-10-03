@@ -11,6 +11,9 @@
   "estalagem": [
     "estalagem"
   ],
+  "ashen-forest": [
+    "ashen-forest-crossing"
+  ],
   "cemetery": [
     "cemiterio-esquecidos"
   ],
@@ -32,5 +35,8 @@
     "vertente",
     "portao",
     "deep-mist"
+  ],
+  "mordavian-woods": [
+    "mordavian-woods"
   ]
 }

@@ -38,6 +38,7 @@ export function BattleCanvas({
   const fxCanvasRef = useRef<HTMLCanvasElement>(null);
   const tacticalUnitsCanvasRef = useRef<HTMLCanvasElement>(null);
   const unitsCanvasRef = useRef<HTMLCanvasElement>(null);
+  const magicMissileCanvasRef = useRef<HTMLCanvasElement>(null);
   const unitHudCanvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hudKey = useRef("");
@@ -60,6 +61,7 @@ export function BattleCanvas({
         // lights — map PointLights — illuminate them; the top canvas keeps their HP bars and
         // overlays only (skipUnitSprites below). Their renderOrder keeps them above Fog 2.
         rendererThree.setSpritesAndDecorationsVisible(true, true);
+        if (magicMissileCanvasRef.current) rendererThree.attachMagicMissileForeground(magicMissileCanvasRef.current);
       }
       else renderer2D = new WebGL2DRenderer(canvas);
     } catch {
@@ -373,6 +375,8 @@ export function BattleCanvas({
           !!rendererThree && engine.tacticsCamera,
         );
       }
+      // Spell foreground is a distinct canvas above both water and character surfaces.
+      rendererThree?.renderMagicMissileForeground(wrap.clientWidth, wrap.clientHeight);
       if (unitHudCanvas && unitHudContext) {
         unitHudContext.setTransform(dpr, 0, 0, dpr, 0, 0);
         unitHudContext.clearRect(0, 0, wrap.clientWidth, wrap.clientHeight);
@@ -696,6 +700,7 @@ export function BattleCanvas({
       <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ display: "none" }} />
       <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
       <canvas ref={tacticalUnitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
+      <canvas ref={magicMissileCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ mixBlendMode: "screen" }} />
       <canvas ref={unitHudCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
       {/* Diorama color grade + vignette: a subtle warm key-light / cool shadow wash from the
           same upper-left "sun" the unit/decoration relighting and cast shadows use (see

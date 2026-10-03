@@ -2386,6 +2386,30 @@
           ]
         },
         "level": 1
+      },
+      {
+        "name": "NPC Placeholder",
+        "classId": "shadowScholar",
+        "x": 22,
+        "y": 8,
+        "level": 1,
+        "dialog": {
+          "id": "inn-placeholder-npc",
+          "startId": "start",
+          "lines": [
+            {
+              "id": "start",
+              "speaker": "NPC Placeholder",
+              "text": "Temporary placeholder character. Rewrite or remove during later development.",
+              "replies": [
+                {
+                  "text": "Understood.",
+                  "next": null
+                }
+              ]
+            }
+          ]
+        }
       }
     ]
   }

@@ -5,6 +5,7 @@ import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, MINOR_VENOM, DECOR_ART_SCALE, HOUSE
 import type { SpellTier } from "./data";
 import { weightedWeaponPick, shieldBashFormula } from "./data";
 import { clearRockColumnTiles, placedBlockingFootprint, THREE_D_DOOR_VARIANTS } from "./data";
+import { vauBackdropBounds } from "./vauBackdrop";
 import { canCounter, makeForecast, mulberry32, powerOf, protOf, rollDamage, rollDamageCustom } from "./combat";
 import {
   attackableEnemies,
@@ -2743,6 +2744,7 @@ export class BattleEngine {
         a.t = 0;
         if (a.stage === "recover") {
           if (!a.noCounter && !def.stunned && def.alive && canCounter(att, def, { x: att.x, y: att.y }, this.tiles, this.cols)) {
+            this.faceSpriteToward(def.id, att.x, att.y);
             const offHand = def.offHandId ? EQUIPMENT[def.offHandId] : null;
             // The off-hand dagger/katar counters only an attacker within its own reach;
             // anyone further away gets the main weapon (the bow).
@@ -8560,6 +8562,13 @@ export class BattleEngine {
 
   private clampCam(): void {
     const tile = ZOOM_RADII[this.zoom]!;
+    const backdrop = this.art.backdrops[this.mission.id];
+    if (this.mission.id === "vau" && !this.tacticsCamera && backdrop) {
+      const bounds = vauBackdropBounds(tile, this.cols, this.viewW, this.viewH, backdrop.width / Math.max(1, backdrop.height));
+      this.camX = Math.min(bounds.left + bounds.width - this.viewW, Math.max(bounds.left, this.camX));
+      this.camY = Math.min(bounds.top + bounds.height - this.viewH, Math.max(bounds.top, this.camY));
+      return;
+    }
     const { w, h } = this.boardSize(tile);
     // The tactics camera is turned and tilted, so board corners swing outside the flat
     // top-down bounds below. Give it a quarter viewport of extra travel on every edge.
@@ -9094,7 +9103,7 @@ export class BattleEngine {
     if (u.sprite === "minor-horror-001") return Math.floor(u.bob * n / MINOR_HORROR_SECONDS.idle) % n;
     if (u.sprite === "big-blue-ox-002") return Math.floor(u.bob * (moving ? 8 * BIG_BLUE_OX_PACE : n / 5.5)) % n;
     if (u.classId === "familiar" || u.classId === "familiar2") {
-      // Familiar 2's idle went from 12 to 32 frames over the same footage span; scaling by
+      // Familiar 2's idle went from 12 to 36 frames over the same footage span; scaling by
       // n / 12 keeps its loop the same length it always was.
       const rate = (moving ? 8.0 : 5.5) * (u.classId === "familiar2" ? n / 12 : 1);
       return Math.floor(u.bob * rate) % n;
@@ -9329,10 +9338,10 @@ export class BattleEngine {
     const lift = this.unitLift(u, cell);
     const atk = this.attackPose(u);
     const moving = this.active?.type === "move" && this.active.id === u.id;
-    // Re-resolve Neera's facing from the live combat action every frame. The sequence
+    // Re-resolve hero facing from the live combat action every frame. The sequence
     // start updates facing too, but wind-ups and queued off-hand strikes can preserve a
     // stale direction if another action changed it before this pose is drawn.
-    if (u.sprite === "neera") {
+    if (u.sprite === "neera" || u.sprite === "kaelFinal" || u.sprite === "kaelEarly" || u.sprite === "defaultWarrior") {
       let actorId: string | undefined;
       let targetId: string | undefined;
       if (this.active?.type === "combat") {
@@ -9589,7 +9598,7 @@ export class BattleEngine {
           : isNeeraCasting
             ? h * 0.045
             : u.sprite === "familiar2"
-              // The 32-frame cuts share one camera anchor so a tentacle stepping toward the
+              // The 36-frame cuts share one camera anchor so a tentacle stepping toward the
               // camera keeps room below; resting feet sit ~2.8% above the canvas bottom.
               ? h * 0.028
               : 0;

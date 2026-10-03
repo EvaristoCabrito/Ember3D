@@ -15,7 +15,13 @@
     {
       "id": "mountain",
       "name": "Montanha",
-      "encounterIds": []
+      "encounterIds": [
+        "random-coldwind-saddle",
+        "random-hollow-pine-basin",
+        "random-cairnkeepers-rise",
+        "random-splintered-trunk-pass",
+        "random-rimewater-shrine"
+      ]
     },
     {
       "id": "swamp",
