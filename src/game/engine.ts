@@ -477,7 +477,7 @@ const LONG_WALK_SECONDS = 1.5;
 // Give the heavy Ox time to settle into each pose; all of its clocks share this pace.
 const BIG_BLUE_OX_PACE = 0.75;
 // Sums of the supplied Minor Horror atlas JSON frame durations.
-const MINOR_HORROR_SECONDS = { idle: 3.240, attack: 2.844, cast: 3.168, walk: 3.456 };
+const MINOR_HORROR_SECONDS = { idle: 3.240, attack: 2.844, cast: 3.168, walk: 3.456, death: 3.924 };
 /** Bow shots on a long sheet, per direct instruction: a normal ATT shot leaves only once the
  * whole attack sheet has played; a bow skill (Special sheet — Long Shot, Multi Shot,
  * Piercing) releases mid-sheet and the archer plays the rest of it while the arrow flies. */
@@ -9084,7 +9084,8 @@ export class BattleEngine {
   private deathSheetPlaying(u: Unit): boolean {
     if (u.alive || u.diedAt == null || !this.art.deaths[u.sprite]) return false;
     const hitLead = u.classId !== "bigBlueCalf" && this.art.hits[u.sprite] ? HIT_ANIM_SECONDS : 0;
-    return this.time - u.diedAt < hitLead + DEATH_ANIM_SECONDS / (u.classId === "bigBlueCalf" ? BIG_BLUE_OX_PACE : 1) + DEATH_HOLD_SECONDS;
+    const deathSeconds = u.classId === "minorHorror" ? MINOR_HORROR_SECONDS.death : DEATH_ANIM_SECONDS / (u.classId === "bigBlueCalf" ? BIG_BLUE_OX_PACE : 1);
+    return this.time - u.diedAt < hitLead + deathSeconds + DEATH_HOLD_SECONDS;
   }
 
   private idleFrame(u: Unit, n: number): number {
@@ -9406,7 +9407,7 @@ export class BattleEngine {
     const oxPosePace = u.classId === "bigBlueCalf" ? BIG_BLUE_OX_PACE : 1;
     // The Ox hit cut ends at source frame 75 instead of 83; retain its playback pace.
     const hitSeconds = HIT_ANIM_SECONDS / oxPosePace * (u.classId === "bigBlueCalf" ? 75 / 83 : 1);
-    const deathSeconds = DEATH_ANIM_SECONDS / oxPosePace;
+    const deathSeconds = u.classId === "minorHorror" ? MINOR_HORROR_SECONDS.death : DEATH_ANIM_SECONDS / oxPosePace;
     const sinceHit = hitPool && u.hitAt != null ? this.time - u.hitAt : Infinity;
     const directOxDeath = u.classId === "bigBlueCalf" && !u.alive && this.art.deaths[u.sprite] != null;
     const hitPlaying = !directOxDeath && sinceHit < hitSeconds && (!u.alive || (atk == null && !moving));
