@@ -201,7 +201,7 @@ function releaseLoad(): void {
 
 function spriteFrameSrc(id: SpriteId, frame: string, cacheBust = ""): string {
   // Conjurer's active art is kept as a complete, source-preserved serial. Talk drives idle; the former Idle sheet drives casting.
-  const directory = id === "minor-horror-001" ? "minor-horror-002" : id === "big-blue-ox-002" ? "big-blue-ox-ai-005" : id === "conjurer" ? "conjurer/conjurer-complete-003" : id === "sandoval" ? "sandoval/sandoval-complete-001" : id === "kaelFinal" ? "Kael_Final/kael-final-002" : id === "kaelEarly" ? "kael" : id === "defaultWarrior" ? "kael-v2" : id;
+  const directory = id === "minor-horror-001" ? "minor-horror-002" : id === "big-blue-ox-002" ? "big-blue-ox-ai-006" : id === "conjurer" ? "conjurer/conjurer-complete-003" : id === "sandoval" ? "sandoval/sandoval-complete-001" : id === "kaelFinal" ? "Kael_Final/kael-final-002" : id === "kaelEarly" ? "kael" : id === "defaultWarrior" ? "kael-v2" : id;
   return `/game/sprites/${directory}/${frame}.png${cacheBust}`;
 }
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -267,7 +267,7 @@ function deriveAlphaFromBlack(img: HTMLImageElement): HTMLCanvasElement {
 // lunge/hit/recover stages, so a set only has to be listed here to animate.
 const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "minor-horror-001": { n: 36, bust: "?v=minor-horror-002" },
-  "big-blue-ox-002": { n: 32, bust: "?v=big-blue-ox-ai-005" },
+  "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   // Big Blue Calf (swampBlueCalf) — right-facing frames cut from the user's video.
   // The renderer mirrors this pool for the opposite direction.
   "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
@@ -373,7 +373,7 @@ const CAST_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
 // more than one attack cut, same "second pool, same idleAlt flip" shape as Malrec's idles2
 // but for the attack pool instead of idle (see GameArt.attacks2's doc comment).
 const ATTACK2_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
-  "big-blue-ox-002": { n: 32, bust: "?v=big-blue-ox-ai-005" },
+  "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   familiar3: { n: 36, bust: "" },
 };
 
@@ -398,7 +398,7 @@ const COUNTER_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
 // no walk cut and falls back to its idle loop played faster, as every sprite used to.
 const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "minor-horror-001": { n: 36, bust: "?v=minor-horror-002" },
-  "big-blue-ox-002": { n: 32, bust: "?v=big-blue-ox-ai-005" },
+  "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
   familiar: { n: 8, bust: "?v=6" },
   // Right-facing cut; see the dedicated walksLeft.familiar2 load below for its own
@@ -471,7 +471,7 @@ const DIR_LEFT: SpriteId[] = ["aldric", "defaultLancer", "lancer", "sandoval"];
 
 // Hit-reaction sheets: hit-*.png, played whenever the unit takes damage (see GameArt.hits).
 const HIT_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
-  "big-blue-ox-002": { n: 32, bust: "?v=big-blue-ox-ai-005" },
+  "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   "mordavian-wolf-final": { n: 32, bust: "" },
   undeadOx: { n: 32, bust: "" },
   // 528x321, wider than its other sheets — see computeUnitVisual's zombieDogWideSheet.
@@ -480,7 +480,7 @@ const HIT_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
 
 // Death sheets: death-*.png, played once when the unit dies (see GameArt.deaths).
 const DEATH_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
-  "big-blue-ox-002": { n: 32, bust: "?v=big-blue-ox-ai-005" },
+  "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
   "mordavian-wolf-final": { n: 32, bust: "" },
   wardog2: { n: 32, bust: "" },
@@ -525,8 +525,8 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
       pools[key] = value;
     }));
   };
-  const n = id === "minor-horror-001" ? 36 : id === "big-blue-ox-002" ? 32 : id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" || id === "zombie" || id === "undeadOx" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" || id === "familiar2" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
-  const cacheBust = id === "minor-horror-001" ? "?v=minor-horror-002" : id === "big-blue-ox-002" ? "?v=big-blue-ox-ai-005" : id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : id === "familiar2" ? "?v=familiar2-32" : "";
+  const n = id === "minor-horror-001" ? 36 : id === "big-blue-ox-002" ? 36 : id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" || id === "zombie" || id === "undeadOx" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" || id === "familiar2" ? 32 : HERO_IDLE.has(id) ? 12 : 4;
+  const cacheBust = id === "minor-horror-001" ? "?v=minor-horror-002" : id === "big-blue-ox-002" ? "?v=big-blue-ox-ai-006" : id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : id === "familiar2" ? "?v=familiar2-32" : "";
   put("sprites", cut(n, (i) => (id === "conjurer" ? `talk-${i}` : `${i}`), cacheBust));
   const atk = ATTACK_FRAMES[id];
   if (atk) put("attacks", cut(atk.n, (i) => `atk-${i}`, atk.bust));
