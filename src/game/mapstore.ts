@@ -46,6 +46,7 @@ export interface DraftSpawn extends Spawn {
 }
 
 export interface MapDraft {
+  lockPartyFormation?: boolean;
   /** Which campaign scenario this map authors for — matches a real Mission.id (e.g.
    * "o-vau") to version-edit that scenario, or any free id for a standalone map with no
    * campaign slot. Versions are grouped and saved under this id — it's the "Cenário
@@ -206,6 +207,7 @@ export function draftToMission(d: MapDraft): Mission {
     layout.push(row);
   }
   return {
+    lockPartyFormation: d.lockPartyFormation,
     id: d.id,
     index: d.index,
     // This campaign chapter has one canonical name. Old browser-local activated drafts

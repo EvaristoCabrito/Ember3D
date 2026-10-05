@@ -1,3 +1,4 @@
+import { applyPartyFormation, cleanPartyFormation } from "./partyFormation";
 import { OptionsButton } from "./OptionsMenu";
 import { uiText, useGamePreferences, type Translations } from "./gamePreferences";
 import { GraphicsQualityControl } from "./GraphicsQualityControl";
@@ -109,7 +110,7 @@ import {
   selectSlot,
 } from "./save";
 import type { Bag, BattleSnapshot, ClassId, DecorationPlacement, DialogAction, DialogTree, ElementalFxPlacement, EquipSlot, GameArt, GrowthLine, HudSnapshot, MapTimeOfDay, Mission, PotionId, SaveBank, SaveData, ScreenId, SpellKind, Spawn, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, UnitPublic, WinCondition, WorldLocation } from "./types";
-import { hexNeighbors, key as hexKey } from "./pathfinding";
+import { hexDist, hexNeighbors, key as hexKey } from "./pathfinding";
 
 /** A map JSON write updates Vite's module list and can reload the app. This one-shot
  * snapshot restores the editor instead of sending the author to the title screen. */
@@ -1107,6 +1108,13 @@ export function GameApp() {
       if (preserveKnockouts) {
         m = { ...m, playerSpawns: m.playerSpawns.filter((spawn) => carried[spawn.name] !== 0) };
       }
+      if (!testMode && !resume) {
+        const heroes = m.playerSpawns.filter(spawn => spawn.name in TEST_PARTY_CLASS);
+        const protectedStart = tutorialMap || heroes.some(a => heroes.some(b => hexDist(a, b) > 4))
+          || heroes.some(hero => (CLASSES[hero.classId].size ?? 1) > 1)
+          || heroes.some(hero => m.enemySpawns.some(enemy => hexDist(hero, enemy) <= Math.max(3, CLASSES[enemy.classId].maxRange)));
+        m = applyPartyFormation(m, save.partyFormation, protectedStart);
+      }
       // !!! DO NOT change this back to `m.index + 1` (mission-position level) !!!
       // Test mode exists so the party can be tested at full strength on ANY mission without
       // grinding first — that means DEFAULT_TEST_LEVEL (see its own definition below, also
@@ -1951,6 +1959,9 @@ export function GameApp() {
 
       {screen === "overworldMap" && (
         <OverworldMapScreen
+          onSaveFormation={order => {
+            if (!testMode) persistCurrent({ ...readMapSave(), partyFormation: cleanPartyFormation(order) });
+          }}
           locations={mapVisibleLocations}
           status={(loc) => locationStatus(loc, save.completed, testMode, campaignLocations, missionAccessFor)}
           missionStatus={(id) => missionStatus(id, save.completed, testMode, campaignLocations, campaignMissions.map((mission) => mission.id), missionAccessFor)}
@@ -3747,6 +3758,7 @@ function missionToDraft(m: Mission): MapDraft {
     music: m.music ?? "",
     decorations: m.decorations ?? [],
     elementalFx: m.elementalFx ?? [],
+    lockPartyFormation: m.lockPartyFormation,
     playerSpawns: m.playerSpawns.map((s) => ({ ...s, level: DEFAULT_TEST_LEVEL })),
     enemySpawns: m.enemySpawns.map((s) => ({ ...s, level: enemyLevelFor(m.index) })),
     neutralSpawns: (m.neutralSpawns ?? []).map((s) => ({ ...s, level: enemyLevelFor(m.index) })),
@@ -5874,6 +5886,10 @@ export function MapEditorScreen({
                 </label>
               );
             })()}
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={!!draft.lockPartyFormation} onChange={e => setDraft(d => ({ ...d, lockPartyFormation: e.target.checked }))} />
+            Preservar posições iniciais (ignorar formação do grupo)
+          </label>
           <label className="flex items-center gap-2 mt-5">
             <input type="checkbox" checked={draft.hub} onChange={(e) => setDraft((d) => ({ ...d, hub: e.target.checked }))} />
             <span className="text-muted">É um hub (sem combate)</span>

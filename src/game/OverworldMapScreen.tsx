@@ -1,3 +1,4 @@
+import { cleanPartyFormation } from "./partyFormation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { BookOpen, Check, ChevronLeft, Clock, Lock, MapPin, Save, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
 import { isCrossingDungeon, missionsForLocation } from "./mapstore";
@@ -84,6 +85,7 @@ export function OverworldMapScreen({
   onTeleport,
   onBack,
   onSave,
+  onSaveFormation,
   onPick,
 }: {
   locations: WorldLocation[];
@@ -132,6 +134,7 @@ export function OverworldMapScreen({
   onTeleport?: (col: number, row: number) => void;
   onBack: () => void;
   onSave?: () => void;
+  onSaveFormation?: (order: string[]) => void;
   onPick: (missionId: string) => void;
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
@@ -141,6 +144,13 @@ export function OverworldMapScreen({
   const [questLogOpen, setQuestLogOpen] = useState(false);
   const [affinityOpen, setAffinityOpen] = useState(false);
   const partyHeroes = AFFINITY_HEROES.filter(hero => test || heroRecruited(hero, save.completed, save.flags));
+  const [formationOrder, setFormationOrder] = useState<string[]>([]);
+  const [formationSaved, setFormationSaved] = useState(false);
+  useEffect(() => {
+    if (affinityOpen) {
+      setFormationOrder([...new Set([...cleanPartyFormation(save.partyFormation), ...AFFINITY_HEROES])]);
+    }
+  }, [affinityOpen, save.partyFormation]);
   const [movementOpen, setMovementOpen] = useState(false);
   const [confirmVau, setConfirmVau] = useState(false);
   const [inventoryHero, setInventoryHero] = useState<string | null>(null);
@@ -370,7 +380,7 @@ export function OverworldMapScreen({
           <BookOpen className="size-4" />
           <span>Missões</span>
         </button>
-        <button type="button" onClick={() => setAffinityOpen(true)} aria-haspopup="dialog" aria-expanded={affinityOpen} className="h-9 ember-plate px-2.5 text-xs sm:text-sm">Party</button>
+        <button type="button" onClick={() => { setFormationSaved(false); setAffinityOpen(true); }} aria-haspopup="dialog" aria-expanded={affinityOpen} className="h-9 ember-plate px-2.5 text-xs sm:text-sm">Party</button>
         {!test && onSave && (
           <button
             type="button"
@@ -717,6 +727,23 @@ export function OverworldMapScreen({
         <div className="absolute inset-0 z-40 ember-veil flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Party">
           <div className="w-full max-w-3xl ember-panel p-5 max-h-[80dvh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3"><h2 className="font-display text-xl">Party</h2><button type="button" onClick={() => setAffinityOpen(false)} aria-label="Fechar Party" className="size-9 ember-icon-btn"><X className="size-4" /></button></div>
+            <section aria-label="Formação inicial" className="rounded-lg border border-border p-3 mb-4">
+              <h3 className="font-display text-lg mb-2">Formação inicial</h3>
+              <p className="text-xs text-muted mb-3">Escolha a ordem dos personagens nas posições iniciais do mapa. Mapas com aberturas perigosas ou posições especiais preservam sua formação própria.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                {formationOrder.filter(hero => partyHeroes.includes(hero as typeof partyHeroes[number])).map((hero, slot, active) => (
+                  <label key={slot} className="text-xs flex flex-col gap-1"><span>Posição {slot + 1}</span>
+                    <select aria-label={`Personagem na posição ${slot + 1}`} className="bg-bg border border-border rounded-md p-2" value={hero} onChange={e => {
+                      const other = e.target.value;
+                      setFormationOrder(order => order.map(name => name === hero ? other : name === other ? hero : name));
+                      setFormationSaved(false);
+                    }}>{active.map(name => <option key={name}>{name}</option>)}</select>
+                  </label>
+                ))}
+              </div>
+              <button type="button" disabled={test} className="ember-btn ember-btn-sm" onClick={() => { onSaveFormation?.(formationOrder); setFormationSaved(true); }}>Salvar formação</button>
+              {formationSaved && <span role="status" className="text-xs text-accent ml-2">Formação salva.</span>}
+            </section>
             <p className="text-sm text-muted mb-4">Afinidade de cada personagem com os outros membros do grupo.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               {partyHeroes.map(a => (
@@ -727,7 +754,7 @@ export function OverworldMapScreen({
                     return <div key={`${a}-${b}`} className="mb-3 last:mb-0">
                       <div className="flex justify-between gap-2 text-sm"><span>{a} - {b}</span><span>{affinityGrade(points)} · {points.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}/100</span></div>
                       <progress aria-label={`Afinidade de ${a} com ${b}`} className="w-full accent-accent" value={points} max={100} />
-                      <p className="text-xs text-muted">Bônus por adjacência: +{Math.round(affinityBonus(points) * 100)}%{canUseAffinityDuo(save.affinityScores, a, b) ? " · Skill de dupla desbloqueada" : ""}</p>
+                      <AffinityBonusHelp points={points} duo={canUseAffinityDuo(save.affinityScores, a, b)} />
                     </div>;
                   })}
                   {partyHeroes.length < 2 && <p className="text-sm text-muted">As afinidades aparecerão quando outro personagem entrar no grupo.</p>}
@@ -1035,4 +1062,23 @@ function LocationPanel({
       </div>
     </div>
   );
+}
+
+function AffinityBonusHelp({ points, duo }: { points: number; duo: boolean }) {
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const show = () => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(true), 500); };
+  const hide = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; setOpen(false); };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  return <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
+    <button type="button" className="text-xs text-muted text-left" aria-label="Ajuda dos bônus de afinidade" aria-expanded={open} onFocus={show} onBlur={hide} onClick={() => { if (timer.current) clearTimeout(timer.current); setOpen(value => !value); }}>
+      Bônus por adjacência: +{Math.round(affinityBonus(points) * 100)}% ⓘ{duo ? " · Skill de dupla desbloqueada" : ""}
+    </button>
+    {open && <div role="tooltip" className="absolute top-full left-0 z-50 mt-1 w-64 max-w-[70vw] rounded-lg border border-border bg-surface p-3 shadow-xl text-xs text-fg">
+      <p className="mb-2">Quando dois aliados ficam em hexes adjacentes, a afinidade aumenta ataque, magia, defesa e resistência. Vale o maior bônus entre os aliados ao lado.</p>
+      <p>25 pontos: +2% · 50 pontos: +5% · 90 pontos: +8%.</p>
+      <p className="mt-2">80 pontos libera a skill de dupla. A Ultimate de trio exige 100 pontos entre cada um dos três pares. As habilidades serão criadas depois.</p>
+      <p className="mt-2">Ação adjacente: +0,1. Cura ou poção em um aliado: +1 adicional. Dano colateral de magia ou skill: −1. Resposta de diálogo: +3, 0 ou −3.</p>
+    </div>}
+  </div>;
 }

@@ -1,3 +1,4 @@
+import { cleanPartyFormation } from "./partyFormation";
 import { EQUIPMENT, EXP_TO_LEVEL, MAX_GRID, MAX_LEVEL, POTION_CARRY_MAX, BAG_MAX, PROMOTIONS, STAT_POINTS_PER_LEVEL, WEAPONS, WORLD_LOCATIONS, emberFromCompleted, equipmentFitsSlot, starterWeaponFor, startingBags } from "./data";
 import { ALL_MISSIONS } from "./mapstore";
 import { OVERWORLD_START_HEX, worldToHex } from "./overworld";
@@ -716,6 +717,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     gameClock: clampInt(raw.gameClock, 0, 999999),
     gameHour: clampInt(raw.gameHour ?? 8, 0, 23),
     affinityScores: cleanAffinityScores(raw.affinityScores),
+    partyFormation: cleanPartyFormation(raw.partyFormation),
     overworldMoveBudgetUsed: clampInt(raw.overworldMoveBudgetUsed ?? raw.gameClock, 0, 999999),
     heroHunger: cleanHunger(raw.heroHunger),
     heroDiseases: cleanHeroDiseases(raw.heroDiseases),

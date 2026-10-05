@@ -467,6 +467,8 @@ export interface VictoryReward {
 }
 
 export interface Mission {
+  /** Preserve authored starting positions for scripted or dangerous openings. */
+  lockPartyFormation?: boolean;
   id: string;
   index: number;
   title: string;
@@ -1301,6 +1303,7 @@ export interface SaveData {
   gameHour?: number;
   /** Shared relationship score for each named hero pair, from 0 to 100. */
   affinityScores?: Record<string, number>;
+  partyFormation?: string[];
   /** Actual travel hours with an empty hunger meter; absent falls back to hungerStreak days. */
   hungerHours?: number;
   /** RPG map only: every hex ("col,row") the party has ever stood on — drives the fog of
