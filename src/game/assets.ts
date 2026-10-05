@@ -271,7 +271,7 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // Legacy Calf (swampBlueCalf) — right-facing frames cut from the user's video.
   // The renderer mirrors this pool for the opposite direction.
   "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
-  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-001" },
+  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-002" },
   // The generic/default warrior look (CLASSES.swordsman's own sprite), its own distinct
   // on-disk cut (kael-v2 — an old internal folder name, kept as-is on disk) — the MC
   // himself is a different unit entirely and plays as kaelFinal instead.
@@ -364,7 +364,7 @@ const CAST_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   zombieDog: { n: 36, bust: "?v=f36" },
   // Undead Ox: green rib-glow and breath, played for its Veneno Cáustico.
   undeadOx: { n: 36, bust: "?v=ox-36" },
-  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-001" },
+  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-002" },
   // Familiar 3's spellcasting windup (cast-*.png) — plays for its Fireball cast only
   // (attackPose falls back to `attacks` for a plain melee swing); see ATTACK_FRAMES/
   // ATTACK2_FRAMES above for its two melee attack cuts.
@@ -402,7 +402,7 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "minor-horror-001": { n: 36, bust: "?v=minor-horror-003" },
   "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
-  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-001" },
+  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-002" },
   familiar: { n: 8, bust: "?v=6" },
   // Right-facing cut; see the dedicated walksLeft.familiar2 load below for its own
   // authored left-facing cut (real distinct footage, not the CSS mirror every other
@@ -486,7 +486,7 @@ const DEATH_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "minor-horror-001": { n: 36, bust: "?v=minor-horror-003" },
   "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   "swamp-blue-calf": { n: 32, bust: "?v=big-blue-calf-001" },
-  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-001" },
+  "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-002" },
   "mordavian-wolf-final": { n: 32, bust: "" },
   wardog2: { n: 36, bust: "?v=f36" },
   EmberedWraith: { n: 36, bust: "?v=f36" },
@@ -551,7 +551,7 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
   const death2 = DEATH2_FRAMES[id];
   if (death2) put("deaths2", cut(death2.n, (i) => `death2-${i}`, death2.bust));
   const walk = WALK_FRAMES[id];
-  if (walk) put("walks", cut(walk.n, (i) => `move-${i}`, walk.bust));
+  if (walk) put("walks", cut(walk.n, (i) => id === "cobalt-blue-deer" ? `move-left-${i}` : `move-${i}`, walk.bust));
   if (DIR_LEFT.includes(id)) {
     const walkN = WALK_FRAMES[id]?.n ?? 6;
     const atkN = ATTACK_FRAMES[id]?.n ?? 5;
@@ -562,7 +562,8 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
   // The Butcher, Cultist V2, Familiar 2 and Familiar 3 each have their own authored
   // left-facing walk cut (same frame count as their right-facing one) but no dedicated
   // left-facing attack cut — their attack keeps mirroring the right-facing pool.
-  if (walk && (id === "theButcher" || id === "cultist-v2" || id === "familiar2" || id === "familiar3" || id === "cobalt-blue-deer")) put("walksLeft", cut(walk.n, (i) => `move-left-${i}`, walk.bust));
+  if (walk && (id === "theButcher" || id === "cultist-v2" || id === "familiar2" || id === "familiar3")) put("walksLeft", cut(walk.n, (i) => `move-left-${i}`, walk.bust));
+  if (id === "cobalt-blue-deer" && walk) put("walksLeft", cut(walk.n, (i) => `move-${i}`, walk.bust));
   // Mordavian Puppy's WALK LEFT row has 7 frames vs its right-facing row's 6.
   if (id === "morvenian-wolf") put("walksLeft", cut(7, (i) => `move-left-${i}`, ""));
   // Malrec's sliced move-left-*.png frames are deliberately unused: the render loop's usual

@@ -9626,7 +9626,8 @@ export class BattleEngine {
     // footage into facing right (walked left while visibly facing right) — reported as
     // "two reverse walk" rather than the one intended mirror-for-left-only.
     const neeraWalkReversed = u.sprite === "neera" && walk != null;
-    const facing = u.classId === "familiar" || defaultWarriorIdleOrWalkReversed || neeraWalkReversed ? -u.facing : u.facing;
+    const deerFacingReversed = u.sprite === "cobalt-blue-deer";
+    const facing = u.classId === "familiar" || defaultWarriorIdleOrWalkReversed || neeraWalkReversed || deerFacingReversed ? -u.facing : u.facing;
     const flip = dirAction ? 1 : facing;
     // A fixed set of sprites skip the breath squash/stretch entirely (ctx.scale(flip, 1)) —
     // see the identical branch this replaced in renderUnitsAndOverlays.
