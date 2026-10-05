@@ -258,6 +258,7 @@ export interface ClassDef {
 /** One reply choice inside a branching DialogLine. Picking it jumps to `next`, or ends the
  * tree if `next` is absent/null — same convention as DialogLine.next below. */
 export interface DialogReply {
+  affinity?: { from: string; to: string; delta: -3 | 0 | 3 };
   translations?: Partial<Record<"pt" | "en", string>>;
   text: string;
   next?: string | null;
@@ -1184,6 +1185,7 @@ export interface BattleUnitSnap {
 }
 
 export interface BattleSnapshot {
+  affinityScores?: Record<string, number>;
   missionId: string;
   turn: number;
   phase: Phase;
@@ -1297,6 +1299,8 @@ export interface SaveData {
   gameClock: number;
   /** Hour on the travel clock (0..23); older saves start at 08:00. */
   gameHour?: number;
+  /** Shared relationship score for each named hero pair, from 0 to 100. */
+  affinityScores?: Record<string, number>;
   /** Actual travel hours with an empty hunger meter; absent falls back to hungerStreak days. */
   hungerHours?: number;
   /** RPG map only: every hex ("col,row") the party has ever stood on — drives the fog of

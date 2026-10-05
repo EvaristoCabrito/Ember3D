@@ -976,6 +976,7 @@ export function GameApp() {
       pendingMission: missionId,
       battle: engine.captureSnapshot(),
       bags: { ...data.bags, ...engine.remainingBags() },
+      affinityScores: { ...engine.affinityScores },
       unitHp: { ...data.unitHp, ...engine.battlePlayerHp() },
       heroHunger: { ...data.heroHunger, ...engine.battlePlayerHunger() },
     };
@@ -1172,7 +1173,7 @@ export function GameApp() {
       const heroPoisons = testMode ? undefined : save.heroPoisons;
       const crossingDefeatedSpawns = !testMode && keepsDefeatedSpawns(m) ? save.crossingDefeatedSpawns[m.id] ?? [] : [];
       const questPickups = testMode ? undefined : activePickupsFor(save, m.id);
-      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, heroPoisons, crossingDefeatedSpawns, questPickups }, Date.now() % 100000, testMode);
+      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, affinityScores: save.affinityScores, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, heroPoisons, crossingDefeatedSpawns, questPickups }, Date.now() % 100000, testMode);
       if (resume && resume.missionId === m.id) battle.applySnapshot(resume);
       if (typeof window !== "undefined" && window.innerWidth < 720) battle.zoom = 0;
       // Sprites load per battle (see ensureSpriteArt): the board opens once this battle's own
@@ -1361,6 +1362,7 @@ export function GameApp() {
         questKills,
         unitHp: hp,
         bags,
+        affinityScores: { ...engine.affinityScores },
         heroHunger: { ...save.heroHunger, ...engine.battlePlayerHunger() },
         heroDiseases,
         heroPoisons,
@@ -2390,6 +2392,9 @@ export function GameApp() {
           save={save}
           playtest={!!customMission}
           fleeable={!customMission && !!missionId && isRandomEncounter(missionId)}
+          onAffinityChange={() => {
+            if (!testMode && !customMission) persistCurrent({ ...readMapSave(), affinityScores: { ...engine.affinityScores } });
+          }}
           onDialogAction={(action) => {
             if (action === "acceptSuspectHostageQuest") {
               if (testMode || customMission) return;
@@ -2511,6 +2516,7 @@ export function GameApp() {
                 persistCurrent({
                   ...rec,
                   bags: { ...rec.bags, ...engine.remainingBags() },
+                  affinityScores: { ...engine.affinityScores },
                   unitHp: { ...rec.unitHp, ...engine.battlePlayerHp() },
                   heroHunger: { ...rec.heroHunger, ...engine.battlePlayerHunger() },
                   heroDiseases: mergeBattleDiseases(rec.heroDiseases, engine),
@@ -2701,6 +2707,7 @@ export function GameApp() {
                   pendingMission: missionId,
                   battle: engine.captureSnapshot(),
                   bags: { ...save.bags, ...engine.remainingBags() },
+                  affinityScores: { ...engine.affinityScores },
                   unitHp: { ...save.unitHp, ...engine.battlePlayerHp() },
                   heroHunger: { ...save.heroHunger, ...engine.battlePlayerHunger() },
                   spellUses: engine.spentTiers(),
@@ -5260,13 +5267,13 @@ export function MapEditorScreen({
    * a browser-local copy as the fallback for when the dev server isn't there to write
    * one (a built app, a deployed preview). Whichever path ran is what the note says: a
    * save that didn't happen never reports success. */
-  const doSave = async () => {
-    const canonicalId = normalizeScenarioId(draft.id);
-    const canonicalTitle = canonicalId === "thebridge" ? "A Ponte de Pedra" : draft.title;
-    const savedDraft = canonicalId === draft.id && canonicalTitle === draft.title
-      ? draft
-      : { ...draft, id: canonicalId, title: canonicalTitle };
-    if (savedDraft !== draft) setDraft(savedDraft);
+  const doSave = async (draftToSave: MapDraft = draft) => {
+    const canonicalId = normalizeScenarioId(draftToSave.id);
+    const canonicalTitle = canonicalId === "thebridge" ? "A Ponte de Pedra" : draftToSave.title;
+    const savedDraft = canonicalId === draftToSave.id && canonicalTitle === draftToSave.title
+      ? draftToSave
+      : { ...draftToSave, id: canonicalId, title: canonicalTitle };
+    if (savedDraft !== draftToSave) setDraft(savedDraft);
     const list = versionStore[savedDraft.id] ?? [];
     const localSerial = (list[list.length - 1]?.serial ?? 0) + 1;
     const next = { ...versionStore, [savedDraft.id]: [...list, { serial: localSerial, draft: savedDraft, savedAt: Date.now() }] };
@@ -5297,13 +5304,14 @@ export function MapEditorScreen({
       await refreshRepoFiles(savedDraft.id);
       await refreshSavedLocationMaps();
       setNote(`Salvo em ${repo.file}.`);
-      return;
+      return true;
     }
     if (localOk) {
       setNote(`Sem servidor de dev: salvo só neste navegador como ${serialLabel(localSerial)} de "${savedDraft.id}" (${repo.error}). Use Ativar pra valer pra campanha.`);
-      return;
+      return true;
     }
     setNote(`NÃO SALVOU: nem arquivo (${repo.error}) nem navegador. O mapa só existe nesta tela — exporte antes de sair.`);
+    return false;
   };
 
   const doExport = () => {
@@ -7485,10 +7493,12 @@ export function MapEditorScreen({
                 ? draft.outroDialog
                 : draft.neutralSpawns?.[dialogEditorTarget.index]?.dialog
           }
-          onChange={(tree) => {
-            if (dialogEditorTarget.kind === "intro") setDraft((d) => ({ ...d, introDialog: tree }));
-            else if (dialogEditorTarget.kind === "outro") setDraft((d) => ({ ...d, outroDialog: tree }));
-            else updateSpawn("neutralSpawns", dialogEditorTarget.index, { dialog: tree });
+          onChange={async (tree) => {
+            const next = dialogEditorTarget.kind === "intro" ? { ...draft, introDialog: tree }
+              : dialogEditorTarget.kind === "outro" ? { ...draft, outroDialog: tree }
+              : { ...draft, neutralSpawns: (draft.neutralSpawns ?? []).map((spawn, index) => index === dialogEditorTarget.index ? { ...spawn, dialog: tree } : spawn) };
+            setDraft(next);
+            return await doSave(next);
           }}
           onClose={() => setDialogEditorTarget(null)}
           portraitOptions={portraitOptions}
@@ -7643,6 +7653,7 @@ function BattleScreen({
   playtest = false,
   fleeable = false,
   onDialogAction,
+  onAffinityChange,
 }: {
   engine: BattleEngine;
   onUseRation: (hero: string) => void;
@@ -7673,6 +7684,7 @@ function BattleScreen({
   fleeable?: boolean;
   /** An NPC reply that opens one of the Inn's menus (Brue's tavern, Vargan's smith). */
   onDialogAction?: (action: DialogAction) => void;
+  onAffinityChange?: () => void;
 }) {
   const [showStatus, setShowStatus] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -8275,10 +8287,10 @@ function BattleScreen({
           </div>
         )}
         {introDialogOpen && engine.mission.introDialog && (
-          <DialogOverlay tree={engine.mission.introDialog} onClose={() => setIntroDialogOpen(false)} />
+          <DialogOverlay onReply={reply => { engine.applyDialogAffinity(reply); onAffinityChange?.(); }} tree={engine.mission.introDialog} onClose={() => setIntroDialogOpen(false)} />
         )}
-        {hud.pendingDialog && <DialogOverlay tree={hud.pendingDialog} onClose={() => engine.acknowledgeDialog()} onAction={onDialogAction} />}
-        {outroDialogOpen && engine.mission.outroDialog && <DialogOverlay tree={engine.mission.outroDialog} onClose={onCloseOutroDialog} />}
+        {hud.pendingDialog && <DialogOverlay onReply={reply => { engine.applyDialogAffinity(reply); onAffinityChange?.(); }} tree={hud.pendingDialog} onClose={() => engine.acknowledgeDialog()} onAction={onDialogAction} />}
+        {outroDialogOpen && engine.mission.outroDialog && <DialogOverlay onReply={reply => { engine.applyDialogAffinity(reply); onAffinityChange?.(); }} tree={engine.mission.outroDialog} onClose={onCloseOutroDialog} />}
       </div>
 
       {engine.mission.id === "vau" && !playtest && !firstBattleHintDismissed && (

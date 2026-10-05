@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AFFINITY_HEROES } from "./affinity";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DialogLine, DialogReply, DialogTree, SpriteId } from "./types";
@@ -13,23 +14,25 @@ function emptyLine(): DialogLine {
 
 /** The Map Editor's authoring UI for one DialogTree — mounted as a modal from
  * MapEditorScreen for all three attachment points (mission intro, mission outro, one per
- * neutral NPC spawn). Every edit commits immediately via onChange, same as every other
- * field in this editor (no separate save/cancel step). */
+ * neutral NPC spawn). Changes stay in a local draft until Save is pressed. */
 export function DialogEditor({
   title,
-  tree,
-  onChange,
+  tree: initialTree,
+  onChange: commit,
   onClose,
   portraitOptions,
 }: {
   title: string;
   tree: DialogTree | undefined;
-  onChange: (tree: DialogTree | undefined) => void;
+  onChange: (tree: DialogTree | undefined) => void | boolean | Promise<void | boolean>;
   onClose: () => void;
   /** Sprite options for the portrait picker — supplied by the caller so this file doesn't
    * need its own opinion on how sprites are enumerated/labeled. */
   portraitOptions: { id: SpriteId; label: string }[];
 }) {
+  const [tree, onChange] = useState(initialTree);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [armedDelete, setArmedDelete] = useState("");
 
   const updateLine = (id: string, patch: Partial<DialogLine>) => {
@@ -72,17 +75,20 @@ export function DialogEditor({
         <div className="flex items-center justify-between mb-4">
           <p className="font-display text-xl leading-none">{title}</p>
           <div className="flex items-center gap-2">
+            <Button size="sm" disabled={saving} onClick={async () => { setSaving(true); try { if (await commit(tree) !== false) onClose(); else setSaveError(true); } catch { setSaveError(true); } finally { setSaving(false); } }}>{saving ? "Salvando…" : "Salvar"}</Button>
             {tree && (
               <button type="button" onClick={() => onChange(undefined)} className="text-xs text-danger px-2 py-1.5 rounded-md border border-border">
                 Apagar diálogo
               </button>
             )}
-            <button type="button" onClick={onClose} className="size-8 grid place-items-center rounded-md border border-border" aria-label="Fechar">
+            <button type="button" onClick={onClose} className="size-8 grid place-items-center rounded-md border border-border" aria-label="Fechar sem salvar">
               <X className="size-4" />
             </button>
           </div>
         </div>
 
+        <p className="text-xs text-muted mb-3">As alterações só são gravadas ao clicar em Salvar. Afinidade por resposta: + = 3 pontos, 0 = neutro, − = perde 3 pontos.</p>
+        {saveError && <p role="alert" className="text-sm text-danger mb-3">Não foi possível salvar. Suas alterações continuam aqui; tente novamente.</p>}
         {!tree ? (
           <>
             <p className="text-sm text-muted mb-4">Nenhum diálogo ainda.</p>
@@ -281,7 +287,7 @@ function ReplyRow({
   onRemove: () => void;
 }) {
   return (
-    <div className="flex items-center gap-1.5 text-xs">
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <input
         className="flex-1 min-w-0 bg-bg border border-border rounded-md px-1.5 py-1"
         placeholder="Texto da resposta"
@@ -299,6 +305,15 @@ function ReplyRow({
             {l.speaker || "(sem nome)"} — {l.text.slice(0, 20) || "(vazio)"}
           </option>
         ))}
+      </select>
+      <select aria-label="Personagem que responde" className="bg-bg border border-border rounded-md px-1 py-1" value={reply.affinity?.from ?? "Kael"} onChange={e => onUpdate({ affinity: { from: e.target.value, to: reply.affinity?.to ?? "Neera", delta: reply.affinity?.delta ?? 0 } })}>
+        {AFFINITY_HEROES.map(hero => <option key={hero}>{hero}</option>)}
+      </select>
+      <select aria-label="Personagem cuja afinidade muda" className="bg-bg border border-border rounded-md px-1 py-1" value={reply.affinity?.to ?? "Neera"} onChange={e => onUpdate({ affinity: { from: reply.affinity?.from ?? "Kael", to: e.target.value, delta: reply.affinity?.delta ?? 0 } })}>
+        {AFFINITY_HEROES.map(hero => <option key={hero}>{hero}</option>)}
+      </select>
+      <select aria-label="Bônus de afinidade da resposta" title="+ dá 3 pontos; − perde 3 pontos" className="bg-bg border border-border rounded-md px-1 py-1" value={reply.affinity?.delta ?? 0} onChange={e => onUpdate({ affinity: { from: reply.affinity?.from ?? "Kael", to: reply.affinity?.to ?? "Neera", delta: Number(e.target.value) as -3 | 0 | 3 } })}>
+        <option value={3}>+ (+3)</option><option value={0}>0</option><option value={-3}>− (−3)</option>
       </select>
       <button type="button" disabled={index === 0} onClick={() => onMove(-1)} className="px-1 disabled:opacity-30">
         ↑

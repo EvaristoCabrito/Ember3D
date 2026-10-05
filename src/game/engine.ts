@@ -1,3 +1,4 @@
+import { AFFINITY_HEROES, affinityBonus, affinityScore, changeAffinity, cleanAffinityScores, type AffinityHero } from "./affinity";
 import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_MOVE, GRID_ROUTE, GRID_ALLY, GRID_ENEMY, GRID_ENEMY_TARGET, GRID_ENEMY_GLOW } from "./tacticalGrid";
 import { isHexGroundVariant, requestSpriteArt } from "./assets";
 import { drawGroundTexture, drawHexGround } from "./hexGround";
@@ -685,6 +686,7 @@ export interface UnitVisual {
 }
 
 interface Roster {
+  affinityScores?: Record<string, number>;
   hp: Record<string, number>;
   levels: Record<string, number>;
   xp?: Record<string, number>;
@@ -1390,7 +1392,40 @@ export class BattleEngine {
   readonly cleaveVfxRequests: CleaveVfxRequest[] = [];
   private cleaveVfxSequence = 0;
 
+  affinityScores: Record<string, number> = {};
+
+  private adjacentAllies(u: Unit): Unit[] {
+    return this.units.filter(ally => ally.id !== u.id && ally.alive && ally.side === "player" && !ally.summoned
+      && footprint(u).some(a => footprint(ally).some(b => hexDist(a, b) === 1)));
+  }
+
+  private affinityUnit(u: Unit): Unit {
+    if (u.side !== "player" || u.summoned || !u.alive) return u;
+    const bonus = Math.max(0, ...this.adjacentAllies(u).map(ally => affinityBonus(affinityScore(this.affinityScores, u.name, ally.name))));
+    return bonus ? { ...u, atk: u.atk * (1 + bonus), mag: u.mag * (1 + bonus), def: u.def * (1 + bonus), res: u.res * (1 + bonus) } : u;
+  }
+
+  private awardAdjacentAffinity(u: Unit): void {
+    if (!u.acted) for (const ally of this.adjacentAllies(u)) this.adjustAffinity(u, ally, 0.1);
+  }
+
+  private adjustAffinity(a: Unit, b: Unit, delta: number): void {
+    if (a.id === b.id || a.side !== "player" || b.side !== "player" || a.summoned || b.summoned) return;
+    this.adjustHeroAffinity(a.name, b.name, delta);
+  }
+
+  private adjustHeroAffinity(a: string, b: string, delta: number): void {
+    if (a === b || delta === 0 || !AFFINITY_HEROES.includes(a as AffinityHero) || !AFFINITY_HEROES.includes(b as AffinityHero)) return;
+    this.affinityScores = changeAffinity(this.affinityScores, a as AffinityHero, b as AffinityHero, delta);
+    this.pushLog(`Afinidade ${a} + ${b}: ${delta > 0 ? "+" : ""}${delta.toLocaleString("pt-BR")}`);
+  }
+
+  applyDialogAffinity(reply: { affinity?: { from: string; to: string; delta: number } }): void {
+    if (reply.affinity) this.adjustHeroAffinity(reply.affinity.from, reply.affinity.to, reply.affinity.delta);
+  }
+
   constructor(mission: Mission, art: GameArt, roster: Roster, seed = 1, debugFreeCast = false) {
+    this.affinityScores = cleanAffinityScores(roster.affinityScores);
     this.debugFreeCast = debugFreeCast;
     this.mission = mission;
     this.art = art;
@@ -1584,8 +1619,8 @@ export class BattleEngine {
       const fy = from?.y ?? selected.y;
       const fake = { ...selected, x: fx, y: fy };
       forecast = makeForecast(
-        fake,
-        foeForForecast,
+        this.affinityUnit(fake),
+        this.affinityUnit(foeForForecast),
         tileAt(this.tiles, this.cols, fx, fy),
         tileAt(this.tiles, this.cols, foeForForecast.x, foeForForecast.y),
         this.tiles,
@@ -1603,7 +1638,7 @@ export class BattleEngine {
     return {
       phase: this.phase,
       banner: this.banner,
-      selected: selected ? pub(selected, this.isWebCell(selected.x, selected.y), this.movLeft(selected)) : null,
+      selected: selected ? pub(this.affinityUnit(selected), this.isWebCell(selected.x, selected.y), this.movLeft(selected)) : null,
       hoveredUnit: hoverUnit ? pub(hoverUnit, this.isWebCell(hoverUnit.x, hoverUnit.y), this.movLeft(hoverUnit)) : null,
       terrain: terr
         ? {
@@ -1852,6 +1887,7 @@ export class BattleEngine {
       }
     }
     return {
+      affinityScores: { ...this.affinityScores },
       missionId: this.mission.id,
       turn: this.turn,
       phase: this.phase,
@@ -1890,6 +1926,7 @@ export class BattleEngine {
 
   /** Overlay a saved fight onto this engine (which has already constructed the mission). */
   applySnapshot(snap: BattleSnapshot): void {
+    this.affinityScores = cleanAffinityScores(snap.affinityScores ?? this.affinityScores);
     if (snap.missionId !== this.mission.id) return;
     if (snap.tiles.length === this.tiles.length) {
       for (let i = 0; i < snap.tiles.length; i++) this.tiles[i] = snap.tiles[i]!;
@@ -2586,8 +2623,8 @@ export class BattleEngine {
         // real equipped weapon at full strength.
         const dice = a.stage === "hit" ? a.customDice : a.counterCustomDice;
         const hit = dice
-          ? rollDamageCustom(actor, target, attTile, defTile, dice.dice, dice.faces, dice.bonus, this.rng)
-          : rollDamage(actor, target, attTile, defTile, this.rng);
+          ? rollDamageCustom(this.affinityUnit(actor), this.affinityUnit(target), attTile, defTile, dice.dice, dice.faces, dice.bonus, this.rng)
+          : rollDamage(this.affinityUnit(actor), this.affinityUnit(target), attTile, defTile, this.rng);
         if (!hit.landed) {
           this.spawnMiss(target);
           this.pushLog(`${actor.name} atacou ${target.name}: Missed`);
@@ -2634,6 +2671,7 @@ export class BattleEngine {
             target.sleepTurns = 0;
           }
           hit.dmg = Math.max(1, Math.floor(hit.dmg * this.zoneDamageMul(target)));
+          if (a.stage === "hit" && a.spellKind && hit.dmg > 0) this.adjustAffinity(actor, target, -1);
           target.hp = Math.max(0, target.hp - hit.dmg);
           target.flash = 1;
           target.hitAt = this.time;
@@ -2785,6 +2823,8 @@ export class BattleEngine {
    * the defender's RES with it, making armoured targets hardest for the spells meant to
    * break them. */
   private spellDamage(att: Unit, foe: Unit, mul: number, roll: number): number {
+    att = this.affinityUnit(att);
+    foe = this.affinityUnit(foe);
     const attTile = this.hexAt(att.x, att.y);
     const defTile = this.hexAt(foe.x, foe.y);
     const prot = protOf(att, foe);
@@ -2998,8 +3038,8 @@ export class BattleEngine {
           // Armor-piercing: the defender's DEF is treated as 20% lower for this hit only.
           const softened = { ...foe, def: Math.max(0, Math.floor(foe.def * (1 - PIERCING_THRUST.armorIgnore))) };
           const hit = rollDamage(
-            att,
-            softened,
+            this.affinityUnit(att),
+            this.affinityUnit(softened),
             tileAt(this.tiles, this.cols, att.x, att.y),
             tileAt(this.tiles, this.cols, foe.x, foe.y),
             this.rng,
@@ -3012,8 +3052,8 @@ export class BattleEngine {
           if (landed) thrustHitIndex++;
         } else {
           const hit = rollDamage(
-            att,
-            foe,
+            this.affinityUnit(att),
+            this.affinityUnit(foe),
             tileAt(this.tiles, this.cols, att.x, att.y),
             tileAt(this.tiles, this.cols, foe.x, foe.y),
             this.rng,
@@ -3038,6 +3078,7 @@ export class BattleEngine {
           foe.sleepTurns = 0;
         }
         dmg = Math.max(1, Math.floor(dmg * this.zoneDamageMul(foe)));
+        if (dmg > 0 && a.spellKind) this.adjustAffinity(att, foe, -1);
         foe.hp = Math.max(0, foe.hp - dmg);
         foe.flash = 1;
         foe.hitAt = this.time;
@@ -3166,9 +3207,10 @@ export class BattleEngine {
     a.t += dt;
     if (!a.applied && a.t >= 0.2) {
       a.applied = true;
-      const heal = rollCure(a.kind, att.mag, this.rng);
+      const heal = rollCure(a.kind, this.affinityUnit(att).mag, this.rng);
       const gained = Math.min(heal, target.maxHp - target.hp);
       target.hp += gained;
+      if (gained > 0) this.adjustAffinity(att, target, 1);
       this.gainExp(att, target.level, gained);
       this.emitParticle({
         x: target.drawX,
@@ -3202,6 +3244,7 @@ export class BattleEngine {
     if (!a.applied && a.t >= 0.2) {
       a.applied = true;
       this.curePlayerDisease(target);
+      this.adjustAffinity(att, target, 1);
       this.emitParticle({
         x: target.drawX,
         y: target.drawY - 0.35,
@@ -3419,6 +3462,7 @@ export class BattleEngine {
    * action was taken from a position a rewind would erase.
    */
   private finishAction(u: Unit): void {
+    this.awardAdjacentAffinity(u);
     this.noteUnitDrawAction(u.id);
     if (u.side === "player" && !u.summoned) u.fullness = drainHunger(u.fullness, ACTION_HUNGER_COST);
     u.acted = true;
@@ -3458,6 +3502,7 @@ export class BattleEngine {
     this.banner = null;
     this.evaluateEnd();
     if (this.result) {
+      this.awardAdjacentAffinity(att);
       this.selectedId = null;
       this.pendingFoeId = null;
       this.inspectedId = null;
@@ -4295,7 +4340,7 @@ export class BattleEngine {
   publicUnit(unitId: string): UnitPublic | null {
     const u = this.units.find((candidate) => candidate.id === unitId);
     if (!u || !u.alive) return null;
-    return pub(u, this.isWebCell(u.x, u.y), this.movLeft(u));
+    return pub(this.affinityUnit(u), this.isWebCell(u.x, u.y), this.movLeft(u));
   }
 
   /** Drops the current inspection without touching the selection, so the same unit can be
@@ -6899,6 +6944,7 @@ export class BattleEngine {
         sfxPlay.ui();
         return;
       }
+      this.adjustAffinity(actor, target, 1);
       actor.bag[kind] -= 1;
       this.curePlayerDisease(target);
       actor.x = Math.round(actor.drawX);
@@ -6927,6 +6973,7 @@ export class BattleEngine {
         sfxPlay.ui();
         return;
       }
+      this.adjustAffinity(actor, target, 1);
       actor.bag[kind] -= 1;
       actor.x = Math.round(actor.drawX);
       actor.y = Math.round(actor.drawY);
@@ -6959,6 +7006,7 @@ export class BattleEngine {
     const heal = rollPotion(kind, this.rng);
     const gained = Math.min(heal, target.maxHp - target.hp);
     target.hp += gained;
+    if (gained > 0) this.adjustAffinity(actor, target, 1);
     this.gainExp(actor, target.level, gained);
     actor.bag[kind] -= 1;
     actor.x = Math.round(actor.drawX);

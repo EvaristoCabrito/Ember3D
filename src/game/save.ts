@@ -2,6 +2,7 @@ import { EQUIPMENT, EXP_TO_LEVEL, MAX_GRID, MAX_LEVEL, POTION_CARRY_MAX, BAG_MAX
 import { ALL_MISSIONS } from "./mapstore";
 import { OVERWORLD_START_HEX, worldToHex } from "./overworld";
 import { cleanHunger, fullness } from "./hunger";
+import { cleanAffinityScores } from "./affinity";
 import { TIER_KEYS } from "./types";
 import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogAction, DialogLine, DialogTree, EquipSlot, Phase, SaveBank, SaveData, Side, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, TierKey } from "./types";
 
@@ -263,7 +264,10 @@ function cleanDialogTree(raw: unknown): DialogTree | null {
           const rr = r as Record<string, unknown>;
           if (typeof rr.text !== "string") return [];
           const action = rr.action === "tavern" || rr.action === "smith" || rr.action === "healer" || rr.action === "merchant" || rr.action === "merchantGear" || rr.action === "recruitAldric" || rr.action === "acceptSuspectHostageQuest" ? (rr.action as DialogAction) : undefined;
-          return [{ text: rr.text, next: typeof rr.next === "string" ? rr.next : null, action }];
+          const af = rr.affinity as { from?: unknown; to?: unknown; delta?: unknown } | undefined;
+          const affinity = af && typeof af.from === "string" && typeof af.to === "string" && (af.delta === -3 || af.delta === 0 || af.delta === 3)
+            ? { from: af.from, to: af.to, delta: af.delta as -3 | 0 | 3 } : undefined;
+          return [{ text: rr.text, next: typeof rr.next === "string" ? rr.next : null, action, affinity }];
         })
       : undefined;
     lines.push({
@@ -439,6 +443,7 @@ function cleanBattle(raw: unknown, pendingMission: string | null): BattleSnapsho
   const phase: Phase = b.phase === "enemy" ? "enemy" : "player";
   return {
     missionId,
+    affinityScores: b.affinityScores == null ? undefined : cleanAffinityScores(b.affinityScores),
     turn: clampInt(b.turn, 1, 999),
     phase,
     units,
@@ -537,6 +542,7 @@ export function emptySave(muted = false): SaveData {
     seenInnArrivalIntro: false,
     overworldPos: { col: START_HEX.x, row: START_HEX.y },
     gameClock: 0,
+    affinityScores: {},
     overworldMoveBudgetUsed: 0,
     heroHunger: {},
     heroDiseases: {},
@@ -709,6 +715,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     overworldPos,
     gameClock: clampInt(raw.gameClock, 0, 999999),
     gameHour: clampInt(raw.gameHour ?? 8, 0, 23),
+    affinityScores: cleanAffinityScores(raw.affinityScores),
     overworldMoveBudgetUsed: clampInt(raw.overworldMoveBudgetUsed ?? raw.gameClock, 0, 999999),
     heroHunger: cleanHunger(raw.heroHunger),
     heroDiseases: cleanHeroDiseases(raw.heroDiseases),

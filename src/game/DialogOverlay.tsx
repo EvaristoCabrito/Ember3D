@@ -2,7 +2,7 @@ import { useGamePreferences, translatedText, uiText } from "./gamePreferences";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { portraitFor } from "./assets";
-import type { DialogAction, DialogTree } from "./types";
+import type { DialogAction, DialogReply, DialogTree } from "./types";
 
 /** The Battle Dialog System's runtime popup — shared by the mission intro/outro and every
  * NPC conversation. Always starts at `tree.startId`; a plain line advances via its own
@@ -10,7 +10,7 @@ import type { DialogAction, DialogTree } from "./types";
  * `next`. Either ends the tree (closes the popup) when the line/reply it followed has no
  * `next`. No click-outside-to-dismiss — same as the chest-loot/promotion popups, a
  * conversation only advances when the player deliberately presses a button. */
-export function DialogOverlay({ tree, onClose, onAction }: { tree: DialogTree; onClose: () => void; onAction?: (action: DialogAction) => void }) {
+export function DialogOverlay({ tree, onClose, onAction, onReply }: { tree: DialogTree; onClose: () => void; onAction?: (action: DialogAction) => void; onReply?: (reply: DialogReply) => void }) {
   const prefs = useGamePreferences();
   const [lineId, setLineId] = useState(tree.startId);
   const line = tree.lines.find((l) => l.id === lineId);
@@ -49,6 +49,7 @@ export function DialogOverlay({ tree, onClose, onAction }: { tree: DialogTree; o
                   variant="quiet"
                   className="w-full text-left justify-start ember-btn ember-btn-sm ember-btn-ghost"
                   onClick={() => {
+                    onReply?.(reply);
                     if (reply.action && onAction) {
                       onClose();
                       onAction(reply.action);
