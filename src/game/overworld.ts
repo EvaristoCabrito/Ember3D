@@ -1,6 +1,6 @@
 import { CHEST_LOOT, EMPTY_BAG, EQUIPMENT, heroRecruited, MAX_LEVEL, partyBagHasRoom, POTION_CARRY_MAX, POTIONS, statsFor, weightedLootPick, weightedPotionPick, WEAPONS, WORLD_LOCATIONS } from "./data";
 import { DAILY_HUNGER_COST, drainHunger } from "./hunger";
-import { campaignHour, TRAVEL_HOURS_PER_HEX, usesTravelClock } from "./campaignTime";
+import { campaignHour, usesTravelClock } from "./campaignTime";
 import { missionsForLocation, RANDOM_ENCOUNTER_REGIONS } from "./mapstore";
 import ENCOUNTER_ZONES from "./random-encounter-zones.json";
 import { cubeRound, cubeToOddr, hexNeighbors, key, oddrToCube } from "./pathfinding";
@@ -271,7 +271,7 @@ export interface OverworldEvent {
 
 /** A destination hex selects its authored biome pool. An exhausted regional pool never
  * falls back to road encounters; outside any zone the existing road pool still applies. */
-export function travelEncounterIds(col: number, row: number): string[] {
+export function travelRegionAt(col: number, row: number): string {
   // Explicitly prioritized routes (such as a road through woods) win overlaps; equal
   // priorities use the later zone so authored additions can refine earlier boundaries.
   let regionId = "road";
@@ -283,7 +283,22 @@ export function travelEncounterIds(col: number, row: number): string[] {
       priority = nextPriority;
     }
   }
-  return RANDOM_ENCOUNTER_REGIONS.find((region) => region.id === regionId)?.encounterIds ?? [];
+  return regionId;
+}
+
+export function travelEncounterIds(col: number, row: number): string[] {
+  return RANDOM_ENCOUNTER_REGIONS.find((region) => region.id === travelRegionAt(col, row))?.encounterIds ?? [];
+}
+
+export function travelHoursForHex(col: number, row: number, locations: WorldLocation[]): number {
+  const location = locationAt(locations, col, row);
+  if (location && /cave|caverna|underground/i.test(`${location.id} ${location.name}`)) return 36;
+  const region = travelRegionAt(col, row);
+  return region === "forest" ? 24 : region === "mountain" || region === "underground" || region === "cave" ? 36 : region === "plains" ? 12 : 6;
+}
+
+export function travelTimeLabel(hours: number): string {
+  return hours === 24 ? "1 dia" : hours === 36 ? "1 dia e 12 horas" : `${hours} horas`;
 }
 
 const ENCOUNTERS: { text: string; rationsDice?: number; ember?: number; goldLossDice?: number; lootBag?: boolean; losePotion?: boolean; loseLockpick?: boolean; diseaseChance?: number; alertDays?: number }[] = [
@@ -313,7 +328,7 @@ export function teleportOverworld(save: SaveData, col: number, row: number): Sav
   return { ...save, overworldPos: { col, row } };
 }
 
-/** Advances one hex step: a day during the tutorial, six hours after the bridge. Refuses (returns
+/** Advances one hex step: a day during the tutorial, terrain-based hours after the bridge. Refuses (returns
  * the save unchanged, no event) if the target hex isn't actually a neighbor of the current
  * position — the UI is expected to only ever offer neighbors, but this is the one place
  * that enforces it regardless. */
@@ -324,7 +339,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
 
   const heroHunger = { ...save.heroHunger };
   const hourly = usesTravelClock(save);
-  const travelHours = hourly ? TRAVEL_HOURS_PER_HEX : 24;
+  const travelHours = hourly ? travelHoursForHex(toCol, toRow, locations) : 24;
   const totalHours = campaignHour(save) + travelHours;
   const elapsedDays = Math.floor(totalHours / 24);
   // Modo teste: everyone shown in the party feels the same daily drain, full stop — not
@@ -342,7 +357,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   for (const [hero, tiers] of Object.entries(save.spellUses)) {
     const next: Partial<Record<TierKey, number>> = {};
     for (const [t, spent] of Object.entries(tiers ?? {})) {
-      const recovered = elapsedDays > 0 ? Math.floor((spent ?? 0) / 2) : (spent ?? 0);
+      const recovered = Math.floor((spent ?? 0) / 2 ** elapsedDays);
       if (recovered > 0) next[t as TierKey] = recovered;
     }
     if (Object.keys(next).length > 0) spellUses[hero] = next;
@@ -364,7 +379,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
       if (max <= 0) continue;
       const current = unitHp[hero] ?? max;
       if (current <= 0 || current >= max) continue; // fallen heroes don't heal on the road
-      unitHp[hero] = Math.min(max, Math.round(current + max * RECOVERY_PCT));
+      unitHp[hero] = Math.min(max, Math.round(current + max * RECOVERY_PCT * elapsedDays));
     }
   }
 
@@ -387,7 +402,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   let diseaseText = "";
   // This roll happens for every completed travel day, independent of whether the day also
   // produces a battle or text encounter. Once sick, a hero is skipped until cured.
-  if (elapsedDays > 0 && healthyTravellers.length > 0 && Math.random() < TRAVEL_DISEASE_CHANCE) {
+  if (elapsedDays > 0 && healthyTravellers.length > 0 && Math.random() < 1 - (1 - TRAVEL_DISEASE_CHANCE) ** elapsedDays) {
     const hero = healthyTravellers[Math.floor(Math.random() * healthyTravellers.length)]!;
     heroDiseases[hero] = true;
     diseaseText = `${hero} contraiu uma doença na estrada (−10% nos atributos até ser curado).`;

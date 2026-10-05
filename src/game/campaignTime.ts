@@ -1,6 +1,5 @@
 import type { MapTimeOfDay, SaveData } from "./types";
 
-export const TRAVEL_HOURS_PER_HEX = 6;
 export function usesTravelClock(save: SaveData): boolean {
   return save.completed.includes("thebridge");
 }

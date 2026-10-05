@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { BookOpen, Check, ChevronLeft, Lock, MapPin, Save, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
+import { BookOpen, Check, ChevronLeft, Clock, Lock, MapPin, Save, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
 import { isCrossingDungeon, missionsForLocation } from "./mapstore";
 import type { EquipSlot, Mission, PotionId, SaveData, WorldLocation } from "./types";
 import { PartyInventoryOverlay } from "./InventoryScreens";
@@ -7,13 +7,13 @@ import { CREATE_FOOD_AND_WATER, POTIONS, createFoodAndWaterFormula, createFoodAn
 import { fullness } from "./hunger";
 import { GoldAmount } from "./GoldAmount";
 import { getAudioVolumes, setCutsceneVolume, setMusicVolume, setSfxVolume, sfxPlay, unlockAudio } from "./audio";
-import { canStepOverworld, hexToWorld, isOverworldCell, locationExpired, neighborsOf, OVERWORLD_START_HEX, type OverworldEvent, worldToHex } from "./overworld";
+import { canStepOverworld, hexToWorld, isOverworldCell, locationExpired, neighborsOf, OVERWORLD_START_HEX, travelHoursForHex, travelTimeLabel, type OverworldEvent, worldToHex } from "./overworld";
 import { HungerBar } from "./HungerBar";
 import { portraitFor } from "./assets";
 import { key } from "./pathfinding";
 import { QUESTS, questProgress, questStatus } from "./quests";
 import { MapLoadingOverlay, useMapLoading } from "./MapLoadingOverlay";
-import { campaignHour, campaignTimeOfDay, TRAVEL_HOURS_PER_HEX, usesTravelClock } from "./campaignTime";
+import { campaignHour, campaignTimeOfDay, usesTravelClock } from "./campaignTime";
 
 export type LocationStatus = "locked" | "available" | "done";
 
@@ -135,7 +135,7 @@ export function OverworldMapScreen({
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
   const hourlyTravel = usesTravelClock(save);
-  const travelCost = hourlyTravel ? `${TRAVEL_HOURS_PER_HEX} horas` : "1 dia";
+  const travelCost = (col: number, row: number) => hourlyTravel ? travelTimeLabel(travelHoursForHex(col, row, locations)) : "1 dia";
   const timeOfDay = hourlyTravel ? campaignTimeOfDay(campaignHour(save)) : "day";
   const skyTint = timeOfDay === "darkNight" ? "rgba(8,15,45,0.55)" : timeOfDay === "brightNight" ? "rgba(20,35,75,0.35)" : timeOfDay === "dawn" || timeOfDay === "dusk" ? "rgba(190,90,40,0.18)" : "rgba(0,0,0,0)";
   const [questLogOpen, setQuestLogOpen] = useState(false);
@@ -380,7 +380,10 @@ export function OverworldMapScreen({
             <span>Salvar</span>
           </button>
         )}
-        <p className="text-sm text-muted ember-plate px-2 py-1">Dia <span className="text-fg tabular-nums">{gameClock}{hourlyTravel ? ` · ${String(campaignHour(save)).padStart(2, "0")}:00` : ""}</span></p>
+        <p aria-label="Relógio do jogo" aria-live="polite" className="inline-flex items-center gap-2 text-sm text-muted ember-plate px-2 py-1">
+          <Clock aria-hidden className="size-4" />
+          <span>Dia <span className="text-fg tabular-nums">{gameClock} · {String(campaignHour(save)).padStart(2, "0")}:00</span></span>
+        </p>
         <p className="text-sm text-muted ember-plate px-2 py-1">Rações <span className="text-fg tabular-nums">{rations}</span></p>
         {hungerStreak > 0 && (
           <p className="text-sm ember-plate px-2 py-1 text-danger">
@@ -677,9 +680,9 @@ export function OverworldMapScreen({
                 onClick={() => walkTo(dot.x, dot.y)}
                 className="overworld-step absolute -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${dot.world.x}%`, top: `${dot.world.y}%`, width: `${Math.sqrt(3) * 5}%`, height: "10%" }}
-                aria-label={`Andar para ${dot.x}, ${dot.y} · ${travelCost}`}
+                aria-label={`Andar para ${dot.x}, ${dot.y} · ${travelCost(dot.x, dot.y)}`}
               >
-                <span>{travelCost}</span>
+                <span>{travelCost(dot.x, dot.y)}</span>
               </button>
             ))}
 
@@ -714,7 +717,7 @@ export function OverworldMapScreen({
 
       <div className="map-party-panel absolute z-20 bottom-4 left-4 rounded-lg border border-border p-3 max-w-[calc(100%-6rem)]">
         <p className="text-xs text-muted mb-2" aria-live="polite">
-          {atStartPreVau ? "Clique em Kael para entrar na missão" : movementOpen ? `Escolha um hexágono · ${travelCost}` : "Clique em Kael para mover"}
+          {atStartPreVau ? "Clique em Kael para entrar na missão" : movementOpen ? "Escolha um hexágono · o tempo depende do terreno" : "Clique em Kael para mover"}
         </p>
         <div className="flex gap-3">
           {([['Kael', 'kaelFinal'], ['Neera', 'neera'], ['Voss', 'voss'], ['Salazar', 'salazar'], ['Aldric', 'aldric'], ['Malrec', 'conjurer']] as const).filter(([name]) => test || heroRecruited(name, save.completed, save.flags)).map(([name, sprite]) => (
