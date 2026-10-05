@@ -715,6 +715,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     heroPoisons: cleanHeroDiseases(raw.heroPoisons),
     rations: typeof raw.rations === "number" ? clampInt(raw.rations, 0, 999999) : STARTING_RATIONS,
     hungerStreak: clampInt(raw.hungerStreak, 0, 999999),
+    hungerHours: typeof raw.hungerHours === "number" && Number.isFinite(raw.hungerHours) ? Math.max(0, raw.hungerHours) : undefined,
     alertStreak: clampInt(raw.alertStreak, 0, 999999),
     lastRoadEncounterId: typeof raw.lastRoadEncounterId === "string" ? raw.lastRoadEncounterId : null,
     roadEncountersSeen: cleanStringList(raw.roadEncountersSeen, MISSION_IDS),

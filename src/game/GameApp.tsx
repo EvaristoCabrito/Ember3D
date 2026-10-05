@@ -1682,7 +1682,7 @@ export function GameApp() {
     // A ration can clear the whole party's streak the moment it does, same as a completed
     // overworld step would next time it ran — otherwise "Fome Xd" and its stat penalty sit
     // stale on-screen until the party's next move recomputes them.
-    if (next.hungerStreak > 0 && partyIsFed(next, testMode)) next = { ...next, hungerStreak: 0 };
+    if ((next.hungerStreak > 0 || (next.hungerHours ?? 0) > 0) && partyIsFed(next, testMode)) next = { ...next, hungerStreak: 0, hungerHours: 0 };
     writeMapSave(next);
   };
   /** Mochila's "Alimentar todos" — one ration per hero in the given roster, off the shared
@@ -1699,7 +1699,7 @@ export function GameApp() {
       next = after;
     }
     if (fed === 0) return 0;
-    if (next.hungerStreak > 0 && partyIsFed(next, testMode)) next = { ...next, hungerStreak: 0 };
+    if ((next.hungerStreak > 0 || (next.hungerHours ?? 0) > 0) && partyIsFed(next, testMode)) next = { ...next, hungerStreak: 0, hungerHours: 0 };
     writeMapSave(next);
     return fed;
   };

@@ -4,7 +4,7 @@ import { isCrossingDungeon, missionsForLocation } from "./mapstore";
 import type { EquipSlot, Mission, PotionId, SaveData, WorldLocation } from "./types";
 import { PartyInventoryOverlay } from "./InventoryScreens";
 import { CREATE_FOOD_AND_WATER, POTIONS, createFoodAndWaterFormula, createFoodAndWaterPower, heroRecruited, rulesClass, tierUses } from "./data";
-import { fullness } from "./hunger";
+import { fullness, travelHungerCost } from "./hunger";
 import { GoldAmount } from "./GoldAmount";
 import { getAudioVolumes, setCutsceneVolume, setMusicVolume, setSfxVolume, sfxPlay, unlockAudio } from "./audio";
 import { canStepOverworld, hexToWorld, isOverworldCell, locationExpired, neighborsOf, OVERWORLD_START_HEX, travelHoursForHex, travelTimeLabel, type OverworldEvent, worldToHex } from "./overworld";
@@ -680,7 +680,8 @@ export function OverworldMapScreen({
                 onClick={() => walkTo(dot.x, dot.y)}
                 className="overworld-step absolute -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${dot.world.x}%`, top: `${dot.world.y}%`, width: `${Math.sqrt(3) * 5}%`, height: "10%" }}
-                aria-label={`Andar para ${dot.x}, ${dot.y} · ${travelCost(dot.x, dot.y)}`}
+                title={`Saciedade: −${travelHungerCost(hourlyTravel ? travelHoursForHex(dot.x, dot.y, locations) : 24)}`}
+                aria-label={`Andar para ${dot.x}, ${dot.y} · ${travelCost(dot.x, dot.y)} · saciedade −${travelHungerCost(hourlyTravel ? travelHoursForHex(dot.x, dot.y, locations) : 24)}`}
               >
                 <span>{travelCost(dot.x, dot.y)}</span>
               </button>
@@ -725,7 +726,7 @@ export function OverworldMapScreen({
               <button type="button" aria-label={`Inventário de ${name}`} onClick={() => setInventoryHero(name)} className="min-h-11">
                 <img src={portraitFor(sprite).src} alt={name} style={{ objectPosition: portraitFor(sprite).position }} className="w-10 h-12 object-cover rounded" />
               </button>
-              <HungerBar name={name} value={heroHunger[name]} />
+              <HungerBar name={name} value={heroHunger[name]} travel={hourlyTravel} />
             </div>
           ))}
         </div>

@@ -1,5 +1,5 @@
 import { CHEST_LOOT, EMPTY_BAG, EQUIPMENT, heroRecruited, MAX_LEVEL, partyBagHasRoom, POTION_CARRY_MAX, POTIONS, statsFor, weightedLootPick, weightedPotionPick, WEAPONS, WORLD_LOCATIONS } from "./data";
-import { DAILY_HUNGER_COST, drainHunger } from "./hunger";
+import { DAILY_HUNGER_COST, drainHunger, fullness, travelHungerCost } from "./hunger";
 import { campaignHour, usesTravelClock } from "./campaignTime";
 import { missionsForLocation, RANDOM_ENCOUNTER_REGIONS } from "./mapstore";
 import ENCOUNTER_ZONES from "./random-encounter-zones.json";
@@ -349,7 +349,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   // still gates on both, same as ever.
   const ages = (hero: string) => test || (heroRecruited(hero, save.completed, save.flags) && (save.unitHp[hero] ?? maxHpFor(save, hero)) > 0);
   for (const hero of Object.keys(HERO_BASE_CLASS)) {
-    if (ages(hero)) heroHunger[hero] = drainHunger(heroHunger[hero], DAILY_HUNGER_COST * travelHours / 24);
+    if (ages(hero)) heroHunger[hero] = drainHunger(heroHunger[hero], travelHungerCost(travelHours));
   }
 
   // Recover half the spent spell charges when travel crosses into a new day.
@@ -366,7 +366,11 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   const fed = Object.keys(HERO_BASE_CLASS).filter(ages).every((hero) => (heroHunger[hero] ?? 100) > 0);
   const rations = save.rations;
   const prevPenalty = hungerPenaltyFor(save.hungerStreak);
-  const hungerStreak = fed ? 0 : save.hungerStreak + elapsedDays;
+  const travellingHeroes = Object.keys(HERO_BASE_CLASS).filter(ages);
+  const startingFullness = Math.min(...travellingHeroes.map((hero) => fullness(save.heroHunger[hero])));
+  const newlyHungryHours = Math.max(0, travelHours - startingFullness * 24 / DAILY_HUNGER_COST);
+  const hungerHours = fed ? 0 : (startingFullness > 0 ? 0 : save.hungerHours ?? save.hungerStreak * 24) + newlyHungryHours;
+  const hungerStreak = hourly ? Math.floor(hungerHours / 24) : fed ? 0 : save.hungerStreak + elapsedDays;
 
   const unitHp: Record<string, number> = { ...save.unitHp };
   // Recovery only happens on a day the party actually ate — "não ativa a recuperação de
@@ -541,6 +545,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
       rations: Math.max(0, rations + rationsDelta),
       ember: Math.max(0, save.ember + emberDelta),
       hungerStreak,
+      hungerHours,
       alertStreak,
       lastRoadEncounterId,
       roadEncountersSeen,

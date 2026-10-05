@@ -1,5 +1,8 @@
 /** Fullness remaining, in percentage points. Travel costs half a bar per day. */
 export const DAILY_HUNGER_COST = 50;
+export function travelHungerCost(hours: number): number {
+  return DAILY_HUNGER_COST * hours / 24;
+}
 export const ACTION_HUNGER_COST = 2;
 export const INN_MEAL_PRICE = 2;
 export const INN_FULLNESS = 120;
