@@ -586,7 +586,9 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "burning-hamlet": { id: "burning-hamlet", name: "Vilarejo em Chamas", footprint: DECO_BLOCK_5 },
   "boulder-mound": { id: "boulder-mound", name: "Monte de Pedras", footprint: DECO_ONE },
   "wooden-cart": { id: "wooden-cart", name: "Carroça de Madeira", footprint: DECO_PAIR },
-  "merchant-covered-cart-001": { id: "merchant-covered-cart-001", name: "Carroça Coberta do Mercador", footprint: DECO_PAIR, artScale: 0.8, heightScale: 1.15 },
+  "merchant-covered-cart-002": { id: "merchant-covered-cart-002", name: "Carroça Coberta do Mercador", footprint: DECO_PAIR, artScale: 0.8, heightScale: 1.15 },
+  "inn-stairs-up": { id: "inn-stairs-up", name: "Escada para o Andar de Cima", footprint: DECO_PAIR, artScale: 0.9 },
+  "inn-stairs-down": { id: "inn-stairs-down", name: "Escada para o Andar de Baixo", footprint: DECO_PAIR, artScale: 0.9 },
   "spike-crown": { id: "spike-crown", name: "Coroa de Espinhos", footprint: DECO_TRIO },
   ...WILDS_DECORATIONS,
   ...TORTURE_DECORATIONS,
@@ -1458,6 +1460,25 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     footprintOffsets: FOOTPRINT_TYPE_3,
     init: 3,
   },
+  // Plague Bearing Cattle: the Undead Ox's stats x1.2, same body type, disease hit and
+  // Veneno Menor. Sheets cut from reference video (work/plague-cattle/).
+  plagueBearingCattle: {
+    id: "plagueBearingCattle",
+    name: "Plague Bearing Cattle",
+    role: "Morto-vivo",
+    hp: 114,
+    atk: 24,
+    mag: 12,
+    def: 8,
+    res: 4,
+    mov: 4,
+    minRange: 1,
+    maxRange: 1,
+    sprite: "plague-bearing-cattle",
+    size: 2,
+    footprintOffsets: FOOTPRINT_TYPE_3,
+    init: 3,
+  },
   troll: {
     id: "troll",
     name: "Troll da caverna",
@@ -2254,6 +2275,8 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
   zombie2: { hp: 4, atk: 2, mag: 0, def: 1, res: 1 },
   // ~2.5x the Zombie's growth.
   undeadOx: { hp: 10, atk: 5, mag: 2, def: 3, res: 2 },
+  // The Undead Ox's growth x1.2.
+  plagueBearingCattle: { hp: 12, atk: 6, mag: 2, def: 4, res: 2 },
   // Twice the Zombie's growth, MAG growing with ATK.
   emberedWraith: { hp: 8, atk: 4, mag: 4, def: 2, res: 2 },
   morvenianWolf: { hp: 4, atk: 2, mag: 0, def: 2, res: 1 },
@@ -3434,6 +3457,7 @@ export const EMBER_DROP: Partial<Record<ClassId, number>> = {
   zombie: 3,
   zombie2: 3,
   undeadOx: 8,
+  plagueBearingCattle: 10,
   emberedWraith: 6,
   morvenianWolf: 3,
   mordavianWolf: 5,

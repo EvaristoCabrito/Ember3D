@@ -141,7 +141,7 @@ export function portraitFor(sprite: SpriteId): { src: string; framed: boolean; p
 }
 
 const TILES = Object.keys(TILE_VARIANT_COUNT) as TerrainId[];
-const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "minor-horror-001", "Asherah", "pikeman", "wardog", "wardog2", "EmberedWraith", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombieDog", "zombie", "zombie2", "undeadOx", "swamp-blue-calf", "cobalt-blue-deer", "big-blue-ox-002", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman", "travelingMerchant"];
+const SPRITES: SpriteId[] = ["defaultWarrior", "neera", "voss", "salazar", "aldric", "malrec", "defaultLancer", "soldier", "brigand", "captain", "sorcerer", "horror", "minor-horror-001", "Asherah", "pikeman", "wardog", "wardog2", "EmberedWraith", "troll", "troll2", "RoccoTheBird", "morvenian-wolf", "mordavian-wolf", "mordavian-wolf-final", "punisher", "theButcher", "birolho", "birolho2", "birolho3", "BirolhoLegs", "BirolhoLegs2", "familiar", "familiar2", "familiar3", "familiar4", "zombieDog", "zombie", "zombie2", "undeadOx", "plague-bearing-cattle", "swamp-blue-calf", "cobalt-blue-deer", "big-blue-ox-002", "ancient-golem", "lancer", "sandoval", "kaelFinal", "kaelEarly", "conjurer", "cultist-v2", "archerRecruit", "mageRecruit", "healerRecruit", "beberrao", "breadLady", "brue", "crazyLady", "mudinho", "oldHealer", "peasant1", "shadyPatron", "soupLady", "villagerF1", "woodsman", "travelingMerchant"];
 
 SPRITES.push(...ENCOUNTER_NPC_IDS);
 
@@ -317,6 +317,7 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   zombie2: { n: 10, bust: "" },
   // Undead Ox: head-down lunge from the Idle/ATT video (see its README).
   undeadOx: { n: 36, bust: "?v=ox-36" },
+  "plague-bearing-cattle": { n: 36, bust: "?v=plague-cattle-001" },
   familiar4: { n: 36, bust: "" },
   "mordavian-wolf-final": { n: 36, bust: "" },
   punisher: { n: 4, bust: "" },
@@ -364,6 +365,7 @@ const CAST_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   zombieDog: { n: 36, bust: "?v=f36" },
   // Undead Ox: green rib-glow and breath, played for its Veneno Cáustico.
   undeadOx: { n: 36, bust: "?v=ox-36" },
+  "plague-bearing-cattle": { n: 36, bust: "?v=plague-cattle-001" },
   "cobalt-blue-deer": { n: 4, bust: "?v=cobalt-blue-deer-002" },
   // Familiar 3's spellcasting windup (cast-*.png) — plays for its Fireball cast only
   // (attackPose falls back to `attacks` for a plain melee swing); see ATTACK_FRAMES/
@@ -449,6 +451,7 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   zombie2: { n: 12, bust: "" },
   // Undead Ox: right-facing walk; the renderer mirrors it for leftward travel.
   undeadOx: { n: 36, bust: "?v=ox-36" },
+  "plague-bearing-cattle": { n: 36, bust: "?v=plague-cattle-001" },
   // Right-facing dash (the video has no walk loop); the renderer mirrors it for leftward travel.
   familiar4: { n: 36, bust: "" },
   // Mordavian Wolf Final: right-facing walk (mirrored from the Walk Left footage); the
@@ -494,6 +497,7 @@ const DEATH_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // as death2-*.png below.
   zombieDog: { n: 36, bust: "?v=zd-hit-death-36" },
   undeadOx: { n: 36, bust: "?v=ox-36" },
+  "plague-bearing-cattle": { n: 36, bust: "?v=plague-cattle-001" },
 };
 
 // Alternate death sheets: death2-*.png, played about one death in three (see GameArt.deaths2).
@@ -530,8 +534,8 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
       pools[key] = value;
     }));
   };
-  const n = id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" ? 36 : id === "undeadOx" ? 36 : id === "minor-horror-001" ? 36 : id === "big-blue-ox-002" ? 36 : id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" || id === "familiar2" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "zombie" ? 32 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 36 : HERO_IDLE.has(id) ? 12 : 4;
-  const cacheBust = id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" ? "?v=f36" : id === "undeadOx" ? "?v=ox-36" : id === "minor-horror-001" ? "?v=minor-horror-003" : id === "big-blue-ox-002" ? "?v=big-blue-ox-ai-006" : id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : id === "familiar2" ? "?v=familiar2-36" : "";
+  const n = id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" ? 36 : id === "undeadOx" || id === "plague-bearing-cattle" ? 36 : id === "minor-horror-001" ? 36 : id === "big-blue-ox-002" ? 36 : id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" || id === "familiar2" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "zombie" ? 32 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 36 : HERO_IDLE.has(id) ? 12 : 4;
+  const cacheBust = id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" ? "?v=f36" : id === "undeadOx" ? "?v=ox-36" : id === "plague-bearing-cattle" ? "?v=plague-cattle-001" : id === "minor-horror-001" ? "?v=minor-horror-003" : id === "big-blue-ox-002" ? "?v=big-blue-ox-ai-006" : id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : id === "familiar2" ? "?v=familiar2-36" : "";
   put("sprites", cut(n, (i) => (id === "conjurer" ? `talk-${i}` : `${i}`), cacheBust));
   const atk = ATTACK_FRAMES[id];
   if (atk) put("attacks", cut(atk.n, (i) => `atk-${i}`, atk.bust));
@@ -762,6 +766,7 @@ export async function loadGameArt(): Promise<GameArt> {
     "random-encounter-5": await loadImage("/game/assets/random-encounter-5-bg.jpg"),
     "random-encounter-8": await loadImage("/game/assets/random-encounter-8-bg.jpg"),
     "random-encounter-11": await loadImage("/game/assets/merchant-road-background-001.jpg"),
+    "random-encounter-14": await loadImage("/game/assets/merchant-snow-market-background-001.jpg"),
     // O Vau's campaign battlefield has its own ash-river vista. Keep Vau Raso on the earlier
     // backdrop below: its road encounter is a separate place and should not inherit this scene.
     vau: await loadImage("/game/assets/vau-1-bg.jpg"),

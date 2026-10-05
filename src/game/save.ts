@@ -393,15 +393,17 @@ function cleanBattle(raw: unknown, pendingMission: string | null): BattleSnapsho
   const tiles = (b.tiles as unknown[]).filter((t): t is TerrainId => typeof t === "string") as TerrainId[];
   const decorations = Array.isArray(b.decorations)
     ? (b.decorations as unknown[])
-        .filter((d): d is { id: string; x: number; y: number; rot?: number } => !!d && typeof d === "object" && typeof (d as { id?: unknown }).id === "string")
+        .filter((d): d is Record<string, unknown> => !!d && typeof d === "object" && typeof (d as { id?: unknown }).id === "string")
         .map((d) => ({
-          id: (d as { id: string }).id,
-          x: clampInt((d as { x?: unknown }).x, 0, MAX_GRID - 1),
-          y: clampInt((d as { y?: unknown }).y, 0, MAX_GRID - 1),
-          rot: typeof (d as { rot?: unknown }).rot === "number" ? clampInt((d as { rot?: unknown }).rot, 0, 5) : undefined,
-          mirrorX: (d as { mirrorX?: unknown }).mirrorX === true ? true : undefined,
-          blocksPath: (d as { blocksPath?: unknown }).blocksPath === true ? true : undefined,
-          yieldsHighGround: (d as { yieldsHighGround?: unknown }).yieldsHighGround === true ? true : undefined,
+          id: d.id as string,
+          x: clampInt(d.x, 0, MAX_GRID - 1),
+          y: clampInt(d.y, 0, MAX_GRID - 1),
+          rot: typeof d.rot === "number" ? clampInt(d.rot, 0, 5) : undefined,
+          mirrorX: d.mirrorX === true ? true : undefined,
+          blocksPath: d.blocksPath === true ? true : undefined,
+          yieldsHighGround: d.yieldsHighGround === true ? true : undefined,
+          targetMapId: typeof d.targetMapId === "string" ? d.targetMapId : undefined,
+          returnConnector: d.returnConnector === true ? (true as const) : undefined,
         }))
     : [];
   const turnOrder = Array.isArray(b.turnOrder) ? (b.turnOrder as unknown[]).filter((id): id is string => typeof id === "string") : units.map((u) => u.id);

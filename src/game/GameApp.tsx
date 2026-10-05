@@ -1084,7 +1084,7 @@ export function GameApp() {
         ? (() => {
             const timeOfDay = campaignTimeOfDay(campaignHour(save));
             const light = TIME_OF_DAY_LIGHT[timeOfDay];
-            return { ...resolved, timeOfDay, sunIntensity: light.key, ambientIntensity: light.ambient };
+            return { ...resolved, environment: resolved.environment ?? "outdoor", timeOfDay, sunIntensity: light.key, ambientIntensity: light.ambient };
           })()
         : resolved;
       // Companions sit in the walkable Inn as NPCs, but only once they've actually joined.
@@ -2175,6 +2175,7 @@ export function GameApp() {
           startInHealer={innEntry === "healer"}
           startInMerchant={innEntry === "merchant"}
           startInMerchantGear={innEntry === "merchantGear"}
+          merchantBackdrop={missionId === "random-encounter-14" ? "/game/assets/merchant-snow-market-background-001.jpg" : "/game/assets/merchant-road-background-001.jpg"}
           onLeave={
             innEntry
               ? () => {
@@ -2597,7 +2598,7 @@ export function GameApp() {
           }
           resting={hud.activeExit?.id !== "floor-connector"}
           turn={hud.turn}
-          growth={lastGrowth}
+          growth={mission.id === "estalagem" || mission.id.startsWith("estalagem-andar-") ? null : lastGrowth}
           loot={lastLoot}
           art={briefArt(mission.id)}
           innOpen={!customMission && innUnlocked(save.completed) && mission.index <= 11}
@@ -2639,7 +2640,7 @@ export function GameApp() {
         />
       )}
 
-      {screen === "victory" && pendingPromotions.length > 0 && (
+      {screen === "victory" && mission && mission.id !== "estalagem" && !mission.id.startsWith("estalagem-andar-") && pendingPromotions.length > 0 && (
         <PromotionScreen pending={pendingPromotions} onPick={choosePromotion} />
       )}
 
@@ -6675,7 +6676,7 @@ export function MapEditorScreen({
         )}
         {showPreview && (
           <ResizableEditorPanel
-            className="overflow-hidden border border-border rounded-md bg-black h-[40vh] min-h-[220px] min-w-[280px]"
+            className="map-preview-window overflow-hidden border border-border rounded-md bg-black h-[40vh] min-h-[220px] min-w-[280px]"
             title="Arraste esta alça para redimensionar a prévia"
             minHeight={220}
           >
@@ -7602,8 +7603,10 @@ function BriefingScreen({
   // One shared backdrop for the currently shipped random encounters. Keep this routing
   // isolated here so future encounter-specific art can replace it by id without touching
   // authored campaign briefings.
-  const art = mission.id === "random-encounter-11"
-    ? "/game/assets/merchant-road-background-001.jpg"
+  const art = mission.id === "random-encounter-14"
+    ? "/game/assets/merchant-snow-market-background-001.jpg"
+    : mission.id === "random-encounter-11"
+      ? "/game/assets/merchant-road-background-001.jpg"
     : isRandomEncounter(mission.id) ? "/game/ui/random-encounter-briefing.jpg" : briefArt(mission.id);
   return (
     <section className="relative h-dvh min-h-0 flex flex-col overflow-hidden bg-surface">
@@ -9229,7 +9232,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                         <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                           <img src={spellIcon("caustic-venom")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                           <p className="text-xs leading-snug">
-                            {uiText(unit.classId === "undeadOx" ? MINOR_VENOM.name : CAUSTIC_VENOM.name)} {damageFormula(unit.mag, CAUSTIC_VENOM.centerMul, CAUSTIC_VENOM.centerDice, CAUSTIC_VENOM.centerFaces, CAUSTIC_VENOM.centerBonus)}{" "}
+                            {uiText(unit.classId === "undeadOx" || unit.classId === "plagueBearingCattle" ? MINOR_VENOM.name : CAUSTIC_VENOM.name)} {damageFormula(unit.mag, CAUSTIC_VENOM.centerMul, CAUSTIC_VENOM.centerDice, CAUSTIC_VENOM.centerFaces, CAUSTIC_VENOM.centerBonus)}{" "}
                             <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("causticVenom")!)]}</span>
                           </p>
                         </div>

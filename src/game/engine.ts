@@ -2,11 +2,11 @@ import { AFFINITY_HEROES, affinityBonus, affinityScore, changeAffinity, cleanAff
 import { tacticalGridStyleQuiet as tacticalGridStyle, GRID_MOVE, GRID_ROUTE, GRID_ALLY, GRID_ENEMY, GRID_ENEMY_TARGET, GRID_ENEMY_GLOW } from "./tacticalGrid";
 import { isHexGroundVariant, requestSpriteArt } from "./assets";
 import { drawGroundTexture, drawHexGround } from "./hexGround";
+import { vauBackdropBounds } from "./vauBackdrop";
 import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, MINOR_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
 import { weightedWeaponPick, shieldBashFormula } from "./data";
 import { clearRockColumnTiles, placedBlockingFootprint, THREE_D_DOOR_VARIANTS } from "./data";
-import { vauBackdropBounds } from "./vauBackdrop";
 import { canCounter, makeForecast, mulberry32, powerOf, protOf, rollDamage, rollDamageCustom } from "./combat";
 import {
   attackableEnemies,
@@ -83,6 +83,7 @@ import type {
   EquipSlot,
   StatPointAllocation,
   StatPointAttribute,
+  Spawn,
 } from "./types";
 
 interface Layout {
@@ -935,7 +936,7 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
         cls.id === "birolho" || cls.id === "birolho2" || cls.id === "birolho3" || cls.id === "birolhoLegs" || cls.id === "birolhoLegs2"
           ? birolhoSpellUses(level).causticVenom
           // Undead Ox: 2 Veneno Cáustico per battle (it joins runAiFor's birolho branch).
-          : cls.id === "undeadOx"
+          : cls.id === "undeadOx" || cls.id === "plagueBearingCattle"
             ? 2
           : remainingTier(cls.id, 4, "tier4", level, side, roster, spawn.name),
       tier5: remainingTier(cls.id, 5, "tier5", level, side, roster, spawn.name),
@@ -1436,6 +1437,31 @@ export class BattleEngine {
     this.tileVariants = mission.tileVariants ?? [];
     this.tileRots = mission.tileRots ?? [];
     this.decorations = (mission.decorations ?? []).map((d) => ({ ...d }));
+    if (mission.environment === "indoor") {
+      // Indoor maps should read as complete rooms, not cut-off patches of floor. Extend the
+      // local wall treatment into a continuous rectangular perimeter. These walls are visual
+      // bounds only; the edge of the board already stops movement beyond the room.
+      const wallCounts = new Map<string, number>();
+      for (const d of this.decorations) {
+        if (/^wall-3d-(?:crypt|tavern)$/.test(d.id)) wallCounts.set(d.id, (wallCounts.get(d.id) ?? 0) + 1);
+      }
+      const wallId = [...wallCounts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "wall-3d-crypt";
+      const perimeter = new Set<string>();
+      for (let x = 0; x < this.cols; x++) {
+        perimeter.add(`${x},0`);
+        perimeter.add(`${x},${this.rows - 1}`);
+      }
+      for (let y = 0; y < this.rows; y++) {
+        perimeter.add(`0,${y}`);
+        perimeter.add(`${this.cols - 1},${y}`);
+      }
+      const existingWalls = new Set(this.decorations.filter((d) => d.id.startsWith("wall-3d-")).map((d) => `${d.x},${d.y}`));
+      for (const cell of perimeter) {
+        if (existingWalls.has(cell)) continue;
+        const [x, y] = cell.split(",").map(Number);
+        this.decorations.push({ id: wallId, x: x!, y: y! });
+      }
+    }
     this.tiles = clearRockColumnTiles(this.tiles, this.cols, this.rows, this.decorations, mission.baseTile);
     this.elementalFxPlacements = (mission.elementalFx ?? []).map((p) => ({ ...p }));
     // A tile under a full-coverage water FX placement (water/water2) skips its own photo
@@ -1517,7 +1543,7 @@ export class BattleEngine {
         const id = `enemy-${s.name}-${i}`;
         return defeatedCrossingSpawns.has(id) ? [] : [spawnUnit(s, "enemy", i, roster, enemyLevelFor(mission.index))];
       }),
-      ...(mission.neutralSpawns ?? []).flatMap((s, i) => {
+      ...(this.uniqueNeutralNpcSpawns(mission.neutralSpawns ?? [])).flatMap(({ spawn: s, index: i }) => {
         const id = `neutral-${s.name}-${i}`;
         return defeatedCrossingSpawns.has(id) ? [] : [spawnUnit(s, "neutral", i, roster, enemyLevelFor(mission.index))];
       }),
@@ -3267,7 +3293,7 @@ export class BattleEngine {
 
   /** A wardog's bite (20%) or a zombie's hit (30%) can inflict disease on a surviving target. */
   private maybeInflictDisease(actor: Unit, target: Unit): void {
-    const chance = actor.classId === "wardog" || actor.classId === "wardog2" ? DISEASE.biteChance : (actor.classId === "zombie" || actor.classId === "zombie2" || actor.classId === "undeadOx") ? DISEASE.zombieChance : 0;
+    const chance = actor.classId === "wardog" || actor.classId === "wardog2" ? DISEASE.biteChance : (actor.classId === "zombie" || actor.classId === "zombie2" || actor.classId === "undeadOx" || actor.classId === "plagueBearingCattle") ? DISEASE.zombieChance : 0;
     if (chance <= 0 || !target.alive || target.diseased) return;
     if (this.rng() >= chance) return;
     target.diseased = true;
@@ -7691,7 +7717,7 @@ export class BattleEngine {
     }
 
     // Undead Ox — its tier4 Veneno Menor (2 per battle), then plain melee.
-    if (next.classId === "undeadOx" && this.tryAiMinorVenom(next, reach, walkReach, players)) return;
+    if ((next.classId === "undeadOx" || next.classId === "plagueBearingCattle") && this.tryAiMinorVenom(next, reach, walkReach, players)) return;
 
     // Birolho (and Birolho2) — Relâmpago outranks Caustic Venom outranks Choque outranks Magic Missile.
     if ((next.classId === "birolho" || next.classId === "birolho2" || next.classId === "birolho3" || next.classId === "birolhoLegs" || next.classId === "birolhoLegs2") && (next.spells.tier1 > 0 || next.spells.tier2 > 0 || next.spells.tier4 > 0 || next.shockCharges > 0)) {
@@ -8578,27 +8604,35 @@ export class BattleEngine {
     };
   }
 
-  /** A small deliberate margin beyond the tactical board. It lets the player pan across
-   * the dark perimeter and see a mission's painted backdrop, without giving the camera
-   * enough empty room to lose the battlefield.
-   *
-   * The Ponte de Pedra gets one extra hex-row's worth on top of the usual margin, on both
-   * the top and bottom edge (the same margin.y clamps both, symmetrically) — its own
-   * painted backdrop (thebridge-bg.jpg) needs more room to actually show above and below
-   * the board than the default margin leaves. */
+  /** Normal gameplay stays on the playable board, rather than panning across a large
+   * decorative backdrop. The editor may opt into a fixed preview rim. */
   private cameraMargin(tile: number): { x: number; y: number } {
     // A centered unit may be near the board edge; allow a quarter viewport of camera travel
     // beyond every edge so the party can still stay in the exact screen center there. The
     // editor preview opts into a small fixed rim instead: a half-viewport overscroll exposes
     // a huge black strip when a map's starting party is close to its edge.
     const previewMargin = this.previewPanMarginRadii > 0 ? this.previewPanMarginRadii * tile : null;
-    // The Inn (both floors) gets half of that rim, per direct request: zoomed out, the full
-    // quarter viewport showed too much of its painted background around the board.
-    const innScale = this.mission.id === "estalagem" || this.mission.id === "estalagem-andar-2" ? 0.5 : 1;
     return {
-      x: previewMargin ?? Math.max(this.viewW / 4, 0) * innScale,
-      y: previewMargin ?? Math.max(tile * (this.mission.id === "thebridge" ? 2.25 : 1.5), this.viewH / 4) * innScale,
+      // Normal gameplay stays within the map. A wide backdrop overscroll is disorienting
+      // and makes the board look smaller than it is. Only the editor's explicit preview rim
+      // may add camera room outside the playable grid.
+      x: previewMargin ?? 0,
+      y: previewMargin ?? 0,
     };
+  }
+
+  private uniqueNeutralNpcSpawns(spawns: readonly Spawn[]): { spawn: Spawn; index: number }[] {
+    const names = new Set<string>();
+    const appearances = new Set<string>();
+    return spawns.flatMap((spawn, index) => {
+      if (!spawn.dialog) return [{ spawn, index }];
+      const name = spawn.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase();
+      const appearance = CLASSES[spawn.classId]?.sprite ?? spawn.classId;
+      if (names.has(name) || appearances.has(appearance)) return [];
+      names.add(name);
+      appearances.add(appearance);
+      return [{ spawn, index }];
+    });
   }
 
   /** Editor-only edge room for panning. Real battle never calls this, so battle camera bounds
@@ -8610,18 +8644,9 @@ export class BattleEngine {
 
   private clampCam(): void {
     const tile = ZOOM_RADII[this.zoom]!;
-    const backdrop = this.art.backdrops[this.mission.id];
-    if (this.mission.id === "vau" && !this.tacticsCamera && backdrop) {
-      const bounds = vauBackdropBounds(tile, this.cols, this.viewW, this.viewH, backdrop.width / Math.max(1, backdrop.height));
-      this.camX = Math.min(bounds.left + bounds.width - this.viewW, Math.max(bounds.left, this.camX));
-      this.camY = Math.min(bounds.top + bounds.height - this.viewH, Math.max(bounds.top, this.camY));
-      return;
-    }
     const { w, h } = this.boardSize(tile);
-    // The tactics camera is turned and tilted, so board corners swing outside the flat
-    // top-down bounds below. Give it a quarter viewport of extra travel on every edge.
-    const roomX = this.tacticsCamera ? this.viewW / 4 : 0;
-    const roomY = this.tacticsCamera ? this.viewH / 4 : 0;
+    const roomX = 0;
+    const roomY = 0;
     // Under fog of war, the camera stays within the playable board instead of exposing the
     // decorative dark rim around it. The first tile row starts after boardPad; keep that
     // offset out of view too. If a board is smaller than the viewport, center it as a whole.
@@ -8633,6 +8658,35 @@ export class BattleEngine {
       const loY = maxY < boardTop ? (boardTop + maxY) / 2 : boardTop, hiY = maxY < boardTop ? (boardTop + maxY) / 2 : maxY;
       this.camX = Math.min(hiX + roomX, Math.max(loX - roomX, this.camX));
       this.camY = Math.min(hiY + roomY, Math.max(loY - roomY, this.camY));
+      return;
+    }
+    // HARD RULE (direct request): on every map the camera pans exactly 4 hexes past each edge
+    // of the grid — left, right, top and bottom, no more, no less. The only exceptions are
+    // fog-of-war maps (branch above) and map 4, A Ponte de Pedra ("thebridge"), which keep the
+    // bounds below. The editor preview's own pan rim (previewPanMarginRadii) is a protected
+    // map-editor control and also keeps the bounds below. Do not add other exceptions.
+    if (this.mission.id !== "thebridge" && this.previewPanMarginRadii <= 0) {
+      const edgeHexes = 4;
+      const edgeX = edgeHexes * Math.sqrt(3) * tile;
+      const edgeY = edgeHexes * 1.5 * tile;
+      const loX = -edgeX;
+      const hiX = w + edgeX - this.viewW;
+      const loY = this.boardPad(tile) - edgeY;
+      const hiY = h + edgeY - this.viewH;
+      // Grid plus its 4-hex rim smaller than the window: no pan room on that axis, centered.
+      this.camX = hiX < loX ? (loX + hiX) / 2 : Math.min(hiX, Math.max(loX, this.camX));
+      this.camY = hiY < loY ? (loY + hiY) / 2 : Math.min(hiY, Math.max(loY, this.camY));
+      // The camera also stops where the background picture ends (direct request), even inside
+      // the 4-hex rim. Only O Vau's picture is pinned to the board; every other map's picture
+      // follows the camera and always fills the screen (as it does in the tilted Tactics view).
+      const pinnedBackdrop = this.mission.id === "vau" && !this.tacticsCamera ? this.art.backdrops?.vau : undefined;
+      if (pinnedBackdrop) {
+        const b = vauBackdropBounds(tile, this.cols, this.viewW, this.viewH, pinnedBackdrop.width / Math.max(1, pinnedBackdrop.height));
+        // Never so tight that part of the grid itself becomes unreachable: at close zoom O Vau's
+        // picture ends above the board's bottom row.
+        this.camX = Math.min(Math.max(b.left + b.width, w) - this.viewW, Math.max(Math.min(b.left, 0), this.camX));
+        this.camY = Math.min(Math.max(b.top + b.height, h) - this.viewH, Math.max(Math.min(b.top, this.boardPad(tile)), this.camY));
+      }
       return;
     }
     const margin = this.cameraMargin(tile);
@@ -9583,8 +9637,9 @@ export class BattleEngine {
     // Undead Ox (640x404 canvas, standing figure ~81% of its height, 44px headroom for the
     // hit rear-up and the cast's venom orb): ~2.15 cells tall, a head taller than a human and
     // bigger than WarDog 2, with the canvas's own aspect kept (1.584).
-    const undeadOxHeightScale = u.sprite === "big-blue-ox-002" ? 0.85 : u.sprite === "undeadOx" ? 1.283 : 1;
-    const undeadOxWidthScale = u.sprite === "big-blue-ox-002" ? 1.49 : u.sprite === "undeadOx" ? 1.889 : 1;
+    // Plague Bearing Cattle: same 640x404 canvas, ground line and standing fill as the Undead Ox.
+    const undeadOxHeightScale = u.sprite === "big-blue-ox-002" ? 0.85 : u.sprite === "undeadOx" || u.sprite === "plague-bearing-cattle" ? 1.283 : 1;
+    const undeadOxWidthScale = u.sprite === "big-blue-ox-002" ? 1.49 : u.sprite === "undeadOx" || u.sprite === "plague-bearing-cattle" ? 1.889 : 1;
     const h =
       cell *
       (s >= 4 ? 3.35 : s === 2 ? 1.72 : boss ? 1.44 : 1.42) *

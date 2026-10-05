@@ -1,6 +1,6 @@
 import { CHEST_LOOT, EMPTY_BAG, EQUIPMENT, heroRecruited, MAX_LEVEL, partyBagHasRoom, POTION_CARRY_MAX, POTIONS, statsFor, weightedLootPick, weightedPotionPick, WEAPONS, WORLD_LOCATIONS } from "./data";
 import { DAILY_HUNGER_COST, drainHunger, fullness, travelHungerCost } from "./hunger";
-import { campaignHour } from "./campaignTime";
+import { campaignHour, campaignTimeOfDay, usesTravelClock } from "./campaignTime";
 import { missionsForLocation, RANDOM_ENCOUNTER_REGIONS } from "./mapstore";
 import ENCOUNTER_ZONES from "./random-encounter-zones.json";
 import { cubeRound, cubeToOddr, hexNeighbors, key, oddrToCube } from "./pathfinding";
@@ -340,6 +340,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   const heroHunger = { ...save.heroHunger };
   const travelHours = travelHoursForHex(toCol, toRow, locations);
   const totalHours = campaignHour(save) + travelHours;
+  const arrivalTime = campaignTimeOfDay(totalHours % 24);
   const elapsedDays = Math.floor(totalHours / 24);
   // Modo teste: everyone shown in the party feels the same daily drain, full stop — not
   // gated on heroRecruited OR on unitHp (a hero who never formally joined this save, or
@@ -413,9 +414,13 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   const landedLocation = locationAt(locations, toCol, toRow);
   // Regional encounters share the existing per-slot history. Each is one-time except
   // the traveling merchant; keep the saved field names compatible with older campaigns.
-  const repeatableRoadEncounter = "random-encounter-11";
+  const repeatableMerchantEncounters = new Set(["random-encounter-11", "random-encounter-14"]);
   const seenRoadEncounters = save.roadEncountersSeen ?? [];
-  const travelIds = travelEncounterIds(toCol, toRow).filter((id) => id === repeatableRoadEncounter || (!save.completed.includes(id) && !seenRoadEncounters.includes(id)));
+  const merchantCanAppear = !usesTravelClock(save) || arrivalTime === "brightNight" || arrivalTime === "darkNight";
+  const travelIds = travelEncounterIds(toCol, toRow).filter((id) => {
+    if (repeatableMerchantEncounters.has(id)) return merchantCanAppear;
+    return !save.completed.includes(id) && !seenRoadEncounters.includes(id);
+  });
   // Doubled, not just flat-boosted, while the "large tracks" alert is active — same relative
   // read on the odds regardless of what BATTLE_ENCOUNTER_CHANCE itself is tuned to later.
   const battleChance = save.alertStreak > 0 ? BATTLE_ENCOUNTER_CHANCE * 2 : BATTLE_ENCOUNTER_CHANCE;

@@ -123,6 +123,7 @@ export function InnScreen({
   startInHealer = false,
   startInMerchant = false,
   startInMerchantGear = false,
+  merchantBackdrop,
   healerTargets = [],
   onHealerCast,
   onHealerCureAilments,
@@ -148,6 +149,8 @@ export function InnScreen({
   startInMerchant?: boolean;
   /** Roadside equipment selection priced between 320 and 1300 Gold. */
   startInMerchantGear?: boolean;
+  /** Roadside or mountain-market scene for the merchant's shop. */
+  merchantBackdrop?: string;
   healerTargets?: HealerTarget[];
   /** Applies one paid Cura Média cast and returns the HP actually restored. */
   onHealerCast?: (hero: string) => number | false;
@@ -328,6 +331,7 @@ export function InnScreen({
         test={test}
         onMute={onMute}
         merchantGear={startInMerchantGear}
+        merchantBackdrop={merchantBackdrop}
         onBack={startInSmith || startInMerchantGear ? onLeave : () => setView("npc")}
         onBuyWeapon={onBuyWeapon}
         onBuyEquipment={onBuyEquipment}
@@ -361,7 +365,7 @@ export function InnScreen({
 
   return (
     <section className="shop-surface relative h-dvh min-h-0 flex flex-col overflow-hidden bg-bg">
-      {!startInMerchant && <img src="/game/assets/brief-estalagem.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />}
+      <img src={startInMerchant ? merchantBackdrop ?? "/game/assets/merchant-road-background-001.jpg" : "/game/assets/brief-estalagem.jpg"} alt="" className="absolute inset-0 h-full w-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-bg/80 via-bg/25 to-bg/10" />
       <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
         {/* Back/exit always sits at the far left, across every screen, so it never gets lost. */}
@@ -369,7 +373,7 @@ export function InnScreen({
           Sair
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-xs ember-kicker">{startInMerchant ? "Parada na estrada" : "Pousada à margem da cinza"}</p>
+          <p className="text-xs ember-kicker">{startInMerchant ? (startInMerchantGear ? "Entre os picos nevados" : "Parada na estrada") : "Pousada à margem da cinza"}</p>
           <h1 className="font-display text-2xl leading-none ember-title">{startInMerchant ? "Mercador Itinerante" : "A Estalagem do Osso Seco"}</h1>
         </div>
         <button
@@ -878,6 +882,7 @@ function SmithPanel({
   save,
   test,
   merchantGear = false,
+  merchantBackdrop,
   onMute,
   onBack,
   onBuyWeapon,
@@ -901,6 +906,7 @@ function SmithPanel({
   save: SaveData;
   test?: boolean;
   merchantGear?: boolean;
+  merchantBackdrop?: string;
   onMute: () => void;
   onBack: () => void;
   onBuyWeapon: (hero: string, weaponId: string) => boolean;
@@ -1024,7 +1030,8 @@ function SmithPanel({
 
   return (
     <section className="shop-surface relative h-dvh min-h-0 flex flex-col overflow-hidden bg-bg">
-      <img src="/game/ui/smith-background.jpg" alt="" className="absolute inset-0 h-full w-full object-cover object-left" />
+      <img src={merchantGear ? merchantBackdrop ?? "/game/assets/merchant-snow-market-background-001.jpg" : "/game/ui/smith-background.jpg"} alt="" className="absolute inset-0 h-full w-full object-cover object-left" />
+      {merchantGear && <img src="/game/decorations/merchant-covered-cart-002.png" alt="" className="pointer-events-none absolute z-[1] bottom-0 left-0 w-[min(48vw,680px)] max-h-[70vh] object-contain object-bottom drop-shadow-2xl" />}
       <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
         {/* Back always sits at the far left, across every screen, so it never gets lost. */}
         <button type="button" onClick={onBack} className="h-10 px-3 rounded-md ember-chip text-xs uppercase tracking-[0.14em]">
@@ -1032,7 +1039,7 @@ function SmithPanel({
         </button>
         <div className="min-w-0 flex-1">
           <p className="text-xs ember-kicker">{merchantGear ? "Equipamentos de viagem · 320–1300 Gold" : "A forja no porão"}</p>
-          <h1 className="font-display text-2xl leading-none ember-title">{merchantGear ? "Elias, Mercador das Três Rotas" : "Vargan, o Ferreiro"}</h1>
+          <h1 className="font-display text-2xl leading-none ember-title">{merchantGear ? "Equipamento para os Picos" : "Vargan, o Ferreiro"}</h1>
         </div>
         <button
           type="button"
