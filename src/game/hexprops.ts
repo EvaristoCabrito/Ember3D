@@ -17,11 +17,13 @@
  * answer, and a flag that is on can only add. Neither can make a barricade walkable
  * or take height off a hill.
  */
-import { BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, CHEST_DECOR_IDS, DECORATIONS, HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, SOLID_ROCK_DECOR_IDS, TERRAIN, WEAPONS } from "./data.ts";
+import { BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, CHEST_DECOR_IDS, DECORATIONS, HOUSE_DECOR_IDS, LOW_BLOCKER_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, SOLID_ROCK_DECOR_IDS, TERRAIN, WEAPONS } from "./data.ts";
 import type { DecorationPlacement, TerrainDef, TerrainId, Unit } from "./types.ts";
 
 export const HEX_BLOCKED = 1;
 export const HEX_HIGH = 2;
+/** With HEX_BLOCKED: the hex stops walking only — arrows and sight still pass (low props like a well). */
+export const HEX_OPEN_SHOT = 4;
 
 /**
  * One byte per cell, row-major like `tiles`, holding the two flags the decorations on
@@ -58,6 +60,7 @@ export function buildDecorOverlay(
     const level = terrainElevations[index];
     if (level != null && Number.isFinite(level) && level > 0) overlay[index]! |= HEX_HIGH;
   }
+  const solidCells: number[] = [];
   for (const p of decorations) {
     // A house is a real building — nothing should be able to walk through one, whether or
     // not the map author remembered to check "Bloquear caminho" for this particular
@@ -76,15 +79,19 @@ export function buildDecorOverlay(
     const architecture = DECORATIONS[p.id]?.model3d;
     const solidArchitecture = architecture === "wall" || architecture === "door" || architecture === "secretDoor"
       || (architecture === "doorway" && !!DECORATIONS[p.id]?.architectureSpan && !!DECORATIONS[p.id]?.blockingFootprint);
-    const bits = (p.blocksPath || isHouse || isChest || isBarricade || isRock || solidArchitecture ? HEX_BLOCKED : 0) | (p.yieldsHighGround ? HEX_HIGH : 0);
+    const lowProp = !!p.blocksPath && LOW_BLOCKER_DECOR_IDS.has(p.id) && !isHouse && !isChest && !isBarricade && !isRock && !solidArchitecture;
+    const bits = (p.blocksPath || isHouse || isChest || isBarricade || isRock || solidArchitecture ? HEX_BLOCKED : 0) | (p.yieldsHighGround ? HEX_HIGH : 0) | (lowProp ? HEX_OPEN_SHOT : 0);
     if (!bits) continue;
     for (const { dx, dy } of cellsOf(p)) {
       const x = p.x + dx;
       const y = p.y + dy;
       if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
       overlay[y * cols + x]! |= bits;
+      if ((bits & HEX_BLOCKED) && !lowProp) solidCells.push(y * cols + x);
     }
   }
+  // A solid prop sharing a hex with a low one keeps the hex shot-blocking.
+  for (const index of solidCells) overlay[index]! &= ~HEX_OPEN_SHOT;
   return overlay;
 }
 
@@ -107,7 +114,7 @@ function deriveDef(base: TerrainDef, bits: number): TerrainDef {
     out.moveCost = 99;
     // Solidity is one thing in this engine: a prop that stops a step also stops an
     // arrow and blocks sight. Keeping those together is what "solid is solid" meant.
-    out.blocksShot = true;
+    out.blocksShot = (bits & HEX_OPEN_SHOT) ? !!base.blocksShot : true;
   }
   if (bits & HEX_HIGH) {
     out.height = 1;

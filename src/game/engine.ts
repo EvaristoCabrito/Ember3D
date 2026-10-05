@@ -5,13 +5,14 @@ import { drawGroundTexture, drawHexGround } from "./hexGround";
 import { vauBackdropBounds } from "./vauBackdrop";
 import { BIG_HOUSE_DECOR_IDS, CAUSTIC_VENOM, MINOR_VENOM, DECOR_ART_SCALE, HOUSE_ART_SCALE, CHEST_DECOR_IDS, CHEST_LOOT, CLASSES, CLEAVE, cleaveDoublesVs, cleaveFormula, cleavePower, CURE_DISEASE, CURES, DECORATIONS, DISEASE, DOUBLE_STRIKE, doubleStrikeFormula, doubleStrikePower, EMPTY_BAG, EQUIPMENT, EXP_TO_LEVEL, expToLevel, expForHit, FIREBALL, FANTOM_FORCE, FOOTPRINT_TYPE_7, FOOTPRINT_TYPE_8, formatSpellUseGains, HIGH_GROUND_LIFT, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, longShotPower, MAGIC_MISSILE, magicMissileCount, MAX_LEVEL, PIERCING, piercingMul, PIERCING_THRUST, POTION_CARRY_MAX, POTIONS, RATIONS_ICON, SHOCK, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceDice, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, FAMILIAR_SPELL, familiarSpellCharges, familiarMagicMissileCharges, LIFE_DRAIN, lifeDrainDice, lifeDrainFormula, familiarLifeDrainCharges, lifeDrainHealMul, SWEEP, TRIP, WEAPON_MAX_ENH, WEAPONS, WEB_OF_DREAMS, healFormula, barricadeDecor, decorationCells, decorationFacing, decorationImage, decorationImageRetryWebp, diceFormula, effectiveMaxRange, enemyLevelFor, equipmentIcon, fireballFormula, fireballOrigin, fireballPower, fireballRangeTiles, fireballTiles, hexAreaTiles, isProjectile, isSummonClass, isBossClass, lightningDice, lightningFormula, lightningTier3Formula, parseLayout, placedFootprint, potionLabel, rollCure, rollDice, rollPotion, shockChargesFor, spellFormula, spellTier, spellUseGains, starterWeaponFor, STARTING_BAG, statsFor, terrainNote, TERRAIN, tierKey, tierUses, gearStatBonus, offHandBlocked, equipmentFitsSlot, equipmentSlotName, equipmentTooltip, weaponTooltip, potionTooltip, weaponIcon, weaponRoll, weightedLootPick, weightedPotionPick, MULTI_SHOT, multiShotFormula, multiShotPower, multiShotTargets, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathFormula, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, shoulderSmashPower, SIGHT_RADIUS, STAMPEDE, stampedeFormula, stampedePower, cultistSpellUses, brigandSpellUses, birolhoSpellUses, webOfDreamsSize, webOfDreamsSleepChance, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, bullRushFormula, bullRushPower, EXECUTIONER_STRIKE, executionerStrikeFormula, executionerStrikePower, SHIELD_BASH, shieldBashPower, BURNING_HANDS, burningHandsFormula, burningHandsPower, CREATE_FOOD_AND_WATER, createFoodAndWaterPower, BLESS, rulesClass } from "./data";
 import type { SpellTier } from "./data";
-import { weightedWeaponPick, shieldBashFormula } from "./data";
+import { weightedWeaponPick, shieldBashFormula, fantomForceChargesFor, fantomForceDice } from "./data";
 import { clearRockColumnTiles, placedBlockingFootprint, THREE_D_DOOR_VARIANTS } from "./data";
 import { canCounter, makeForecast, mulberry32, powerOf, protOf, rollDamage, rollDamageCustom } from "./combat";
 import {
   attackableEnemies,
   canHitFrom,
   clearShot,
+  shotBlocker,
   computeReachable,
   computeThreat,
   cleaveHexes,
@@ -184,6 +185,8 @@ const MISSILE_TRAVEL = 0.18;
 /** Phantasmal Force is an apparition, not a bolt: give its attacking silhouette enough
  * screen time to read before its claws land. */
 const PHANTASMAL_FORCE_TRAVEL = 0.38;
+/** Phantom System retains its own legacy bolt timing. */
+const FANTOM_FORCE_TRAVEL = 0.38;
 /** stepSpell's hit tick, per spellKind — every other spell keeps the original 0.18; only
  * Magic Missile's is tied to its own (now longer) travel time. */
 const MISSILE_HIT_AT = MISSILE_TRAVEL;
@@ -335,7 +338,7 @@ function blankPortalFx(): PortalFx {
 /** Divine light / potion burst sitting on a character. Independent of healGlow so the old
  * Potionzero halo can still be fired on its own for a future skill. */
 /** food = Create Food and Water: Cura Média's exact light, in blue. */
-type HolyKind = "minor" | "medium" | "disease" | "potion" | "food";
+type HolyKind = "minor" | "hands" | "medium" | "disease" | "potion" | "food";
 interface HolyFx {
   live: boolean;
   unitId: string;
@@ -352,6 +355,7 @@ function blankHolyFx(): HolyFx {
   return { live: false, unitId: "", x: 0, y: 0, t: 0, max: 0.8, kind: "minor", seed: 0, rays: [] };
 }
 function holyDuration(kind: HolyKind): number {
+  if (kind === "hands") return 0.94;
   if (kind === "medium" || kind === "food") return 1.18;
   if (kind === "disease") return 1.02;
   if (kind === "potion") return 0.88;
@@ -468,6 +472,8 @@ const OVERLAY_FADE_IN = 0.4;
 /** Default: one full pass of any long sheet (idle, walk, attack, cast) lasts this many
  * seconds, whatever its frame count — a 36-frame sheet plays at 12 fps. */
 const LONG_ANIM_SECONDS = 3;
+/** Kael's 36-frame swing, start to finish — shorter than the 3s every other long sheet gets. */
+const KAEL_FINAL_ATTACK_SECONDS = 2;
 /** A death sheet (GameArt.deaths) plays over this long, then the body lies still for
  * DEATH_HOLD_SECONDS before fading out like any other fallen unit. */
 const DEATH_ANIM_SECONDS = 3;
@@ -888,6 +894,8 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
     moved: false,
     acted: false,
     facing: side === "player" ? 1 : -1,
+    faceDx: side === "player" ? 1 : -1,
+    faceDy: 0,
     walkPose: "front",
     idleAlt: false,
     alive: true,
@@ -907,7 +915,9 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
       // tier1/tier2/tier4 uses — see cultistSpellUses/brigandSpellUses/birolhoSpellUses and
       // runAiFor's cultist/brigand/birolho branches.
       tier1:
-        cls.id === "bigBlueCalf"
+        cls.id === "swampBlueCalf"
+          ? tierUses(cls.id, 1, level)
+          : cls.id === "bigBlueCalf"
           ? 3
           : cls.id === "roccoTheBird"
           ? 2
@@ -956,7 +966,7 @@ function spawnUnit(spawn: Mission["playerSpawns"][number], side: Unit["side"], i
     footprintOffsets: cls.footprintOffsets,
     shock: null,
     shockCharges: side === "enemy" ? shockChargesFor(cls.id) : 0,
-    fantomForceCharges: side === "enemy" && (cls.id === "cultist" || cls.id === "cultistV2" || cls.id === "emberedWraith") ? 2 : 0,
+    fantomForceCharges: side === "enemy" ? fantomForceChargesFor(cls.id) : 0,
     diseased,
     diseaseBase: diseased
       ? {
@@ -1019,6 +1029,8 @@ function unitFromSnap(snap: BattleUnitSnap): Unit {
     moved: snap.moved,
     acted: snap.acted,
     facing: snap.facing,
+    faceDx: snap.faceDx ?? snap.facing,
+    faceDy: snap.faceDy ?? 0,
     walkPose: "front",
     idleAlt: false,
     alive: snap.alive,
@@ -1042,7 +1054,7 @@ function unitFromSnap(snap: BattleUnitSnap): Unit {
     footprintOffsets: cls?.footprintOffsets,
     shock: snap.shock ? { ...snap.shock } : null,
     shockCharges: snap.shockCharges ?? 0,
-    fantomForceCharges: snap.fantomForceCharges ?? ((classId === "cultist" || classId === "cultistV2" || classId === "emberedWraith") && snap.side === "enemy" ? 2 : 0),
+    fantomForceCharges: snap.fantomForceCharges ?? (snap.side === "enemy" ? fantomForceChargesFor(classId) : 0),
     blessedHitBonusPct: snap.blessedHitBonusPct ?? 0,
     blessedRoundsLeft: snap.blessedRoundsLeft ?? 0,
     diseased: snap.diseased,
@@ -1875,6 +1887,8 @@ export class BattleEngine {
         moved: u.moved,
         acted: u.acted,
         facing: u.facing,
+        faceDx: u.faceDx,
+        faceDy: u.faceDy,
         alive: u.alive,
         fade: u.fade,
         level: u.level,
@@ -2254,13 +2268,68 @@ export class BattleEngine {
     // position, not column: same reason as stepMove's facing — on this row-staggered grid a
     // same-column target is still left or right on screen, and comparing columns left those
     // units facing wherever their last walk pointed them.
-    const from = this.hexCenter(u.x, u.y).cx;
-    const to = this.hexCenter(x, y).cx;
-    if (to > from) u.facing = 1;
-    else if (to < from) u.facing = -1;
+    const from = this.hexCenter(u.x, u.y);
+    const to = this.hexCenter(x, y);
+    if (to.cx === from.cx && to.cy === from.cy) return;
+    u.faceDx = to.cx - from.cx;
+    u.faceDy = to.cy - from.cy;
+    this.applyHeading(u);
+  }
+
+  /** Hard rule for every unit: on-screen facing always follows its last real heading (faceDx/faceDy),
+   * resolved for the current camera angle — it never falls back to a default, and a camera rotation
+   * can't leave a unit facing away from whoever it last fought. */
+  private applyHeading(u: Unit): void {
+    if (u.faceDx == null || u.faceDy == null) return;
+    const azimuth = this.tacticsCamera ? (this.cameraTiltSide * Math.PI) / 180 : 0;
+    const screenDx = u.faceDx * Math.cos(azimuth) - u.faceDy * Math.sin(azimuth);
+    if (screenDx > 1e-6) u.facing = 1;
+    else if (screenDx < -1e-6) u.facing = -1;
   }
 
   private startSeq(step: Seq): void {
+    // Facing is action state, never a render-time calculation. Preserve it after the
+    // action ends, and do not turn again when a wound-up action resumes.
+    if (!this.woundUp.has(step) && (step.type === "combat" || step.type === "spell")) {
+      const actor = this.units.find(u => u.id === step.att);
+      const targets = step.type === "combat" ? [step.def] : step.ids;
+      const target = this.units.find(u => u.id === targets[0]) ?? (step.type === "spell" ? step.tiles[0] : undefined);
+      if (actor && target) this.faceSpriteToward(actor.id, target.x, target.y);
+      for (const id of targets) {
+        const recipient = this.units.find(u => u.id === id);
+        if (actor && recipient && actor.side !== recipient.side) this.faceSpriteToward(recipient.id, actor.x, actor.y);
+      }
+    }
+    // Fire authored casting/healing cues when the action begins. Long cast sheets can
+    // hold the queued step for a wind-up, so only play on the first visit to this step.
+    if (!this.woundUp.has(step)) {
+      if (step.type === "spell") {
+        const caster = this.units.find((u) => u.id === step.att);
+        const arrowSpell = step.spellKind === "longShot" || step.spellKind === "multiShot" || step.spellKind === "piercing";
+        const meleeSkill = step.spellKind === "cleave" || step.spellKind === "sweep" || step.spellKind === "shoulderSmash" || step.spellKind === "stampede";
+        if (arrowSpell) sfxPlay.arrowAttack(caster?.sprite === "neera");
+        else if (meleeSkill) sfxPlay.meleeAttack();
+        else if (step.spellKind !== "webOfDreams" && step.spellKind !== "bless" && !meleeSkill) {
+          if (caster?.sprite === "minor-horror-001") sfxPlay.minorHorrorCast();
+          else if (caster?.sprite === "cultist-v2") sfxPlay.cultistV2Spellcast();
+          else sfxPlay.spell();
+        }
+      } else if (step.type === "combat") {
+        const attacker = this.units.find((u) => u.id === step.att);
+        if (attacker && (attacker.classId === "brigand" || (!step.customDice && this.isArrowAttack(attacker)))) {
+          sfxPlay.arrowAttack(attacker.sprite === "neera");
+        } else if (attacker && !step.customDice && this.isArcaneCaster(attacker)) {
+          if (attacker.sprite === "cultist-v2") sfxPlay.cultistV2Attack();
+          else sfxPlay.magicAttack();
+        } else if (attacker && !this.isArcaneCaster(attacker) && (attacker.sprite !== "kaelFinal" || !!step.customDice)) {
+          // Kael's long main-hand swing is cued at its strike instead (see stepCombat's lunge end).
+          if (attacker.sprite === "minor-horror-001") sfxPlay.minorHorrorAttack();
+          else sfxPlay.meleeAttack();
+        }
+      } else if (step.type === "heal" || step.type === "cureDisease") {
+        sfxPlay.heal();
+      }
+    }
     // Long sheets only (LONG_SHEET_FRAMES+): a spell, skill, heal or ranged shot waits for the
     // caster's/archer's whole cast or attack sheet to finish before it goes off — the arrow
     // leaves the bow only after the draw, not halfway through it. The step is put back at the
@@ -2428,7 +2497,7 @@ export class BattleEngine {
       }
       this.banner = step.label ?? "";
       if (step.spellKind === "bless") sfxPlay.heal();
-      else sfxPlay.crit();
+      else if (step.spellKind !== "longShot" && step.spellKind !== "multiShot" && step.spellKind !== "piercing") sfxPlay.crit();
       if (step.spellKind === "magicMissile") {
         const caster = this.units.find((u) => u.id === step.att);
         if (caster) for (const t of step.tiles) this.emitMissileFx(caster.x, caster.y, t.x, t.y, "magicMissile");
@@ -2543,7 +2612,11 @@ export class BattleEngine {
       // a move that's only one hex and never touches a different column at all.
       const fromScreen = this.hexCenter(from.x, from.y);
       const toScreen = this.hexCenter(to.x, to.y);
-      if (toScreen.cx !== fromScreen.cx) unit.facing = toScreen.cx > fromScreen.cx ? 1 : -1;
+      if (toScreen.cx !== fromScreen.cx || toScreen.cy !== fromScreen.cy) {
+        unit.faceDx = toScreen.cx - fromScreen.cx;
+        unit.faceDy = toScreen.cy - fromScreen.cy;
+        this.applyHeading(unit);
+      }
       unit.walkPose = to.y < from.y ? "back" : to.y > from.y ? "front" : "side";
       a.t += dt;
       const dur = this.moveStepDur(a);
@@ -2629,15 +2702,12 @@ export class BattleEngine {
       actor.drawY = actor.y + (target.y - actor.y) * (ranged ? 0 : 0.28) * k;
       if (a.t >= lunge) {
         if (arrowShot) {
-          sfxPlay.arrowAttack();
           this.emitMissileFx(actor.x, actor.y, target.x, target.y, "longShot");
         } else if (arcaneBolt) {
-          if (actor.sprite === "cultist-v2") sfxPlay.cultistV2Attack();
-          else sfxPlay.magicAttack();
           this.emitMissileFx(actor.x, actor.y, target.x, target.y, "arcaneBolt");
-        } else {
-          if (actor.sprite === "minor-horror-001") sfxPlay.minorHorrorAttack();
-          else sfxPlay.meleeAttack();
+        } else if (actor.sprite === "kaelFinal" && !this.offHandStrike(a)) {
+          // The wind-up is half the sheet; the blow lands now, so the sound lands now.
+          sfxPlay.meleeAttack();
         }
         a.t = 0;
         a.stage = a.stage === "lunge" ? "hit" : "counterHit";
@@ -2828,6 +2898,14 @@ export class BattleEngine {
             const counterSheet = this.art.counters[def.sprite] ?? this.art.attacks[def.sprite];
             a.counterWindAt =
               !a.counterCustomDice && this.isArrowAttack(def) && (counterSheet?.length ?? 0) >= LONG_SHEET_FRAMES && !this.reducedMotion ? this.time : undefined;
+            // startSeq only cues the attacker's own strike, so the counter plays its cue here,
+            // as the counter animation begins.
+            if (!a.counterCustomDice && this.isArrowAttack(def)) sfxPlay.arrowAttack(def.sprite === "neera");
+            else if (this.isArcaneCaster(def)) {
+              if (def.sprite === "cultist-v2") sfxPlay.cultistV2Attack();
+              else sfxPlay.magicAttack();
+            } else if (def.sprite === "minor-horror-001") sfxPlay.minorHorrorAttack();
+            else if (def.sprite !== "kaelFinal" || a.counterCustomDice) sfxPlay.meleeAttack();
             a.stage = "counterLunge";
           }
           else if (!def.alive) a.stage = "fade";
@@ -3015,24 +3093,13 @@ export class BattleEngine {
       if (!a.magicMissileV2Complete && a.t >= 3.2) a.magicMissileV2Complete = true;
     }
     const arrowSpell = a.spellKind === "longShot" || a.spellKind === "multiShot" || a.spellKind === "piercing";
-    const hitAt = arrowSpell ? ARROW_TRAVEL : a.spellKind === "phantasmalForce" || a.spellKind === "fantomForce" ? PHANTASMAL_FORCE_TRAVEL : a.spellKind === "magicMissile" || a.spellKind === "magicMissileV2" || a.spellKind === "fireball" || a.spellKind === "causticVenom" || a.spellKind === "minorVenom" ? SPELL_TRAVEL : 0.18;
+    const hitAt = arrowSpell ? ARROW_TRAVEL : a.spellKind === "fantomForce" ? FANTOM_FORCE_TRAVEL : a.spellKind === "phantasmalForce" ? PHANTASMAL_FORCE_TRAVEL : a.spellKind === "magicMissile" || a.spellKind === "magicMissileV2" || a.spellKind === "fireball" || a.spellKind === "causticVenom" || a.spellKind === "minorVenom" ? SPELL_TRAVEL : 0.18;
     if (syncMagicMissileV2Vfx && a.magicMissileV2VfxId === "") {
       if (a.t >= hitAt) a.magicMissileV2Impact = true;
     }
-    // Weapon-based skills routed through this same SpellAnim machinery for their multi-target
-    // reach (bow shots, Cleave, Sweep, the two charge skills) are not magic — only the actual
-    // spellcasters' kinds get the casting cue below.
-    const meleeSkill = a.spellKind === "cleave" || a.spellKind === "sweep" || a.spellKind === "shoulderSmash" || a.spellKind === "stampede";
     if (!a.hit && (syncFireballVfx ? a.fireballImpact === true : syncCausticVenomVfx ? a.causticVenomImpact === true : syncPhantasmalVfx ? a.phantasmalImpact === true : syncMagicMissileV2Vfx ? a.magicMissileV2Impact === true : syncBurningHandsVfx ? a.burningHandsReleased === true : a.t >= hitAt)) {
       a.hit = true;
-      if (a.spellKind === "webOfDreams") sfxPlay.dreamingWeb();
-      else if (att.sprite === "minor-horror-001") sfxPlay.minorHorrorCast();
-      else if (att.sprite === "cultist-v2") sfxPlay.cultistV2Spellcast();
-      // Long Shot/Multi Shot/Piercing are bow skills — the blunt melee cue is wrong for them,
-      // same reasoning as arrowAttack in stepCombat's plain bow attack.
-      else if (arrowSpell) sfxPlay.arrowAttack();
-      else if (meleeSkill) sfxPlay.meleeAttack();
-      else sfxPlay.spell();
+      // Every attack cue (weapon skills included) already played when its animation began, in startSeq.
       // AoE/line spells: the first enemy actually hit grants full XP, every enemy after
       // that in the same cast grants half — hitting a whole group shouldn't out-earn
       // picking them off one at a time, but the first one still counts fully.
@@ -3262,8 +3329,7 @@ export class BattleEngine {
       });
       this.tip = `${CURES[a.kind].name} · +${gained} HP`;
       this.pushLog(`${att.name} curou ${target.name}: +${gained} HP`);
-      this.emitHolyFx(target.x, target.y, a.kind === "cureMinor" ? "minor" : "medium", target.id);
-      sfxPlay.heal();
+      this.emitHolyFx(target.x, target.y, a.kind === "cureMinor" ? "minor" : a.kind === "cureLight" ? "hands" : "medium", target.id);
     }
     if (a.t >= 0.5) this.finishCombat(att);
   }
@@ -3295,7 +3361,6 @@ export class BattleEngine {
       });
       this.tip = `${CURE_DISEASE.name} · ${target.name} está curado.`;
       this.emitHolyFx(target.x, target.y, "disease", target.id);
-      sfxPlay.heal();
     }
     if (a.t >= 0.5) this.finishCombat(att);
   }
@@ -3913,12 +3978,12 @@ export class BattleEngine {
   }
 
   /** Divine light on a hex (and optional unit). minor = Cura Menor, medium = Cura Média /
-   * Cura Leve, disease = Curar Doença (teal), potion = the nicer drink FX on the receiver. */
+   * hands = Healing Hands, disease = Curar Doença (teal), potion = the drink FX. */
   emitHolyFx(x: number, y: number, kind: HolyKind, unitId = ""): void {
     const u = unitId ? this.units.find((n) => n.id === unitId) : this.units.find((n) => n.alive && n.x === x && n.y === y);
     if (u) {
-      u.healGlow = kind === "minor" ? 0.72 : kind === "potion" ? 0.88 : 1;
-      u.healGlowKind = kind === "minor" ? "holyMinor" : kind === "medium" ? "holyMedium" : kind === "food" ? "food" : kind === "disease" ? "disease" : "potion";
+      u.healGlow = kind === "minor" ? 0.72 : kind === "hands" ? 0.86 : kind === "potion" ? 0.88 : 1;
+      u.healGlowKind = kind === "minor" ? "holyMinor" : kind === "hands" ? "healingHands" : kind === "medium" ? "holyMedium" : kind === "food" ? "food" : kind === "disease" ? "disease" : "potion";
     }
     if (this.reducedMotion) return;
     let slot = this.holyFx.find((h) => !h.live);
@@ -3932,7 +3997,7 @@ export class BattleEngine {
         }
       }
     } else this.holyFxLive += 1;
-    const rayCount = kind === "medium" || kind === "food" ? 10 : kind === "disease" ? 8 : kind === "potion" ? 5 : 6;
+    const rayCount = kind === "medium" || kind === "food" ? 10 : kind === "hands" || kind === "disease" ? 8 : kind === "potion" ? 5 : 6;
     slot.live = true;
     slot.unitId = u?.id ?? unitId;
     slot.x = x;
@@ -3974,9 +4039,12 @@ export class BattleEngine {
   private isArrowAttack(unit: Unit): boolean {
     // Reach weapons are always physical, even if an imported loadout is incorrectly flagged ranged.
     if (unit.classId === "pikeman" || unit.classId === "lancer" || unit.classId === "aldric" || unit.classId === "sandoval" || unit.classId === "sentinel" || unit.classId === "templar") return false;
+    // Besteiros are enemy crossbow users; an imported/legacy weapon id must never turn their
+    // ranged attack into a silent or melee action.
+    if (unit.classId === "brigand") return true;
     if (unit.weaponId) return !!WEAPONS[unit.weaponId]?.ranged;
-    // Default campaign loadouts: Neera and brigands start as bow/crossbow users before gear is assigned.
-    return unit.classId === "archer" || unit.classId === "ranger" || unit.classId === "assassin" || unit.classId === "brigand";
+    // Default campaign loadouts: Neera starts as a bow user before gear is assigned.
+    return unit.classId === "archer" || unit.classId === "ranger" || unit.classId === "assassin";
   }
 
   /** Only spellcasting classes use the distinct basic-attack arcane bolt. */
@@ -3986,6 +4054,8 @@ export class BattleEngine {
 
   /** One glowing bolt per target, hex-to-hex — see MissileFx. */
   private emitMissileFx(fromX: number, fromY: number, toX: number, toY: number, kind: "magicMissile" | "phantasmalForce" | "fantomForce" | "fireball" | "causticVenom" | "minorVenom" | "longShot" | "arcaneBolt" | "webOfDreams"): void {
+    // The arrow-release cue lands the instant the arrow leaves the bow (the draw cue played when the pull began).
+    if (kind === "longShot") sfxPlay.arrowRelease(this.units.find((u) => u.x === Math.round(fromX) && u.y === Math.round(fromY) && u.alive)?.sprite === "neera");
     if (this.reducedMotion) return;
     let slot = this.missileFx.find((m) => !m.live);
     if (!slot) {
@@ -4004,9 +4074,10 @@ export class BattleEngine {
     slot.toX = toX;
     slot.toY = toY;
     slot.t = 0;
-    slot.travel = kind === "longShot" ? ARROW_TRAVEL : kind === "webOfDreams" ? WEB_SHOT_TRAVEL : kind === "phantasmalForce" || kind === "fantomForce" ? PHANTASMAL_FORCE_TRAVEL : kind === "magicMissile" || kind === "fireball" || kind === "causticVenom" || kind === "minorVenom" ? SPELL_TRAVEL : MISSILE_TRAVEL;
+    slot.travel = kind === "longShot" ? ARROW_TRAVEL : kind === "webOfDreams" ? WEB_SHOT_TRAVEL : kind === "fantomForce" ? FANTOM_FORCE_TRAVEL : kind === "phantasmalForce" ? PHANTASMAL_FORCE_TRAVEL : kind === "magicMissile" || kind === "fireball" || kind === "causticVenom" || kind === "minorVenom" ? SPELL_TRAVEL : MISSILE_TRAVEL;
     slot.max = slot.travel + MISSILE_AFTERGLOW;
-    slot.hue = kind === "fireball" ? 22 : kind === "causticVenom" || kind === "minorVenom" ? 104 : kind === "longShot" ? 205 : kind === "arcaneBolt" ? 2 : kind === "webOfDreams" ? 276 : kind === "phantasmalForce" || kind === "fantomForce" ? 202 : 268;
+    // Phantom System uses the original purple 2D bolt; only Phantasmal Force is a blue apparition.
+    slot.hue = kind === "fireball" ? 22 : kind === "causticVenom" || kind === "minorVenom" ? 104 : kind === "longShot" ? 205 : kind === "arcaneBolt" ? 2 : kind === "webOfDreams" ? 276 : kind === "phantasmalForce" ? 202 : 268;
     slot.kind = kind;
     slot.seed = this.rng() * Math.PI * 2;
   }
@@ -4684,6 +4755,18 @@ export class BattleEngine {
     this.spellAim = null;
     this.hover = null;
     this.tip = `${PIERCING.name}: reta da colmeia. ${piercingMul(u.level)}× do AT − DF em cada um na linha, aliado ou inimigo.`;
+    sfxPlay.ui();
+  }
+
+  startShock(): void {
+    const u = this.units.find((x) => x.id === this.selectedId);
+    if (!u || u.acted || this.familiarSpellRemaining(u, "shock") <= 0) return;
+    this.mode = "awaitSpell";
+    this.spellKind = "shock";
+    this.spellArmed = false;
+    this.spellAim = null;
+    this.hover = null;
+    this.tip = `${SHOCK.name}: alcance ${SHOCK.range}, ${spellFormula(u.mag, SHOCK.mul, SHOCK.dice, SHOCK.faces, SHOCK.bonus)} − RES. Toque no inimigo.`;
     sfxPlay.ui();
   }
 
@@ -5486,7 +5569,10 @@ export class BattleEngine {
     // secondWind is a passive triggered from startOfTurnEffects, never armed via a startX()
     if (this.spellKind === "secondWind") return;
     // Choque is enemy-AI only — never armed from the player hotbar
-    if (this.spellKind === "shock") return;
+    if (this.spellKind === "shock") {
+      this.castShock(u, cell);
+      return;
+    }
     if (this.isHeal(this.spellKind)) this.castHeal(u, cell, this.spellKind);
   }
 
@@ -5685,7 +5771,7 @@ export class BattleEngine {
       return `Alvo fora de alcance (máximo ${MAGIC_MISSILE.range} hexes).`;
     }
     if (!clearShot(caster, cell, this.tiles, this.cols, "bolt", this.decorOverlay)) {
-      return "Linha de tiro bloqueada.";
+      return this.shotBlockedTip(caster, cell, "bolt");
     }
     return null;
   }
@@ -5728,17 +5814,17 @@ export class BattleEngine {
       const max = kind === "longShot" ? this.longMax(caster) : MULTI_SHOT.range;
       if (distance < caster.minRange) return `Alvo perto demais (alcance mínimo ${caster.minRange} hexes).`;
       if (distance > max) return `Alvo fora de alcance (máximo ${max} hexes).`;
-      if (!clearShot(caster, cell, this.tiles, this.cols, "arrow", this.decorOverlay)) return "Linha de tiro bloqueada por terreno ou obstáculo.";
+      if (!clearShot(caster, cell, this.tiles, this.cols, "arrow", this.decorOverlay)) return this.shotBlockedTip(caster, cell, "arrow");
     }
     if (kind === "lightning" || kind === "lightningTier3" || kind === "shock" || kind === "phantasmalForce") {
       const range = kind === "lightning" ? LIGHTNING.range : kind === "lightningTier3" ? LIGHTNING_T3.range : kind === "shock" ? SHOCK.range : PHANTASMAL_FORCE.range;
       if (distance > range) return `Alvo fora de alcance (máximo ${range} hexes).`;
-      if (kind === "phantasmalForce" && !clearShot(caster, cell, this.tiles, this.cols, "bolt", this.decorOverlay)) return "Linha de tiro bloqueada por terreno ou obstáculo.";
+      if (kind === "phantasmalForce" && !clearShot(caster, cell, this.tiles, this.cols, "bolt", this.decorOverlay)) return this.shotBlockedTip(caster, cell, "bolt");
     }
     if (kind === "fireball" || kind === "causticVenom" || kind === "minorVenom" || kind === "webOfDreams") {
       const range = kind === "fireball" ? FIREBALL.range : kind === "causticVenom" ? CAUSTIC_VENOM.range : kind === "minorVenom" ? MINOR_VENOM.range : WEB_OF_DREAMS.range;
       if (distance > range) return `Casa fora de alcance (máximo ${range} hexes).`;
-      if (!clearShot(caster, fireballOrigin(cell, this.cols, this.rows), this.tiles, this.cols, "bolt", this.decorOverlay)) return "Linha de tiro bloqueada por terreno ou obstáculo.";
+      if (!clearShot(caster, fireballOrigin(cell, this.cols, this.rows), this.tiles, this.cols, "bolt", this.decorOverlay)) return this.shotBlockedTip(caster, fireballOrigin(cell, this.cols, this.rows), "bolt");
     }
     if (kind === "cleave" || kind === "shoulderSmash") return "Escolha um hex vizinho ao personagem.";
     if (kind === "sweep") return `Escolha uma casa dentro do raio ${SWEEP.radius}.`;
@@ -5871,6 +5957,20 @@ export class BattleEngine {
    * off `tiles` directly, which is what lets a placement's switches change movement,
    * sight and the high-ground bonus without the board itself being rewritten.
    */
+  /** "Tiro bloqueado: <what> no caminho." — names the prop (chests stay generic) or terrain that
+   * stops this shot, so the player is never left guessing. */
+  private shotBlockedTip(from: Point, to: Point, kind: "arrow" | "bolt"): string {
+    const p = shotBlocker(from, to, this.tiles, this.cols, kind, this.decorOverlay);
+    if (!p) return "Linha de tiro bloqueada.";
+    const deco = this.decorations.find((d) => DECORATIONS[d.id] && placedBlockingFootprint(d).some((f) => d.x + f.dx === p.x && d.y + f.dy === p.y));
+    const what = deco
+      ? (CHEST_DECOR_IDS.has(deco.id) ? "um baú" : DECORATIONS[deco.id]!.name)
+      : this.hexAt(p.x, p.y).height && !this.hexAt(p.x, p.y).blocksShot
+        ? `terreno alto (${this.hexAt(p.x, p.y).name})`
+        : this.hexAt(p.x, p.y).name;
+    return `Tiro bloqueado: ${what} no caminho.`;
+  }
+
   private hexAt(x: number, y: number): TerrainDef {
     return hexDef(this.tiles, this.cols, x, y, this.decorOverlay);
   }
@@ -6284,6 +6384,23 @@ export class BattleEngine {
     this.queue.push({ type: "spell", att: unit.id, tiles: line, ids, label: PIERCING_THRUST.name, spellKind: "piercingThrust" });
   }
 
+  private castShock(unit: Unit, cell: Point): void {
+    if (unit.acted || this.familiarSpellRemaining(unit, "shock") <= 0) return;
+    if (!this.spellAimValid(unit, cell)) {
+      this.tip = this.spellAimError(unit, cell);
+      sfxPlay.ui();
+      return;
+    }
+    const foe = this.occ().get(key(cell.x, cell.y));
+    if (!foe) return;
+    this.spendFamiliarOrTier(unit, "shock");
+    this.spellKind = null;
+    this.spellAim = null;
+    this.tip = null;
+    this.mode = "locked";
+    this.queue.push({ type: "spell", att: unit.id, tiles: [cell], ids: [foe.id], dice: SHOCK.dice, faces: SHOCK.faces, bonus: SHOCK.bonus, label: SHOCK.name, echo: { dice: SHOCK.echoDice, faces: SHOCK.echoFaces, bonus: SHOCK.echoBonus }, spellMul: SHOCK.mul, spellKind: "shock" });
+  }
+
   private castLightning(unit: Unit, cell: Point): void {
     if (!this.spellAimValid(unit, cell)) {
       this.tip = this.spellAimError(unit, cell);
@@ -6612,6 +6729,8 @@ export class BattleEngine {
       moved: false,
       acted: false,
       facing: 1,
+      faceDx: 1,
+      faceDy: 0,
       walkPose: "front",
       idleAlt: false,
       alive: true,
@@ -6638,7 +6757,7 @@ export class BattleEngine {
       footprintOffsets: cls.footprintOffsets,
       shock: null,
       shockCharges: 0,
-      spellCharges: tier === 5 ? SUMMON_ZOMBIE_DOG.causticVenomCharges : tier === 3 ? familiarSpellCharges(unit.level) : familiarMagicMissileCharges(unit.level),
+      spellCharges: tier === 4 ? 3 : tier === 5 ? SUMMON_ZOMBIE_DOG.causticVenomCharges : tier === 3 ? familiarSpellCharges(unit.level) : familiarMagicMissileCharges(unit.level),
       lifeDrainCharges: tier === 2 || tier === 4 ? familiarLifeDrainCharges(unit.level) : undefined,
       summonerId: unit.id,
       diseased: false,
@@ -7612,6 +7731,35 @@ export class BattleEngine {
     const walkReach = computeReachable(this.effectiveUnitForReach(next), this.tiles, this.cols, this.rows, this.units, false, this.decorOverlay);
     const players = this.units.filter((u) => u.side === "player" && u.alive);
 
+    // The small blue ox keeps as far from the party as a clear spell shot allows.
+    // Its exhausted tier-1 pool falls through to the normal melee/chase AI below.
+    const blueOxCasting = next.classId === "swampBlueCalf" && this.tierRemaining(next, "phantasmalForce") > 0;
+    if (blueOxCasting && !next.acted && players.length > 0) {
+      let bestForce: { foe: Unit; target: Point; from: Point; distance: number; cost: number } | null = null;
+      for (const cell of reach.values()) {
+        const distance = Math.min(...players.flatMap((foe) => footprint(foe).map((p) => hexDist(cell, p))));
+        for (const foe of players) {
+          for (const target of footprint(foe)) {
+            if (hexDist(cell, target) > PHANTASMAL_FORCE.range) continue;
+            if (!clearShot(cell, target, this.tiles, this.cols, "bolt", this.decorOverlay)) continue;
+            if (!bestForce || distance > bestForce.distance || (distance === bestForce.distance && cell.cost < bestForce.cost)) {
+              bestForce = { foe, target, from: { x: cell.x, y: cell.y }, distance, cost: cell.cost };
+            }
+          }
+        }
+      }
+      if (bestForce) {
+        if (bestForce.from.x !== next.x || bestForce.from.y !== next.y) {
+          this.queue.push({ type: "move", id: next.id, path: reconstructPath(walkReach, bestForce.from) });
+        }
+        this.spendTier(next, "phantasmalForce");
+        const dice = phantasmalForceDice(next.level);
+        this.queue.push({ type: "spell", att: next.id, tiles: [bestForce.target], ids: [bestForce.foe.id], dice: dice.dice, faces: dice.faces, bonus: 0, label: PHANTASMAL_FORCE.name, spellMul: 1, spellKind: "phantasmalForce" });
+        this.queue.push({ type: "delay", dur: 0.12 });
+        return;
+      }
+    }
+
     // The Ox spends its own three per-battle tier-1 charges on warrior Bull Rush.
     if (next.classId === "bigBlueCalf" && !next.acted && this.tierRemaining(next, "bullRush") > 0) {
       const targets = players.flatMap((foe) => footprint(foe).map((cell) => ({ foe, cell })))
@@ -7674,7 +7822,7 @@ export class BattleEngine {
             this.queue.push({ type: "move", id: next.id, path: reconstructPath(walkReach, bestForce.from) });
           }
           next.fantomForceCharges = Math.max(0, next.fantomForceCharges! - 1);
-          const dice = phantasmalForceDice(next.level);
+          const dice = fantomForceDice(next.level);
           this.queue.push({
             type: "spell",
             att: next.id,
@@ -8003,6 +8151,7 @@ export class BattleEngine {
     let best: { foe: Unit; from: Point; score: number } | null = null;
     for (const cell of reach.values()) {
       for (const foe of players) {
+        if (blueOxCasting) continue;
         if (!canHitFrom(next, cell, foe, this.tiles, this.cols, this.decorOverlay)) continue;
         const terr = this.hexAt(cell.x, cell.y);
         const score = (foe.maxHp - foe.hp) * 3 + terr.def * 2 + (foe.hp <= 8 ? 20 : 0);
@@ -8205,6 +8354,13 @@ export class BattleEngine {
       // A primary click on a valid enemy is the basic attack action. The Atacar button
       // still arms targeting explicitly, while right-click is reserved for inspection.
       if (selected && !selected.acted && (this.mode === "awaitAttack" || this.mode === "awaitAction" || this.mode === "selected")) {
+        // A bow user with an off-hand dagger/katar strikes with it by default whenever the foe is
+        // within its reach from where they stand — it always outhits the arrow.
+        const offHandItem = selected.offHandId ? EQUIPMENT[selected.offHandId] : null;
+        if (offHandItem?.kind === "weapon" && this.isArrowAttack(selected) && canHitFrom(this.offHandReach(selected), selected, here, this.tiles, this.cols, this.decorOverlay)) {
+          this.commitOffHandAction(selected, here, { x: selected.x, y: selected.y });
+          return;
+        }
         // attackFrom stores the best reachable hex for each visible foe. Using only the
         // unit's current hex let ranged units fire but made melee attacks appear dead
         // unless the player first moved adjacent by hand.
@@ -8218,9 +8374,7 @@ export class BattleEngine {
           return;
         }
         if (shotKind(selected) && inWeaponRange(selected.x, selected.y, here.x, here.y, selected.minRange, effectiveMaxRange(selected, tileAt(this.tiles, this.cols, selected.x, selected.y)))) {
-          this.tip = this.hexAt(here.x, here.y).id === "barricade"
-            ? "Barricada bloqueia o projétil."
-            : "O terreno alto corta a flecha.";
+          this.tip = this.shotBlockedTip(selected, here, shotKind(selected)!);
           sfxPlay.ui();
           return;
         }
@@ -9267,6 +9421,7 @@ export class BattleEngine {
       const sprite = this.units.find((u) => u.id === (counter ? a.def : a.att))?.sprite;
       if (!sprite) return 1;
       if (sprite === "big-blue-ox-002") seconds /= BIG_BLUE_OX_PACE;
+      if (sprite === "kaelFinal") seconds = KAEL_FINAL_ATTACK_SECONDS;
       if (sprite === "minor-horror-001") seconds = MINOR_HORROR_SECONDS.attack;
       frames = (this.offHandStrike(a) ? this.art.attacksShort[sprite] : undefined) ?? (counter ? this.art.counters[sprite] : undefined) ?? this.art.attacks[sprite];
       // stepCombat's lunge + hit + recover clocks, which attackPose spreads the sheet across.
@@ -9447,6 +9602,7 @@ export class BattleEngine {
    * used to be inlined in renderUnitsAndOverlays's own per-unit loop; see that method's history
    * for the reasoning behind each individual correction. */
   private computeUnitVisual(u: Unit, cell: number, tile: number): UnitVisual {
+    this.applyHeading(u);
     // Sprites load per battle (see ensureSpriteArt in assets.ts). Anything that still reaches
     // the board without its art (a map-editor preview, a mid-battle addition) requests it here
     // and draws as soon as it lands.
@@ -9457,32 +9613,7 @@ export class BattleEngine {
     const lift = this.unitLift(u, cell);
     const atk = this.attackPose(u);
     const moving = this.active?.type === "move" && this.active.id === u.id;
-    // Re-resolve hero facing from the live combat action every frame. The sequence
-    // start updates facing too, but wind-ups and queued off-hand strikes can preserve a
-    // stale direction if another action changed it before this pose is drawn.
-    if (u.sprite === "neera" || u.sprite === "kaelFinal" || u.sprite === "kaelEarly" || u.sprite === "defaultWarrior") {
-      let actorId: string | undefined;
-      let targetId: string | undefined;
-      if (this.active?.type === "combat") {
-        const counter = this.active.stage.startsWith("counter");
-        actorId = counter ? this.active.def : this.active.att;
-        targetId = counter ? this.active.att : this.active.def;
-      } else if (this.active?.type === "windup" && this.active.id === u.id && this.active.pose === "attack") {
-        const queued = this.queue[0];
-        if (queued?.type === "combat" && queued.att === u.id) {
-          actorId = queued.att;
-          targetId = queued.def;
-        }
-      }
-      if (actorId === u.id && targetId) {
-        const target = this.units.find((candidate) => candidate.id === targetId);
-        if (target) {
-          const from = this.hexCenter(u.x, u.y).cx;
-          const to = this.hexCenter(target.x, target.y).cx;
-          if (to !== from) u.facing = to > from ? 1 : -1;
-        }
-      }
-    }
+    // Reading a pose must never change the last direction established by combat/movement.
     // idleAlt flips once per this unit's own turn (see beginUnitTurn) — a sprite with a
     // second idle loop (currently just Malrec's idles2) alternates into it; everyone else
     // has no idles2 entry, so this is a no-op fallback to their regular idle/stand pool.
@@ -9588,7 +9719,9 @@ export class BattleEngine {
     // matched on occupied-area so this doesn't stretch him, just restores his idle size) —
     // see scratchpad measure_bbox.py from the neera/kael-final shrink report.
     const isKaelFinalAttacking = isKaelFinal && atk != null;
-    const kaelFinalAtkScale = isKaelFinalAttacking ? 1.07 : 1;
+    // 1.07 (an average over the swing) still left him visibly smaller as ATT starts: his upright
+    // atk-1 fills 86.4% of its 432x640 canvas vs idle's 98.1% of 354x528 — 98.1 / 86.4 = 1.135.
+    const kaelFinalAtkScale = isKaelFinalAttacking ? 1.135 : 1;
     // Same root cause as Kael Final above: Neera's atk-*.png (360x572) and cast-*.png
     // (360x520) sheets both carry noticeably more padding around her than her idle stand
     // sheet (318x556) does — atk fills ~66% of canvas width on average vs idle's ~84%, cast
@@ -9729,7 +9862,13 @@ export class BattleEngine {
     // Dedicated left/right walk+attack cuts already face the enemy, so flipping
     // them would put the spear/staff on the wrong side. Idle still flips.
     const dirActionWalk = (u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval" || u.sprite === "theButcher" || u.sprite === "familiar2" || u.sprite === "familiar3" || u.sprite === "cultist-v2" || u.sprite === "cobalt-blue-deer") && moving;
-    const dirActionAttack = (u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval") && atk != null;
+    // Suppress mirroring only when the frame actually came from an authored left cut.
+    // Having a left ATT cut must not suppress the mirror of casts, counters or off-hand art.
+    const dirActionAttack = atk != null && !!frames && (
+      frames === this.art.attacksLeft[u.sprite] ||
+      frames === this.art.castsLeft[u.sprite] ||
+      frames === this.art.countersLeft[u.sprite]
+    );
     const dirAction = dirActionWalk || dirActionAttack;
     // The familiar's art is drawn facing left by default — the opposite of every other
     // sprite's "facing 1 shows the sheet as drawn" convention — so its mirror has to run
@@ -9747,7 +9886,10 @@ export class BattleEngine {
     // "two reverse walk" rather than the one intended mirror-for-left-only.
     const neeraWalkReversed = u.sprite === "neera" && walk != null;
     const deerFacingReversed = u.sprite === "cobalt-blue-deer";
-    const facing = u.classId === "familiar" || defaultWarriorIdleOrWalkReversed || neeraWalkReversed || deerFacingReversed ? -u.facing : u.facing;
+    // Kael Final's idle (1..36.png) is drawn turned three-quarters to the LEFT, while his atk and
+    // move cuts face right — so his idle must mirror the other way to face his enemy.
+    const kaelFinalIdleReversed = u.sprite === "kaelFinal" && atk == null && walk == null;
+    const facing = u.classId === "familiar" || defaultWarriorIdleOrWalkReversed || neeraWalkReversed || deerFacingReversed || kaelFinalIdleReversed ? -u.facing : u.facing;
     const flip = dirAction ? 1 : facing;
     // A fixed set of sprites skip the breath squash/stretch entirely (ctx.scale(flip, 1)) —
     // see the identical branch this replaced in renderUnitsAndOverlays.
@@ -10693,7 +10835,7 @@ export class BattleEngine {
       if (u.healGlow > 0) {
         const pulse = 0.8 + Math.sin(this.time * 5) * 0.2;
         const halo = this.healHaloRgb(u.healGlowKind);
-        const reach = u.healGlowKind === "holyMedium" || u.healGlowKind === "food" ? 1.35 : u.healGlowKind === "holyMinor" ? 0.92 : 1.08;
+        const reach = u.healGlowKind === "holyMedium" || u.healGlowKind === "food" ? 1.35 : u.healGlowKind === "healingHands" ? 1.13 : u.healGlowKind === "holyMinor" ? 0.92 : 1.08;
         const bg = ctx.createRadialGradient(0, -h * 0.5, 0, 0, -h * 0.5, w * reach);
         bg.addColorStop(0, `rgba(${halo.core},${0.5 * u.healGlow * pulse})`);
         bg.addColorStop(0.45, `rgba(${halo.mid},${0.22 * u.healGlow * pulse})`);
@@ -11029,7 +11171,7 @@ export class BattleEngine {
         // missile, it just draws nothing of its own here.
         if (m.kind === "webOfDreams") continue;
 
-        if (m.kind === "phantasmalForce" || m.kind === "fantomForce") {
+        if (m.kind === "phantasmalForce") {
           // A translucent attacker races along the cast path rather than behaving like a
           // coloured projectile: skull, streaming lower body and two reaching claws make the
           // hit read as a brief hostile apparition on the victim's hex.
@@ -11410,6 +11552,7 @@ export class BattleEngine {
     if (kind === "disease") return { core: "200,255,230", mid: "70,210,160" };
     if (kind === "potion") return { core: "255,230,170", mid: "255,150,60" };
     if (kind === "holyMedium") return { core: "255,250,220", mid: "255,210,90" };
+    if (kind === "healingHands") return { core: "255,249,225", mid: "255,215,120" };
     if (kind === "food") return { core: "225,242,255", mid: "110,175,255" };
     if (kind === "holyMinor") return { core: "255,248,230", mid: "255,220,150" };
     return { core: "255,250,235", mid: "255,248,224" }; // potionZero
@@ -11504,7 +11647,7 @@ export class BattleEngine {
       const cy = pos.cy;
       const k = fx.t / fx.max;
       const appear = Math.min(1, fx.t / 0.07);
-      const hold = fx.kind === "medium" || fx.kind === "food" ? 0.36 : fx.kind === "disease" ? 0.32 : 0.26;
+      const hold = fx.kind === "medium" || fx.kind === "food" ? 0.36 : fx.kind === "hands" ? 0.31 : fx.kind === "disease" ? 0.32 : 0.26;
       const fade = (k < hold ? 1 : Math.max(0, 1 - (k - hold) / (1 - hold))) * appear;
       if (fade <= 0) continue;
       ctx.save();
@@ -12100,20 +12243,21 @@ export class BattleEngine {
     k: number,
   ): void {
     const medium = fx.kind === "medium" || fx.kind === "food";
+    const hands = fx.kind === "hands";
     const disease = fx.kind === "disease";
     const h = disease ? 158 : fx.kind === "food" ? 208 : 46;
     const s = disease ? 80 : fx.kind === "food" ? 90 : 95;
-    const height = tile * (medium ? 2.85 : disease ? 2.25 : 1.55);
-    const width = tile * (medium ? 0.58 : disease ? 0.48 : 0.32);
+    const height = tile * (medium ? 2.85 : hands ? 2.2 : disease ? 2.25 : 1.55);
+    const width = tile * (medium ? 0.58 : hands ? 0.45 : disease ? 0.48 : 0.32);
     const topY = cy - height;
     const chestY = cy - tile * 0.55;
     const pulse = 0.88 + 0.12 * Math.abs(Math.sin(this.time * 7 + fx.seed));
 
     const shaft = ctx.createLinearGradient(cx, topY, cx, cy + tile * 0.1);
     shaft.addColorStop(0, `hsla(${h}, ${s}%, 96%, 0)`);
-    shaft.addColorStop(0.18, `hsla(${h}, ${s}%, 94%, ${(medium ? 0.42 : 0.22) * fade * pulse})`);
-    shaft.addColorStop(0.55, `hsla(${h}, ${s}%, 82%, ${(medium ? 0.55 : 0.32) * fade})`);
-    shaft.addColorStop(0.88, `hsla(${h}, ${s}%, 78%, ${(medium ? 0.28 : 0.16) * fade})`);
+    shaft.addColorStop(0.18, `hsla(${h}, ${s}%, 94%, ${(medium ? 0.42 : hands ? 0.32 : 0.22) * fade * pulse})`);
+    shaft.addColorStop(0.55, `hsla(${h}, ${s}%, 82%, ${(medium ? 0.55 : hands ? 0.435 : 0.32) * fade})`);
+    shaft.addColorStop(0.88, `hsla(${h}, ${s}%, 78%, ${(medium ? 0.28 : hands ? 0.22 : 0.16) * fade})`);
     shaft.addColorStop(1, `hsla(${h}, ${s}%, 70%, 0)`);
     ctx.fillStyle = shaft;
     ctx.beginPath();
@@ -12124,27 +12268,27 @@ export class BattleEngine {
     ctx.closePath();
     ctx.fill();
 
-    const coreW = width * (medium ? 0.28 : 0.22);
+    const coreW = width * (medium ? 0.28 : hands ? 0.25 : 0.22);
     const core = ctx.createLinearGradient(cx, topY, cx, cy);
     core.addColorStop(0, `hsla(${h}, 40%, 100%, ${0.55 * fade})`);
-    core.addColorStop(0.7, `hsla(${h}, 80%, 96%, ${(medium ? 0.85 : 0.5) * fade})`);
+    core.addColorStop(0.7, `hsla(${h}, 80%, 96%, ${(medium ? 0.85 : hands ? 0.675 : 0.5) * fade})`);
     core.addColorStop(1, `hsla(${h}, 80%, 90%, 0)`);
     ctx.fillStyle = core;
     ctx.fillRect(cx - coreW, topY, coreW * 2, cy - topY);
 
-    const bloomR = tile * (medium ? 1.45 : disease ? 1.2 : 0.82);
+    const bloomR = tile * (medium ? 1.45 : hands ? 1.13 : disease ? 1.2 : 0.82);
     const bloom = ctx.createRadialGradient(cx, chestY, 0, cx, chestY, bloomR);
-    bloom.addColorStop(0, `hsla(${h}, 90%, 96%, ${(medium ? 0.72 : 0.4) * fade * pulse})`);
-    bloom.addColorStop(0.35, `hsla(${h}, ${s}%, 72%, ${(medium ? 0.38 : 0.2) * fade})`);
+    bloom.addColorStop(0, `hsla(${h}, 90%, 96%, ${(medium ? 0.72 : hands ? 0.56 : 0.4) * fade * pulse})`);
+    bloom.addColorStop(0.35, `hsla(${h}, ${s}%, 72%, ${(medium ? 0.38 : hands ? 0.29 : 0.2) * fade})`);
     bloom.addColorStop(1, `hsla(${h}, ${s}%, 60%, 0)`);
     ctx.fillStyle = bloom;
     ctx.beginPath();
     ctx.arc(cx, chestY, bloomR, 0, Math.PI * 2);
     ctx.fill();
 
-    const groundR = tile * (medium ? 0.85 : 0.55) * (0.7 + k * 0.35);
+    const groundR = tile * (medium ? 0.85 : hands ? 0.7 : 0.55) * (0.7 + k * 0.35);
     const ground = ctx.createRadialGradient(cx, cy, 0, cx, cy, groundR);
-    ground.addColorStop(0, `hsla(${h}, ${s}%, 90%, ${(medium ? 0.55 : 0.3) * fade})`);
+    ground.addColorStop(0, `hsla(${h}, ${s}%, 90%, ${(medium ? 0.55 : hands ? 0.425 : 0.3) * fade})`);
     ground.addColorStop(1, `hsla(${h}, ${s}%, 70%, 0)`);
     ctx.fillStyle = ground;
     ctx.beginPath();
@@ -12160,13 +12304,24 @@ export class BattleEngine {
       ctx.stroke();
     }
 
-    const motes = medium ? 16 : disease ? 12 : 7;
+    if (hands) {
+      // Two cupped arcs gather light toward the receiver like a pair of healing hands.
+      ctx.strokeStyle = `hsla(42, 95%, 82%, ${0.7 * fade * pulse})`;
+      ctx.lineWidth = Math.max(1.5, tile * 0.035);
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(cx + side * tile * 0.48, chestY - tile * 0.25);
+        ctx.bezierCurveTo(cx + side * tile * 0.72, chestY + tile * 0.2, cx + side * tile * 0.3, chestY + tile * 0.5, cx + side * tile * 0.08, chestY + tile * 0.22);
+        ctx.stroke();
+      }
+    }
+    const motes = medium ? 16 : hands ? 11 : disease ? 12 : 7;
     for (let i = 0; i < motes; i++) {
-      const rise = ((fx.seed * 13 + i * 0.37 + k * (medium ? 1.6 : 1.1)) % 1);
+      const rise = ((fx.seed * 13 + i * 0.37 + k * (medium ? 1.6 : hands ? 1.35 : 1.1)) % 1);
       const sway = Math.sin(fx.seed + i * 1.7 + this.time * 3) * tile * 0.18;
       const mx = cx + sway + ((i % 5) - 2) * tile * 0.08;
       const my = cy - rise * height * 0.95;
-      const r = tile * (medium ? 0.045 : 0.03) * (1 - rise * 0.4) * fade;
+      const r = tile * (medium ? 0.045 : hands ? 0.0375 : 0.03) * (1 - rise * 0.4) * fade;
       ctx.fillStyle = `hsla(${h}, 80%, 96%, ${(0.55 + (i % 3) * 0.15) * fade})`;
       ctx.beginPath();
       ctx.arc(mx, my, Math.max(0.8, r), 0, Math.PI * 2);

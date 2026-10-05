@@ -1,4 +1,4 @@
-import { cleanPartyFormation, partyLeaderOf } from "./partyFormation";
+import { FORMATION_SLOTS, cleanPartyFormation, partyLeaderOf } from "./partyFormation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { BookOpen, Check, ChevronLeft, Clock, Lock, MapPin, Save, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
 import { isCrossingDungeon, missionsForLocation } from "./mapstore";
@@ -24,7 +24,8 @@ const ZOOM_STOPS = [70, 90, 110, 130];
 /** Idle-breathing frames of the party leader's own battle sprite (Party menu; Kael by default:
  * public/game/sprites/Kael_Final/kael-final-002, see assets.ts's "kaelFinal" entry). Only every
  * third frame of a 36-frame idle is used: plenty smooth at the size this renders (a small
- * JRPG-style overworld token), for a third of the image requests. Each sheet pads its figure
+ * JRPG-style overworld token), for a third of the image requests. Playback follows the
+ * battle idle's forward/backward clock before sampling those frames. Each sheet pads its figure
  * differently, so height/drop (px) are measured per sheet to give every leader Kael's exact
  * on-screen height (48px sheet, figure 98.3% of it) and the same feet line. */
 const LEADER_MARKER: Record<AffinityHero, { dir: string; idle: number; bust: string; height: number; drop: number }> = {
@@ -41,9 +42,19 @@ function LeaderMarker({ hero, facingLeft }: { hero: AffinityHero; facingLeft: bo
   const frames = sheet.idle === 36 ? Array.from({ length: 12 }, (_, i) => 1 + i * 3) : Array.from({ length: sheet.idle }, (_, i) => 1 + i);
   const [frame, setFrame] = useState(0);
   useEffect(() => {
-    const id = window.setInterval(() => setFrame((f) => (f + 1) % frames.length), 110);
+    // Match BattleEngine.idleFrame: long sheets run at n / 3 frames per second;
+    // short sheets complete a ping-pong cycle in 2.6 seconds. Malrec is 10% slower.
+    const cycle = sheet.idle * 2 - 2;
+    const pace = (sheet.idle >= 24 ? sheet.idle / 3 : cycle / 2.6) * (hero === "Malrec" ? 0.9 : 1);
+    const startedAt = performance.now();
+    setFrame(0);
+    const id = window.setInterval(() => {
+      const step = Math.floor((performance.now() - startedAt) / 1000 * pace) % cycle;
+      const sourceFrame = step < sheet.idle ? step : cycle - step;
+      setFrame(sheet.idle === 36 ? Math.floor(sourceFrame / 3) : sourceFrame);
+    }, 1000 / pace);
     return () => window.clearInterval(id);
-  }, [frames.length]);
+  }, [hero, sheet.idle]);
   return (
     <img
       src={`/game/sprites/${sheet.dir}/${frames[frame % frames.length]}.png${sheet.bust}`}
@@ -149,7 +160,8 @@ export function OverworldMapScreen({
   onTeleport?: (col: number, row: number) => void;
   onBack: () => void;
   onSave?: () => void;
-  onSaveFormation?: (order: string[]) => void;
+  /** Saves the formation board and reports whether it really landed (read back from the save). */
+  onSaveFormation?: (order: string[]) => { ok: boolean; test: boolean };
   /** Party menu: saves the hero who walks the world map and free-roam maps. */
   onSaveLeader?: (hero: string) => void;
   onPick: (missionId: string) => void;
@@ -165,15 +177,20 @@ export function OverworldMapScreen({
   const [formationOrder, setFormationOrder] = useState<string[]>([]);
   // Formation map: the slot picked first, waiting for a second click to swap with.
   const [formationPick, setFormationPick] = useState<number | null>(null);
-  const [formationSaved, setFormationSaved] = useState(false);
+  // Result of the last "Salvar formação": confirmed only after the save is read back.
+  const [formationSaved, setFormationSaved] = useState<null | "saved" | "test" | "failed">(null);
   useEffect(() => {
     if (affinityOpen) {
-      setFormationOrder([...new Set([...cleanPartyFormation(save.partyFormation), ...AFFINITY_HEROES])]);
+      // The Type 7 board: saved cells in place (party members only), newcomers into the first free cell.
+      const saved = cleanPartyFormation(save.partyFormation);
+      const cells = Array.from({ length: FORMATION_SLOTS }, (_, i) => (saved[i] && partyHeroes.includes(saved[i] as typeof partyHeroes[number]) ? saved[i]! : ""));
+      for (const hero of partyHeroes) if (!cells.includes(hero)) { const free = cells.indexOf(""); if (free >= 0) cells[free] = hero; }
+      setFormationOrder(cells);
       setFormationPick(null);
     }
   }, [affinityOpen, save.partyFormation]);
   const [movementOpen, setMovementOpen] = useState(false);
-  const [confirmVau, setConfirmVau] = useState(false);
+
   const [inventoryHero, setInventoryHero] = useState<string | null>(null);
   const stepLock = useRef(false);
   useEffect(() => {
@@ -331,12 +348,6 @@ export function OverworldMapScreen({
    * single dot the party stood on. */
   const FOG_REVEAL_RADIUS = 9;
 
-  // Standing at the western edge with O Vau still unfought — clicking Kael here has nothing
-  // to walk to (canStepOverworld keeps that edge closed until Vau is won) and nowhere to open
-  // a chapter list either, so it asks outright instead of just toggling an empty move prompt.
-  const atStartPreVau =
-    !test && !save.completed.includes("vau") && overworldPos.col === OVERWORLD_START_HEX.x && overworldPos.row === OVERWORLD_START_HEX.y;
-
   const walkTo = (col: number, row: number) => {
     if (!movementOpen || stepLock.current || !isOverworldCell(col, row)) return;
     stepLock.current = true;
@@ -346,15 +357,6 @@ export function OverworldMapScreen({
     // list open on its own. The pin now reads as "standing here" (see standingOn) and
     // waits for its own click, same as any other pin, so arriving never yanks a panel
     // over the map before the player has looked around.
-    //
-    // One scripted exception: Bosque Morto is an ambush, not a chapter the player opts into
-    // from a list — it finds the party the moment they set out from the ford, so their very
-    // first step after O Vau (and before Bosque is played) launches it directly, no click
-    // needed. Never in test mode: testing needs to walk and map every hex freely, not get
-    // funneled into a forced battle.
-    if (!test && save.completed.includes("vau") && !save.completed.includes("bosque")) {
-      onPick("bosque");
-    }
   };
 
   const enterLocation = (loc: WorldLocation, st: LocationStatus) => {
@@ -401,7 +403,7 @@ export function OverworldMapScreen({
           <BookOpen className="size-4" />
           <span>Missões</span>
         </button>
-        <button type="button" onClick={() => { setFormationSaved(false); setAffinityOpen(true); }} aria-haspopup="dialog" aria-expanded={affinityOpen} className="h-9 ember-plate px-2.5 text-xs sm:text-sm">Party</button>
+        <button type="button" onClick={() => { setFormationSaved(null); setAffinityOpen(true); }} aria-haspopup="dialog" aria-expanded={affinityOpen} className="h-9 ember-plate px-2.5 text-xs sm:text-sm">Party</button>
         {!test && onSave && (
           <button
             type="button"
@@ -726,13 +728,9 @@ export function OverworldMapScreen({
                 walk-cycle art in use here, just the idle loop, so distance covered does the talking). */}
             <button
               type="button"
-              aria-label={atStartPreVau ? "Entrar na missão" : `Mover ${leader}`}
+              aria-label={`Mover ${leader}`}
               aria-expanded={movementOpen}
               onClick={() => {
-                if (atStartPreVau) {
-                  setConfirmVau(true);
-                  return;
-                }
                 setMovementOpen((value) => !value);
               }}
               className="absolute z-20 -translate-x-1/2 -translate-y-full min-w-11 min-h-11 transition-all duration-500 ease-in-out focus-visible:outline-2 focus-visible:outline-accent"
@@ -776,28 +774,50 @@ export function OverworldMapScreen({
                 <section aria-label="Formação inicial">
                   <h3 className="mb-2 text-sm ember-kicker">Formação inicial</h3>
                   <div className="ember-slot p-3">
-                    <p className="mb-3 text-sm text-muted">A linha de frente começa nas posições mais próximas do inimigo; a retaguarda, nas mais distantes. Clique em dois personagens para trocá-los de lugar. Mapas com aberturas perigosas ou posições especiais preservam sua formação própria.</p>
+                    <p className="mb-3 text-sm text-muted">A linha de frente começa nas posições mais próximas do inimigo; a retaguarda, nas mais distantes. Clique em duas casas para trocá-las de lugar (vale a casa vazia). Mapas com aberturas perigosas ou posições especiais preservam sua formação própria.</p>
+                    <div className="mb-3 flex flex-wrap items-center gap-3">
+                      <button type="button" className="h-11 px-5 ember-btn ember-btn-primary text-sm" onClick={() => { const result = onSaveFormation?.(formationOrder); setFormationSaved(!result ? "failed" : !result.ok ? "failed" : result.test ? "test" : "saved"); }}>Salvar formação</button>
+                      {formationSaved === "saved" && <span role="status" className="text-sm text-accent">✓ Formação salva — conferida no arquivo do save.</span>}
+                      {formationSaved === "test" && <span role="status" className="text-sm text-accent">✓ Formação salva nesta sessão de teste (o modo teste nunca grava no save real).</span>}
+                      {formationSaved === "failed" && <span role="alert" className="text-sm text-danger">Não foi possível salvar a formação. Tente de novo.</span>}
+                    </div>
                     {(() => {
-                      const active = formationOrder.filter(hero => partyHeroes.includes(hero as typeof partyHeroes[number]));
-                      const rows = [{ label: "Frente", slots: active.slice(0, 3).map((hero, i) => ({ hero, slot: i })) }, { label: "Retaguarda", slots: active.slice(3, 6).map((hero, i) => ({ hero, slot: i + 3 })) }].filter(row => row.slots.length);
+                      // Radius-2 board (rows 3-4-5-4-3, center cell 10) — cells numbered front to back.
+                      const cells = Array.from({ length: FORMATION_SLOTS }, (_, i) => formationOrder[i] ?? "");
+                      const rows = [
+                        { label: "Frente", slots: [0, 1, 2] },
+                        { label: "", slots: [3, 4, 5, 6] },
+                        { label: "Meio", slots: [7, 8, 9, 10, 11] },
+                        { label: "", slots: [12, 13, 14, 15] },
+                        { label: "Retaguarda", slots: [16, 17, 18] },
+                      ].map(row => ({ label: row.label, slots: row.slots.map(slot => ({ hero: cells[slot]!, slot })) }));
                       const hex = "polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)";
                       const pick = (slot: number) => {
                         if (formationPick === null) return setFormationPick(slot);
-                        const a = active[formationPick], b = active[slot];
+                        const from = formationPick;
                         setFormationPick(null);
-                        if (!a || !b || a === b) return;
-                        setFormationOrder(order => order.map(name => name === a ? b : name === b ? a : name));
-                        setFormationSaved(false);
+                        if (from === slot || (!cells[from] && !cells[slot])) return;
+                        setFormationOrder(cells.map((hero, i) => (i === from ? cells[slot]! : i === slot ? cells[from]! : hero)));
+                        setFormationSaved(null);
                       };
                       return (
                         <div role="group" aria-label="Mapa da formação" className="mb-3 flex flex-col items-center">
                           <p className="mb-1 text-xs ember-kicker">Inimigo ▲</p>
                           <div className="flex flex-col">
                             {rows.map((row, r) => (
-                              <div key={row.label} className={`flex items-center gap-1 ${r ? "-mt-5" : ""}`}>
+                              <div key={r} className={`flex items-center gap-1 ${r ? "-mt-5" : ""}`}>
                                 <span className="w-20 shrink-0 pr-2 text-right text-xs ember-kicker">{row.label}</span>
-                                {r > 0 && <span aria-hidden="true" className="w-[40px] shrink-0" />}
-                                {row.slots.map(({ hero, slot }) => (
+                                {row.slots.length < 5 && <span aria-hidden="true" className="shrink-0" style={{ width: (5 - row.slots.length) * 44 }} />}
+                                {row.slots.map(({ hero, slot }) => !hero ? (
+                                  <button key={slot} type="button" aria-pressed={formationPick === slot} aria-label={`${row.label}, posição ${slot + 1}: vazia`} onClick={() => pick(slot)}
+                                    className="grid h-[96px] w-[84px] place-items-center"
+                                    style={{ clipPath: hex, background: formationPick === slot ? "#d9621c" : "rgba(190, 150, 95, 0.25)" }}>
+                                    <span className="flex h-[92px] w-[80px] flex-col items-center justify-center gap-0.5 text-[11px] leading-none text-muted" style={{ clipPath: hex, background: "linear-gradient(180deg, #0e0b09, #060504)" }}>
+                                      <span>vazia</span>
+                                      <span className="tabular-nums">{slot + 1}</span>
+                                    </span>
+                                  </button>
+                                ) : (
                                   <button key={slot} type="button" aria-pressed={formationPick === slot} aria-label={`${row.label}, posição ${slot + 1}: ${hero}`} onClick={() => pick(slot)}
                                     className="grid h-[96px] w-[84px] place-items-center"
                                     style={{ clipPath: hex, background: formationPick === slot ? "#d9621c" : "rgba(190, 150, 95, 0.45)" }}>
@@ -814,10 +834,6 @@ export function OverworldMapScreen({
                         </div>
                       );
                     })()}
-                    <div className="flex items-center gap-2">
-                      <button type="button" disabled={test} className="ember-btn ember-btn-sm" onClick={() => { onSaveFormation?.(formationOrder); setFormationSaved(true); }}>Salvar formação</button>
-                      {formationSaved && <span role="status" className="text-xs text-accent">Formação salva.</span>}
-                    </div>
                   </div>
                 </section>
                 <section aria-label="Afinidades">
@@ -856,7 +872,7 @@ export function OverworldMapScreen({
 
       <div className="map-party-panel absolute z-20 bottom-4 left-4 rounded-lg border border-border p-3 max-w-[calc(100%-6rem)]">
         <p className="text-xs text-muted mb-2" aria-live="polite">
-          {atStartPreVau ? `Clique em ${leader} para entrar na missão` : movementOpen ? "Escolha um hexágono · o tempo depende do terreno" : `Clique em ${leader} para mover`}
+          {movementOpen ? "Escolha um hexágono · o tempo depende do terreno" : `Clique em ${leader} para mover`}
         </p>
         <div className="flex gap-3">
           {([['Kael', 'kaelFinal'], ['Neera', 'neera'], ['Voss', 'voss'], ['Salazar', 'salazar'], ['Aldric', 'aldric'], ['Malrec', 'conjurer']] as const).filter(([name]) => test || heroRecruited(name, save.completed, save.flags)).map(([name, sprite]) => (
@@ -882,32 +898,6 @@ export function OverworldMapScreen({
         </div>
       )}
 
-      {confirmVau && (
-        <div className="absolute inset-0 z-40 ember-veil flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Entrar na missão">
-          <div className="relative w-full max-w-sm ember-panel px-5 py-4 text-sm">
-            <p className="font-display text-xl text-center mb-4 ember-title">Entrar na missão?</p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmVau(false)}
-                className="h-11 flex-1 ember-btn ember-btn-ghost text-sm"
-              >
-                Não
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmVau(false);
-                  onPick("vau");
-                }}
-                className="h-11 flex-1 ember-btn ember-btn-primary text-sm"
-              >
-                Sim
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {artOk && (
         <div className="absolute z-20 bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 flex flex-col gap-1 ember-plate p-1">

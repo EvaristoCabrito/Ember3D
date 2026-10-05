@@ -24,7 +24,11 @@ DialogOverlay resolves text and replies through dialogueLanguage, independently 
 
 CutsceneScreen accepts optional `subtitles` mapping languages to WebVTT URLs:
 `subtitles={{ pt: "/game/subtitles/intro.pt.vtt", en: "/game/subtitles/intro.en.vtt" }}`.
-Only the selected track is shown when subtitles are enabled. An unavailable English track falls back to Portuguese. No subtitle files are fabricated for current unfinished dialogue.
+Cutscene subtitles currently use English only. `cutsceneSubtitles.ts` registers the revised `.en-v2.vtt` tracks, which preserve the original subtitle files. Stored Portuguese subtitle preferences are migrated to English; the subtitle visibility toggle still works. Other language preferences remain independent.
+
+The village, inn arrival, forest entrance, smith, Asherah ritual, and temple aftermath have dialogue tracks. The bridge, title opening, ford introduction, and gate ending have no recognized dialogue and do not attach dialogue captions. Caption text was checked with local speech recognition, including a normalized audio pass without voice-activity filtering to recover quiet opening lines. Recognition and timing still benefit from listening review.
+
+Run `node scripts/qa-english-subtitles.mjs` with the dev server running to verify every video mapping, cue loading, timing bounds, English-only playback, and the village's opening captions.
 
 ## Verification
 

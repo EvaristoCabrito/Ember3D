@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CUTSCENE_SUBTITLES, syncEnglishSubtitles } from "./cutsceneSubtitles";
 import { ChevronLeft, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ALL_HERO_NAMES, BAG_MAX, CLASSES, EQUIPMENT, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_ICON, RATIONS_PRICE, WEAPON_MAX_ENH, WEAPONS, equipmentIcon, equipmentTooltip, equipmentTypeSlotName, heroRecruited, isPlayableClassForDisplay, isPouch, lockpickTooltip, partyBagHasRoom, partyPouchId, potionTooltip, pouchIcon, weaponDiceLabel, weaponEnhCost, weaponIcon, weaponPower, weaponRangeLabel, weaponSellValue, weaponTooltip, potionLabel } from "./data";
@@ -316,7 +317,7 @@ export function InnScreen({
   };
 
   if (smithIntro) {
-    return <SmithIntroScreen muted={muted} onSkip={finishSmithIntro} />;
+    return <SmithIntroScreen muted={muted} onMute={onMute} onSkip={finishSmithIntro} />;
   }
 
   if (view === "smith") {
@@ -1260,15 +1261,12 @@ function SmithPanel({
   );
 }
 
-function SmithIntroScreen({ muted, onSkip }: { muted: boolean; onSkip: () => void }) {
+function SmithIntroScreen({ muted, onMute, onSkip }: { muted: boolean; onMute: () => void; onSkip: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
   const prefs = useGamePreferences();
-  const selectedSubtitle = prefs.subtitles ? prefs.subtitleLanguage : "off";
-  const setTrack = (track: TextTrack) => { track.mode = track.language === selectedSubtitle ? "showing" : "disabled"; };
   useEffect(() => {
-    const tracks = ref.current?.textTracks;
-    if (tracks) for (const track of Array.from(tracks)) setTrack(track);
-  }, [selectedSubtitle]);
+    syncEnglishSubtitles(ref.current?.textTracks, prefs.subtitles);
+  }, [prefs.subtitles]);
   const [portrait, setPortrait] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(max-width: 720px) and (orientation: portrait)").matches,
   );
@@ -1301,8 +1299,7 @@ function SmithIntroScreen({ muted, onSkip }: { muted: boolean; onSkip: () => voi
     <section className="relative h-dvh w-dvw bg-black overflow-hidden">
       <div className="cutscene-stage">
         <video ref={ref} src="/game/smith-intro.mp4" playsInline autoPlay preload="auto" onEnded={onSkip} onError={onSkip}>
-          <track kind="subtitles" src="/game/subtitles/smith-intro.pt.vtt" srcLang="pt" label="Português" default={selectedSubtitle === "pt"} onLoad={(event) => setTrack(event.currentTarget.track)} />
-          <track kind="subtitles" src="/game/subtitles/smith-intro.en.vtt" srcLang="en" label="English" default={selectedSubtitle === "en"} onLoad={(event) => setTrack(event.currentTarget.track)} />
+          <track kind="subtitles" src={CUTSCENE_SUBTITLES["/game/smith-intro.mp4"]} srcLang="en" label="English" default={prefs.subtitles} onLoad={() => syncEnglishSubtitles(ref.current?.textTracks, prefs.subtitles)} />
         </video>
       </div>
       {portrait && (
@@ -1310,6 +1307,17 @@ function SmithIntroScreen({ muted, onSkip }: { muted: boolean; onSkip: () => voi
           Deite o telefone
         </p>
       )}
+      <div className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 p-2">
+        <button
+          type="button"
+          className="grid size-9 place-items-center rounded bg-black/40 text-white/90"
+          aria-label={muted ? "Ativar som" : "Silenciar"}
+          aria-pressed={!muted}
+          onClick={onMute}
+        >
+          {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+        </button>
+      </div>
       <div className="absolute inset-x-0 bottom-0 z-10 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex justify-end">
         <Button size="md" variant="ghost" onClick={onSkip}>
           Pular

@@ -1,9 +1,10 @@
 import { cleanPartyFormation, cleanPartyLeader } from "./partyFormation";
 import { EQUIPMENT, EXP_TO_LEVEL, expToLevel, MAX_GRID, MAX_LEVEL, POTION_CARRY_MAX, BAG_MAX, PROMOTIONS, STAT_POINTS_PER_LEVEL, WEAPONS, WORLD_LOCATIONS, emberFromCompleted, equipmentFitsSlot, starterWeaponFor, startingBags } from "./data";
 import { ALL_MISSIONS } from "./mapstore";
-import { OVERWORLD_START_HEX, worldToHex } from "./overworld";
+import { OVERWORLD_START_HEX, locationAt, worldToHex } from "./overworld";
 import { cleanHunger, fullness } from "./hunger";
 import { cleanAffinityScores } from "./affinity";
+import { cleanConversationMemory } from "./companionDialogues";
 import { TIER_KEYS } from "./types";
 import type { Bag, BattleSnapshot, BattleUnitSnap, ClassId, DialogAction, DialogLine, DialogTree, EquipSlot, Phase, SaveBank, SaveData, Side, SpriteId, StatPointAllocation, StatPointAttribute, TerrainId, TierKey } from "./types";
 
@@ -349,6 +350,8 @@ function cleanBattleUnit(raw: unknown): BattleUnitSnap | null {
     moved: u.moved === true,
     acted: u.acted === true,
     facing,
+    faceDx: typeof u.faceDx === "number" && Number.isFinite(u.faceDx) ? u.faceDx : undefined,
+    faceDy: typeof u.faceDy === "number" && Number.isFinite(u.faceDy) ? u.faceDy : undefined,
     alive: u.alive !== false,
     fade: Math.min(1, Math.max(0, Number(u.fade) || 1)),
     level: clampInt(u.level, 1, MAX_LEVEL),
@@ -720,6 +723,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     gameClock: clampInt(raw.gameClock, 0, 999999),
     gameHour: clampInt(raw.gameHour ?? 8, 0, 23),
     affinityScores: cleanAffinityScores(raw.affinityScores),
+    companionConversations: cleanConversationMemory(raw.companionConversations),
     partyFormation: cleanPartyFormation(raw.partyFormation),
     partyLeader: cleanPartyLeader(raw.partyLeader),
     overworldMoveBudgetUsed: clampInt(raw.overworldMoveBudgetUsed ?? raw.gameClock, 0, 999999),
@@ -773,7 +777,7 @@ function writeKey(key: string, value: string): boolean {
 
 function slotOccupied(s: SaveData | null): boolean {
   if (!s) return false;
-  return s.completed.length > 0 || Object.keys(s.unitHp).length > 0 || !!s.pendingMission || !!s.battle;
+  return s.completed.length > 0 || Object.keys(s.unitHp).length > 0 || !!s.pendingMission || !!s.battle || Object.keys(s.companionConversations ?? {}).length > 0;
 }
 
 function migrateLegacyIntoBank(): SaveBank {
@@ -900,6 +904,23 @@ export function slotProgress(slot: SaveData | null): { title: string; detail: st
   if (slot.pendingMission) {
     const m = ALL_MISSIONS.find((x) => x.id === slot.pendingMission);
     return { title: m ? m.title : slot.pendingMission, detail: "Início do combate" };
+  }
+  // On the RPG map the party has a real position: name the place it is standing on (or the
+  // nearest one, when it is out on the road) instead of guessing from completed missions.
+  if (slot.mapMode === "rpg" && slot.overworldPos) {
+    const { col, row } = slot.overworldPos;
+    const here = locationAt(WORLD_LOCATIONS, col, row);
+    if (here) return { title: here.name, detail: `Dia ${slot.gameClock ?? 0} · mapa` };
+    const toCube = (x: number, y: number) => { const q = x - (y - (y & 1)) / 2; return { q, r: y, s: -q - y }; };
+    const a = toCube(col, row);
+    let nearest: { name: string; d: number } | null = null;
+    for (const loc of WORLD_LOCATIONS) {
+      const h = worldToHex(loc.x, loc.y);
+      const b = toCube(h.x, h.y);
+      const d = (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.s - b.s)) / 2;
+      if (!nearest || d < nearest.d) nearest = { name: loc.name, d };
+    }
+    if (nearest) return { title: `Estrada perto de ${nearest.name}`, detail: `Dia ${slot.gameClock ?? 0} · mapa` };
   }
   if (slot.completed.length === 0) return { title: "Campanha nova", detail: "Mapa de cenários" };
   const lastId = slot.completed[slot.completed.length - 1]!;

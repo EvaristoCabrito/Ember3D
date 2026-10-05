@@ -698,8 +698,10 @@ export function BattleCanvas({
     <div ref={wrapRef} className="relative h-full w-full min-h-0 touch-none">
       <canvas ref={canvasRef} className="block h-full w-full touch-none" />
       <canvas ref={fxCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ display: "none" }} />
-      <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
+      {/* Tactical unit sprites (drawn here only while elemental FX are on screen) sit BELOW the units/overlay
+          canvas, so missiles and other overlays drawn there stay in front of the caster, never behind. */}
       <canvas ref={tacticalUnitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
+      <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
       <canvas ref={magicMissileCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ mixBlendMode: "screen" }} />
       <canvas ref={unitHudCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
       {/* Diorama color grade + vignette: a subtle warm key-light / cool shadow wash from the

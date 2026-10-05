@@ -79,6 +79,19 @@ export function clearShot(
   kind: "arrow" | "bolt",
   overlay: DecorOverlay = EMPTY_OVERLAY,
 ): boolean {
+  return shotBlocker(from, to, tiles, cols, kind, overlay) === null;
+}
+
+/** The hex that stops a shot from `from` to `to` (clearShot's rules), or null when the line is clear —
+ * so the game can tell the player exactly what is in the way. */
+export function shotBlocker(
+  from: Point,
+  to: Point,
+  tiles: TerrainId[],
+  cols: number,
+  kind: "arrow" | "bolt",
+  overlay: DecorOverlay = EMPTY_OVERLAY,
+): Point | null {
   const fromHigh = !!hexDef(tiles, cols, from.x, from.y, overlay).height;
   const line = hexLine(from, to);
   for (let i = 1; i < line.length; i++) {
@@ -86,17 +99,17 @@ export function clearShot(
     const end = i === line.length - 1;
     const t = hexDef(tiles, cols, p.x, p.y, overlay);
     if (t.id === "barricade") {
-      if (end) return false;
+      if (end) return p;
       const shooterBehind = hexDist(from, p) <= 1;
       const targetBehind = hexDist(to, p) <= 1;
-      if (targetBehind) return false;
-      if (!shooterBehind) return false;
+      if (targetBehind) return p;
+      if (!shooterBehind) return p;
       continue;
     }
-    if (t.blocksShot && !end) return false;
-    if (!end && kind === "arrow" && t.height && !fromHigh) return false;
+    if (t.blocksShot && !end) return p;
+    if (!end && kind === "arrow" && t.height && !fromHigh) return p;
   }
-  return true;
+  return null;
 }
 
 export function shotKind(unit: { maxRange: number; mag: number }): "arrow" | "bolt" | null {

@@ -1,12 +1,13 @@
 import { applyPartyFormation, cleanPartyFormation, cleanPartyLeader, partyLeaderOf } from "./partyFormation";
 import { OptionsButton } from "./OptionsMenu";
+import { CUTSCENE_SUBTITLES, syncEnglishSubtitles } from "./cutsceneSubtitles";
 import { uiText, useGamePreferences, type Translations } from "./gamePreferences";
 import { GraphicsQualityControl } from "./GraphicsQualityControl";
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Dices, Grip, ListOrdered, Lock, Pencil, RotateCcw, Shuffle, SlidersHorizontal, Swords, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { artProgress, ensureDecorationArt, ensureTerrainArt, ensureSpriteArt, loadGameArt, portraitFor, releaseSpriteArt, subscribeArtProgress, TILE_VARIANT_COUNT, tileVariantName, tileVariantSrc } from "./assets";
-import { getAudioVolumes, installAudioUnlock, playFile, playMenuMusic, playTheme, resumeAudio, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
+import { getAudioVolumes, isMuted, installAudioUnlock, pauseMusic, playFile, playMenuMusic, playTheme, resumeAudio, resumeMusic, setCutsceneVolume, setMusicVolume, setMuted, setSfxVolume, sfxPlay, stopMusic, unlockAudio } from "./audio";
 import { BattleCanvas } from "./BattleCanvas";
 import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } from "./gfx/params";
 import { ELEMENT_FX_REGISTRY, pixelDefaults, pixelPresetsFor, type PixelElement, type PixelElementSettings } from "./gfx/three/ProceduralElementEmitter";
@@ -22,6 +23,9 @@ import { Hd2dTestScreen } from "./gfx/three/Hd2dTestScene";
 import { HEALER_AILMENT_PRICE, HEALER_CAST_PRICE, NIGHT_REST_PRICE, InnScreen } from "./InnScreen";
 import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
+import { CompanionConversations } from "./CompanionConversations";
+import { resolveCompanionReply } from "./companionDialogues";
+import { AFFINITY_HEROES } from "./affinity";
 import { LIGHT_DEFS } from "./lighting";
 import { DialogEditor } from "./DialogEditor";
 import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, SOLID_ROCK_DECOR_IDS, CAUSTIC_VENOM, MINOR_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, FOREST_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, expToLevel, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
@@ -483,8 +487,8 @@ function classSpells(classId: ClassId, level = Number.POSITIVE_INFINITY): SpellK
         // charge pool.
         return ["magicMissile", "lifeDrain"];
       case "familiar4":
-        // Familiar Radiante carries Familiar Maior's kit.
-        return ["magicMissile", "lifeDrain"];
+        // Familiar Radiante has three Shock casts plus Life Drain.
+        return ["shock", "lifeDrain"];
       case "familiar3":
         // The Big Guy's own hotbar, once summoned — its only action beyond a plain attack.
         return ["fireball"];
@@ -835,6 +839,7 @@ export function GameApp() {
   const [innEntry, setInnEntry] = useState<DialogAction | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(hudBlank);
   const [paused, setPaused] = useState(false);
+  const [companionConversationsOpen, setCompanionConversationsOpen] = useState(false);
   // The mission's outro dialog (see hud.result effect below) — opens once, right when
   // victory is confirmed, and never reopens after being closed even though hud.result
   // stays "victory" for the rest of the battle.
@@ -902,6 +907,10 @@ export function GameApp() {
   // playthrough left off.
   const [testOverworld, setTestOverworld] = useState<SaveData | null>(null);
   const awardedRef = useRef<string | null>(null);
+  // Each hero's level/XP when this battle began: the result screen's XP bar fills from here.
+  // save.xp can't be used — spending a stat point or saving to a slot mid-battle writes the
+  // live XP into it, which left the bar nothing to fill.
+  const battleStartProgressRef = useRef<Record<string, { level: number; xp: number }>>({});
   // Bumped by every startBattle; a battle whose sprites finish loading after a newer one was
   // requested is dropped (see startBattle).
   const battleLoadRef = useRef(0);
@@ -1080,7 +1089,8 @@ export function GameApp() {
       const resolved = override ?? missionById(id);
       if (!resolved) return;
       const tutorialMap = resolved.index <= (missionById("thebridge")?.index ?? 3) && !resolved.id.startsWith("random-encounter-");
-      const timed = !testMode && !tutorialMap && resolved.environment !== "indoor" && usesTravelClock(save)
+      // The travel clock drives lighting for random maps and "-crossing" maps only for now — other campaign maps keep their authored time of day.
+      const timed = !testMode && !tutorialMap && (resolved.id.startsWith("random-") || resolved.id.endsWith("-crossing")) && resolved.environment !== "indoor" && usesTravelClock(save)
         ? (() => {
             const timeOfDay = campaignTimeOfDay(campaignHour(save));
             const light = TIME_OF_DAY_LIGHT[timeOfDay];
@@ -1205,6 +1215,7 @@ export function GameApp() {
       ]).then(() => {
         if (load !== battleLoadRef.current) return;
         awardedRef.current = null;
+        battleStartProgressRef.current = Object.fromEntries(battle.units.filter((u) => u.side === "player").map((u) => [u.name, { level: u.level, xp: u.xp }]));
         setEngine(battle);
         setMissionId(id);
         setHud(battle.getHud());
@@ -1265,7 +1276,7 @@ export function GameApp() {
     for (const u of engine.units.filter((x) => x.side === "player")) {
       // Levels (and any level-ups from XP earned mid-battle) already happened live in the
       // engine — `from` is just whatever was on file before this mission started.
-      const from = levels[u.name] ?? u.level;
+      const from = battleStartProgressRef.current[u.name]?.level ?? levels[u.name] ?? u.level;
       const to = u.level;
       const stFrom = statsFor(u.classId, from);
       const stTo = statsFor(u.classId, to);
@@ -1301,7 +1312,7 @@ export function GameApp() {
         resTo: stTo.res,
         fallen: !u.alive,
         xp: u.xp,
-        xpFrom: save.xp?.[u.name] ?? 0,
+        xpFrom: battleStartProgressRef.current[u.name]?.xp ?? save.xp?.[u.name] ?? 0,
         skillGain: from === to ? undefined : formatSpellUseGains(spellUseGains(u.classId, from, to)),
       });
       if (!testMode && u.alive) {
@@ -1313,10 +1324,10 @@ export function GameApp() {
         newPromotions.push({ name: u.name, options });
       }
     }
-    setLastGrowth(growth);
-    if (newPromotions.length > 0) setPendingPromotions(newPromotions);
     if (awardedRef.current === mission.id) return;
     awardedRef.current = mission.id;
+    setLastGrowth(growth);
+    if (newPromotions.length > 0) setPendingPromotions(newPromotions);
     const completed = save.completed.includes(mission.id) ? save.completed : [...save.completed, mission.id];
     if (!testMode) {
       const crossingDefeatedSpawns = keepsDefeatedSpawns(mission)
@@ -1575,8 +1586,12 @@ export function GameApp() {
       playTheme("early");
       return;
     }
-    playMenuMusic();
-  }, [screen, muted, missionId, innEntry, save.seenSmithIntro]);
+    // Intro music belongs only to the title. Save slots, map choice and other
+    // transition screens must not restart it after the player starts the game.
+    // The title song carries on through the save-slot screen opened from the title.
+    if (screen === "title" || (screen === "saveSlots" && slotReturnScreen === "title")) playMenuMusic();
+    else stopMusic();
+  }, [screen, muted, missionId, innEntry, save.seenSmithIntro, slotReturnScreen]);
 
   // Campaign maps reuse the mode stored in that save. Debug always opens the chooser so
   // each test run can select the kind of map independently of the last Debug session.
@@ -1585,21 +1600,26 @@ export function GameApp() {
       setScreen("mapChoice");
       return;
     }
-    const mode = save.mapMode ?? mapMode;
-    if (mode) {
-      setMapMode(mode);
-      setScreen(mode === "classic" ? "worldMap" : "overworldMap");
-      return;
-    }
-    setScreen("mapChoice");
-  }, [save.mapMode, mapMode, testMode]);
+    // Older campaign records predate the RPG map preference. Returning from a mission
+    // should still land on a playable campaign map instead of restarting at the chooser.
+    const mode = save.mapMode ?? mapMode ?? "classic";
+    setMapMode(mode);
+    if (!save.mapMode) persistCurrent({ ...save, mapMode: mode });
+    setScreen(mode === "classic" ? "worldMap" : "overworldMap");
+  }, [save, mapMode, testMode, persistCurrent]);
 
   const leaveBoot = useCallback(() => {
     // Entering the world map is a hard music boundary: do not leave intro.mp3 under it.
     playTheme("worldMap");
-    // Every new campaign chooses its map after the intro, even after a previous game.
-    setScreen("mapChoice");
-  }, []);
+    // The travel-mode chooser is for Debug only; a campaign goes straight to the RPG map.
+    if (testMode) {
+      setScreen("mapChoice");
+      return;
+    }
+    setMapMode("rpg");
+    persistCurrent({ ...save, mapMode: "rpg" });
+    setScreen("overworldMap");
+  }, [testMode, save, persistCurrent]);
 
   const goToTitle = useCallback(() => {
     stopMusic();
@@ -1824,7 +1844,7 @@ export function GameApp() {
     <main className="relative h-dvh min-h-0 bg-bg text-fg overflow-hidden">
       <LoadingCurtain visible={loadingCurtain} />
       {screen === "boot" && (
-        <CutsceneScreen src="/game/title-open.mp4" onSkip={leaveBoot} />
+        <CutsceneScreen onSoundChange={setMutedUi} src="/game/title-open.mp4" onSkip={leaveBoot} />
       )}
       {screen === "title" && (
         <TitleScreen
@@ -1885,21 +1905,14 @@ export function GameApp() {
           onPick={(mode) => {
             setMapMode(mode);
             if (!testMode) persistCurrent({ ...save, mapMode: mode });
-            // Picking the RPG map on a brand-new campaign (nothing completed, nothing in
-            // progress) plays its own intro before O Vau's briefing instead of landing on
-            // the hex map first — a returning campaign, or the classic map, skips straight
-            // to its usual screen same as ever.
-            if (mode === "rpg" && !testMode && save.completed.length === 0 && !save.pendingMission) {
-              setScreen("vauIntro");
-              return;
-            }
+            // Open the map at the saved starting hex. The first trip is a player action.
             setScreen(mode === "classic" ? "worldMap" : "overworldMap");
           }}
         />
       )}
 
       {screen === "vauIntro" && (
-        <CutsceneScreen
+        <CutsceneScreen onSoundChange={setMutedUi}
           src="/game/vau-intro.mp4"
           onSkip={() => {
             setMissionId("vau");
@@ -1909,11 +1922,11 @@ export function GameApp() {
       )}
 
       {screen === "wispForestIntro" && (
-        <CutsceneScreen src="/game/wisp-entrance.mp4" subtitles={{ pt: "/game/subtitles/wisp-entrance.pt.vtt", en: "/game/subtitles/wisp-entrance.en.vtt" }} onSkip={finishWispForestIntro} />
+        <CutsceneScreen onSoundChange={setMutedUi} src="/game/wisp-entrance.mp4" subtitles={{ pt: "/game/subtitles/wisp-entrance.pt.vtt", en: "/game/subtitles/wisp-entrance.en.vtt" }} onSkip={finishWispForestIntro} />
       )}
 
       {screen === "innArrivalIntro" && (
-        <CutsceneScreen src="/game/inn-arrival.mp4" subtitles={{ pt: "/game/subtitles/inn-arrival.pt.vtt", en: "/game/subtitles/inn-arrival.en.vtt" }} onSkip={finishInnArrivalIntro} />
+        <CutsceneScreen onSoundChange={setMutedUi} src="/game/inn-arrival.mp4" subtitles={{ pt: "/game/subtitles/inn-arrival.pt.vtt", en: "/game/subtitles/inn-arrival.en.vtt" }} onSkip={finishInnArrivalIntro} />
       )}
 
       {screen === "mapEditor" && art && (
@@ -1970,7 +1983,16 @@ export function GameApp() {
       {screen === "overworldMap" && (
         <OverworldMapScreen
           onSaveFormation={order => {
-            if (!testMode) persistCurrent({ ...readMapSave(), partyFormation: cleanPartyFormation(order) });
+            const formation = cleanPartyFormation(order);
+            // Test mode keeps it for the test session only, like every other test-mode map state.
+            if (testMode) {
+              writeMapSave({ ...readMapSave(), partyFormation: formation });
+              return { ok: true, test: true };
+            }
+            persistCurrent({ ...readMapSave(), partyFormation: formation });
+            // Proof, not a promise: read the slot back from storage and compare.
+            const stored = activeSave(loadBank()).partyFormation ?? [];
+            return { ok: JSON.stringify(stored) === JSON.stringify(formation), test: false };
           }}
           onSaveLeader={hero => {
             if (!testMode) persistCurrent({ ...readMapSave(), partyLeader: cleanPartyLeader(hero) });
@@ -2387,7 +2409,7 @@ export function GameApp() {
       )}
 
       {screen === "cutscene" && (
-        <CutsceneScreen
+        <CutsceneScreen onSoundChange={setMutedUi}
           src={
             missionId === "aldeia"
               ? "/game/aldeia-intro.mp4"
@@ -2401,7 +2423,7 @@ export function GameApp() {
       )}
 
       {screen === "epilogue" && (
-        <CutsceneScreen
+        <CutsceneScreen onSoundChange={setMutedUi}
           src={missionId === "portao" ? "/game/portao-end.mp4" : "/game/temple-aftermath.mp4"}
           onSkip={() => setScreen("victory")}
         />
@@ -2505,12 +2527,13 @@ export function GameApp() {
             return true;
           }}
           onHud={onHud}
-          onPause={() => setPaused(true)}
+          onPause={() => { pauseMusic(); setPaused(true); }}
           onTitle={goToTitle}
           onResume={() => {
             setSlotMode(null);
             setOverwrite(null);
             setPaused(false);
+            resumeMusic();
           }}
           onMute={() => {
             unlockAudio();
@@ -2719,6 +2742,12 @@ export function GameApp() {
               return;
             }
             const snapshot = (() => {
+              // Map saves must use the current map record. combatStartRef holds the
+              // snapshot from before the last battle/map transition, so using it here
+              // silently reset travel progress when a player saved from the RPG map.
+              if (slotReturnScreen === "overworldMap" || slotReturnScreen === "worldMap" || slotReturnScreen === "campaign") {
+                return { ...readMapSave(), muted };
+              }
               if (engine && missionId) {
                 const levels = { ...save.levels };
                 const xp = { ...save.xp };
@@ -2752,25 +2781,43 @@ export function GameApp() {
           }}
         />
       )}
+      {!testMode && (screen === "worldMap" || screen === "overworldMap" || screen === "campaign") && <>
+        <button type="button" className="absolute bottom-4 right-4 z-30 ember-btn ember-btn-sm" onClick={() => setCompanionConversationsOpen(true)}>Conversations</button>
+        {companionConversationsOpen && <CompanionConversations
+          save={save}
+          leader={partyLeaderOf(save.partyLeader, h => heroRecruited(h, save.completed, save.flags))}
+          heroes={AFFINITY_HEROES.filter(h => heroRecruited(h, save.completed, save.flags))}
+          onClose={() => setCompanionConversationsOpen(false)}
+          onLeader={hero => persistCurrent({ ...readMapSave(), partyLeader: hero })}
+          onReply={(reply, leader) => {
+            const rec = readMapSave();
+            const resolved = resolveCompanionReply(rec.affinityScores, rec.companionConversations, reply, leader);
+            persistCurrent({ ...rec, affinityScores: resolved.scores, companionConversations: resolved.memory });
+          }}
+        />}
+      </>}
     </main>
   );
 }
 
-function CutsceneScreen({
+export function CutsceneScreen({
   src,
   subtitles,
   onSkip,
+  onSoundChange,
 }: {
   src: string;
   subtitles?: Translations;
   onSkip: () => void;
+  onSoundChange: (muted: boolean) => void;
 }) {
   const prefs = useGamePreferences();
   const ref = useRef<HTMLVideoElement>(null);
+  const [soundOn, setSoundOn] = useState(() => !isMuted());
+  const englishSubtitles = CUTSCENE_SUBTITLES[src] ?? subtitles?.en;
   useEffect(() => {
-    const tracks = ref.current?.textTracks;
-    if (tracks) for (const track of Array.from(tracks)) track.mode = prefs.subtitles && track.language === (subtitles?.[prefs.subtitleLanguage] ? prefs.subtitleLanguage : subtitles?.pt ? "pt" : "en") ? "showing" : "disabled";
-  }, [prefs.subtitles, prefs.subtitleLanguage, subtitles]);
+    syncEnglishSubtitles(ref.current?.textTracks, prefs.subtitles);
+  }, [prefs.subtitles, englishSubtitles]);
   const [portrait, setPortrait] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(max-width: 720px) and (orientation: portrait)").matches,
   );
@@ -2793,11 +2840,13 @@ function CutsceneScreen({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // Cutscene audio is its own setting (see the "Cutscenes" slider in Áudio/Volumes),
-    // always on by default — never tied to the game's own master mute toggle.
+    // The cutscene volume slider sets its level; the sound toggle silences everything.
     const cutsceneVolume = getAudioVolumes().cutscene;
     el.volume = cutsceneVolume;
-    el.muted = cutsceneVolume <= 0;
+    el.muted = isMuted() || cutsceneVolume <= 0;
+    setSoundOn(!el.muted);
+    const syncSound = () => setSoundOn(!el.muted && el.volume > 0);
+    el.addEventListener("volumechange", syncSound);
     let stuckTimer = 0;
     const clearStuckTimer = () => {
       if (stuckTimer) {
@@ -2827,6 +2876,7 @@ function CutsceneScreen({
     return () => {
       el.removeEventListener("canplay", kick);
       el.removeEventListener("playing", clearStuckTimer);
+      el.removeEventListener("volumechange", syncSound);
       clearStuckTimer();
     };
   }, [src, onSkip]);
@@ -2834,7 +2884,7 @@ function CutsceneScreen({
     <section className="relative h-dvh w-dvw bg-black overflow-hidden">
       <div className="cutscene-stage">
         <video ref={ref} src={src} playsInline autoPlay preload="auto" onEnded={onSkip} onError={onSkip}>
-          {Object.entries(subtitles ?? {}).map(([language, url]) => <track key={language} kind="subtitles" src={url} srcLang={language} label={language === "pt" ? "Português" : "English"} onLoad={() => { const tracks = ref.current?.textTracks; if (tracks) for (const track of Array.from(tracks)) track.mode = prefs.subtitles && track.language === (subtitles?.[prefs.subtitleLanguage] ? prefs.subtitleLanguage : subtitles?.pt ? "pt" : "en") ? "showing" : "disabled"; }} />)}
+          {englishSubtitles && <track key={englishSubtitles} kind="subtitles" src={englishSubtitles} srcLang="en" label="English" default={prefs.subtitles} onLoad={() => syncEnglishSubtitles(ref.current?.textTracks, prefs.subtitles)} />}
         </video>
       </div>
       {portrait && (
@@ -2842,6 +2892,26 @@ function CutsceneScreen({
           {uiText("Deite o telefone")}
         </p>
       )}
+      <div className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex gap-1 p-2">
+        <button
+          type="button"
+          className="grid size-9 place-items-center rounded bg-black/40 text-white/90"
+          aria-label={uiText(soundOn ? "Silenciar" : "Ativar som")}
+          aria-pressed={soundOn}
+          onClick={() => {
+            const video = ref.current;
+            if (!video) return;
+            const enable = video.muted || video.volume <= 0;
+            setMuted(!enable);
+            onSoundChange(!enable);
+            if (enable && video.volume <= 0) video.volume = getAudioVolumes().cutscene || 1;
+            video.muted = !enable;
+            setSoundOn(enable);
+          }}
+        >
+          {soundOn ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+        </button>
+      </div>
       <div className="absolute inset-x-0 bottom-0 z-10 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex justify-end">
         <Button size="md" variant="ghost" onClick={onSkip}>
           {uiText("Pular")}
@@ -3162,7 +3232,7 @@ const SKILL_DAMAGE_ROWS: { name: string; cls: ClassId; tier: SpellTier; formula:
     param: "level" as const,
     note: `Passiva: cura sozinho ao cair a ${Math.round(SECOND_WIND.badlyWoundedPct * 100)}% de HP ou menos. Não é um golpe do atalho.`,
   },
-  { name: CURES.cureLight.name, cls: SKILL_CLASS.cureLight!, tier: spellTier("cureLight")!, formula: (mag: number) => `${healFormula(mag, "cureLight")} (cura)`, note: "Igual à Cura Média da Clériga, usos próprios do Paladino." },
+  { name: CURES.cureLight.name, cls: SKILL_CLASS.cureLight!, tier: spellTier("cureLight")!, formula: (mag: number) => `${healFormula(mag, "cureLight")} (cura)`, note: "Entre Cura Menor e Cura Média; usos próprios do Paladino." },
   {
     name: AURA_OF_PROTECTION.name,
     cls: SKILL_CLASS.auraOfProtection!,
@@ -3238,7 +3308,7 @@ const SKILL_DAMAGE_NOTES_EN: Record<string, string> = {
   [CAUSTIC_VENOM.name]: `Range ${CAUSTIC_VENOM.range}. Poisons the target: 1D4 at the start of each turn until cured. Radius ${CAUSTIC_VENOM.size}; affects both sides.`,
   [MULTI_SHOT.name]: "2 targets (3 at level 11), range 6. Damage die increases at levels 8 and 13.",
   [SECOND_WIND.name]: `Passive: automatically heals when HP falls to ${Math.round(SECOND_WIND.badlyWoundedPct * 100)}% or lower. It is not an action-bar attack.`,
-  [CURES.cureLight.name]: "Same as the Cleric's Medium Heal; exclusive uses for the Paladin.",
+  [CURES.cureLight.name]: "Between Minor and Medium Heal; exclusive uses for the Paladin.",
   [AURA_OF_PROTECTION.name]: "Instant, centered on self — no aiming. Scales at levels 20, 22, 24, 26, 28, and 30.",
   [DIVINE_WRATH.name]: `Aimed straight line, range ${DIVINE_WRATH.range} — never hits allies. Damage die increases at levels 19, 22, 26, and 30.`,
   [SHOULDER_SMASH.name]: `Requires no shield. Hex arc grows to 4; knocks targets back ${SHOULDER_SMASH.knockback} hexes.`,
@@ -7956,6 +8026,7 @@ function BattleScreen({
         engine.startLightningTier3();
         break;
       case "shock":
+        engine.startShock();
         break;
       case "magicMissile":
         engine.startMagicMissile();
@@ -8059,6 +8130,16 @@ function BattleScreen({
     if (count <= 0) return true;
     if (!showAct || actor.acted) return true;
     return false;
+  }
+
+  /** Why a greyed-out slot can't be used right now, shown in its tooltip so it never looks like a bug. */
+  function slotDisabledReason(action: SlotAction): string | null {
+    if (!actor) return null;
+    if (hud.busy) return "aguarde a ação atual terminar";
+    if (slotCount(action, actor) <= 0) return "sem usos restantes";
+    if (actor.acted) return `${actor.name} já agiu neste turno`;
+    if (!showAct) return "termine ou cancele a ação atual primeiro";
+    return null;
   }
 
   function slotActive(action: SlotAction): boolean {
@@ -8495,9 +8576,10 @@ function BattleScreen({
               {slots.map((action, i) => {
                 const empty = !action;
                 const disabled = action ? slotDisabled(action) : !editingSlots;
+                const blockedWhy = action && !editingSlots && disabled ? slotDisabledReason(action) : null;
                 const fullFrameIcon = action?.kind === "spell" && action.spell === "summonFamiliar3";
                 return (
-                  <ItemTip key={i} text={`F${i + 1} · ${action ? slotTooltip(action) : "Slot vazio"}`} className="relative">
+                  <ItemTip key={i} text={`F${i + 1} · ${action ? slotTooltip(action) : "Slot vazio"}${blockedWhy ? ` — indisponível: ${blockedWhy}` : ""}`} className="relative">
                     <button
                       type="button"
                       disabled={!editingSlots && disabled}
@@ -9305,11 +9387,20 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                       {spellStatusRow("summonZombieDog", SUMMON_ZOMBIE_DOG.name)}
                     </>
                   )}
-                  {(familiar1 || familiar2 || familiar4) && (
+                  {(familiar1 || familiar2) && (
                     <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                       <img src={spellIcon("magic-missile")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                       <p className="text-xs leading-snug">
                         {uiText(MAGIC_MISSILE.name)} {damageFormula(unit.mag, MAGIC_MISSILE.mul, MAGIC_MISSILE.dice, MAGIC_MISSILE.faces, MAGIC_MISSILE.bonus)}{" "}
+                        <span className="tabular-nums text-muted">×{unit.spellCharges ?? 0}</span>
+                      </p>
+                    </div>
+                  )}
+                  {familiar4 && (
+                    <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
+                      <img src={slotIcon({ kind: "spell", spell: "shock" })} alt="" className="size-5 rounded-sm object-cover shrink-0" />
+                      <p className="text-xs leading-snug">
+                        {uiText(SHOCK.name)} {damageFormula(unit.mag, SHOCK.mul, SHOCK.dice, SHOCK.faces, SHOCK.bonus)}{" "}
                         <span className="tabular-nums text-muted">×{unit.spellCharges ?? 0}</span>
                       </p>
                     </div>
@@ -9405,6 +9496,7 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                   )}
                   {paladin && (
                     <>
+                      {spellStatusRow("cureLight", CURES.cureLight.name)}
                       {spellStatusRow("auraOfProtection", AURA_OF_PROTECTION.name)}
                       {spellStatusRow("divineWrath", DIVINE_WRATH.name)}
                     </>

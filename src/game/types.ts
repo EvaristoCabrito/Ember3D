@@ -259,6 +259,8 @@ export interface ClassDef {
 /** One reply choice inside a branching DialogLine. Picking it jumps to `next`, or ends the
  * tree if `next` is absent/null — same convention as DialogLine.next below. */
 export interface DialogReply {
+  /** Directed companion chapter resolved by this response, for one-time affinity changes. */
+  companionScene?: string;
   affinity?: { from: string; to: string; delta: -3 | 0 | 3 };
   translations?: Partial<Record<"pt" | "en", string>>;
   text: string;
@@ -683,6 +685,11 @@ export interface Unit {
   moved: boolean;
   acted: boolean;
   facing: 1 | -1;
+  /** The unit's last real heading on the board (hexCenter delta toward its last attack/counter/cast
+   * target, or along its last step). `facing` is re-derived from it for the current camera angle every
+   * frame, so a unit keeps pointing where it last fought, whatever the camera does. */
+  faceDx?: number;
+  faceDy?: number;
   walkPose: "front" | "back" | "side";
   /** Flips at the start of every one of this unit's own turns (see beginUnitTurn). Consulted
    * by sprites with a second idle loop (currently just Malrec, see idles2 in GameArt) to
@@ -703,7 +710,7 @@ export interface Unit {
   healGlow: number;
   /** Palette the healGlow halo uses: holy gold (minor/medium), disease teal, potion amber,
    * or Potionzero (the original warm-white glow, kept for future skills). */
-  healGlowKind: "holyMinor" | "holyMedium" | "disease" | "potion" | "potionZero" | "food" | "bless";
+  healGlowKind: "holyMinor" | "healingHands" | "holyMedium" | "disease" | "potion" | "potionZero" | "food" | "bless";
   fade: number;
   /** Engine time (BattleEngine.time) at which this unit died — drives its death sheet (see
    * GameArt.deaths) and holds off the fade-out until that sheet has played. */
@@ -1151,6 +1158,8 @@ export interface BattleUnitSnap {
   moved: boolean;
   acted: boolean;
   facing: 1 | -1;
+  faceDx?: number;
+  faceDy?: number;
   alive: boolean;
   fade: number;
   level: number;
@@ -1306,6 +1315,8 @@ export interface SaveData {
   gameHour?: number;
   /** Shared relationship score for each named hero pair, from 0 to 100. */
   affinityScores?: Record<string, number>;
+  /** Chosen response per directed companion chapter; preserved across leader changes. */
+  companionConversations?: Record<string, -3 | 0 | 3>;
   partyFormation?: string[];
   /** Hero who walks the world map and free-roam maps (Party menu); absent means Kael. */
   partyLeader?: string;

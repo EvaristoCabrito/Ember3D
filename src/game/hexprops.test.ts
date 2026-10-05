@@ -157,9 +157,10 @@ test("each house blocks its complete ground footprint even when its saved checkb
       assert.equal(hexDef(tiles, COLS, placement.x + dx, placement.y + dy, overlay).passable, false, `${id} blocks ${placement.x + dx},${placement.y + dy}`);
     }
     if (id === "burnt-house-ruins") {
-      assert.deepEqual(placedBlockingFootprint(placement), FOOTPRINT_TYPE_6.map(({ dx, dy }) => ({ dx: dx - 2, dy })), `${id} uses Type 6 shifted two tiles left`);
+      assert.deepEqual(placedBlockingFootprint(placement).slice(0, 6), FOOTPRINT_TYPE_6, `${id} retains Type 6 without the erroneous leftward shift`);
+      assert.ok(placedBlockingFootprint(placement).slice(6).every(cell => cell.dy <= -2), 'extra collision covers the rear only');
     } else if (HOUSE_DECOR_IDS.has(id) || id === "burning-hamlet") {
-      assert.equal(placedBlockingFootprint(placement).length, 5, `${id} keeps the existing house footprint`);
+      assert.equal(placedBlockingFootprint(placement).length, id === "burning-house" || id === "burning-hamlet" ? 9 : 5, `${id} keeps its ground blocking footprint`);
     }
   }
 });

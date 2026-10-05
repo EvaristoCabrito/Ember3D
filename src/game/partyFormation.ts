@@ -1,9 +1,25 @@
 import { AFFINITY_HEROES, type AffinityHero } from "./affinity.ts";
 import type { Mission } from "./types";
 
+/** The Party menu's formation board: a radius-2 hex (rows of 3-4-5-4-3), so a tank can take the
+ * true center cell (index 9). Cells run front to back, left to right. */
+export const FORMATION_SLOTS = 19;
+
+/** Board cells front to back, left to right: a hero name, or "" for an empty cell. Heroes are
+ * deduped; empty cells are kept (so a hero can sit in any cell) only as many as fit the board. */
 export function cleanPartyFormation(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  return [...new Set(raw.filter((hero): hero is string => typeof hero === "string" && AFFINITY_HEROES.includes(hero as typeof AFFINITY_HEROES[number])))];
+  const heroes = new Set<string>();
+  for (const v of raw) if (typeof v === "string" && AFFINITY_HEROES.includes(v as typeof AFFINITY_HEROES[number])) heroes.add(v);
+  let empties = Math.max(0, FORMATION_SLOTS - heroes.size);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of raw) {
+    if (v === "" && empties > 0) { out.push(""); empties--; }
+    else if (typeof v === "string" && heroes.has(v) && !seen.has(v)) { seen.add(v); out.push(v); }
+  }
+  while (out.length && out[out.length - 1] === "") out.pop();
+  return out;
 }
 
 /** The chosen party leader (Party menu), or undefined when none/invalid was saved. */
@@ -30,7 +46,7 @@ function hexDistance(a: { x: number; y: number }, b: { x: number; y: number }): 
  * farthest (its back row). A map without enemies keeps its authored slot order. */
 export function applyPartyFormation(mission: Mission, raw: unknown, protectedStart = false): Mission {
   const order = cleanPartyFormation(raw);
-  if (!order.length || protectedStart || mission.lockPartyFormation || mission.explore) return mission;
+  if (!order.some(Boolean) || protectedStart || mission.lockPartyFormation || mission.explore) return mission;
   const heroes = mission.playerSpawns.filter(spawn => AFFINITY_HEROES.includes(spawn.name as typeof AFFINITY_HEROES[number]));
   const ranked = [...heroes].sort((a, b) => {
     const ai = order.indexOf(a.name), bi = order.indexOf(b.name);

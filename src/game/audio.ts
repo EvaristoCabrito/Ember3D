@@ -3,18 +3,19 @@ let master: GainNode | null = null;
 let sfx: GainNode | null = null;
 let music: GainNode | null = null;
 let muted = false;
+const activeSfx = new Set<HTMLAudioElement>();
+let musicPaused = false;
 const AUDIO_SETTINGS_KEY = "ember-ashes-audio-v1";
 const clampVolume = (value: number) => Math.max(0, Math.min(1, value));
-let musicVolume = 0.65;
+let musicVolume = 1;
 let sfxVolume = 1;
 // Cutscenes carry their own dialogue/sfx track, not just background music — on by default
 // and independent of the master mute toggle (see CutsceneScreen), same as music/sfx are
 // independent of each other. Its own slider in the audio settings panel, defaulting to full.
 let cutsceneVolume = 1;
 let musicTimer = 0;
-let htmlPrime: HTMLAudioElement | null = null;
 let retryTimer = 0;
-const htmlUrls: Record<string, string> = {};
+const endedMusicTracks = new WeakSet<HTMLAudioElement>();
 
 if (typeof window !== "undefined") {
   try {
@@ -73,51 +74,6 @@ if (typeof window !== "undefined") {
   }
 }
 
-function wavTone(freq: number, dur: number, volume: number, kind: "sine" | "square" | "noise" = "sine"): string {
-  const key = `${kind}:${freq}:${dur}:${volume}`;
-  if (htmlUrls[key]) return htmlUrls[key];
-  const sr = 22050;
-  const n = Math.max(2, Math.floor(sr * dur));
-  const pcm = new Int16Array(n);
-  for (let i = 0; i < n; i++) {
-    const env = Math.min(1, i / (sr * 0.012)) * Math.min(1, (n - i) / (sr * 0.05));
-    let s: number;
-    if (kind === "noise") s = Math.random() * 2 - 1;
-    else if (kind === "square") s = Math.sin((2 * Math.PI * freq * i) / sr) > 0 ? 1 : -1;
-    else s = Math.sin((2 * Math.PI * freq * i) / sr);
-    pcm[i] = (s * env * volume * 32767) | 0;
-  }
-  const bytes = new ArrayBuffer(44 + n * 2);
-  const v = new DataView(bytes);
-  const ascii = (o: number, t: string) => {
-    for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i));
-  };
-  ascii(0, "RIFF");
-  v.setUint32(4, 36 + n * 2, true);
-  ascii(8, "WAVE");
-  ascii(12, "fmt ");
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true);
-  v.setUint16(22, 1, true);
-  v.setUint32(24, sr, true);
-  v.setUint32(28, sr * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  ascii(36, "data");
-  v.setUint32(40, n * 2, true);
-  new Uint8Array(bytes, 44).set(new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength));
-  const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
-  htmlUrls[key] = url;
-  return url;
-}
-
-function playHtml(url: string, volume = 0.7): void {
-  if (muted || typeof Audio === "undefined") return;
-  const a = new Audio(url);
-  a.volume = Math.min(1, volume * sfxVolume);
-  void a.play().catch(() => {});
-}
-
 function ac(): AudioContext | null {
   if (typeof window === "undefined") return null;
   if (!ctx) {
@@ -149,18 +105,7 @@ function silentTick(c: AudioContext): void {
   }
 }
 
-function htmlUnlock(): void {
-  if (typeof Audio === "undefined") return;
-  if (!htmlPrime) {
-    htmlPrime = new Audio(wavTone(440, 0.04, 0.0008));
-    htmlPrime.volume = 0.01;
-  }
-  htmlPrime.currentTime = 0;
-  void htmlPrime.play().catch(() => {});
-}
-
 export function unlockAudio(): void {
-  htmlUnlock();
   const c = ac();
   if (!c) return;
   if (c.state === "suspended") {
@@ -173,6 +118,10 @@ export function unlockAudio(): void {
 
 export function setMuted(next: boolean): void {
   muted = next;
+  for (const el of activeSfx) el.muted = next;
+  if (typeof document !== "undefined") {
+    document.querySelectorAll<HTMLMediaElement>("audio, video").forEach(el => { el.muted = next; });
+  }
   if (master && ctx) {
     master.gain.setTargetAtTime(next ? 0 : 1, ctx.currentTime, 0.02);
   }
@@ -187,135 +136,84 @@ export function isMuted(): boolean {
   return muted;
 }
 
-function beep(freq: number, dur: number, type: OscillatorType, gain = 0.22, slide = 0): void {
-  if (muted || fileSfxPlaying()) return;
-  const c = ac();
-  if (!c || c.state !== "running") {
-    playHtml(wavTone(freq, dur, Math.min(0.9, gain * 2.4), type === "square" ? "square" : "sine"), Math.min(1, gain * 3));
-    if (c && c.state === "suspended") void c.resume();
-    return;
-  }
-  if (!sfx) return;
-  const t0 = c.currentTime;
-  const osc = c.createOscillator();
-  const g = c.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, t0);
-  if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t0 + dur);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  osc.connect(g);
-  g.connect(sfx);
-  osc.start(t0);
-  osc.stop(t0 + dur + 0.02);
-}
-
-/** Temporary stand-in for "hit" only, restored on request as a placeholder until a real
- * recording replaces it — remove this and hit's noise()/beep() calls together once that
- * file lands (see the sfxPlay.hit comment below). */
-function noise(dur: number, gain = 0.22): void {
-  if (muted || fileSfxPlaying()) return;
-  const c = ac();
-  if (!c || c.state !== "running") {
-    playHtml(wavTone(180, dur, Math.min(0.8, gain * 2), "noise"), Math.min(1, gain * 2.5));
-    if (c && c.state === "suspended") void c.resume();
-    return;
-  }
-  if (!sfx) return;
-  const n = c.createBuffer(1, Math.floor(c.sampleRate * dur), c.sampleRate);
-  const data = n.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-  const src = c.createBufferSource();
-  src.buffer = n;
-  const g = c.createGain();
-  const t0 = c.currentTime;
-  g.gain.setValueAtTime(gain, t0);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  const f = c.createBiquadFilter();
-  f.type = "bandpass";
-  f.frequency.value = 1800;
-  src.connect(f);
-  f.connect(g);
-  g.connect(sfx);
-  src.start(t0);
-  src.stop(t0 + dur + 0.02);
-}
-
-/** Whether a real sound-effect file (from playSfxFile/playSfxFileExclusive) is currently meant
- * to be audible, so beep()/noise() below can hold off rather than layer a synthesised chip-tune
- * bleep under a real recording — the two timbres clash badly when they land on top of each
- * other (reported directly: a spell's cast mp3 and the generic "hit" bleep landing on the same
- * beat). This used to be inferred from each element's own .paused/.ended state, but that reads
- * as "not yet playing" for a brief window right after .play() is called (the browser hasn't
- * actually started producing audio yet), which is exactly when a same-tick follow-up call like
- * stepSpell's sfxPlay.hit() right after sfxPlay.spell() would slip through. Tracking intent
- * explicitly — flagged the instant we ask an element to play, cleared only once it actually
- * stops — removes that race entirely. */
-const activeFileSfxEls = new Set<HTMLAudioElement>();
-function fileSfxPlaying(): boolean {
-  return activeFileSfxEls.size > 0;
-}
-
-/** One-shot effect from a file in public/game/MUSIC/SoundFX, layered over whatever music or
- * synthesised beep is already playing rather than replacing it — unlike playFile, this never
+/** One-shot effect from a file in public/game/MUSIC/SoundFX, layered over the music
+ * rather than replacing it — unlike playFile, this never
  * touches the theme/track elements, so it can't interrupt them. A fresh Audio() per call: the
  * previous play is left to finish on its own instead of being cut short by the next one. */
+/** Preloaded copy of a one-shot file, cloned per play so a cue starts from already-fetched data. */
+const sfxTemplates = new Map<string, HTMLAudioElement>();
+function sfxTemplate(file: string): HTMLAudioElement {
+  let el = sfxTemplates.get(file);
+  if (!el) {
+    el = new Audio(`/game/MUSIC/SoundFX/${file}`);
+    el.preload = "auto";
+    sfxTemplates.set(file, el);
+    el.load();
+  }
+  return el;
+}
 function playSfxFile(file: string, volume = 0.55): void {
   if (muted || typeof Audio === "undefined") return;
-  const el = new Audio(`/game/MUSIC/SoundFX/${file}`);
+  const el = sfxTemplate(file).cloneNode(true) as HTMLAudioElement;
+  activeSfx.add(el);
+  el.addEventListener("ended", () => activeSfx.delete(el), { once: true });
+  el.addEventListener("error", () => activeSfx.delete(el), { once: true });
+  el.muted = muted;
   el.volume = volume * sfxVolume;
-  activeFileSfxEls.add(el);
-  const done = () => activeFileSfxEls.delete(el);
-  el.addEventListener("ended", done, { once: true });
-  el.addEventListener("error", done, { once: true });
-  el.play().catch(done);
+  el.play().catch(() => {});
 }
 
 /** One persistent element per file, reused instead of a fresh Audio() per call. A retrigger
  * while the previous play is still going seeks back to 0 and restarts it rather than layering
  * a second copy on top — so a generic cue fired several times in quick succession (a flurry of
  * basic attacks, a multi-target skill) never stacks into a buzzing chord of itself. Only worth
- * it for a cue reused across many different actions (the shared attack/cast bleeps below); a
+ * it for a cue reused across many different actions (the shared attack/cast recordings); a
  * one-off cue tied to a single distinct moment (LevelUp, Cultist V2's own cuts) has nothing to
  * overlap with itself and keeps using playSfxFile's layered fresh-Audio() behavior. */
 const exclusiveSfxEls = new Map<string, HTMLAudioElement>();
+function preloadExclusiveSfx(file: string): void {
+  if (typeof Audio === "undefined" || exclusiveSfxEls.has(file)) return;
+  const el = new Audio(`/game/MUSIC/SoundFX/${file}`);
+  el.preload = "auto";
+  exclusiveSfxEls.set(file, el);
+  el.load();
+}
+
+// Bow cues must be ready before an attack starts: loading either MP3 on its first play can
+// make the shot sound arrive after its projectile. These two small files are used by every
+// ranged attack, so warm them while the game initializes.
+// Each bow has two cues cut from its recording: the string draw (played as the pull begins) and
+// the arrow release (played the instant the arrow leaves the bow).
+for (const file of ["ShortArrowsDraw.mp3", "ShortArrowsRelease.mp3", "Arrows1Draw.mp3", "Arrows1Release.mp3"]) preloadExclusiveSfx(file);
+// Every other attack/cast cue is warmed too, so none of them loads on its first use.
+for (const file of ["ATT01Blunt.mp3", "Spellcast01.mp3"]) preloadExclusiveSfx(file);
+if (typeof Audio !== "undefined") {
+  for (const file of ["CultistV2Attack.mp3", "CultistV2Spellcast.mp3", "MinorHorrorATT001.mp3", "MinorHorrorCasting001.mp3"]) sfxTemplate(file);
+}
+
 function playSfxFileExclusive(file: string, volume = 0.55): void {
   if (muted || typeof Audio === "undefined") return;
   let el = exclusiveSfxEls.get(file);
   if (!el) {
     el = new Audio(`/game/MUSIC/SoundFX/${file}`);
+    el.preload = "auto";
     exclusiveSfxEls.set(file, el);
-    const captured = el;
-    const done = () => activeFileSfxEls.delete(captured);
-    captured.addEventListener("ended", done);
-    captured.addEventListener("pause", done);
-    captured.addEventListener("error", done);
+    activeSfx.add(el);
+    el.load();
   }
   el.volume = volume * sfxVolume;
   el.currentTime = 0;
-  activeFileSfxEls.add(el);
-  el.play().catch(() => activeFileSfxEls.delete(el));
+  el.muted = muted;
+  el.play().catch(() => {});
 }
 
-// Every synthesised chip-tune "bleep" cue (beep()-based) has been silenced per direct report —
-// arrowAttack is the sole named exception, kept as a legit sound. Each entry below is
-// left as a no-op rather than deleted so every existing call site across engine.ts/GameApp.tsx/
-// OverworldMapScreen.tsx/WorldMapScreen.tsx/InnScreen.tsx keeps working untouched; a cue backed
-// by a real recording (spell, meleeAttack, the Cultist V2 set, heal, thrust/sweep/trip, levelUp)
-// is unaffected, since those were never bleeps.
+// Sound cues without a supplied recording stay silent until a real asset is authored.
 export const sfxPlay = {
   select: () => {},
   move: () => {},
   ui: () => {},
   purchase: () => {},
-  // Temporary placeholder, restored on request until a real recording replaces it — remove
-  // this (and noise()'s only remaining call site above) the moment that file lands.
-  hit: () => {
-    noise(0.12, 0.26);
-    beep(122, 0.16, "sawtooth", 0.2, -70);
-    setTimeout(() => beep(310, 0.06, "square", 0.075, -120), 12);
-  },
+  hit: () => {},
   crit: () => {},
   death: () => {},
   turn: () => {},
@@ -325,7 +223,7 @@ export const sfxPlay = {
   dreamingWeb: () => {},
   summonFamiliar: () => {},
   // meleeAttack (stepCombat's basic melee lunge) and thrust/sweep/trip (a physical skill's
-  // own activation cue) share ATT01Blunt.mp3 — a real recording, not a bleep. spell and heal
+  // own activation cue) share ATT01Blunt.mp3. spell and heal
   // (stepSpell's cast cue, magic or physical-skill alike) share Spellcast01.mp3 the same way.
   // playSfxFileExclusive keeps repeats of either file from stacking into a buzz when several
   // fire in quick succession.
@@ -340,12 +238,9 @@ export const sfxPlay = {
   cultistV2Spellcast: () => playSfxFile("CultistV2Spellcast.mp3", 0.55),
   cultistV2WalkLeft: () => playSfxFile("CultistV2WalkLeft.mp3", 0.45),
   cultistV2WalkRight: () => playSfxFile("CultistV2WalkRight.mp3", 0.45),
-  // The one bleep kept by direct request — a legit sound.
-  arrowAttack: () => {
-    beep(740, 0.055, "triangle", 0.17, -250);
-    setTimeout(() => beep(260, 0.11, "sine", 0.12, -92), 18);
-  },
-  magicAttack: () => {},
+  arrowAttack: (neera = false) => playSfxFileExclusive(neera ? "Arrows1Draw.mp3" : "ShortArrowsDraw.mp3", 0.55),
+  arrowRelease: (neera = false) => playSfxFileExclusive(neera ? "Arrows1Release.mp3" : "ShortArrowsRelease.mp3", 0.55),
+  magicAttack: () => playSfxFileExclusive("Spellcast01.mp3", 0.55),
   heal: () => playSfxFileExclusive("Spellcast01.mp3", 0.55),
   stun: () => {},
   miss: () => {},
@@ -378,6 +273,7 @@ if (typeof window !== "undefined") {
 
 function attachTrack(el: HTMLAudioElement, volume: number): HTMLAudioElement {
   el.loop = true;
+  el.addEventListener("ended", () => endedMusicTracks.add(el));
   el.preload = "auto";
   el.dataset.emberMusicBase = String(volume);
   el.volume = volume * musicVolume;
@@ -448,6 +344,7 @@ function menuElement(): HTMLAudioElement | null {
   const node = new Audio(`/game/MUSIC/${encodeURIComponent("LANDR-AsheraIntrol-Balanced-High.mp3")}`);
   node.id = "ember-intro";
   node.loop = true;
+  node.addEventListener("ended", () => endedMusicTracks.add(node));
   node.preload = "auto";
   node.dataset.emberMusicBase = "0.7";
   node.volume = 0.7 * musicVolume;
@@ -475,14 +372,22 @@ function pauseIntroTracks(except: HTMLAudioElement | null = null): void {
 }
 
 function kickPlay(el: HTMLAudioElement): void {
-  if (muted) return;
+  if (muted || musicPaused) return;
+  if (endedMusicTracks.has(el)) return;
   if (!el.paused && !el.ended) return;
   el.muted = false;
   el.defaultMuted = false;
   const baseVolume = Number(el.dataset.emberMusicBase ?? (el === introEl ? "0.7" : el === templeEl ? "0.42" : "0.4"));
   el.volume = clampVolume(baseVolume * musicVolume);
   const tryOnce = () => {
-    if (muted) return;
+    if (muted || musicPaused) return;
+    if (endedMusicTracks.has(el)) {
+      if (retryTimer) {
+        clearInterval(retryTimer);
+        retryTimer = 0;
+      }
+      return;
+    }
     if (!el.paused && !el.ended) {
       if (retryTimer) {
         clearInterval(retryTimer);
@@ -498,9 +403,13 @@ function kickPlay(el: HTMLAudioElement): void {
     }).catch(() => {
       if (muted || retryTimer) return;
       retryTimer = window.setInterval(() => {
-        if (muted) return;
-        const want = currentTheme === "intro" ? menuElement() : getTrack(currentTheme);
-        if (!want || (!want.paused && !want.ended)) {
+        if (muted || musicPaused) {
+          clearInterval(retryTimer);
+          retryTimer = 0;
+          return;
+        }
+        const want = currentFile ? getFileTrack(currentFile) : currentTheme === "intro" ? menuElement() : getTrack(currentTheme);
+        if (!want || endedMusicTracks.has(want) || (!want.paused && !want.ended)) {
           if (retryTimer) {
             clearInterval(retryTimer);
             retryTimer = 0;
@@ -535,9 +444,12 @@ function getFileTrack(file: string): HTMLAudioElement | null {
 /** Plays one specific file from public/game/MUSIC, silencing everything else — the escape
  * hatch from the fixed Theme list, so a mission can name its own track. */
 export function playFile(file: string): void {
+  const themeChanged = currentFile !== file;
   currentFile = file;
   if (muted) return;
+  musicPaused = false;
   const want = getFileTrack(file);
+  if (themeChanged && want) endedMusicTracks.delete(want);
   pauseIntroTracks(want === introEl ? introEl : null);
   silenceAllBut(want);
   if (!want) return;
@@ -545,86 +457,75 @@ export function playFile(file: string): void {
 }
 /** Stops every track except the one asked for, themes and per-file alike. */
 function silenceAllBut(want: HTMLAudioElement | null): void {
-  const others = [introEl, battleEl, earlyEl, templeEl, aldeiaEl, siegeEl, innEl, hillEl, portaoEl, worldMapEl, ...fileEls.values()];
-  for (const el of others) {
-    if (!el || el === want) continue;
-    el.pause();
+  const known = [introEl, battleEl, earlyEl, templeEl, aldeiaEl, siegeEl, innEl, hillEl, portaoEl, worldMapEl, ...fileEls.values()];
+  const all = new Set(known.filter((el): el is HTMLAudioElement => !!el));
+  if (typeof document !== "undefined") {
+    document.querySelectorAll<HTMLAudioElement>("audio").forEach((el) => all.add(el));
   }
+  for (const el of all) if (el !== want) el.pause();
 }
 
 export function playTheme(theme: Theme): void {
+  const themeChanged = currentTheme !== theme || currentFile !== null;
   currentTheme = theme;
   currentFile = null;
   if (muted) return;
+  musicPaused = false;
   const want = getTrack(theme);
-  pauseIntroTracks(want === introEl ? introEl : null);
-  if (battleEl && battleEl !== want) {
-    battleEl.pause();
-  }
-  if (earlyEl && earlyEl !== want) {
-    earlyEl.pause();
-  }
-  if (templeEl && templeEl !== want) {
-    templeEl.pause();
-  }
-  if (aldeiaEl && aldeiaEl !== want) {
-    aldeiaEl.pause();
-  }
-  if (siegeEl && siegeEl !== want) {
-    siegeEl.pause();
-  }
-  if (innEl && innEl !== want) {
-    innEl.pause();
-  }
-  if (hillEl && hillEl !== want) {
-    hillEl.pause();
-  }
-  if (portaoEl && portaoEl !== want) {
-    portaoEl.pause();
-  }
-  if (worldMapEl && worldMapEl !== want) {
-    worldMapEl.pause();
-  }
-  // A mission that named its own track may be playing; a fixed theme has to silence it too.
-  for (const el of fileEls.values()) {
-    if (el === want) continue;
-    el.pause();
-  }
+  if (themeChanged && want) endedMusicTracks.delete(want);
+  silenceAllBut(want);
   if (!want) return;
   kickPlay(want);
 }
 
 export function preloadMenuMusic(): void {
-  playMenuMusic();
+  menuElement();
 }
 
 export function playMenuMusic(): void {
+  const themeChanged = currentTheme !== "intro" || currentFile !== null;
   currentTheme = "intro";
   currentFile = null;
   if (muted) return;
-  battleEl?.pause();
-  earlyEl?.pause();
-  templeEl?.pause();
-  aldeiaEl?.pause();
-  siegeEl?.pause();
-  innEl?.pause();
-  hillEl?.pause();
-  portaoEl?.pause();
-  worldMapEl?.pause();
+  musicPaused = false;
   const el = menuElement();
   if (!el) return;
+  if (themeChanged) endedMusicTracks.delete(el);
   // Returning to the title is another hard boundary: custom mission tracks must not linger.
-  pauseIntroTracks(el);
   silenceAllBut(el);
   kickPlay(el);
 }
 
 export function startMusic(): void {
+  if (musicPaused) return;
   if (currentFile) playFile(currentFile);
   else playTheme(currentTheme);
 }
 
+/** Pause all background tracks together while preserving the current theme and time. */
+export function pauseMusic(): void {
+  musicPaused = true;
+  stopMusic();
+}
+
+/** Resume the track selected by the current screen. */
+export function resumeMusic(): void {
+  musicPaused = false;
+  const want = currentFile ? getFileTrack(currentFile) : currentTheme === "intro" ? menuElement() : getTrack(currentTheme);
+  // A deliberate Resume starts a finished recording again. Autoplay unlocks still
+  // respect endedMusicTracks, so ordinary clicks never turn single plays into a loop.
+  if (want && (want.ended || endedMusicTracks.has(want))) {
+    endedMusicTracks.delete(want);
+    want.currentTime = 0;
+  }
+  startMusic();
+}
+
 export function stopMusic(): void {
+  // A later click/key used to call the global autoplay unlock and restart the last
+  // selected track underneath music-free screens (including cutscenes). Explicitly
+  // stopped music stays stopped until a screen selects a theme or the user resumes it.
+  musicPaused = true;
   if (musicTimer) {
     clearInterval(musicTimer);
     musicTimer = 0;
@@ -651,6 +552,9 @@ export function stopMusic(): void {
   portaoEl?.pause();
   worldMapEl?.pause();
   for (const el of fileEls.values()) el.pause();
+  if (typeof document !== "undefined") {
+    document.querySelectorAll<HTMLAudioElement>("audio").forEach((el) => el.pause());
+  }
 }
 
 export function resumeAudio(): void {
@@ -659,17 +563,23 @@ export function resumeAudio(): void {
 
 export function installAudioUnlock(): () => void {
   if (typeof window === "undefined") return () => {};
+  const audioWindow = window as Window & { __emberAudioUnlockCleanup?: () => void };
+  // Remove the previous module's listener during hot reloads. Its stale theme state
+  // could otherwise restart the intro over the currently selected game track.
+  audioWindow.__emberAudioUnlockCleanup?.();
   const arm = () => {
     unlockAudio();
-    startMusic();
   };
   const opts: AddEventListenerOptions = { capture: true };
   window.addEventListener("pointerdown", arm, opts);
   window.addEventListener("keydown", arm, opts);
-  return () => {
+  const cleanup = () => {
     window.removeEventListener("pointerdown", arm, opts);
     window.removeEventListener("keydown", arm, opts);
+    if (audioWindow.__emberAudioUnlockCleanup === cleanup) delete audioWindow.__emberAudioUnlockCleanup;
   };
+  audioWindow.__emberAudioUnlockCleanup = cleanup;
+  return cleanup;
 }
 
 

@@ -152,9 +152,18 @@ const DECO_BLOCK_5 = [
   { dx: 0, dy: -1 },
   { dx: 1, dy: -1 },
 ];
-// The visible house sits two tiles right of its map anchor. Match its ground area with the
-// established Type 6 body shape, shifted two tiles left; keep it separate from art sizing.
-const HOUSE_BLOCKING_FOOTPRINT = FOOTPRINT_TYPE_6.map(({ dx, dy }) => ({ dx: dx - 2, dy }));
+// Keep the authored front edge; extend collision toward the rear (negative rows)
+// so units cannot enter the space hidden behind the building.
+const HOUSE_GROUND_FOOTPRINT = [
+  ...DECO_BLOCK_5,
+  { dx: -1, dy: -2 }, { dx: 0, dy: -2 }, { dx: 1, dy: -2 },
+  { dx: 0, dy: -3 },
+];
+const BURNT_HOUSE_GROUND_FOOTPRINT = [
+  ...FOOTPRINT_TYPE_6,
+  { dx: -2, dy: -2 }, { dx: -1, dy: -2 }, { dx: 0, dy: -2 },
+  { dx: -2, dy: -3 }, { dx: -1, dy: -3 },
+];
 // A genuine 3x3 block (three rows, three columns) rather than a single row — a linear
 // footprint collapses vertical spread to 0, which stretches a roughly-square image (like a
 // wide ancestral tree) into a flat, deformed strip. Spreading it across both axes keeps the
@@ -570,8 +579,8 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "boulder-pile": { id: "boulder-pile", name: "Pilha de Pedras", footprint: DECO_PAIR },
   "twin-spires": { id: "twin-spires", name: "Torres Gêmeas de Pedra", footprint: DECO_PAIR },
   "large-boulder": { id: "large-boulder", name: "Pedregulho Grande", footprint: DECO_ONE },
-  "burning-house": { id: "burning-house", name: "Casa em Chamas", footprint: DECO_BLOCK_5 },
-  "burnt-house-ruins": { id: "burnt-house-ruins", name: "Ruínas Queimadas", footprint: DECO_BLOCK_5, blockingFootprint: HOUSE_BLOCKING_FOOTPRINT },
+  "burning-house": { id: "burning-house", name: "Casa em Chamas", footprint: DECO_BLOCK_5, blockingFootprint: HOUSE_GROUND_FOOTPRINT },
+  "burnt-house-ruins": { id: "burnt-house-ruins", name: "Ruínas Queimadas", footprint: DECO_BLOCK_5, blockingFootprint: BURNT_HOUSE_GROUND_FOOTPRINT },
   well: { id: "well", name: "Poço", footprint: DECO_ONE },
   "stone-fountain": { id: "stone-fountain", name: "Fonte de Pedra", footprint: DECO_ONE },
   // These were painted at their intended small prop size; opt out of the global 1.6x decor boost.
@@ -583,7 +592,7 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "mossy-boulder": { id: "mossy-boulder", name: "Pedregulho Musgoso", footprint: DECO_ONE },
   "mountain-range": { id: "mountain-range", name: "Cadeia de Montanhas", footprint: DECO_TRIO, tile: "hill" },
   "rune-stone": { id: "rune-stone", name: "Menir Rúnico", footprint: DECO_ONE },
-  "burning-hamlet": { id: "burning-hamlet", name: "Vilarejo em Chamas", footprint: DECO_BLOCK_5 },
+  "burning-hamlet": { id: "burning-hamlet", name: "Vilarejo em Chamas", footprint: DECO_BLOCK_5, blockingFootprint: HOUSE_GROUND_FOOTPRINT },
   "boulder-mound": { id: "boulder-mound", name: "Monte de Pedras", footprint: DECO_ONE },
   "wooden-cart": { id: "wooden-cart", name: "Carroça de Madeira", footprint: DECO_PAIR },
   "merchant-covered-cart-002": { id: "merchant-covered-cart-002", name: "Carroça Coberta do Mercador", footprint: DECO_PAIR, artScale: 0.8, heightScale: 1.15 },
@@ -669,6 +678,8 @@ export const BIG_HOUSE_DECOR_IDS = new Set<string>();
 export const SOLID_HOUSE_DECOR_IDS = new Set(["burning-hamlet", "gatehouse", "watchtower"]);
 
 /** Rock props are solid decorations; their art must never replace the ground with column terrain. */
+/** Low props: "Bloquear caminho" stops walking through them, but arrows and sight pass over (a well is knee-high). */
+export const LOW_BLOCKER_DECOR_IDS = new Set<string>(["well", "wilds-wishing-well", "tombstones"]);
 export const SOLID_ROCK_DECOR_IDS = new Set([
   "rocks-3d-grey-outcrop", "rocks-3d-outcrop", "spike-rocks", "rocky-outcrop", "boulder-pile", "twin-spires",
   "large-boulder", "spike-rocks-2", "mossy-rocks", "mossy-boulder", "boulder-mound", "spike-crown",
@@ -2497,6 +2508,16 @@ function priceWeight(price: number): number {
 
 export type LootDrop = { kind: "weapon"; id: string } | { kind: "equipment"; id: string };
 
+/** Free starting weapons, including the heroes' explicit main/off-hand loadouts. */
+function startingWeaponIds(): Set<string> {
+  const ids = new Set(["cajado-da-galhada", "punhal-curvo"]);
+  for (const classId of Object.keys(CLASSES) as ClassId[]) {
+    const id = starterWeaponFor(classId);
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
 /** Lowest/highest price across every lootable item (every weapon, every offHand
  * EquipmentDef) — the endpoints of the 1-MAX_LEVEL power-level scale below. Recomputed
  * from whatever WEAPONS/EQUIPMENT currently contain rather than hardcoded, so adding a new
@@ -2518,17 +2539,18 @@ export function gearPowerLevel(price: number): number {
   return Math.max(1, Math.min(MAX_LEVEL, Math.round(1 + t * (MAX_LEVEL - 1))));
 }
 
-/** Weighted random pick across every weapon and every offHand EquipmentDef, rarer as price
+/** Weighted random pick across weapons and equipment, excluding free starting weapons, rarer as price
  * climbs, capped to maxLevel on the gearPowerLevel scale (see BattleEngine.highestEnemyLevel)
  * and — for weapons — excluding anything in ownedWeaponIds so a drop never announces a weapon the
  * recipient already has. Used for chest loot and enemy kill drops alike. */
 export function weightedLootPick(rng: () => number, maxLevel = MAX_LEVEL, ownedWeaponIds: ReadonlySet<string> = new Set()): LootDrop {
+  const startingWeapons = startingWeaponIds();
   const build = (level: number): [LootDrop, number][] => [
     ...Object.values(WEAPONS)
-      .filter((w) => gearPowerLevel(w.price) <= level && !ownedWeaponIds.has(w.id))
+      .filter((w) => !startingWeapons.has(w.id) && gearPowerLevel(w.price) <= level && !ownedWeaponIds.has(w.id))
       .map((w): [LootDrop, number] => [{ kind: "weapon", id: w.id }, priceWeight(w.price)]),
     ...Object.values(EQUIPMENT)
-      .filter((e) => gearPowerLevel(e.price ?? 60) <= level)
+      .filter((e) => !startingWeapons.has(e.id) && gearPowerLevel(e.price ?? 60) <= level)
       .map((e): [LootDrop, number] => [{ kind: "equipment", id: e.id }, priceWeight(e.price ?? 60)]),
   ];
   // The mission-level cap can (rarely) leave nothing eligible once owned weapons are also
@@ -2540,10 +2562,15 @@ export function weightedLootPick(rng: () => number, maxLevel = MAX_LEVEL, ownedW
 /** Weighted random pick across a given set of weapon ids, capped to maxLevel on the
  * gearPowerLevel scale — for drop sources that only ever granted a weapon before (e.g.
  * enemy kill drops), optionally restricted to a pool (e.g. "not already owned"). Defaults
- * to every weapon in the game. */
+ * to every non-starting weapon in the game. Starting weapons stay excluded from fallback pools. */
 export function weightedWeaponPick(rng: () => number, ids: string[] = Object.keys(WEAPONS), maxLevel = MAX_LEVEL): string {
-  const capped = ids.filter((id) => gearPowerLevel(WEAPONS[id]?.price ?? 100) <= maxLevel);
-  const pool = capped.length > 0 ? capped : ids;
+  const startingWeapons = startingWeaponIds();
+  const lootable = (id: string) => !!WEAPONS[id] && !startingWeapons.has(id);
+  const eligible = ids.filter(lootable);
+  // Even an empty or starter-only requested pool must never fall back to free weapons.
+  const candidates = eligible.length > 0 ? eligible : Object.keys(WEAPONS).filter(lootable);
+  const capped = candidates.filter((id) => gearPowerLevel(WEAPONS[id]!.price) <= maxLevel);
+  const pool = capped.length > 0 ? capped : candidates;
   const entries: [string, number][] = pool.map((id): [string, number] => [id, priceWeight(WEAPONS[id]?.price ?? 100)]);
   return weightedPick(rng, entries);
 }
@@ -3510,10 +3537,9 @@ export function emberFromCompleted(completed: string[]): number {
 export const CURES: Record<HealId, { name: string; dice: number; faces: number; bonus: number; mul: number; range: number }> = {
   cureMinor: { name: "Cura Menor", dice: 1, faces: 6, bonus: 0, mul: 1.0, range: 2 },
   cureWounds: { name: "Cura Média", dice: 2, faces: 6, bonus: 0, mul: 1.6, range: 3 },
-  // Paladin tier 4: mechanically identical to the Healer's Cura Média (same dice/mul/range,
-  // "the same as Healer" per spec) — a distinct HealId so its tier-4 uses are its own pool,
-  // never shared with the Healer's tier-2 Cura Média.
-  cureLight: { name: "Cura Leve", dice: 2, faces: 6, bonus: 0, mul: 1.6, range: 3 },
+  // Paladin tier 4: between Minor and Medium Heal, with its own charge pool.
+  // The MAG contribution is 20% above Minor Heal; 1D8 gives a modest potency lift.
+  cureLight: { name: "Healing Hands", dice: 1, faces: 8, bonus: 0, mul: 1.2, range: 1 },
 };
 
 export function rollDice(dice: number, faces: number, bonus: number, rng: () => number): number {
@@ -3992,14 +4018,25 @@ export const PHANTASMAL_FORCE = {
   range: 6,
 };
 
-/** Enemy-only legacy spell retained for Cultists. It shares Phantasmal Force's level curve
- * and casts twice per battle, but its damage is reduced in BattleEngine. */
+/** Monster-only Phantom System: legacy 2D arcane bolt with its own charge pool and damage
+ * settings, independent of the Conjurer's Phantasmal Force. */
 export const FANTOM_FORCE = {
-  name: "FantomForce",
-  range: PHANTASMAL_FORCE.range,
+  name: "Phantom System",
+  range: 6,
   usesPerBattle: 2,
   damageMul: 0.82,
 };
+
+export function fantomForceChargesFor(classId: ClassId): number {
+  return classId === "cultist" || classId === "cultistV2" || classId === "emberedWraith"
+    ? FANTOM_FORCE.usesPerBattle
+    : 0;
+}
+
+/** Monster spell's own dice progression; changing Phantasmal Force does not change it. */
+export function fantomForceDice(level: number): { dice: number; faces: number } {
+  return { dice: 1, faces: 4 + Math.floor((Math.max(1, level) - 1) / 2) * 2 };
+}
 
 export const PHANTASMAL_FORCE_UNLOCK_LEVEL = 2;
 
@@ -4061,10 +4098,11 @@ export const SUMMON_ZOMBIE_DOG = {
   causticVenomCharges: 2,
 };
 
-/** Which of the conjurer's three familiar tiers gets a spell of its own, and which one —
+/** Which of the conjurer's familiar tiers gets a spell of its own, and which one —
  * Familiar and Familiar Maior (tiers 1-2) both get Magic Missile, Familiar Titã (tier 3) gets
- * Bola de Fogo instead. Every other tier/class is absent, meaning "no familiar spell of its
- * own" (see familiarSpellRemaining in engine.ts). Familiar Maior is the one tier with a SECOND
+ * Bola de Fogo instead. Familiar Radiante (tier 4) gets three Shock charges per summon.
+ * Classes absent here have no familiar spell of their own (see familiarSpellRemaining in
+ * engine.ts). Familiar Maior and Familiar Radiante also have a SECOND
  * own spell on top of this, Dreno de Vida (see LIFE_DRAIN/familiarLifeDrainCharges below) —
  * it isn't listed here because it runs through its own dedicated Unit.lifeDrainCharges field
  * and castLifeDrain, not the generic spellCharges machinery this table drives. */
@@ -4072,7 +4110,7 @@ export const FAMILIAR_SPELL: Partial<Record<ClassId, SpellKind>> = {
   familiar: "magicMissile",
   familiar2: "magicMissile",
   familiar3: "fireball",
-  familiar4: "magicMissile",
+  familiar4: "shock",
   zombieDog: "minorVenom",
 };
 
@@ -4570,6 +4608,8 @@ export function rulesClass(classId: ClassId): ClassId {
 }
 
 export function tierUses(classId: ClassId, tier: SpellTier, level: number): number {
+  // Small blue ox: daily Phantasmal Force pool, with a third cast from level 5.
+  if (classId === "swampBlueCalf") return tier === 1 ? (level >= 5 ? 3 : 2) : 0;
   const progressionClass = rulesClass(classId);
   const table = CLASS_TIER_TABLE[progressionClass];
   if (table) {

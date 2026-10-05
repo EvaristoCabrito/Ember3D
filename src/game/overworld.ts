@@ -55,17 +55,24 @@ export const ASHEN_FOREST_BLOCKED_HEX = { x: ASHEN_FOREST_ENTRANCE.x + 1, y: ASH
  * the full Stone Bridge mission set, then the full three-way travel choice opens up. Kept in the logic layer so a
  * click or a future renderer cannot bypass the tutorial route. */
 export function canStepOverworld(save: SaveData, from: Point, to: Point, test = false): boolean {
+  // Removed map cells are permanent exclusions, including during test-mode travel.
+  if (!isOverworldCell(to.x, to.y)) return false;
   if (to.x === ASHEN_FOREST_BLOCKED_HEX.x && to.y === ASHEN_FOREST_BLOCKED_HEX.y) return false;
   // Modo teste: full freedom to walk anywhere, same as every other test-mode override —
   // testing movement range/random encounters needs the whole grid open, not just the
   // linear tutorial route out of Stone Bridge.
   if (test) return true;
-  if (STONE_BRIDGE_MISSION_IDS.every((missionId) => save.completed.includes(missionId))) return true;
+  // The authored opening is the horizontal line Start -> Stone Bridge -> Wisp Forest
+  // -> Inn. Do not substitute a general eastward fan or explored-cell escape routes.
+  const inn = WORLD_LOCATIONS.find(location => location.id === "estalagem")!;
+  const innHex = worldToHex(inn.x, inn.y);
+  if (save.completed.includes("estalagem") || (from.x === innHex.x && from.y === innHex.y)) return true;
+  if (to.y !== OVERWORLD_START_HEX.y || to.x < OVERWORLD_START_HEX.x || to.x > innHex.x) return false;
   const atStart = from.x === OVERWORLD_START_HEX.x && from.y === OVERWORLD_START_HEX.y;
-  // O Vau is fought right at the western edge, before the party has taken a single step —
-  // the party has nowhere to walk to yet until it's cleared, so the east move (the only one
-  // this edge ever offers) stays closed until save.completed says so.
-  return atStart && to.x > from.x && save.completed.includes("vau");
+  if (to.x < from.x) return true;
+  if (atStart) return to.y === from.y && to.x === from.x + 1;
+  if (!STONE_BRIDGE_MISSION_IDS.every(missionId => save.completed.includes(missionId))) return false;
+  return to.x > from.x;
 }
 
 /** The only notion of adjacency the RPG map is allowed to use. */

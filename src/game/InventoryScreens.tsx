@@ -24,6 +24,7 @@ function ItemActionSheet({
   icon,
   tip,
   onEquip,
+  equipChoices,
   onUse,
   onDiscard,
   onClose,
@@ -32,11 +33,13 @@ function ItemActionSheet({
   icon: string;
   tip: string;
   onEquip?: () => void;
+  equipChoices?: { name: string; equip: () => void }[];
   onUse?: () => void;
   onDiscard?: () => void;
   onClose: () => void;
 }) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [choosingHero, setChoosingHero] = useState(false);
   return (
     <div
       className="absolute inset-0 z-50 ember-veil flex items-center justify-center p-4"
@@ -55,7 +58,21 @@ function ItemActionSheet({
             <X className="size-3.5" />
           </button>
         </div>
-        {confirmDiscard ? (
+        {choosingHero ? (
+          <div role="dialog" aria-label="Escolher personagem para equipar" className="relative mx-auto h-64 w-full">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+              <img src={icon} alt="" className="mx-auto size-12 object-contain" />
+              <p className="mt-1 text-xs text-muted">Equipar em</p>
+              <button type="button" onClick={() => setChoosingHero(false)} className="mt-2 ember-btn ember-btn-sm ember-btn-ghost text-xs">Voltar</button>
+            </div>
+            {equipChoices?.map((choice, index) => {
+              const angle = -Math.PI / 2 + index * Math.PI * 2 / equipChoices.length;
+              return <button key={choice.name} type="button" onClick={() => { choice.equip(); onClose(); }}
+                className="absolute min-h-11 min-w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent bg-bg px-3 py-2 text-sm hover:bg-accent/20 focus-visible:outline-2 focus-visible:outline-accent"
+                style={{ left: `calc(50% + ${Math.cos(angle) * 94}px)`, top: `calc(50% + ${Math.sin(angle) * 94}px)` }}>{choice.name}</button>;
+            })}
+          </div>
+        ) : confirmDiscard ? (
           <div className="flex flex-col gap-2">
             <p className="text-xs text-danger">Jogar fora {name}? Não pode ser desfeito.</p>
             <div className="flex gap-2">
@@ -78,8 +95,9 @@ function ItemActionSheet({
           <div className="flex flex-col gap-1.5">
             <button
               type="button"
-              disabled={!onEquip}
+              disabled={!onEquip && !equipChoices?.length}
               onClick={() => {
+                if (equipChoices?.length) { setChoosingHero(true); return; }
                 onEquip?.();
                 onClose();
               }}
@@ -591,7 +609,7 @@ export function BackpackScreen({
     const timer = window.setTimeout(() => setRationNote(null), 2200);
     return () => window.clearTimeout(timer);
   }, [rationNote]);
-  const [sheetEntry, setSheetEntry] = useState<{ name: string; icon: string; tip: string; equip?: () => void; use?: () => void; discard?: () => void } | null>(null);
+  const [sheetEntry, setSheetEntry] = useState<{ name: string; icon: string; tip: string; equip?: () => void; equipChoices?: { name: string; equip: () => void }[]; use?: () => void; discard?: () => void } | null>(null);
   const bag = save.bags[heroName] ?? EMPTY_BAG;
   const weaponEntries = Object.entries(save.weapons).filter(([id]) => {
     const wielder = Object.entries(save.equipped).find(([, v]) => v === id)?.[0];
@@ -616,14 +634,16 @@ export function BackpackScreen({
   // never count. Each physical piece takes one cell — copies do not stack.
   const bagCount = partyBagUsed(save);
   const bagCapacity = partyBagCapacity(save, test);
-  const heroEquip = save.equipment[heroName] ?? {};
+  const equipHeroes = availableHeroes ?? ALL_HERO_NAMES.filter(name => test || heroRecruited(name, save.completed, save.flags));
+  const equipClass = (name: string) => save.promotions[name] ?? HERO_BASE_CLASS[name] ?? (name === heroName ? classId : undefined);
   /** Which slot a click-to-equip should fill: rings pick whichever finger is free (ring1
    * first), everything else has exactly one slot — except offHand, which has none at all
    * while the main hand holds a two-handed weapon. Returns null when there's nowhere for
    * it to go automatically (the picker on the doll itself still handles that case). */
-  const targetSlotFor = (item: (typeof EQUIPMENT)[string]): EquipSlot | null => {
+  const targetSlotFor = (item: (typeof EQUIPMENT)[string], name: string): EquipSlot | null => {
+    const heroEquip = save.equipment[name] ?? {};
     if (item.slot === "ring1" || item.slot === "ring2") return heroEquip.ring1 ? "ring2" : "ring1";
-    if (item.slot === "offHand" && offHandBlocked(save.equipped[heroName] ?? null)) return null;
+    if (item.slot === "offHand" && offHandBlocked(save.equipped[name] ?? null)) return null;
     return item.slot;
   };
   const backpackEntries: {
@@ -634,6 +654,7 @@ export function BackpackScreen({
     count?: number;
     isWeapon?: boolean;
     equip?: () => void;
+    equipChoices?: { name: string; equip: () => void }[];
     use?: () => void;
     discard?: () => void;
   }[] = [];
@@ -656,14 +677,17 @@ export function BackpackScreen({
   for (const [id, enh] of weaponEntries) {
     const w = WEAPONS[id];
     if (!w || Object.values(save.equipped).includes(id)) continue;
-    const fitsClass = !!classId && weaponsForClass(classId).some((candidate) => candidate.id === id);
+    const equipChoices = onEquipWeapon ? equipHeroes.filter(name => {
+      const cls = equipClass(name);
+      return !!cls && w.usableBy.includes(cls);
+    }).map(name => ({ name, equip: () => onEquipWeapon(name, id) })) : [];
     backpackEntries.push({
       key: `weapon:${id}`,
       name: `${w.name}${enh > 0 ? ` +${enh}` : ""}`,
       icon: weaponIcon(id),
       tip: weaponTooltip(w, enh),
       isWeapon: true,
-      equip: onEquipWeapon && fitsClass ? () => onEquipWeapon(heroName, id) : undefined,
+      equipChoices,
       discard: onDiscardWeapon ? () => onDiscardWeapon(id) : undefined,
     });
   }
@@ -671,15 +695,19 @@ export function BackpackScreen({
     const item = EQUIPMENT[id];
     const count = save.looseEquipment[id] ?? 0;
     if (!item || count <= 0) continue;
-    const fitsClass = !!classId && (!item.usableBy || item.usableBy.includes(classId));
-    const targetSlot = targetSlotFor(item);
+    const equipChoices = onEquipItem ? equipHeroes.flatMap(name => {
+      const cls = equipClass(name);
+      const slot = targetSlotFor(item, name);
+      return cls && slot && equipmentFitsSlot(item, slot) && (!item.usableBy || item.usableBy.includes(cls))
+        ? [{ name, equip: () => onEquipItem(name, slot, id) }] : [];
+    }) : [];
     for (let copy = 0; copy < count; copy++) {
       backpackEntries.push({
         key: `equipment:${id}:${copy}`,
         name: item.name,
         icon: equipmentIcon(id),
         tip: equipmentTooltip(item),
-        equip: onEquipItem && fitsClass && targetSlot ? () => onEquipItem(heroName, targetSlot, id) : undefined,
+        equipChoices,
         discard: onDiscardEquipment ? () => onDiscardEquipment(id) : undefined,
       });
     }
@@ -796,13 +824,13 @@ export function BackpackScreen({
                   </>
                 ) : null;
                 const slotClass = `relative flex aspect-square w-full items-center justify-center rounded-md border border-border/80 shadow-inner backdrop-blur-[2px] ${entry?.isWeapon ? "bg-black" : "bg-bg/70"}`;
-                if (entry && (entry.equip || entry.use || entry.discard)) {
+                if (entry && (entry.equip || entry.equipChoices?.length || entry.use || entry.discard)) {
                   const opened = entry;
                   return (
                     <ItemTip key={entry.key} text={entry.tip} className="block">
                       <button
                         type="button"
-                        onClick={() => setSheetEntry({ name: opened.name, icon: opened.icon, tip: opened.tip, equip: opened.equip, use: opened.use, discard: opened.discard })}
+                        onClick={() => setSheetEntry({ name: opened.name, icon: opened.icon, tip: opened.tip, equip: opened.equip, equipChoices: opened.equipChoices, use: opened.use, discard: opened.discard })}
                         className={`${slotClass} hover:border-accent`}
                         aria-label={opened.name}
                       >
@@ -909,6 +937,7 @@ export function BackpackScreen({
           icon={sheetEntry.icon}
           tip={sheetEntry.tip}
           onEquip={sheetEntry.equip}
+          equipChoices={sheetEntry.equipChoices}
           onUse={sheetEntry.use}
           onDiscard={sheetEntry.discard}
           onClose={() => setSheetEntry(null)}

@@ -1,8 +1,8 @@
 # SoundFX
 
-Effects, not music. Empty for now — combat sounds are still synthesised in
-`src/game/audio.ts` (wavTone) rather than played from files.
+Authored one-shot sound effects used by combat and character actions. These files are
+loaded by `src/game/audio.ts`; effects are not music tracks and do not appear in the
+map editor's music list.
 
-Files dropped here are left alone: the sweep that gathers stray audio into MUSIC/ skips
-this folder, and only the tracks sitting directly in MUSIC/ appear in the map editor's
-Trilha list. Effects are not tracks.
+Keep sound-effect assets in this folder. Only tracks sitting directly in `MUSIC/` appear
+in the map editor's music list.

@@ -3,18 +3,18 @@ export type GameLanguage = "pt" | "en";
 export type Translations = Partial<Record<GameLanguage, string>>;
 export interface GamePreferences { uiLanguage: GameLanguage; dialogueLanguage: GameLanguage; subtitleLanguage: GameLanguage; subtitles: boolean; dialogueScale: number; }
 const KEY = "emberash:preferences:v1";
-const defaults: GamePreferences = { uiLanguage: "pt", dialogueLanguage: "pt", subtitleLanguage: "pt", subtitles: true, dialogueScale: 1 };
+const defaults: GamePreferences = { uiLanguage: "pt", dialogueLanguage: "pt", subtitleLanguage: "en", subtitles: true, dialogueScale: 1 };
 let current = { ...defaults };
 try {
  const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
- for (const key of ["uiLanguage", "dialogueLanguage", "subtitleLanguage"] as const) if (saved[key] === "pt" || saved[key] === "en") current[key] = saved[key];
+ for (const key of ["uiLanguage", "dialogueLanguage"] as const) if (saved[key] === "pt" || saved[key] === "en") current[key] = saved[key];
  if (typeof saved.subtitles === "boolean") current.subtitles = saved.subtitles;
  if ([1, 1.15, 1.3].includes(saved.dialogueScale)) current.dialogueScale = saved.dialogueScale;
 } catch { /* Defaults when storage is unavailable. */ }
 const listeners = new Set<() => void>();
 export const getGamePreferences = () => current;
 export function setGamePreferences(patch: Partial<GamePreferences>) {
- current = { ...current, ...patch };
+ current = { ...current, ...patch, subtitleLanguage: "en" };
  try { localStorage.setItem(KEY, JSON.stringify(current)); } catch { /* Session still works. */ }
  listeners.forEach(listener => listener());
 }

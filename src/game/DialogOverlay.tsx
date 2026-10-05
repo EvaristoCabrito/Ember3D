@@ -29,13 +29,13 @@ export function DialogOverlay({ tree, onClose, onAction, onReply }: { tree: Dial
   const portrait = line.portrait ? portraitFor(line.portrait) : null;
   return (
     <div className="absolute inset-0 z-50 ember-veil flex items-end sm:items-center justify-center p-4">
-      <div className="relative w-full max-w-xl ember-panel p-5 flex gap-4">
+      <div className="relative w-full max-w-xl max-h-[90dvh] overflow-y-auto ember-panel p-5 flex gap-4">
         {portrait && (
           <img
             src={portrait.src}
             alt=""
             style={{ objectPosition: portrait.position }}
-            className={portrait.framed ? "h-24 w-20 object-cover rounded-lg border border-border shrink-0" : "h-20 w-20 object-contain shrink-0"}
+            className={portrait.framed ? "h-20 w-14 sm:h-24 sm:w-20 object-cover rounded-lg border border-border shrink-0" : "h-16 w-14 sm:h-20 sm:w-20 object-contain shrink-0"}
           />
         )}
         <div className="flex-1 min-w-0" style={{ fontSize: `${prefs.dialogueScale}rem` }}>
@@ -47,7 +47,7 @@ export function DialogOverlay({ tree, onClose, onAction, onReply }: { tree: Dial
                 <Button
                   key={i}
                   variant="quiet"
-                  className="w-full text-left justify-start ember-btn ember-btn-sm ember-btn-ghost"
+                  className="w-full h-auto min-h-11 whitespace-normal py-2 text-left justify-start leading-snug ember-btn ember-btn-sm ember-btn-ghost"
                   onClick={() => {
                     onReply?.(reply);
                     if (reply.action && onAction) {

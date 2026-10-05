@@ -346,7 +346,7 @@ const POINT_LIGHT_POOL = 8;
 /** Bounce-fill lights (see BOUNCE_FRACTION): a fixed pool given to the map lights nearest the
  * view, so the per-fragment light count stays bounded however many lamps a map carries. */
 const BOUNCE_LIGHT_POOL = 8;
-const HEALING_SPELL_GLOW_KINDS = new Set(["holyMinor", "holyMedium", "disease", "food"]);
+const HEALING_SPELL_GLOW_KINDS = new Set(["holyMinor", "healingHands", "holyMedium", "disease", "food"]);
 /** Rim-glow canvas size relative to the sprite (room for the blur to spread). */
 const GLOW_PAD = 1.7;
 /** How much brighter than its own art a sprite (character or decoration, light props included)
@@ -2021,7 +2021,10 @@ export class ThreeBattleRenderer {
       if (!entry) {
         // Lit, like decorations — real scene lights illuminate the character (see
         // syncSpriteExposure).
-        const material = new THREE.MeshLambertMaterial({ map: this.unitTextureFor(img), transparent: true, depthWrite: false });
+        // Units mirror by applying a negative X scale (see unitVisual().scaleX). A
+        // FrontSide plane is culled after that reflection, so characters such as Kael
+        // could not turn toward targets on their left in the 3D renderer.
+        const material = new THREE.MeshLambertMaterial({ map: this.unitTextureFor(img), transparent: true, depthWrite: false, side: THREE.DoubleSide });
         const lightCap = { value: SPRITE_LIGHT_CAP };
         capSpriteLight(material, lightCap);
         this.litSpriteMats.add(material);
@@ -2439,8 +2442,10 @@ export class ThreeBattleRenderer {
       }
     }
     for (const mesh of candidates) {
-      const goal = covering.has(mesh) ? 0.25 : 1;
-      const opacity = THREE.MathUtils.lerp(mesh.userData.tacticsOpacity ?? 1, goal, 0.18);
+      const placementId = mesh.userData.tacticsPlacementId;
+      const solidHouse = HOUSE_DECOR_IDS.has(placementId) || BIG_HOUSE_DECOR_IDS.has(placementId) || SOLID_HOUSE_DECOR_IDS.has(placementId);
+      const goal = !solidHouse && covering.has(mesh) ? 0.25 : 1;
+      const opacity = solidHouse ? 1 : THREE.MathUtils.lerp(mesh.userData.tacticsOpacity ?? 1, goal, 0.18);
       mesh.userData.tacticsOpacity = opacity;
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const material of materials) {
@@ -3355,21 +3360,21 @@ export class ThreeBattleRenderer {
     const targetVisual = this.engine.unitVisual(target, tile);
     const targetGroundY = targetAnchor.worldY + targetVisual.footY;
     const targetCenterY = (targetVisual.footOffset - targetVisual.h * 0.48) * targetVisual.scaleY;
-    // Keep the spell close to the endpoint sprite planes for its world-space lighting.
-    // Its foreground materials render above character cards independently of scene depth.
-    const missileDepth = Math.max(
-      spriteDepthZ(casterGroundY, tile) + UNIT_DEPTH_TIE,
-      spriteDepthZ(targetGroundY, tile) + UNIT_DEPTH_TIE,
-    ) + 0.01;
+    // Track the ground-row depth along the shot. A single depth chosen from the nearer
+    // endpoint makes the missile pass behind the caster when Voss stands on a farther row.
+    // Keep each endpoint just in front of that character; the curved trajectory then
+    // interpolates depth naturally between the two planes.
+    const casterMissileDepth = spriteDepthZ(casterGroundY, tile) + UNIT_DEPTH_TIE + 0.01;
+    const targetMissileDepth = spriteDepthZ(targetGroundY, tile) + UNIT_DEPTH_TIE + 0.01;
     const origin = new THREE.Vector3(
       casterAnchor.worldX + casterVisual.sway,
       -(casterGroundY + casterVisual.bob - casterVisual.lift + casterCenterY),
-      missileDepth,
+      casterMissileDepth,
     );
     const destination = new THREE.Vector3(
       targetAnchor.worldX + targetVisual.sway,
       -(targetGroundY + targetVisual.bob - targetVisual.lift + targetCenterY),
-      missileDepth,
+      targetMissileDepth,
     );
     system.castSpell({
       id: request.id,

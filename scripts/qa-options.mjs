@@ -34,8 +34,10 @@ try {
  await modal.getByText(/^Custom \u00b7/).waitFor();
  await modal.getByRole('slider',{name:/Music/}).fill('0.27');
  await modal.locator('select').nth(1).selectOption('en');
- await modal.locator('select').nth(2).selectOption('pt');
- mkdirSync('screenshots/options',{recursive:true});await page.screenshot({path:'screenshots/options/english-ui-portuguese-subtitles.png'});
+ assert.equal(await page.evaluate(()=>window.preferences.getGamePreferences().subtitleLanguage),'en');
+ await page.evaluate(()=>window.preferences.setGamePreferences({subtitleLanguage:'pt'}));
+ assert.equal(await page.evaluate(()=>window.preferences.getGamePreferences().subtitleLanguage),'en');
+ mkdirSync('screenshots/options',{recursive:true});await page.screenshot({path:'screenshots/options/english-subtitles.png'});
  await modal.getByRole('button',{name:'Close',exact:true}).click();
  await page.getByText('English dialogue',{exact:true}).waitFor();
  await page.evaluate(()=>window.preferences.setGamePreferences({dialogueLanguage:'pt'}));

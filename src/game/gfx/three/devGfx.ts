@@ -35,7 +35,7 @@ export interface DevGfxSettings {
 }
 
 const KEY = "emberash:devGfx";
-const DEFAULTS: DevGfxSettings = { realShadows: true, shadowResolution: 4096, softShadows: false, contactShadows: true, ambientOcclusion: true, fogOfWar: true, fogDebug: false, localLights: true, atmosphericFx: true, sunAzimuth: 53.13, sunElevation: 45, moonAzimuth: 140, moonElevation: 35 };
+const DEFAULTS: DevGfxSettings = { realShadows: true, shadowResolution: 2048, softShadows: false, contactShadows: true, ambientOcclusion: true, fogOfWar: true, fogDebug: false, localLights: true, atmosphericFx: true, sunAzimuth: 53.13, sunElevation: 45, moonAzimuth: 140, moonElevation: 35 };
 
 function load(): DevGfxSettings {
   try {

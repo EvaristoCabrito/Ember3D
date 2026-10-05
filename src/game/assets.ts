@@ -277,7 +277,7 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // himself is a different unit entirely and plays as kaelFinal instead.
   defaultWarrior: { n: 12, bust: "?v=kael-v2" },
   kaelEarly: { n: 12, bust: "?v=kael-early" },
-  neera: { n: 36, bust: "" },
+  neera: { n: 36, bust: "?v=neera-attack-001" },
   voss: { n: 4, bust: "" },
   salazar: { n: 4, bust: "" },
   // Generic-enemy "alter" sprites (see the SpriteId comment in types.ts) — same file
@@ -326,7 +326,7 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   theButcher: { n: 36, bust: "?v=the-butcher-001" },
   lancer: { n: 6, bust: "?v=3" },
   sandoval: { n: 6, bust: "?v=sandoval-complete-001" },
-  kaelFinal: { n: 36, bust: "?v=kael-final-002" },
+  kaelFinal: { n: 36, bust: "?v=kael-final-004-restored" },
   conjurer: { n: 36, bust: "?v=conjurer-complete-003" },
   "cultist-v2": { n: 36, bust: "" },
   // Familiar 3's primary attack cut — see ATTACK2_FRAMES below for its alternate cut,
@@ -563,6 +563,9 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
     put("walksLeft", cut(walkN, (i) => `move-left-${i}`, bust));
     put("attacksLeft", cut(atkN, (i) => `atk-left-${i}`, bust));
   }
+  // Neera's new attack sheet includes its own mirrored left-facing cuts. Keep her walk
+  // pool mirrored normally; only regular ATT uses this authored left-facing set.
+  if (id === "neera" && atk) put("attacksLeft", cut(atk.n, (i) => `atk-left-${i}`, atk.bust));
   // The Butcher, Cultist V2, Familiar 2 and Familiar 3 each have their own authored
   // left-facing walk cut (same frame count as their right-facing one) but no dedicated
   // left-facing attack cut — their attack keeps mirroring the right-facing pool.
