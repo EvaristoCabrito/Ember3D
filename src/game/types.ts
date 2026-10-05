@@ -716,7 +716,7 @@ export interface Unit {
   hitAt?: number;
   bob: number;
   level: number;
-  /** XP toward the next level (0..EXP_TO_LEVEL-1). Player-only; always 0 for enemies. */
+  /** XP toward the next level (0..expToLevel(level)-1). Player-only; always 0 for enemies. */
   xp: number;
   bag: Bag;
   spells: Spells;
@@ -1307,6 +1307,8 @@ export interface SaveData {
   /** Shared relationship score for each named hero pair, from 0 to 100. */
   affinityScores?: Record<string, number>;
   partyFormation?: string[];
+  /** Hero who walks the world map and free-roam maps (Party menu); absent means Kael. */
+  partyLeader?: string;
   /** Actual travel hours with an empty hunger meter; absent falls back to hungerStreak days. */
   hungerHours?: number;
   /** RPG map only: every hex ("col,row") the party has ever stood on — drives the fog of
@@ -1372,12 +1374,10 @@ export interface GrowthLine {
   resFrom: number;
   resTo: number;
   fallen: boolean;
-  /** XP toward the next level at the end of the mission (0..EXP_TO_LEVEL-1). */
+  /** XP toward the next level at the end of the mission (0..expToLevel(level)-1). */
   xp: number;
-  /** XP toward the level shown by `xp` at mission start — the ResultScreen's XP bar
-   * animates from here up to `xp` rather than snapping straight to the final value. Only
-   * meaningful (nonzero) when `to === from`; a level-up resets it to 0 since the bar is now
-   * tracking progress in a different level than the one `xpFrom` would describe. */
+  /** XP toward level `from + 1` at mission start. The ResultScreen's XP bar fills from here
+   * to full, refills once per level gained, and ends at `xp` (progress toward `to + 1`). */
   xpFrom: number;
   /** Extra spell uses this level-up granted (e.g. "+1 T1 · +1 T2"). Empty when the new
    * level didn't add slots — spent charges are never refilled, only new slots land. */

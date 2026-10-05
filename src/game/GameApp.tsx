@@ -1,4 +1,4 @@
-import { applyPartyFormation, cleanPartyFormation } from "./partyFormation";
+import { applyPartyFormation, cleanPartyFormation, cleanPartyLeader, partyLeaderOf } from "./partyFormation";
 import { OptionsButton } from "./OptionsMenu";
 import { uiText, useGamePreferences, type Translations } from "./gamePreferences";
 import { GraphicsQualityControl } from "./GraphicsQualityControl";
@@ -24,7 +24,7 @@ import { PartyInventoryOverlay, ItemTip } from "./InventoryScreens";
 import { DialogOverlay } from "./DialogOverlay";
 import { LIGHT_DEFS } from "./lighting";
 import { DialogEditor } from "./DialogEditor";
-import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, SOLID_ROCK_DECOR_IDS, CAUSTIC_VENOM, MINOR_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, FOREST_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
+import { BLESS, BARRICADE_LIKE_DECOR, BIG_HOUSE_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, SOLID_ROCK_DECOR_IDS, CAUSTIC_VENOM, MINOR_VENOM, CHEST_LOOT, CLASSES, DEADWOODS_DECOR_IDS, FOREST_DECOR_IDS, CLEAVE, cleaveFormula, CURE_DISEASE, CURES, DECORATIONS, DOUBLE_STRIKE, doubleStrikeFormula, EQUIPMENT, EXP_TO_LEVEL, expToLevel, FAMILIAR_SPELL, FIREBALL, formatSpellUseGains, LIFE_DRAIN, lifeDrainFormula, lifeDrainHealMul, HOUSE_DECOR_IDS, KILL_DROP_CHANCE, LIGHTNING, LIGHTNING_T3, LONG_SHOT, longShotFormula, MAGIC_MISSILE, PIERCING, piercingMul, PIERCING_THRUST, MAX_GRID, MAX_LEVEL, MIN_GRID, POTIONS, POTION_LOOT_WEIGHT, PROMOTE_LEVEL, PROMOTED_BASE, PROMOTIONS, rulesClass, SHOCK, STAT_POINTS_PER_LEVEL, SUMMON_FAMILIAR, PHANTASMAL_FORCE, PHANTASMAL_FORCE_UNLOCK_LEVEL, phantasmalForceFormula, SUMMON_FAMILIAR2, SUMMON_FAMILIAR2_UNLOCK_LEVEL, SUMMON_FAMILIAR3, SUMMON_FAMILIAR4, SUMMON_ZOMBIE_DOG, SWEEP, TRIP, TERRAIN, WEAPONS, WEAPON_MAX_ENH, WEB_OF_DREAMS, BAG_MAX, LOCKPICK_PRICE, POTION_CARRY_MAX, POTION_PRICE, RATION_STACK_MAX, RATIONS_PRICE, barricadeDecor, decorationCells, placedFootprint, decorationImage, decorationImageWebp, diceFormula, emberForKill, enemyLevelFor, equippedPouchId, fireballFormula, healFormula, heroRecruited, lightningFormula, lightningTier3Formula, dressMap, isSummonClass, MUSIC_TRACKS, SUMMON_CLASSES, parseLayout, potionLabel, potionTooltip, lockpickTooltip, partyBagHasRoom, pouchIcon, rangeLabel, rollPotion, sheetLine, spellFormula, spellIcon, spellTier, spellUseGains, startingBags, statsFor, terrainNote, tierKey, tierUses, weaponEnhCost, weaponSellValue, equipmentFitsSlot, gearStatBonus, MULTI_SHOT, multiShotFormula, SECOND_WIND, secondWindPct, auraPower, AURA_OF_PROTECTION, INTIMIDATING_PRESENCE, DIVINE_WRATH, divineWrathPower, SHOULDER_SMASH, shoulderSmashFormula, STAMPEDE, stampedeFormula, BULL_RUSH, BULL_RUSH_UNLOCK_LEVEL, EXECUTIONER_STRIKE, SHIELD_BASH, BURNING_HANDS, CREATE_FOOD_AND_WATER, createFoodAndWaterFormula, createFoodAndWaterPower, rollDice, type SpellTier } from "./data";
 import { QUESTS, activePickupsFor, questById, questProgress, questStatus, questsFor } from "./quests";
 import { advanceProgression, evaluate, isGatedMission, missionAccess, type MissionAccess, type ProgressExtras } from "./progression";
 import { BattleEngine, heroSpriteFor } from "./engine";
@@ -1096,12 +1096,22 @@ export function GameApp() {
         freedAldric.explore && !testMode && freedAldric.neutralSpawns
           ? { ...freedAldric, neutralSpawns: freedAldric.neutralSpawns.filter((s) => !(s.name in TEST_PARTY_CLASS) || heroRecruited(s.name, save.completed, save.flags)) }
           : freedAldric;
-      // A free-roam map is walked by the party leader alone.
-      let m = testMode && !resolved.explore
-        ? addMissingTestHeroes(seated)
-        : !testMode && seated.id.startsWith("watchtower-") && heroRecruited("Aldric", save.completed, save.flags)
-          ? addAdditionalPartyHeroes(seated, { Aldric: "aldric" })
+      // A free-roam map is walked by the party leader alone. A leader other than Kael takes the
+      // authored walker's place (Kael waits with the rest of the party) and isn't also seated.
+      const leaderName = partyLeaderOf(save.partyLeader, (hero) => heroRecruited(hero, save.completed, save.flags));
+      const led =
+        seated.explore && !testMode && leaderName !== "Kael" && seated.playerSpawns[0]
+          ? {
+              ...seated,
+              playerSpawns: [{ ...seated.playerSpawns[0], name: leaderName, classId: TEST_PARTY_CLASS[leaderName] }, ...seated.playerSpawns.slice(1)],
+              neutralSpawns: seated.neutralSpawns?.filter((s) => s.name !== leaderName),
+            }
           : seated;
+      let m = testMode && !resolved.explore
+        ? addMissingTestHeroes(led)
+        : !testMode && led.id.startsWith("watchtower-") && heroRecruited("Aldric", save.completed, save.flags)
+          ? addAdditionalPartyHeroes(led, { Aldric: "aldric" })
+          : led;
       // Advancing through a dungeon connector carries wounds forward. Heroes who fell on
       // the previous floor stay out of the next one instead of respawning at full HP
       // because zero was treated like a missing HP value.
@@ -1181,7 +1191,7 @@ export function GameApp() {
       const heroPoisons = testMode ? undefined : save.heroPoisons;
       const crossingDefeatedSpawns = !testMode && keepsDefeatedSpawns(m) ? save.crossingDefeatedSpawns[m.id] ?? [] : [];
       const questPickups = testMode ? undefined : activePickupsFor(save, m.id);
-      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, affinityScores: save.affinityScores, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, heroPoisons, crossingDefeatedSpawns, questPickups }, Date.now() % 100000, testMode);
+      const battle = new BattleEngine(m, art, { hp, levels, bags, xp, promotions, weapons, offHand, equipment, statPointAllocations, enemyLevels, neutralLevels, ownedWeaponIds, affinityScores: save.affinityScores, partyLeader: testMode ? undefined : leaderName, spellSpent, hungerPenaltyPct, heroHunger, heroDiseases, heroPoisons, crossingDefeatedSpawns, questPickups }, Date.now() % 100000, testMode);
       if (resume && resume.missionId === m.id) battle.applySnapshot(resume);
       if (typeof window !== "undefined" && window.innerWidth < 720) battle.zoom = 0;
       // Sprites load per battle (see ensureSpriteArt): the board opens once this battle's own
@@ -1291,7 +1301,7 @@ export function GameApp() {
         resTo: stTo.res,
         fallen: !u.alive,
         xp: u.xp,
-        xpFrom: from === to ? (save.xp?.[u.name] ?? 0) : 0,
+        xpFrom: save.xp?.[u.name] ?? 0,
         skillGain: from === to ? undefined : formatSpellUseGains(spellUseGains(u.classId, from, to)),
       });
       if (!testMode && u.alive) {
@@ -1961,6 +1971,9 @@ export function GameApp() {
         <OverworldMapScreen
           onSaveFormation={order => {
             if (!testMode) persistCurrent({ ...readMapSave(), partyFormation: cleanPartyFormation(order) });
+          }}
+          onSaveLeader={hero => {
+            if (!testMode) persistCurrent({ ...readMapSave(), partyLeader: cleanPartyLeader(hero) });
           }}
           locations={mapVisibleLocations}
           status={(loc) => locationStatus(loc, save.completed, testMode, campaignLocations, missionAccessFor)}
@@ -8370,7 +8383,7 @@ function BattleScreen({
                         {unit.name} · Nv {unit.level}
                         {unit.side === "player" && (
                           <span className="text-xs text-muted font-normal ml-1 align-middle tabular-nums">
-                            {unit.level >= MAX_LEVEL ? "· NÍVEL MÁX." : `· ${unit.xp}/${EXP_TO_LEVEL} XP`}
+                            {unit.level >= MAX_LEVEL ? "· NÍVEL MÁX." : `· ${unit.xp}/${expToLevel(unit.level)} XP`}
                           </span>
                         )}
                       </p>
@@ -9052,10 +9065,10 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                   ) : (
                     <>
                       <div className="h-1.5 rounded-full bg-border overflow-hidden">
-                        <div className="h-full bg-accent" style={{ width: `${(unit.xp / EXP_TO_LEVEL) * 100}%` }} />
+                        <div className="h-full bg-accent" style={{ width: `${(unit.xp / expToLevel(unit.level)) * 100}%` }} />
                       </div>
                       <p className="text-[11px] text-muted tabular-nums mt-0.5">
-                        {unit.xp}/{EXP_TO_LEVEL} XP
+                        {unit.xp}/{expToLevel(unit.level)} XP
                       </p>
                     </>
                   )}
@@ -9467,18 +9480,83 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
   );
 }
 
-/** XP bar on the post-mission screen: mounts at the hero's pre-battle progress, then eases
- * up to the post-battle value on the next paint, so the gain reads as a fill instead of
- * snapping straight to the end state. */
-function GrowthXpBar({ from, to }: { from: number; to: number }) {
-  const [pct, setPct] = useState(from);
+/** XP bar on the post-mission screen: starts at the hero's pre-battle progress and plays the
+ * real gain — fill to full, flash, refill from empty for each level gained, then ease to the
+ * post-battle value. Driven by the Web Animations API, one segment at a time, so it never
+ * animates backwards or skips the fill. */
+function GrowthXpBar({ fromLevel, toLevel, fromXp, toXp }: { fromLevel: number; toLevel: number; fromXp: number; toXp: number }) {
+  const fill = useRef<HTMLSpanElement>(null);
+  const flash = useRef<HTMLSpanElement>(null);
+  // The real path: the old XP fills to full, every level gained refills from empty, and the
+  // last segment ends at the new XP. Each refill restarts at 0 instantly — never slides back.
+  const segments = useMemo(() => {
+    const share = (xp: number, level: number) => Math.max(0, Math.min(1, xp / expToLevel(level)));
+    if (toLevel <= fromLevel) return [{ start: share(fromXp, fromLevel), end: share(toXp, toLevel) }];
+    return [
+      { start: share(fromXp, fromLevel), end: 1 },
+      ...Array.from({ length: toLevel - fromLevel - 1 }, () => ({ start: 0, end: 1 })),
+      { start: 0, end: share(toXp, toLevel) },
+    ];
+  }, [fromLevel, toLevel, fromXp, toXp]);
+  const pct = (share: number) => `${share * 100}%`;
   useEffect(() => {
-    const id = requestAnimationFrame(() => setPct(to));
-    return () => cancelAnimationFrame(id);
-  }, [to]);
+    const el = fill.current;
+    if (!el) return;
+    const last = segments[segments.length - 1]!;
+    if (typeof el.animate !== "function" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      el.style.width = pct(last.end);
+      return;
+    }
+    let cancelled = false;
+    let running: Animation | null = null;
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    void (async () => {
+      el.style.width = pct(segments[0]!.start);
+      await wait(350);
+      for (let i = 0; i < segments.length && !cancelled; i++) {
+        const { start, end } = segments[i]!;
+        el.style.width = pct(start);
+        running = el.animate([{ width: pct(start) }, { width: pct(end) }], {
+          duration: Math.max(380, 1200 * (end - start)),
+          easing: i === segments.length - 1 ? "cubic-bezier(0.2, 0.7, 0.2, 1)" : "cubic-bezier(0.45, 0, 0.55, 1)",
+          fill: "forwards",
+        });
+        await running.finished.catch(() => undefined);
+        if (cancelled) return;
+        el.style.width = pct(end);
+        running.cancel();
+        if (i < segments.length - 1) {
+          flash.current?.animate([{ opacity: 0 }, { opacity: 1, offset: 0.25 }, { opacity: 0 }], { duration: 520, easing: "ease-out" });
+          await wait(300);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      running?.cancel();
+    };
+  }, [segments]);
   return (
-    <span className="h-1.5 w-24 rounded-full bg-border overflow-hidden shrink-0">
-      <span className="block h-full bg-accent transition-[width] duration-[1400ms] ease-out" style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+    <span className="relative h-2.5 w-32 shrink-0 overflow-hidden ember-socket" style={{ borderRadius: 9999 }}>
+      <span
+        ref={fill}
+        className="absolute inset-y-0 left-0 overflow-hidden"
+        style={{
+          width: pct(segments[0]!.start),
+          borderRadius: 9999,
+          background: "linear-gradient(90deg, #713718 0%, #c8641e 55%, #e1a541 85%, #fff0a2 100%)",
+          boxShadow: "0 0 6px rgba(255, 140, 50, 0.55)",
+        }}
+      >
+        <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1/2 bg-white/15" />
+        <span aria-hidden="true" className="absolute inset-y-0 right-0 w-1.5 bg-[#fff0a2] blur-[2px]" />
+      </span>
+      <span
+        ref={flash}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-0"
+        style={{ borderRadius: 9999, background: "rgba(255, 220, 150, 0.45)", boxShadow: "inset 0 0 8px #fff0a2, 0 0 10px #ffb347" }}
+      />
     </span>
   );
 }
@@ -9552,9 +9630,9 @@ function ResultScreen({
                 </p>
                 {g.to < MAX_LEVEL ? (
                   <p className="flex items-center gap-2 mt-1 text-sm">
-                    <GrowthXpBar from={(g.xpFrom / EXP_TO_LEVEL) * 100} to={(g.xp / EXP_TO_LEVEL) * 100} />
+                    <GrowthXpBar fromLevel={g.from} toLevel={g.to} fromXp={g.xpFrom} toXp={g.xp} />
                     <span className="text-muted tabular-nums">
-                      {g.xp}/{EXP_TO_LEVEL} XP{g.to !== g.from ? " · subiu" : ""}
+                      {g.xp}/{expToLevel(g.to)} XP{g.to !== g.from ? " · subiu" : ""}
                     </span>
                   </p>
                 ) : (

@@ -38,3 +38,12 @@ test("new or absent members never create spawns or duplicate starting positions"
   assert.equal(new Set(result.playerSpawns.map(s => `${s.x},${s.y}`)).size, 4);
   assert.equal(result.playerSpawns.some(s => s.name === "Malrec"), false);
 });
+
+test("formation slot 1 takes the start hex closest to the enemy, the last slot the farthest", () => {
+  const withEnemy = { ...mission, enemySpawns: [{ name: "Foe", classId: "soldier", x: 2, y: 8 }] } as Mission;
+  const result = applyPartyFormation(withEnemy, ["Neera", "Kael", "Voss"]);
+  // Voss's authored hex (2,5) is closest to the enemy, then (2,4), then (3,4).
+  assert.deepEqual(result.playerSpawns.slice(0, 3).map(s => [s.name, s.x, s.y]), [
+    ["Kael", 2, 4], ["Neera", 2, 5], ["Voss", 3, 4],
+  ]);
+});

@@ -1,5 +1,5 @@
-import { cleanPartyFormation } from "./partyFormation";
-import { EQUIPMENT, EXP_TO_LEVEL, MAX_GRID, MAX_LEVEL, POTION_CARRY_MAX, BAG_MAX, PROMOTIONS, STAT_POINTS_PER_LEVEL, WEAPONS, WORLD_LOCATIONS, emberFromCompleted, equipmentFitsSlot, starterWeaponFor, startingBags } from "./data";
+import { cleanPartyFormation, cleanPartyLeader } from "./partyFormation";
+import { EQUIPMENT, EXP_TO_LEVEL, expToLevel, MAX_GRID, MAX_LEVEL, POTION_CARRY_MAX, BAG_MAX, PROMOTIONS, STAT_POINTS_PER_LEVEL, WEAPONS, WORLD_LOCATIONS, emberFromCompleted, equipmentFitsSlot, starterWeaponFor, startingBags } from "./data";
 import { ALL_MISSIONS } from "./mapstore";
 import { OVERWORLD_START_HEX, worldToHex } from "./overworld";
 import { cleanHunger, fullness } from "./hunger";
@@ -125,12 +125,12 @@ function cleanLevels(raw: unknown): Record<string, number> {
   return levels;
 }
 
-function cleanXp(raw: unknown): Record<string, number> {
+function cleanXp(raw: unknown, levels: Record<string, number>): Record<string, number> {
   const xp = { ...DEFAULT_XP };
   if (!raw || typeof raw !== "object") return xp;
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!HEROES.includes(k as (typeof HEROES)[number])) continue;
-    xp[k] = clampInt(v, 0, EXP_TO_LEVEL - 1);
+    xp[k] = clampInt(v, 0, expToLevel(levels[k] ?? 1) - 1);
   }
   return xp;
 }
@@ -352,7 +352,7 @@ function cleanBattleUnit(raw: unknown): BattleUnitSnap | null {
     alive: u.alive !== false,
     fade: Math.min(1, Math.max(0, Number(u.fade) || 1)),
     level: clampInt(u.level, 1, MAX_LEVEL),
-    xp: clampInt(u.xp, 0, EXP_TO_LEVEL - 1),
+    xp: clampInt(u.xp, 0, expToLevel(clampInt(u.level, 1, MAX_LEVEL)) - 1),
     bag: cleanBag(u.bag),
     spells,
     weaponId: typeof u.weaponId === "string" && WEAPONS[u.weaponId] ? u.weaponId : null,
@@ -696,7 +696,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     questKills: cleanQuestList(raw.questKills),
     unitHp: cleanHp(raw.unitHp),
     levels,
-    xp: cleanXp(raw.xp),
+    xp: cleanXp(raw.xp, levels),
     statPointAllocations: cleanStatPointAllocations(raw.statPointAllocations, levels),
     bags: version < 4 ? startingBags() : cloneBags(raw.bags as Record<string, Bag>),
     promotions: cleanPromotions(raw.promotions),
@@ -721,6 +721,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     gameHour: clampInt(raw.gameHour ?? 8, 0, 23),
     affinityScores: cleanAffinityScores(raw.affinityScores),
     partyFormation: cleanPartyFormation(raw.partyFormation),
+    partyLeader: cleanPartyLeader(raw.partyLeader),
     overworldMoveBudgetUsed: clampInt(raw.overworldMoveBudgetUsed ?? raw.gameClock, 0, 999999),
     heroHunger: cleanHunger(raw.heroHunger),
     heroDiseases: cleanHeroDiseases(raw.heroDiseases),

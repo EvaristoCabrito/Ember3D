@@ -1,4 +1,4 @@
-import { cleanPartyFormation } from "./partyFormation";
+import { cleanPartyFormation, partyLeaderOf } from "./partyFormation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { BookOpen, Check, ChevronLeft, Clock, Lock, MapPin, Save, SlidersHorizontal, Volume2, VolumeX, X, ZoomIn, ZoomOut } from "lucide-react";
 import { isCrossingDungeon, missionsForLocation } from "./mapstore";
@@ -15,34 +15,48 @@ import { key } from "./pathfinding";
 import { QUESTS, questProgress, questStatus } from "./quests";
 import { MapLoadingOverlay, useMapLoading } from "./MapLoadingOverlay";
 import { campaignHour, campaignTimeOfDay, usesTravelClock } from "./campaignTime";
-import { AFFINITY_HEROES, affinityBonus, affinityGrade, affinityScore, canUseAffinityDuo, canUseAffinityUltimate } from "./affinity";
+import { AFFINITY_HEROES, affinityBonus, affinityGrade, affinityScore, canUseAffinityDuo, canUseAffinityUltimate, type AffinityHero } from "./affinity";
 
 export type LocationStatus = "locked" | "available" | "done";
 
 const ZOOM_STOPS = [70, 90, 110, 130];
 
-/** Idle-breathing frames of the MC's own sprite (public/game/sprites/Kael_Final/kael-final-002),
- * the same art the battle engine plays as Kael — see assets.ts's "kaelFinal" entry. Only every
- * third of the 36 captured frames is used: plenty smooth at the size this renders (a small
- * JRPG-style overworld token), for a third of the image requests. */
-const KAEL_MARKER_FRAMES = Array.from({ length: 12 }, (_, i) => 1 + i * 3);
+/** Idle-breathing frames of the party leader's own battle sprite (Party menu; Kael by default:
+ * public/game/sprites/Kael_Final/kael-final-002, see assets.ts's "kaelFinal" entry). Only every
+ * third frame of a 36-frame idle is used: plenty smooth at the size this renders (a small
+ * JRPG-style overworld token), for a third of the image requests. Each sheet pads its figure
+ * differently, so height/drop (px) are measured per sheet to give every leader Kael's exact
+ * on-screen height (48px sheet, figure 98.3% of it) and the same feet line. */
+const LEADER_MARKER: Record<AffinityHero, { dir: string; idle: number; bust: string; height: number; drop: number }> = {
+  Kael: { dir: "Kael_Final/kael-final-002", idle: 36, bust: "?v=kael-final-002", height: 48, drop: 0 },
+  Neera: { dir: "neera", idle: 36, bust: "", height: 47.95, drop: 0.07 },
+  Voss: { dir: "voss", idle: 12, bust: "", height: 47.95, drop: 0.39 },
+  Salazar: { dir: "salazar", idle: 12, bust: "", height: 51.18, drop: 0.44 },
+  Aldric: { dir: "aldric", idle: 36, bust: "?v=aldric-final-001", height: 54.42, drop: 3.21 },
+  Malrec: { dir: "malrec", idle: 36, bust: "", height: 51.01, drop: 1.55 },
+};
 
-function KaelMarker({ facingLeft }: { facingLeft: boolean }) {
+function LeaderMarker({ hero, facingLeft }: { hero: AffinityHero; facingLeft: boolean }) {
+  const sheet = LEADER_MARKER[hero];
+  const frames = sheet.idle === 36 ? Array.from({ length: 12 }, (_, i) => 1 + i * 3) : Array.from({ length: sheet.idle }, (_, i) => 1 + i);
   const [frame, setFrame] = useState(0);
   useEffect(() => {
-    const id = window.setInterval(() => setFrame((f) => (f + 1) % KAEL_MARKER_FRAMES.length), 110);
+    const id = window.setInterval(() => setFrame((f) => (f + 1) % frames.length), 110);
     return () => window.clearInterval(id);
-  }, []);
+  }, [frames.length]);
   return (
     <img
-      src={`/game/sprites/Kael_Final/kael-final-002/${KAEL_MARKER_FRAMES[frame]}.png?v=kael-final-002`}
+      src={`/game/sprites/${sheet.dir}/${frames[frame % frames.length]}.png${sheet.bust}`}
       alt=""
       draggable={false}
-      className="h-12 w-auto object-contain select-none drop-shadow-[0_2px_3px_rgba(0,0,0,0.6)]"
-      style={{ transform: facingLeft ? "scaleX(-1)" : undefined }}
+      className="w-auto object-contain select-none drop-shadow-[0_2px_3px_rgba(0,0,0,0.6)]"
+      style={{ height: sheet.height, transform: `translateY(${sheet.drop}px)${facingLeft ? " scaleX(-1)" : ""}` }}
     />
   );
 }
+
+/** Portrait sprite per hero, same pairs as the party panel's own list. */
+const HERO_PORTRAIT_SPRITE = { Kael: "kaelFinal", Neera: "neera", Voss: "voss", Salazar: "salazar", Aldric: "aldric", Malrec: "conjurer" } as const;
 
 /** The RPG map: same background art and pan/zoom viewport as the classic map, but travel is
  * hex-by-hex instead of jumping straight to any unlocked location. The hex grid itself
@@ -86,6 +100,7 @@ export function OverworldMapScreen({
   onBack,
   onSave,
   onSaveFormation,
+  onSaveLeader,
   onPick,
 }: {
   locations: WorldLocation[];
@@ -135,6 +150,8 @@ export function OverworldMapScreen({
   onBack: () => void;
   onSave?: () => void;
   onSaveFormation?: (order: string[]) => void;
+  /** Party menu: saves the hero who walks the world map and free-roam maps. */
+  onSaveLeader?: (hero: string) => void;
   onPick: (missionId: string) => void;
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
@@ -144,11 +161,15 @@ export function OverworldMapScreen({
   const [questLogOpen, setQuestLogOpen] = useState(false);
   const [affinityOpen, setAffinityOpen] = useState(false);
   const partyHeroes = AFFINITY_HEROES.filter(hero => test || heroRecruited(hero, save.completed, save.flags));
+  const leader = partyLeaderOf(save.partyLeader, (hero) => test || heroRecruited(hero, save.completed, save.flags));
   const [formationOrder, setFormationOrder] = useState<string[]>([]);
+  // Formation map: the slot picked first, waiting for a second click to swap with.
+  const [formationPick, setFormationPick] = useState<number | null>(null);
   const [formationSaved, setFormationSaved] = useState(false);
   useEffect(() => {
     if (affinityOpen) {
       setFormationOrder([...new Set([...cleanPartyFormation(save.partyFormation), ...AFFINITY_HEROES])]);
+      setFormationPick(null);
     }
   }, [affinityOpen, save.partyFormation]);
   const [movementOpen, setMovementOpen] = useState(false);
@@ -700,12 +721,12 @@ export function OverworldMapScreen({
               </button>
             ))}
 
-            {/* The party's own marker — a tiny idle Kael, sliding hex to hex as the party
-                steps (the transition is what reads as "movement": there's no walk-cycle art
-                for this sprite, just the idle loop, so distance covered does the talking). */}
+            {/* The party's own marker — the leader's tiny idle sprite, sliding hex to hex as
+                the party steps (the transition is what reads as "movement": there's no
+                walk-cycle art in use here, just the idle loop, so distance covered does the talking). */}
             <button
               type="button"
-              aria-label={atStartPreVau ? "Entrar na missão" : "Mover Kael"}
+              aria-label={atStartPreVau ? "Entrar na missão" : `Mover ${leader}`}
               aria-expanded={movementOpen}
               onClick={() => {
                 if (atStartPreVau) {
@@ -717,53 +738,114 @@ export function OverworldMapScreen({
               className="absolute z-20 -translate-x-1/2 -translate-y-full min-w-11 min-h-11 transition-all duration-500 ease-in-out focus-visible:outline-2 focus-visible:outline-accent"
               style={{ left: `${partyWorld.x}%`, top: `${partyWorld.y}%` }}
             >
-              <KaelMarker facingLeft={facingLeft} />
+              <LeaderMarker hero={leader} facingLeft={facingLeft} />
             </button>
           </div>
         </div>
       </div>
 
       {affinityOpen && (
-        <div className="absolute inset-0 z-40 ember-veil flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Party">
-          <div className="w-full max-w-3xl ember-panel p-5 max-h-[80dvh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-3"><h2 className="font-display text-xl">Party</h2><button type="button" onClick={() => setAffinityOpen(false)} aria-label="Fechar Party" className="size-9 ember-icon-btn"><X className="size-4" /></button></div>
-            <section aria-label="Formação inicial" className="rounded-lg border border-border p-3 mb-4">
-              <h3 className="font-display text-lg mb-2">Formação inicial</h3>
-              <p className="text-xs text-muted mb-3">Escolha a ordem dos personagens nas posições iniciais do mapa. Mapas com aberturas perigosas ou posições especiais preservam sua formação própria.</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
-                {formationOrder.filter(hero => partyHeroes.includes(hero as typeof partyHeroes[number])).map((hero, slot, active) => (
-                  <label key={slot} className="text-xs flex flex-col gap-1"><span>Posição {slot + 1}</span>
-                    <select aria-label={`Personagem na posição ${slot + 1}`} className="bg-bg border border-border rounded-md p-2" value={hero} onChange={e => {
-                      const other = e.target.value;
-                      setFormationOrder(order => order.map(name => name === hero ? other : name === other ? hero : name));
-                      setFormationSaved(false);
-                    }}>{active.map(name => <option key={name}>{name}</option>)}</select>
-                  </label>
-                ))}
+        <div className="absolute inset-0 z-40 ember-veil flex items-center justify-center p-4" onClick={(event) => { if (event.target === event.currentTarget) setAffinityOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="party-title" className="relative flex max-h-[82dvh] w-full max-w-3xl flex-col overflow-hidden ember-panel">
+            <header className="flex items-start justify-between gap-3 border-b border-[#6b5238]/60 p-4">
+              <div>
+                <p className="text-xs ember-kicker">Grupo · {partyHeroes.length} {partyHeroes.length === 1 ? "membro" : "membros"} · Líder: {leader}</p>
+                <h2 id="party-title" className="mt-1 font-display text-2xl ember-title">Party</h2>
               </div>
-              <button type="button" disabled={test} className="ember-btn ember-btn-sm" onClick={() => { onSaveFormation?.(formationOrder); setFormationSaved(true); }}>Salvar formação</button>
-              {formationSaved && <span role="status" className="text-xs text-accent ml-2">Formação salva.</span>}
-            </section>
-            <p className="text-sm text-muted mb-4">Afinidade de cada personagem com os outros membros do grupo.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              {partyHeroes.map(a => (
-                <section key={a} aria-label={`Afinidades de ${a}`} className="rounded-lg border border-border p-3">
-                  <h3 className="font-display text-lg mb-3">{a}</h3>
-                  {partyHeroes.filter(b => b !== a).map(b => {
-                    const points = affinityScore(save.affinityScores, a, b);
-                    return <div key={`${a}-${b}`} className="mb-3 last:mb-0">
-                      <div className="flex justify-between gap-2 text-sm"><span>{a} - {b}</span><span>{affinityGrade(points)} · {points.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}/100</span></div>
-                      <progress aria-label={`Afinidade de ${a} com ${b}`} className="w-full accent-accent" value={points} max={100} />
-                      <AffinityBonusHelp points={points} duo={canUseAffinityDuo(save.affinityScores, a, b)} />
-                    </div>;
-                  })}
-                  {partyHeroes.length < 2 && <p className="text-sm text-muted">As afinidades aparecerão quando outro personagem entrar no grupo.</p>}
+              <button type="button" onClick={() => setAffinityOpen(false)} aria-label="Fechar Party" className="grid size-9 place-items-center ember-icon-btn">
+                <X className="size-4" />
+              </button>
+            </header>
+            <div className="overflow-y-auto p-4">
+              <div className="flex flex-col gap-4">
+                <section aria-label="Líder do grupo">
+                  <h3 className="mb-2 text-sm ember-kicker">Líder do grupo</h3>
+                  <div className="ember-slot p-3">
+                    <p className="mb-3 text-sm text-muted">O líder anda pelo mapa e pelas áreas livres. Em conversas e outras situações, a afinidade do líder com o grupo cresce mais rápido quanto mais baixa ela estiver.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {partyHeroes.map(hero => (
+                        <button key={hero} type="button" disabled={test} aria-pressed={leader === hero} onClick={() => onSaveLeader?.(hero)}
+                          className={`ember-slot flex w-16 flex-col items-center gap-1 p-1.5 text-xs disabled:opacity-60 ${leader === hero ? "is-last text-accent" : ""}`}>
+                          <img src={portraitFor(HERO_PORTRAIT_SPRITE[hero]).src} alt="" style={{ objectPosition: portraitFor(HERO_PORTRAIT_SPRITE[hero]).position }} className="h-12 w-10 rounded object-cover" />
+                          {hero}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </section>
-              ))}
+                <section aria-label="Formação inicial">
+                  <h3 className="mb-2 text-sm ember-kicker">Formação inicial</h3>
+                  <div className="ember-slot p-3">
+                    <p className="mb-3 text-sm text-muted">A linha de frente começa nas posições mais próximas do inimigo; a retaguarda, nas mais distantes. Clique em dois personagens para trocá-los de lugar. Mapas com aberturas perigosas ou posições especiais preservam sua formação própria.</p>
+                    {(() => {
+                      const active = formationOrder.filter(hero => partyHeroes.includes(hero as typeof partyHeroes[number]));
+                      const rows = [{ label: "Frente", slots: active.slice(0, 3).map((hero, i) => ({ hero, slot: i })) }, { label: "Retaguarda", slots: active.slice(3, 6).map((hero, i) => ({ hero, slot: i + 3 })) }].filter(row => row.slots.length);
+                      const hex = "polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)";
+                      const pick = (slot: number) => {
+                        if (formationPick === null) return setFormationPick(slot);
+                        const a = active[formationPick], b = active[slot];
+                        setFormationPick(null);
+                        if (!a || !b || a === b) return;
+                        setFormationOrder(order => order.map(name => name === a ? b : name === b ? a : name));
+                        setFormationSaved(false);
+                      };
+                      return (
+                        <div role="group" aria-label="Mapa da formação" className="mb-3 flex flex-col items-center">
+                          <p className="mb-1 text-xs ember-kicker">Inimigo ▲</p>
+                          <div className="flex flex-col">
+                            {rows.map((row, r) => (
+                              <div key={row.label} className={`flex items-center gap-1 ${r ? "-mt-5" : ""}`}>
+                                <span className="w-20 shrink-0 pr-2 text-right text-xs ember-kicker">{row.label}</span>
+                                {r > 0 && <span aria-hidden="true" className="w-[40px] shrink-0" />}
+                                {row.slots.map(({ hero, slot }) => (
+                                  <button key={slot} type="button" aria-pressed={formationPick === slot} aria-label={`${row.label}, posição ${slot + 1}: ${hero}`} onClick={() => pick(slot)}
+                                    className="grid h-[96px] w-[84px] place-items-center"
+                                    style={{ clipPath: hex, background: formationPick === slot ? "#d9621c" : "rgba(190, 150, 95, 0.45)" }}>
+                                    <span className="flex h-[92px] w-[80px] flex-col items-center justify-center gap-0.5 text-[11px] leading-none" style={{ clipPath: hex, background: "linear-gradient(180deg, #0e0b09, #060504)", color: formationPick === slot ? "#ffe0b4" : "#e2c294" }}>
+                                      <img src={portraitFor(HERO_PORTRAIT_SPRITE[hero as AffinityHero]).src} alt="" style={{ objectPosition: portraitFor(HERO_PORTRAIT_SPRITE[hero as AffinityHero]).position }} className="h-10 w-9 rounded object-cover" />
+                                      <span>{hero}</span>
+                                      <span className="text-muted tabular-nums">{slot + 1}</span>
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <div className="flex items-center gap-2">
+                      <button type="button" disabled={test} className="ember-btn ember-btn-sm" onClick={() => { onSaveFormation?.(formationOrder); setFormationSaved(true); }}>Salvar formação</button>
+                      {formationSaved && <span role="status" className="text-xs text-accent">Formação salva.</span>}
+                    </div>
+                  </div>
+                </section>
+                <section aria-label="Afinidades">
+                  <h3 className="mb-2 text-sm ember-kicker">Afinidades</h3>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {partyHeroes.map(a => (
+                      <article key={a} aria-label={`Afinidades de ${a}`} className="ember-slot p-3">
+                        <h4 className="mb-2 font-display text-lg leading-tight ember-title">{a}</h4>
+                        {partyHeroes.filter(b => b !== a).map(b => {
+                          const points = affinityScore(save.affinityScores, a, b);
+                          return <div key={`${a}-${b}`} className="mb-3 last:mb-0">
+                            <div className="flex justify-between gap-2 text-sm"><span>{b}</span><span className="text-muted tabular-nums">{affinityGrade(points)} · {points.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}/100</span></div>
+                            <div role="progressbar" aria-label={`Afinidade de ${a} com ${b}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={points} className="my-1 h-1.5 overflow-hidden rounded-full bg-border">
+                              <div className="h-full bg-accent" style={{ width: `${Math.max(0, Math.min(100, points))}%` }} />
+                            </div>
+                            <AffinityBonusHelp points={points} duo={canUseAffinityDuo(save.affinityScores, a, b)} />
+                          </div>;
+                        })}
+                        {partyHeroes.length < 2 && <p className="text-sm text-muted">As afinidades aparecerão quando outro personagem entrar no grupo.</p>}
+                      </article>
+                    ))}
+                  </div>
+                  {partyHeroes.flatMap((a, i, heroes) => heroes.slice(i + 1).flatMap((b, j) => heroes.slice(i + j + 2).filter(c => canUseAffinityUltimate(save.affinityScores, [a, b, c])).map(c => <p key={`${a}-${b}-${c}`} className="mt-2 text-sm text-accent">Ultimate disponível: {a} + {b} + {c}</p>)))}
+                  <p className="mt-2 text-xs text-muted">25: +2% · 50: +5% · 80: skill de dupla · 90: +8% · 100 nas três relações: Ultimate de trio</p>
+                </section>
+              </div>
             </div>
-            {partyHeroes.flatMap((a, i, heroes) => heroes.slice(i + 1).flatMap((b, j) => heroes.slice(i + j + 2).filter(c => canUseAffinityUltimate(save.affinityScores, [a, b, c])).map(c => <p key={`${a}-${b}-${c}`} className="text-sm text-accent mb-2">Ultimate disponível: {a} + {b} + {c}</p>)))}
-            <p className="text-xs text-muted">25: +2% · 50: +5% · 80: skill de dupla · 90: +8% · 100 nas três relações: Ultimate de trio</p>
-          </div>
+          </section>
         </div>
       )}
       {hint && (
@@ -774,7 +856,7 @@ export function OverworldMapScreen({
 
       <div className="map-party-panel absolute z-20 bottom-4 left-4 rounded-lg border border-border p-3 max-w-[calc(100%-6rem)]">
         <p className="text-xs text-muted mb-2" aria-live="polite">
-          {atStartPreVau ? "Clique em Kael para entrar na missão" : movementOpen ? "Escolha um hexágono · o tempo depende do terreno" : "Clique em Kael para mover"}
+          {atStartPreVau ? `Clique em ${leader} para entrar na missão` : movementOpen ? "Escolha um hexágono · o tempo depende do terreno" : `Clique em ${leader} para mover`}
         </p>
         <div className="flex gap-3">
           {([['Kael', 'kaelFinal'], ['Neera', 'neera'], ['Voss', 'voss'], ['Salazar', 'salazar'], ['Aldric', 'aldric'], ['Malrec', 'conjurer']] as const).filter(([name]) => test || heroRecruited(name, save.completed, save.flags)).map(([name, sprite]) => (

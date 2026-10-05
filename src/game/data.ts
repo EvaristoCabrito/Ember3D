@@ -2355,8 +2355,14 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
 
 export const MAX_LEVEL = 30;
 
-/** XP needed to go up one level — flat at every level, Final Fantasy Tactics-style. */
+/** XP needed to go up one level at the start of the curve (levels 1-4). */
 export const EXP_TO_LEVEL = 100;
+
+/** XP needed to go from `level` to `level + 1`: 100, then +50 every 5 levels —
+ * 5→10: 150, 10→15: 200, 15→20: 250, 20→25: 300, 25→30: 350. */
+export function expToLevel(level: number): number {
+  return EXP_TO_LEVEL + 50 * Math.floor(Math.max(1, Math.min(MAX_LEVEL - 1, level)) / 5);
+}
 
 /** Diablo-style progression layered on top of each class's normal automatic growth. */
 export const STAT_POINTS_PER_LEVEL = 3;
