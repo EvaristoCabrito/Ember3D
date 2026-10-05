@@ -7602,7 +7602,9 @@ function BriefingScreen({
   // One shared backdrop for the currently shipped random encounters. Keep this routing
   // isolated here so future encounter-specific art can replace it by id without touching
   // authored campaign briefings.
-  const art = isRandomEncounter(mission.id) ? "/game/ui/random-encounter-briefing.jpg" : briefArt(mission.id);
+  const art = mission.id === "random-encounter-11"
+    ? "/game/assets/merchant-road-background-001.jpg"
+    : isRandomEncounter(mission.id) ? "/game/ui/random-encounter-briefing.jpg" : briefArt(mission.id);
   return (
     <section className="relative h-dvh min-h-0 flex flex-col overflow-hidden bg-surface">
       {art && (

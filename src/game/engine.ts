@@ -8947,7 +8947,15 @@ export class BattleEngine {
       let anchorDy = anchor ? (1 - anchor.v) * h : 0;
 
       if (facing.step === 0) {
-        ctx.drawImageLit(art, cx - w / 2 + anchorDx, cy - h / 2 + dy + anchorDy, w, h);
+        if (p.mirrorX) {
+          ctx.save();
+          ctx.translate(cx, cy + dy);
+          ctx.scale(-1, 1);
+          ctx.drawImageLit(art, -w / 2 - anchorDx, -h / 2 + anchorDy, w, h);
+          ctx.restore();
+        } else {
+          ctx.drawImageLit(art, cx - w / 2 + anchorDx, cy - h / 2 + dy + anchorDy, w, h);
+        }
       } else if (facing.own) {
         ctx.save();
         ctx.translate(cx, cy + dy);

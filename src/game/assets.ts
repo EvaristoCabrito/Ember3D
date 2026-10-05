@@ -761,6 +761,7 @@ export async function loadGameArt(): Promise<GameArt> {
     "random-encounter-4": await loadImage("/game/assets/random-encounter-4-bg.jpg"),
     "random-encounter-5": await loadImage("/game/assets/random-encounter-5-bg.jpg"),
     "random-encounter-8": await loadImage("/game/assets/random-encounter-8-bg.jpg"),
+    "random-encounter-11": await loadImage("/game/assets/merchant-road-background-001.jpg"),
     // O Vau's campaign battlefield has its own ash-river vista. Keep Vau Raso on the earlier
     // backdrop below: its road encounter is a separate place and should not inherit this scene.
     vau: await loadImage("/game/assets/vau-1-bg.jpg"),

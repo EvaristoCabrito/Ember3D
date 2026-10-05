@@ -399,6 +399,7 @@ function cleanBattle(raw: unknown, pendingMission: string | null): BattleSnapsho
           x: clampInt((d as { x?: unknown }).x, 0, MAX_GRID - 1),
           y: clampInt((d as { y?: unknown }).y, 0, MAX_GRID - 1),
           rot: typeof (d as { rot?: unknown }).rot === "number" ? clampInt((d as { rot?: unknown }).rot, 0, 5) : undefined,
+          mirrorX: (d as { mirrorX?: unknown }).mirrorX === true ? true : undefined,
           blocksPath: (d as { blocksPath?: unknown }).blocksPath === true ? true : undefined,
           yieldsHighGround: (d as { yieldsHighGround?: unknown }).yieldsHighGround === true ? true : undefined,
         }))

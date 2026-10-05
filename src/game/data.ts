@@ -586,6 +586,7 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "burning-hamlet": { id: "burning-hamlet", name: "Vilarejo em Chamas", footprint: DECO_BLOCK_5 },
   "boulder-mound": { id: "boulder-mound", name: "Monte de Pedras", footprint: DECO_ONE },
   "wooden-cart": { id: "wooden-cart", name: "Carroça de Madeira", footprint: DECO_PAIR },
+  "merchant-covered-cart-001": { id: "merchant-covered-cart-001", name: "Carroça Coberta do Mercador", footprint: DECO_PAIR, artScale: 0.8, heightScale: 1.15 },
   "spike-crown": { id: "spike-crown", name: "Coroa de Espinhos", footprint: DECO_TRIO },
   ...WILDS_DECORATIONS,
   ...TORTURE_DECORATIONS,
