@@ -13,6 +13,7 @@ import { portraitFor } from "./assets";
 import { key } from "./pathfinding";
 import { QUESTS, questProgress, questStatus } from "./quests";
 import { MapLoadingOverlay, useMapLoading } from "./MapLoadingOverlay";
+import { campaignHour, campaignTimeOfDay, TRAVEL_HOURS_PER_HEX, usesTravelClock } from "./campaignTime";
 
 export type LocationStatus = "locked" | "available" | "done";
 
@@ -133,6 +134,10 @@ export function OverworldMapScreen({
   onPick: (missionId: string) => void;
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
+  const hourlyTravel = usesTravelClock(save);
+  const travelCost = hourlyTravel ? `${TRAVEL_HOURS_PER_HEX} horas` : "1 dia";
+  const timeOfDay = hourlyTravel ? campaignTimeOfDay(campaignHour(save)) : "day";
+  const skyTint = timeOfDay === "darkNight" ? "rgba(8,15,45,0.55)" : timeOfDay === "brightNight" ? "rgba(20,35,75,0.35)" : timeOfDay === "dawn" || timeOfDay === "dusk" ? "rgba(190,90,40,0.18)" : "rgba(0,0,0,0)";
   const [questLogOpen, setQuestLogOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
   const [confirmVau, setConfirmVau] = useState(false);
@@ -375,7 +380,7 @@ export function OverworldMapScreen({
             <span>Salvar</span>
           </button>
         )}
-        <p className="text-sm text-muted ember-plate px-2 py-1">Dia <span className="text-fg tabular-nums">{gameClock}</span></p>
+        <p className="text-sm text-muted ember-plate px-2 py-1">Dia <span className="text-fg tabular-nums">{gameClock}{hourlyTravel ? ` · ${String(campaignHour(save)).padStart(2, "0")}:00` : ""}</span></p>
         <p className="text-sm text-muted ember-plate px-2 py-1">Rações <span className="text-fg tabular-nums">{rations}</span></p>
         {hungerStreak > 0 && (
           <p className="text-sm ember-plate px-2 py-1 text-danger">
@@ -573,6 +578,7 @@ export function OverworldMapScreen({
           ) : (
             <div className="w-[70dvw] h-[70dvh] max-w-md" />
           )}
+          {artOk && hourlyTravel && <div aria-hidden className="pointer-events-none absolute inset-0 transition-colors duration-[1500ms]" style={{ backgroundColor: skyTint }} />}
           {artOk && !test && (
             // Fog of war: dark everywhere except a soft radius around every hex the party
             // has ever stood on (see exploredSet above). Test mode skips this like it skips
@@ -671,9 +677,9 @@ export function OverworldMapScreen({
                 onClick={() => walkTo(dot.x, dot.y)}
                 className="overworld-step absolute -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${dot.world.x}%`, top: `${dot.world.y}%`, width: `${Math.sqrt(3) * 5}%`, height: "10%" }}
-                aria-label={`Andar para ${dot.x}, ${dot.y} · 1 dia`}
+                aria-label={`Andar para ${dot.x}, ${dot.y} · ${travelCost}`}
               >
-                <span>1 dia</span>
+                <span>{travelCost}</span>
               </button>
             ))}
 
@@ -708,7 +714,7 @@ export function OverworldMapScreen({
 
       <div className="map-party-panel absolute z-20 bottom-4 left-4 rounded-lg border border-border p-3 max-w-[calc(100%-6rem)]">
         <p className="text-xs text-muted mb-2" aria-live="polite">
-          {atStartPreVau ? "Clique em Kael para entrar na missão" : movementOpen ? "Escolha um hexágono · 1 dia" : "Clique em Kael para mover"}
+          {atStartPreVau ? "Clique em Kael para entrar na missão" : movementOpen ? `Escolha um hexágono · ${travelCost}` : "Clique em Kael para mover"}
         </p>
         <div className="flex gap-3">
           {([['Kael', 'kaelFinal'], ['Neera', 'neera'], ['Voss', 'voss'], ['Salazar', 'salazar'], ['Aldric', 'aldric'], ['Malrec', 'conjurer']] as const).filter(([name]) => test || heroRecruited(name, save.completed, save.flags)).map(([name, sprite]) => (

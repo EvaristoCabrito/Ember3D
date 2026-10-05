@@ -1295,6 +1295,8 @@ export interface SaveData {
   /** RPG map only: current hex position and day count. Unused by the classic map. */
   overworldPos: { col: number; row: number };
   gameClock: number;
+  /** Hour on the travel clock (0..23); older saves start at 08:00. */
+  gameHour?: number;
   /** RPG map only: every hex ("col,row") the party has ever stood on — drives the fog of
    * war (see OverworldMapScreen): a location pin other than the Inn only shows once its
    * hex is in here, and the dark overlay clears in a radius around each one. Grows,

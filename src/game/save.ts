@@ -708,6 +708,7 @@ function migrateRecord(raw: Record<string, unknown>, muted: boolean): SaveData {
     mapMode: raw.mapMode === "classic" || raw.mapMode === "rpg" ? raw.mapMode : undefined,
     overworldPos,
     gameClock: clampInt(raw.gameClock, 0, 999999),
+    gameHour: clampInt(raw.gameHour ?? 8, 0, 23),
     overworldMoveBudgetUsed: clampInt(raw.overworldMoveBudgetUsed ?? raw.gameClock, 0, 999999),
     heroHunger: cleanHunger(raw.heroHunger),
     heroDiseases: cleanHeroDiseases(raw.heroDiseases),

@@ -29,6 +29,7 @@ import { advanceProgression, evaluate, isGatedMission, missionAccess, type Missi
 import { BattleEngine, heroSpriteFor } from "./engine";
 import { MapPreviewCanvas, type PreviewDecorationSelection, type PreviewUnitSelection } from "./MapPreviewCanvas";
 import { WorldMapScreen } from "./WorldMapScreen";
+import { campaignHour, campaignTimeOfDay, usesTravelClock } from "./campaignTime";
 import { OverworldMapScreen } from "./OverworldMapScreen";
 import { LoadingCurtain, useLoadingCurtain } from "./MapLoadingOverlay";
 import { HungerBar } from "./HungerBar";
@@ -1076,11 +1077,19 @@ export function GameApp() {
       }
       const resolved = override ?? missionById(id);
       if (!resolved) return;
+      const tutorialMap = resolved.index <= (missionById("thebridge")?.index ?? 3) && !resolved.id.startsWith("random-encounter-");
+      const timed = !testMode && !tutorialMap && resolved.environment !== "indoor" && usesTravelClock(save)
+        ? (() => {
+            const timeOfDay = campaignTimeOfDay(campaignHour(save));
+            const light = TIME_OF_DAY_LIGHT[timeOfDay];
+            return { ...resolved, timeOfDay, sunIntensity: light.key, ambientIntensity: light.ambient };
+          })()
+        : resolved;
       // Companions sit in the walkable Inn as NPCs, but only once they've actually joined.
       const freedAldric =
-        !testMode && resolved.id === "watchtower-prison" && heroRecruited("Aldric", save.completed, save.flags) && resolved.neutralSpawns
-          ? { ...resolved, neutralSpawns: resolved.neutralSpawns.filter((spawn) => spawn.name !== "Aldric") }
-          : resolved;
+        !testMode && timed.id === "watchtower-prison" && heroRecruited("Aldric", save.completed, save.flags) && timed.neutralSpawns
+          ? { ...timed, neutralSpawns: timed.neutralSpawns.filter((spawn) => spawn.name !== "Aldric") }
+          : timed;
       const seated =
         freedAldric.explore && !testMode && freedAldric.neutralSpawns
           ? { ...freedAldric, neutralSpawns: freedAldric.neutralSpawns.filter((s) => !(s.name in TEST_PARTY_CLASS) || heroRecruited(s.name, save.completed, save.flags)) }
@@ -2080,6 +2089,7 @@ export function GameApp() {
               ...rec,
               ember: testMode ? rec.ember : balance - cost,
               gameClock: rec.gameClock + 1,
+              gameHour: usesTravelClock(rec) ? 8 : rec.gameHour,
               unitHp,
               spellUses: {},
             };
