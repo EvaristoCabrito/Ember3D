@@ -140,6 +140,7 @@ export function OverworldMapScreen({
   const skyTint = timeOfDay === "darkNight" ? "rgba(8,15,45,0.55)" : timeOfDay === "brightNight" ? "rgba(20,35,75,0.35)" : timeOfDay === "dawn" || timeOfDay === "dusk" ? "rgba(190,90,40,0.18)" : "rgba(0,0,0,0)";
   const [questLogOpen, setQuestLogOpen] = useState(false);
   const [affinityOpen, setAffinityOpen] = useState(false);
+  const partyHeroes = AFFINITY_HEROES.filter(hero => test || heroRecruited(hero, save.completed, save.flags));
   const [movementOpen, setMovementOpen] = useState(false);
   const [confirmVau, setConfirmVau] = useState(false);
   const [inventoryHero, setInventoryHero] = useState<string | null>(null);
@@ -369,7 +370,7 @@ export function OverworldMapScreen({
           <BookOpen className="size-4" />
           <span>Missões</span>
         </button>
-        <button type="button" onClick={() => setAffinityOpen(true)} className="h-9 ember-plate px-2.5 text-xs sm:text-sm">Afinidade</button>
+        <button type="button" onClick={() => setAffinityOpen(true)} aria-haspopup="dialog" aria-expanded={affinityOpen} className="h-9 ember-plate px-2.5 text-xs sm:text-sm">Party</button>
         {!test && onSave && (
           <button
             type="button"
@@ -713,14 +714,27 @@ export function OverworldMapScreen({
       </div>
 
       {affinityOpen && (
-        <div className="absolute inset-0 z-40 ember-veil flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Afinidade do grupo">
-          <div className="w-full max-w-md ember-panel p-5 max-h-[80dvh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-3"><h2 className="font-display text-xl">Afinidade</h2><button type="button" onClick={() => setAffinityOpen(false)} aria-label="Fechar afinidade" className="size-9 ember-icon-btn"><X className="size-4" /></button></div>
-            {AFFINITY_HEROES.filter(hero => test || heroRecruited(hero, save.completed, save.flags)).flatMap((a, i, heroes) => heroes.slice(i + 1).map(b => {
-              const points = affinityScore(save.affinityScores, a, b);
-              return <div key={`${a}-${b}`} className="mb-3"><div className="flex justify-between gap-2 text-sm"><span>{a} + {b}</span><span>{affinityGrade(points)} · {points}/100</span></div><progress aria-label={`Afinidade entre ${a} e ${b}`} className="w-full accent-accent" value={points} max={100} /><p className="text-xs text-muted">Bônus: +{Math.round(affinityBonus(points) * 100)}%{canUseAffinityDuo(save.affinityScores, a, b) ? " · Skill de dupla desbloqueada" : ""}</p></div>;
-            }))}
-            {AFFINITY_HEROES.filter(hero => test || heroRecruited(hero, save.completed, save.flags)).flatMap((a, i, heroes) => heroes.slice(i + 1).flatMap((b, j) => heroes.slice(i + j + 2).filter(c => canUseAffinityUltimate(save.affinityScores, [a, b, c])).map(c => <p key={`${a}-${b}-${c}`} className="text-sm text-accent mb-2">Ultimate disponível: {a} + {b} + {c}</p>)))}
+        <div className="absolute inset-0 z-40 ember-veil flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Party">
+          <div className="w-full max-w-3xl ember-panel p-5 max-h-[80dvh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3"><h2 className="font-display text-xl">Party</h2><button type="button" onClick={() => setAffinityOpen(false)} aria-label="Fechar Party" className="size-9 ember-icon-btn"><X className="size-4" /></button></div>
+            <p className="text-sm text-muted mb-4">Afinidade de cada personagem com os outros membros do grupo.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              {partyHeroes.map(a => (
+                <section key={a} aria-label={`Afinidades de ${a}`} className="rounded-lg border border-border p-3">
+                  <h3 className="font-display text-lg mb-3">{a}</h3>
+                  {partyHeroes.filter(b => b !== a).map(b => {
+                    const points = affinityScore(save.affinityScores, a, b);
+                    return <div key={`${a}-${b}`} className="mb-3 last:mb-0">
+                      <div className="flex justify-between gap-2 text-sm"><span>{a} - {b}</span><span>{affinityGrade(points)} · {points.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}/100</span></div>
+                      <progress aria-label={`Afinidade de ${a} com ${b}`} className="w-full accent-accent" value={points} max={100} />
+                      <p className="text-xs text-muted">Bônus por adjacência: +{Math.round(affinityBonus(points) * 100)}%{canUseAffinityDuo(save.affinityScores, a, b) ? " · Skill de dupla desbloqueada" : ""}</p>
+                    </div>;
+                  })}
+                  {partyHeroes.length < 2 && <p className="text-sm text-muted">As afinidades aparecerão quando outro personagem entrar no grupo.</p>}
+                </section>
+              ))}
+            </div>
+            {partyHeroes.flatMap((a, i, heroes) => heroes.slice(i + 1).flatMap((b, j) => heroes.slice(i + j + 2).filter(c => canUseAffinityUltimate(save.affinityScores, [a, b, c])).map(c => <p key={`${a}-${b}-${c}`} className="text-sm text-accent mb-2">Ultimate disponível: {a} + {b} + {c}</p>)))}
             <p className="text-xs text-muted">25: +2% · 50: +5% · 80: skill de dupla · 90: +8% · 100 nas três relações: Ultimate de trio</p>
           </div>
         </div>
