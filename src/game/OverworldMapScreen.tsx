@@ -134,9 +134,8 @@ export function OverworldMapScreen({
   onPick: (missionId: string) => void;
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
-  const hourlyTravel = usesTravelClock(save);
-  const travelCost = (col: number, row: number) => hourlyTravel ? travelTimeLabel(travelHoursForHex(col, row, locations)) : "1 dia";
-  const timeOfDay = hourlyTravel ? campaignTimeOfDay(campaignHour(save)) : "day";
+  const travelCost = (col: number, row: number) => travelTimeLabel(travelHoursForHex(col, row, locations));
+  const timeOfDay = usesTravelClock(save) ? campaignTimeOfDay(campaignHour(save)) : "day";
   const skyTint = timeOfDay === "darkNight" ? "rgba(8,15,45,0.55)" : timeOfDay === "brightNight" ? "rgba(20,35,75,0.35)" : timeOfDay === "dawn" || timeOfDay === "dusk" ? "rgba(190,90,40,0.18)" : "rgba(0,0,0,0)";
   const [questLogOpen, setQuestLogOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
@@ -581,7 +580,7 @@ export function OverworldMapScreen({
           ) : (
             <div className="w-[70dvw] h-[70dvh] max-w-md" />
           )}
-          {artOk && hourlyTravel && <div aria-hidden className="pointer-events-none absolute inset-0 transition-colors duration-[1500ms]" style={{ backgroundColor: skyTint }} />}
+          {artOk && usesTravelClock(save) && <div aria-hidden className="pointer-events-none absolute inset-0 transition-colors duration-[1500ms]" style={{ backgroundColor: skyTint }} />}
           {artOk && !test && (
             // Fog of war: dark everywhere except a soft radius around every hex the party
             // has ever stood on (see exploredSet above). Test mode skips this like it skips
@@ -680,8 +679,8 @@ export function OverworldMapScreen({
                 onClick={() => walkTo(dot.x, dot.y)}
                 className="overworld-step absolute -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${dot.world.x}%`, top: `${dot.world.y}%`, width: `${Math.sqrt(3) * 5}%`, height: "10%" }}
-                title={`Saciedade: −${travelHungerCost(hourlyTravel ? travelHoursForHex(dot.x, dot.y, locations) : 24)}`}
-                aria-label={`Andar para ${dot.x}, ${dot.y} · ${travelCost(dot.x, dot.y)} · saciedade −${travelHungerCost(hourlyTravel ? travelHoursForHex(dot.x, dot.y, locations) : 24)}`}
+                title={`Saciedade: −${travelHungerCost(travelHoursForHex(dot.x, dot.y, locations))}`}
+                aria-label={`Andar para ${dot.x}, ${dot.y} · ${travelCost(dot.x, dot.y)} · saciedade −${travelHungerCost(travelHoursForHex(dot.x, dot.y, locations))}`}
               >
                 <span>{travelCost(dot.x, dot.y)}</span>
               </button>
@@ -726,7 +725,7 @@ export function OverworldMapScreen({
               <button type="button" aria-label={`Inventário de ${name}`} onClick={() => setInventoryHero(name)} className="min-h-11">
                 <img src={portraitFor(sprite).src} alt={name} style={{ objectPosition: portraitFor(sprite).position }} className="w-10 h-12 object-cover rounded" />
               </button>
-              <HungerBar name={name} value={heroHunger[name]} travel={hourlyTravel} />
+              <HungerBar name={name} value={heroHunger[name]} travel />
             </div>
           ))}
         </div>

@@ -1,6 +1,6 @@
 import { CHEST_LOOT, EMPTY_BAG, EQUIPMENT, heroRecruited, MAX_LEVEL, partyBagHasRoom, POTION_CARRY_MAX, POTIONS, statsFor, weightedLootPick, weightedPotionPick, WEAPONS, WORLD_LOCATIONS } from "./data";
 import { DAILY_HUNGER_COST, drainHunger, fullness, travelHungerCost } from "./hunger";
-import { campaignHour, usesTravelClock } from "./campaignTime";
+import { campaignHour } from "./campaignTime";
 import { missionsForLocation, RANDOM_ENCOUNTER_REGIONS } from "./mapstore";
 import ENCOUNTER_ZONES from "./random-encounter-zones.json";
 import { cubeRound, cubeToOddr, hexNeighbors, key, oddrToCube } from "./pathfinding";
@@ -328,7 +328,7 @@ export function teleportOverworld(save: SaveData, col: number, row: number): Sav
   return { ...save, overworldPos: { col, row } };
 }
 
-/** Advances one hex step: a day during the tutorial, terrain-based hours after the bridge. Refuses (returns
+/** Advances one hex step by its terrain's travel hours. Refuses (returns
  * the save unchanged, no event) if the target hex isn't actually a neighbor of the current
  * position — the UI is expected to only ever offer neighbors, but this is the one place
  * that enforces it regardless. */
@@ -338,8 +338,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   if (!isOverworldCell(toCol, toRow) || !isNeighbor(from, to) || !canStepOverworld(save, from, to, test)) return { save, event: null };
 
   const heroHunger = { ...save.heroHunger };
-  const hourly = usesTravelClock(save);
-  const travelHours = hourly ? travelHoursForHex(toCol, toRow, locations) : 24;
+  const travelHours = travelHoursForHex(toCol, toRow, locations);
   const totalHours = campaignHour(save) + travelHours;
   const elapsedDays = Math.floor(totalHours / 24);
   // Modo teste: everyone shown in the party feels the same daily drain, full stop — not
@@ -370,7 +369,7 @@ export function stepOverworld(save: SaveData, toCol: number, toRow: number, loca
   const startingFullness = Math.min(...travellingHeroes.map((hero) => fullness(save.heroHunger[hero])));
   const newlyHungryHours = Math.max(0, travelHours - startingFullness * 24 / DAILY_HUNGER_COST);
   const hungerHours = fed ? 0 : (startingFullness > 0 ? 0 : save.hungerHours ?? save.hungerStreak * 24) + newlyHungryHours;
-  const hungerStreak = hourly ? Math.floor(hungerHours / 24) : fed ? 0 : save.hungerStreak + elapsedDays;
+  const hungerStreak = Math.floor(hungerHours / 24);
 
   const unitHp: Record<string, number> = { ...save.unitHp };
   // Recovery only happens on a day the party actually ate — "não ativa a recuperação de
