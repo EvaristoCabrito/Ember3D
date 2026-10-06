@@ -305,7 +305,7 @@ export function WorldMapScreen({
        * percent-based marker coordinates land correctly at any zoom level. */}
       <div
         ref={viewportRef}
-        className="relative z-10 flex-1 min-h-0 overflow-auto overscroll-contain touch-pan-x touch-pan-y select-none cursor-default"
+        className={`relative z-10 flex-1 min-h-0 overflow-auto overscroll-contain touch-pan-x touch-pan-y select-none${dragging ? " world-map-pan-grab" : " cursor-default"}`}
         style={{ WebkitOverflowScrolling: "touch" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
