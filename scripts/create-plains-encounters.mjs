@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 const specs = [
- ['windgrass','Capim ao Vento','Uma matilha caça entre faixas de capim alto. As elevações laterais permitem vigiar a campina.', 'morvenianWolf','Lobo da campina',0],
+ ['windgrass','Capim ao Vento','Uma matilha caça entre faixas de capim alto. As elevações laterais permitem vigiar a campina.', 'mordavianWolfFinal','Mordavian Wolf Final',0],
  ['broken-caravan','A Caravana Dispersa','Salteadores cercam carroças abandonadas. Contorne as cargas para alcançar os arqueiros.', 'brigand','Saqueador da caravana',1],
  ['sunken-ford','O Vau da Campina','Um riacho atravessa a planície. Dois vaus oferecem passagem, mas lanceiros guardam a margem distante.', 'pikeman','Lanceiro do vau',2],
  ['old-stones','As Pedras do Sol Poente','Um círculo de pedras antigas virou altar de um culto. Interrompa o ritual usando as colinas para flanquear os vigias.', 'cultist','Devoto da pedra',3],

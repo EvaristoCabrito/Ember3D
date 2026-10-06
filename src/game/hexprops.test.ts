@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BIG_HOUSE_DECOR_IDS, clearRockColumnTiles, FOOTPRINT_TYPE_6, HOUSE_DECOR_IDS, MISSIONS, parseLayout, placedFootprint, placedBlockingFootprint, SOLID_HOUSE_DECOR_IDS, SOLID_ROCK_DECOR_IDS, TERRAIN } from "./data.ts";
+import { BIG_HOUSE_DECOR_IDS, clearRockColumnTiles, DECORATIONS, FOOTPRINT_TYPE_6, HOUSE_DECOR_IDS, MISSIONS, parseLayout, placedFootprint, placedBlockingFootprint, SOLID_CART_DECOR_IDS, SOLID_HOUSE_DECOR_IDS, SOLID_ROCK_DECOR_IDS, TERRAIN } from "./data.ts";
 import { EMPTY_OVERLAY, HEX_BLOCKED, HEX_HIGH, buildDecorOverlay, hexDef, hexProps } from "./hexprops.ts";
 import type { DecorationPlacement, TerrainId } from "./types.ts";
 
@@ -161,6 +161,22 @@ test("each house blocks its complete ground footprint even when its saved checkb
       assert.ok(placedBlockingFootprint(placement).slice(6).every(cell => cell.dy <= -2), 'extra collision covers the rear only');
     } else if (HOUSE_DECOR_IDS.has(id) || id === "burning-hamlet") {
       assert.equal(placedBlockingFootprint(placement).length, id === "burning-house" || id === "burning-hamlet" ? 9 : 5, `${id} keeps its ground blocking footprint`);
+    }
+  }
+});
+
+test("every cart, wagon and handcart blocks its full footprint and line of sight", () => {
+  const tiles = board();
+  for (const id of SOLID_CART_DECOR_IDS) {
+    const placement = { id, x: 4, y: 3 };
+    assert.ok(DECORATIONS[id], `${id} has a decoration definition`);
+    const footprint = placedBlockingFootprint(placement);
+    assert.ok(footprint.length > 0, `${id} has a blocking footprint`);
+    const overlay = buildDecorOverlay([placement], COLS, ROWS, placedBlockingFootprint);
+    for (const { dx, dy } of footprint) {
+      const cell = hexDef(tiles, COLS, placement.x + dx, placement.y + dy, overlay);
+      assert.equal(cell.passable, false, `${id} blocks movement at ${placement.x + dx},${placement.y + dy}`);
+      assert.equal(cell.blocksShot, true, `${id} blocks shots and sight at ${placement.x + dx},${placement.y + dy}`);
     }
   }
 });

@@ -11994,15 +11994,15 @@
       {
         "x": 60,
         "y": 24,
-        "classId": "mordavianWolf",
-        "name": "Ashwood Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {
         "x": 62,
         "y": 24,
-        "classId": "mordavianWolf",
-        "name": "Ashwood Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {

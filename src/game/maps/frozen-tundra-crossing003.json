@@ -10324,16 +10324,16 @@
     "enemySpawns": [
       {
         "x": 14,
-        "name": "Lobo da Geada",
+        "name": "Mordavian Wolf Final",
         "y": 19,
-        "classId": "mordavianWolf",
+        "classId": "mordavianWolfFinal",
         "level": 4
       },
       {
         "x": 18,
-        "name": "Filhote da Geada",
+        "name": "Mordavian Wolf Final",
         "y": 31,
-        "classId": "morvenianWolf",
+        "classId": "mordavianWolfFinal",
         "level": 4
       },
       {
@@ -10366,9 +10366,9 @@
       },
       {
         "x": 54,
-        "name": "Lobo da Geada",
+        "name": "Mordavian Wolf Final",
         "y": 31,
-        "classId": "mordavianWolf",
+        "classId": "mordavianWolfFinal",
         "level": 4
       }
     ],

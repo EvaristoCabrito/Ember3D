@@ -1400,15 +1400,15 @@
         "level": 8
       },
       {
-        "name": "Lobo da tundra",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 8,
         "y": 6,
         "level": 8
       },
       {
-        "name": "Lobo da neve",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 15,
         "y": 13,
         "level": 8

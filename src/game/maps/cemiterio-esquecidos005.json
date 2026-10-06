@@ -10298,15 +10298,15 @@
     ],
     "neutralSpawns": [
       {
-        "name": "Cão das Covas",
-        "classId": "mordavianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 4,
         "y": 21,
         "level": 4
       },
       {
-        "name": "Cão das Covas",
-        "classId": "mordavianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 5,
         "y": 28,
         "level": 4

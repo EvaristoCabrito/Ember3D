@@ -89,7 +89,7 @@ d = make('random-hollow-root-den', 'A Toca das Raízes Ocas', 25,
 paint(d, 8, 3, 13, 6, 'hill', 4); paint(d, 8, 10, 17, 14, 'plains', 41); paint(d, 14, 5, 19, 8, 'ruins', 7);
 paint(d, 10, 7, 10, 9, 'column', 2); paint(d, 11, 7, 11, 8, 'column', 2);
 props(d, [['wilds-camp', 16, 6], ['wilds-mossy-log', 5, 7], ['mossy-boulder', 8, 4], ['wilds-twisted-tree', 18, 12], ['wilds-abandoned-cart', 15, 8], ['chest-medium', 17, 7], ['chest-large', 19, 6]]);
-enemies(d, [['Lobo das raízes', 'morvenianWolf', 6, 9], ['Lobo da clareira', 'morvenianWolf', 12, 12], ['Lobo da toca', 'morvenianWolf', 17, 14], ['Saqueador do acampamento', 'brigand', 15, 6], ['Arqueiro das raízes', 'archer', 12, 4], ['Chefe da toca', 'captain', 18, 8]]);
+enemies(d, [['Mordavian Wolf Final', 'mordavianWolfFinal', 6, 9], ['Mordavian Wolf Final', 'mordavianWolfFinal', 12, 12], ['Mordavian Wolf Final', 'mordavianWolfFinal', 17, 14], ['Saqueador do acampamento', 'brigand', 15, 6], ['Arqueiro das raízes', 'archer', 12, 4], ['Chefe da toca', 'captain', 18, 8]]);
 
 const path = 'src/game/random-encounters.json', config = JSON.parse(fs.readFileSync(path, 'utf8'));
 const forest = config.regions.find(r => r.id === 'forest');

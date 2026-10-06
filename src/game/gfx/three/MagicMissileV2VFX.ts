@@ -119,7 +119,15 @@ export class MagicMissileV2VFX {
         }
       }
     });
-    this.root.visible = false; this.movingLight.visible = false; for (const light of this.impactLights) light.visible = false;
+    this.root.visible = false; this.parkLights();
+  }
+
+  /** The spell's lights never leave the scene: switching a light's visibility changes the scene's
+   * light count, which recompiles every lit material on screen (the first-cast stall). Idle
+   * lights are just dark, and their shadow maps aren't re-rendered. */
+  private parkLights(): void {
+    this.movingLight.intensity = 0; this.movingLight.shadow.autoUpdate = false;
+    for (const light of this.impactLights) { light.intensity = 0; light.shadow.autoUpdate = false; }
   }
 
   setRenderLayer(layer: number): void {
@@ -131,9 +139,18 @@ export class MagicMissileV2VFX {
     this.particlesMaterial.emissiveIntensity = settings.emissiveEnabled ? settings.emissive : 0;
     if (this.cast) this.update(0);
   }
+  /** Makes every part drawable for one shader warm-up render; call hide() right after. */
+  showAllForWarmup(): void {
+    // Drawn regardless of the camera during warm-up, so every part's shader is really used once.
+    this.root.traverse(object => { object.frustumCulled = false; });
+    this.root.visible = true;
+    for (const bolt of this.bolts) { bolt.core.visible = true; bolt.shell.visible = true; }
+    for (const burst of this.impactBursts) burst.visible = true;
+    for (const trail of this.trailMeshes) trail.visible = true;
+    for (const group of [...this.impactFractures, ...this.arcaneFilaments]) for (const mesh of group) mesh.visible = true;
+  }
   hide(): void {
-    this.root.visible = false; this.movingLight.visible = false; this.movingLight.intensity = 0;
-    for (const light of this.impactLights) { light.visible = false; light.intensity = 0; }
+    this.root.visible = false; this.parkLights();
     for (const bolt of this.bolts) { bolt.core.visible = false; bolt.shell.visible = false; }
     for (const burst of this.impactBursts) burst.visible = false;
     for (const trail of this.trailMeshes) trail.visible = false;
@@ -163,7 +180,8 @@ export class MagicMissileV2VFX {
     this.movingLight.distance = this.settings.travelLightRadius * this.worldScale;
     this.movingLight.shadow.camera.far = this.movingLight.distance;
     this.movingLight.shadow.camera.updateProjectionMatrix();
-    this.movingLight.visible = true; this.movingLight.intensity = 0;
+    this.movingLight.intensity = 0; this.movingLight.shadow.autoUpdate = true;
+    for (const light of this.impactLights) light.shadow.autoUpdate = true;
     cast.onTimelineEvent?.("magic_missile_charge"); this.update(0);
   }
   update(dt: number): void {
@@ -192,7 +210,7 @@ export class MagicMissileV2VFX {
           bolt.hit = true; bolt.impactStarted = t; pos.copy(cast.target);
           const impact = (`magic_missile_impact_${i + 1}`) as MagicMissileV2TimelineEvent; cast.onTimelineEvent?.(impact, i); cast.onImpact(i);
           const finalScale = this.settings.finalImpactMultiplier;
-          this.impactLights[i]!.position.copy(cast.target); this.impactLights[i]!.intensity = this.settings.lights ? this.settings.impactLightIntensity * finalScale * this.worldScale * this.worldScale : 0; this.impactLights[i]!.distance = this.settings.impactLightRadius * this.worldScale; this.impactLights[i]!.shadow.camera.far = this.impactLights[i]!.distance; this.impactLights[i]!.shadow.camera.updateProjectionMatrix(); this.impactLights[i]!.visible = true;
+          this.impactLights[i]!.position.copy(cast.target); this.impactLights[i]!.intensity = this.settings.lights ? this.settings.impactLightIntensity * finalScale * this.worldScale * this.worldScale : 0; this.impactLights[i]!.distance = this.settings.impactLightRadius * this.worldScale; this.impactLights[i]!.shadow.camera.far = this.impactLights[i]!.distance; this.impactLights[i]!.shadow.camera.updateProjectionMatrix(); this.impactLights[i]!.intensity = this.impactLights[i]!.intensity;
           this.impactBursts[i]!.position.copy(cast.target); this.impactBursts[i]!.rotation.set(Math.PI / 2, (i * 0.7), t * 2); this.impactBursts[i]!.visible = true;
         }
         if (!bolt.hit) bolt.points.push(pos.clone());
@@ -222,7 +240,7 @@ export class MagicMissileV2VFX {
         material.opacity = this.settings.geometry && this.settings.distortion && !bolt.hit ? 0.8 * (0.42 + 0.58 * Math.abs(Math.sin(phase * 1.4))) : 0;
         filament.visible = material.opacity > 0.02;
       }
-      const burst = this.impactBursts[i]!; if (bolt.hit) { const impactT = t - bolt.impactStarted; const life = Math.max(0, 1 - impactT / 0.78); const mult = this.settings.finalImpactMultiplier; burst.scale.setScalar(this.settings.impactSize * this.worldScale * mult * (0.25 + impactT * 1.6)); (burst.material as THREE.MeshBasicMaterial).opacity = this.settings.geometry ? life * 0.9 : 0; burst.visible = this.settings.geometry && life > 0; this.impactLights[i]!.intensity = this.settings.lights ? this.settings.impactLightIntensity * this.worldScale * this.worldScale * life * mult : 0; if (life <= 0) this.impactLights[i]!.visible = false; }
+      const burst = this.impactBursts[i]!; if (bolt.hit) { const impactT = t - bolt.impactStarted; const life = Math.max(0, 1 - impactT / 0.78); const mult = this.settings.finalImpactMultiplier; burst.scale.setScalar(this.settings.impactSize * this.worldScale * mult * (0.25 + impactT * 1.6)); (burst.material as THREE.MeshBasicMaterial).opacity = this.settings.geometry ? life * 0.9 : 0; burst.visible = this.settings.geometry && life > 0; this.impactLights[i]!.intensity = this.settings.lights ? this.settings.impactLightIntensity * this.worldScale * this.worldScale * life * mult : 0; if (life <= 0) this.impactLights[i]!.intensity = 0; }
       for (let j = 0; j < this.impactFractures[i]!.length; j++) {
         const fracture = this.impactFractures[i]![j]!;
         fracture.position.copy(cast.target); fracture.rotation.set(j * 0.7 + 0.3, j * 1.1, t * (j % 2 ? -1.8 : 1.5) + j * 1.9);
@@ -236,8 +254,8 @@ export class MagicMissileV2VFX {
     }
     this.particles.count = activeParticles; this.particles.instanceMatrix.needsUpdate = true; this.particles.visible = this.settings.particles;
     if (lightTotal) { lightWeight.multiplyScalar(1 / lightTotal); this.movingLight.position.copy(lightWeight); this.movingLight.intensity = this.settings.lights ? this.settings.travelLightIntensity * this.worldScale * this.worldScale : 0; }
-    else if (t < this.bolts[0]!.launchAt) { this.movingLight.position.copy(this.formationPosition(cast.origin, 0, 1, t)); this.movingLight.intensity = this.settings.lights ? this.settings.travelLightIntensity * this.worldScale * this.worldScale * buildup : 0; this.movingLight.visible = true; }
-    else { this.movingLight.intensity = 0; this.movingLight.visible = false; }
+    else if (t < this.bolts[0]!.launchAt) { this.movingLight.position.copy(this.formationPosition(cast.origin, 0, 1, t)); this.movingLight.intensity = this.settings.lights ? this.settings.travelLightIntensity * this.worldScale * this.worldScale * buildup : 0; }
+    else { this.movingLight.intensity = 0; }
     if (this.bolts[0]!.hit && t > this.bolts[0]!.impactStarted + 0.78) {
       const active = this.cast; active?.onTimelineEvent?.("magic_missile_complete"); this.hide(); active?.onComplete();
     }

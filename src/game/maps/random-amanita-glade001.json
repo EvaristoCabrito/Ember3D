@@ -2913,15 +2913,15 @@
       {
         "x": 10,
         "y": 10,
-        "classId": "morvenianWolf",
-        "name": "Leashed Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {
         "x": 15,
         "y": 14,
-        "classId": "morvenianWolf",
-        "name": "Leashed Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       }
     ],

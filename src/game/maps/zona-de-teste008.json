@@ -1328,7 +1328,7 @@
     ],
     "enemySpawns": [
       {
-        "name": "Inimigo 1",
+        "name": "Mordavian Wolf Final",
         "classId": "mordavianWolfFinal",
         "x": 0,
         "y": 1,
@@ -1350,7 +1350,7 @@
         "level": 1
       },
       {
-        "name": "Inimigo 8",
+        "name": "Mordavian Wolf Final",
         "classId": "mordavianWolfFinal",
         "x": 4,
         "y": 3,

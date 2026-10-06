@@ -8,7 +8,7 @@ import { CREATE_FOOD_AND_WATER, POTIONS, createFoodAndWaterFormula, createFoodAn
 import { fullness, travelHungerCost } from "./hunger";
 import { GoldAmount } from "./GoldAmount";
 import { getAudioVolumes, setCutsceneVolume, setMusicVolume, setSfxVolume, sfxPlay, unlockAudio } from "./audio";
-import { canStepOverworld, hexToWorld, isOverworldCell, locationExpired, neighborsOf, OVERWORLD_START_HEX, travelHoursForHex, travelTimeLabel, type OverworldEvent, worldToHex } from "./overworld";
+import { canStepOverworld, wispForestHex, wispForestUncleared, hexToWorld, isOverworldCell, locationExpired, neighborsOf, OVERWORLD_START_HEX, travelHoursForHex, travelTimeLabel, type OverworldEvent, worldToHex } from "./overworld";
 import { HungerBar } from "./HungerBar";
 import { portraitFor } from "./assets";
 import { key } from "./pathfinding";
@@ -394,6 +394,7 @@ export function OverworldMapScreen({
           <p className="text-sm ember-kicker">{test ? "Modo teste" : "Campanha"} · RPG</p>
           <h1 className="font-display text-3xl leading-none ember-title">Mapa</h1>
         </div>
+        <button type="button" onClick={() => { setFormationSaved(null); setAffinityOpen(true); }} aria-haspopup="dialog" aria-expanded={affinityOpen} className="h-9 ember-plate px-2.5 text-xs sm:text-sm">Party</button>
         <button
           type="button"
           onClick={() => setQuestLogOpen(true)}
@@ -403,7 +404,6 @@ export function OverworldMapScreen({
           <BookOpen className="size-4" />
           <span>Missões</span>
         </button>
-        <button type="button" onClick={() => { setFormationSaved(null); setAffinityOpen(true); }} aria-haspopup="dialog" aria-expanded={affinityOpen} className="h-9 ember-plate px-2.5 text-xs sm:text-sm">Party</button>
         {!test && onSave && (
           <button
             type="button"
@@ -872,7 +872,9 @@ export function OverworldMapScreen({
 
       <div className="map-party-panel absolute z-20 bottom-4 left-4 rounded-lg border border-border p-3 max-w-[calc(100%-6rem)]">
         <p className="text-xs text-muted mb-2" aria-live="polite">
-          {movementOpen ? "Escolha um hexágono · o tempo depende do terreno" : `Clique em ${leader} para mover`}
+          {!test && wispForestUncleared(save) && overworldPos.col === wispForestHex()?.x && overworldPos.row === wispForestHex()?.y
+            ? "Limpe a Wisp Forest para poder seguir viagem para o leste."
+            : movementOpen ? "Escolha um hexágono · o tempo depende do terreno" : `Clique em ${leader} para mover`}
         </p>
         <div className="flex gap-3">
           {([['Kael', 'kaelFinal'], ['Neera', 'neera'], ['Voss', 'voss'], ['Salazar', 'salazar'], ['Aldric', 'aldric'], ['Malrec', 'conjurer']] as const).filter(([name]) => test || heroRecruited(name, save.completed, save.flags)).map(([name, sprite]) => (

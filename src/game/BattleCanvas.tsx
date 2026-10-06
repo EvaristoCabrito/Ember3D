@@ -229,6 +229,8 @@ export function BattleCanvas({
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
 
+    // Tells GameApp the loading curtain can come down (see its battleLoading).
+    let battleReadySent = false;
     const loop = (now: number) => {
       if (!running) return;
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -278,6 +280,10 @@ export function BattleCanvas({
         // decoration or a unit standing on a highlighted hex stays visible on top of it instead
         // of the highlight's tint painting over it.
         rendererThree.render(wrap.clientWidth, wrap.clientHeight);
+        if (!battleReadySent && rendererThree.isWarm()) {
+          battleReadySent = true;
+          window.dispatchEvent(new CustomEvent("ember:battle-ready"));
+        }
         if (unitsCanvas) {
           const matrix = rendererThree.overlayTransform(wrap.clientWidth, wrap.clientHeight);
           const cssTransform = `matrix(${matrix.join(",")})`;
@@ -290,6 +296,11 @@ export function BattleCanvas({
       } else if (renderer2D) {
         renderer2D.clear();
         engine.renderGround(renderer2D, wrap.clientWidth, wrap.clientHeight, dpr);
+      }
+      // Without the WebGL renderer there is nothing to warm: ready after the first drawn frame.
+      if (!battleReadySent && !rendererThree) {
+        battleReadySent = true;
+        window.dispatchEvent(new CustomEvent("ember:battle-ready"));
       }
       if (fx) {
         // Dreaming Web's shot: one "webShot" beam, repositioned every frame via updateOverride

@@ -813,7 +813,8 @@ function parseBank(text: string | null): SaveBank | null {
 }
 
 export function loadBank(): SaveBank {
-  const bank = parseBank(readKey(BANK_KEY));
+  const rawBank = readKey(BANK_KEY);
+  const bank = parseBank(rawBank);
   if (bank) return bank;
   const migrated = migrateLegacyIntoBank();
   persistBank(migrated);

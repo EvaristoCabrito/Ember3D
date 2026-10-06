@@ -38,10 +38,10 @@
       { "name": "Salazar", "classId": "salazar", "x": 0, "y": 4, "level": 10 }
     ],
     "enemySpawns": [
-      { "name": "Mordavian Puppy", "classId": "morvenianWolf", "x": 9, "y": 2, "level": 8 },
-      { "name": "Mordavian Puppy", "classId": "morvenianWolf", "x": 10, "y": 4, "level": 8 },
-      { "name": "Mordavian Puppy", "classId": "morvenianWolf", "x": 9, "y": 6, "level": 8 },
-      { "name": "Mordavian Puppy", "classId": "morvenianWolf", "x": 7, "y": 4, "level": 7 }
+      { "name": "Mordavian Wolf Final", "classId": "mordavianWolfFinal", "x": 9, "y": 2, "level": 8 },
+      { "name": "Mordavian Wolf Final", "classId": "mordavianWolfFinal", "x": 10, "y": 4, "level": 8 },
+      { "name": "Mordavian Wolf Final", "classId": "mordavianWolfFinal", "x": 9, "y": 6, "level": 8 },
+      { "name": "Mordavian Wolf Final", "classId": "mordavianWolfFinal", "x": 7, "y": 4, "level": 7 }
     ],
     "neutralSpawns": [],
     "tileRots": []

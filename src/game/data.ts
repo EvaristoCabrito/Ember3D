@@ -548,8 +548,8 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   // of the ground-mist sheets (aboveGroundMist): it commonly sits right in the map's edge band,
   // where Mist 4's border fog lives, and mist's depthTest-disabled material would otherwise
   // paint over it and wash it out.
-  "bridge-parapet-gothic-statues-001": { id: "bridge-parapet-gothic-statues-001", name: "Parapeito Gótico — Estátuas", footprint: DECO_QUAD, foreground: true, unitLayer: "front", repeatGroup: "bridge-parapet-gothic-statues", noShadow: true },
-  "bridge-parapet-gothic-wall-001": { id: "bridge-parapet-gothic-wall-001", name: "Parapeito Gótico — Muralha", footprint: DECO_QUAD, unitLayer: "behind", repeatGroup: "bridge-parapet-gothic-wall", noShadow: true },
+  "bridge-parapet-gothic-statues-001": { id: "bridge-parapet-gothic-statues-001", name: "Parapeito Gótico — Estátuas", footprint: DECO_QUAD, foreground: true, unitLayer: "front", repeatGroup: "bridge-parapet-gothic-statues", noShadow: true, aboveGroundMist: true },
+  "bridge-parapet-gothic-wall-001": { id: "bridge-parapet-gothic-wall-001", name: "Parapeito Gótico — Muralha", footprint: DECO_QUAD, unitLayer: "behind", repeatGroup: "bridge-parapet-gothic-wall", noShadow: true, aboveGroundMist: true },
   "bridge-parapet-tall-001": { id: "bridge-parapet-tall-001", name: "Tall-Parapeito", footprint: DECO_ROW_FIVE, unitLayer: "behind", repeatGroup: "bridge-parapet-tall", heightScale: 1.8, noShadow: true, aboveGroundMist: true },
   "bridge-parapet-tall-statues-001": { id: "bridge-parapet-tall-statues-001", name: "Tall-Parapeito — Estátuas", footprint: DECO_ROW_FIVE, foreground: true, unitLayer: "front", decorRenderOrder: 10, repeatGroup: "bridge-parapet-tall", heightScale: 1.8, noShadow: true, aboveGroundMist: true },
   "ember-channels-001": { id: "ember-channels-001", name: "Canais de Brasa", footprint: DECO_PAIR },
@@ -595,6 +595,7 @@ export const DECORATIONS: Record<string, DecorationDef> = {
   "burning-hamlet": { id: "burning-hamlet", name: "Vilarejo em Chamas", footprint: DECO_BLOCK_5, blockingFootprint: HOUSE_GROUND_FOOTPRINT },
   "boulder-mound": { id: "boulder-mound", name: "Monte de Pedras", footprint: DECO_ONE },
   "wooden-cart": { id: "wooden-cart", name: "Carroça de Madeira", footprint: DECO_PAIR },
+  "merchant-covered-cart-001": { id: "merchant-covered-cart-001", name: "Carroça Coberta do Mercador", footprint: DECO_PAIR, artScale: 0.8, heightScale: 1.15 },
   "merchant-covered-cart-002": { id: "merchant-covered-cart-002", name: "Carroça Coberta do Mercador", footprint: DECO_PAIR, artScale: 0.8, heightScale: 1.15 },
   "inn-stairs-up": { id: "inn-stairs-up", name: "Escada para o Andar de Cima", footprint: DECO_PAIR, artScale: 0.9 },
   "inn-stairs-down": { id: "inn-stairs-down", name: "Escada para o Andar de Baixo", footprint: DECO_PAIR, artScale: 0.9 },
@@ -676,6 +677,21 @@ export const BIG_HOUSE_DECOR_IDS = new Set<string>();
  * impassable and never faded by fog, same as HOUSE_DECOR_IDS. This also includes the gatehouse
  * and watchtower: both are solid buildings whose full footprint must stay out of movement range. */
 export const SOLID_HOUSE_DECOR_IDS = new Set(["burning-hamlet", "gatehouse", "watchtower"]);
+
+/** Carts, wagons and handcarts are solid scenery: their complete authored footprint
+ * blocks movement, arrows and line of sight, including placements saved on older maps. */
+export const SOLID_CART_DECOR_IDS = new Set([
+  "wilds-abandoned-cart",
+  "wooden-cart",
+  "merchant-covered-cart-001",
+  "merchant-covered-cart-002",
+  "city-supply-cart",
+  "city-covered-wagon",
+  "city-supply-cart-2",
+  "city-log-cart",
+  "city-market-wagon-new",
+  "city-wheelbarrow",
+]);
 
 /** Rock props are solid decorations; their art must never replace the ground with column terrain. */
 /** Low props: "Bloquear caminho" stops walking through them, but arrows and sight pass over (a well is knee-high). */
@@ -2366,13 +2382,19 @@ export const GROWTH: Record<ClassId, { hp: number; atk: number; mag: number; def
 
 export const MAX_LEVEL = 30;
 
-/** XP needed to go up one level at the start of the curve (levels 1-4). */
+/** XP needed for the first two level transitions. */
 export const EXP_TO_LEVEL = 100;
 
-/** XP needed to go from `level` to `level + 1`: 100, then +50 every 5 levels —
- * 5→10: 150, 10→15: 200, 15→20: 250, 20→25: 300, 25→30: 350. */
+/** Cost from the current level to the next; each band starts at its named level. */
 export function expToLevel(level: number): number {
-  return EXP_TO_LEVEL + 50 * Math.floor(Math.max(1, Math.min(MAX_LEVEL - 1, level)) / 5);
+  const current = Math.max(1, Math.min(MAX_LEVEL - 1, level));
+  if (current >= 28) return 600;
+  if (current >= 23) return 500;
+  if (current >= 18) return 400;
+  if (current >= 13) return 300;
+  if (current >= 8) return 225;
+  if (current >= 3) return 150;
+  return EXP_TO_LEVEL;
 }
 
 /** Diablo-style progression layered on top of each class's normal automatic growth. */

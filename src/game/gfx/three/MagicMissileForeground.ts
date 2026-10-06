@@ -54,5 +54,18 @@ export class MagicMissileForeground {
     }
   }
 
+  /** Compiles and links the spell's shaders in the background (no frame stall), with the scene's
+   * lights enabled on this layer exactly as render() does, so the programs match a real cast. */
+  warm(scene: THREE.Scene, camera: THREE.Camera): Promise<unknown> {
+    scene.traverse(object => { if (object instanceof THREE.Light) object.layers.enable(MagicMissileForeground.layer); });
+    const mask = camera.layers.mask;
+    camera.layers.set(MagicMissileForeground.layer);
+    try {
+      return this.renderer.compileAsync(scene, camera);
+    } finally {
+      camera.layers.mask = mask;
+    }
+  }
+
   dispose(): void { this.composer.dispose(); this.bloom.dispose(); this.output.dispose(); this.renderer.dispose(); }
 }

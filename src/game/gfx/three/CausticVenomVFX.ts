@@ -385,7 +385,8 @@ export class CausticVenomVFX {
     return new THREE.MeshPhysicalMaterial({ color, emissive, emissiveIntensity, roughness: 0.16, metalness: 0.08, clearcoat: 0.96, clearcoatRoughness: 0.1, transmission: 0.1, transparent: opacity < 0.99, opacity, depthWrite: opacity >= 0.99, side: THREE.DoubleSide });
   }
 
-  private cancel(): void {
+  /** Stops any cast at once and removes its impact objects (also ends the battle-start warm-up). */
+  cancel(): void {
     this.phase = "idle";
     this.currentCast = null;
     this.root.visible = false;

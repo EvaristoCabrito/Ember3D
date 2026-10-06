@@ -1283,22 +1283,22 @@
     ],
     "enemySpawns": [
       {
-        "name": "Lobo das raízes",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 6,
         "y": 9,
         "level": 8
       },
       {
-        "name": "Lobo da clareira",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 12,
         "y": 12,
         "level": 8
       },
       {
-        "name": "Lobo da toca",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 17,
         "y": 14,
         "level": 8

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /** Keeps the map hidden until its large image has dimensions and React can position its markers. */
 export function useMapLoading() {
@@ -62,7 +62,9 @@ export function useLoadingCurtain(screen: string): boolean {
   const [visible, setVisible] = useState(false);
   const prevScreen = useRef(screen);
 
-  useEffect(() => {
+  // A layout effect runs before the browser paints, so the curtain appears in the very same
+  // frame as the new screen — the map/board is never shown, even for one frame, before it.
+  useLayoutEffect(() => {
     if (prevScreen.current === screen) return;
     prevScreen.current = screen;
     if (!HEAVY_SCREENS.has(screen)) return;

@@ -202,6 +202,10 @@ function releaseLoad(): void {
 function spriteFrameSrc(id: SpriteId, frame: string, cacheBust = ""): string {
   // Conjurer's active art is kept as a complete, source-preserved serial. Talk drives idle; the former Idle sheet drives casting.
   const directory = id === "minor-horror-001" ? "minor-horror-003" : id === "big-blue-ox-002" ? "big-blue-ox-ai-006" : id === "conjurer" ? "conjurer/conjurer-complete-003" : id === "sandoval" ? "sandoval/sandoval-complete-001" : id === "kaelFinal" ? "Kael_Final/kael-final-002" : id === "kaelEarly" ? "kael" : id === "defaultWarrior" ? "kael-v2" : id;
+  if (id === "neera" && /^(?:\d+|idle-\d+|atk-(?:left-)?\d+|atk-short-\d+|atk2-(?:left-)?\d+|move-\d+)$/.test(frame)) {
+    const currentFrame = /^\d+$/.test(frame) ? `idle-${frame}` : frame;
+    return `/game/sprites/neera/neera-v2-001/${currentFrame}.png?v=neera-v2-001`;
+  }
   return `/game/sprites/${directory}/${frame}.png${cacheBust}`;
 }
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -277,7 +281,7 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // himself is a different unit entirely and plays as kaelFinal instead.
   defaultWarrior: { n: 12, bust: "?v=kael-v2" },
   kaelEarly: { n: 12, bust: "?v=kael-early" },
-  neera: { n: 36, bust: "?v=neera-attack-001" },
+  neera: { n: 36, bust: "?v=neera-attack-002" },
   voss: { n: 4, bust: "" },
   salazar: { n: 4, bust: "" },
   // Generic-enemy "alter" sprites (see the SpriteId comment in types.ts) — same file
@@ -346,8 +350,8 @@ const CAST_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // his arms back in after the charge, the same way his ATT ends.
   BirolhoLegs: { n: 48, bust: "" },
   BirolhoLegs2: { n: 36, bust: "" },
-  // Neera's supplied Special cut plays for spell-type archer skills; physical attacks
-  // stay on her dedicated ATT cut above.
+  // Neera's supplied cast pose remains available for non-arrow spells. Her old ATT is the
+  // placeholder animation for longShot, multiShot and piercing (see ATTACK2_FRAMES).
   neera: { n: 36, bust: "" },
   // The spell cast intentionally uses the former Idle sheet; ATT remains the physical attack.
   conjurer: { n: 36, bust: "?v=conjurer-complete-003" },
@@ -379,6 +383,8 @@ const CAST_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
 const ATTACK2_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   "big-blue-ox-002": { n: 36, bust: "?v=big-blue-ox-ai-006" },
   familiar3: { n: 36, bust: "" },
+  // Neera V2's labeled Special sheet is reserved for arrow skills.
+  neera: { n: 36, bust: "?v=neera-special-001" },
 };
 
 // Short-range (off-hand dagger/katar) attack cut — see GameArt.attacksShort.
@@ -519,8 +525,8 @@ const WALK2_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   familiar3: { n: 36, bust: "" },
 };
 
-type SpritePoolKey = "hits" | "deaths" | "deaths2" | "sprites" | "attacks" | "attacks2" | "attacksShort" | "attacksLeft" | "casts" | "castsLeft" | "counters" | "countersLeft" | "walks" | "walksLeft" | "idles" | "idles2" | "walkDirs" | "walksUp" | "walksDown" | "walks2" | "walksLeft2";
-const SPRITE_POOL_KEYS: SpritePoolKey[] = ["hits", "deaths", "deaths2", "sprites", "attacks", "attacks2", "attacksShort", "attacksLeft", "casts", "castsLeft", "counters", "countersLeft", "walks", "walksLeft", "idles", "idles2", "walkDirs", "walksUp", "walksDown", "walks2", "walksLeft2"];
+type SpritePoolKey = "hits" | "deaths" | "deaths2" | "sprites" | "attacks" | "attacks2" | "attacksShort" | "attacksLeft" | "attacks2Left" | "casts" | "castsLeft" | "counters" | "countersLeft" | "walks" | "walksLeft" | "idles" | "idles2" | "walkDirs" | "walksUp" | "walksDown" | "walks2" | "walksLeft2";
+const SPRITE_POOL_KEYS: SpritePoolKey[] = ["hits", "deaths", "deaths2", "sprites", "attacks", "attacks2", "attacksShort", "attacksLeft", "attacks2Left", "casts", "castsLeft", "counters", "countersLeft", "walks", "walksLeft", "idles", "idles2", "walkDirs", "walksUp", "walksDown", "walks2", "walksLeft2"];
 
 /** Loads every pool one sprite contributes to GameArt (idle, attack, cast, walk, ...) — the
  * same files, frame counts and cache-busts loadGameArt used to load for every sprite up front. */
@@ -535,12 +541,13 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
     }));
   };
   const n = id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" ? 36 : id === "undeadOx" || id === "plague-bearing-cattle" ? 36 : id === "minor-horror-001" ? 36 : id === "big-blue-ox-002" ? 36 : id === "zombie2" ? 11 : id === "neera" || id === "conjurer" || id === "kaelFinal" || id === "aldric" || id === "cultist-v2" || id === "malrec" || id === "familiar3" || id === "familiar2" ? 36 : id === "sandoval" || id === "mordavian-wolf" ? 8 : id === "birolho2" ? 18 : id === "birolho3" ? 12 : id === "zombie" ? 32 : id === "BirolhoLegs" || id === "BirolhoLegs2" || id === "troll2" || id === "ancient-golem" || id === "familiar4" || id === "mordavian-wolf-final" ? 36 : HERO_IDLE.has(id) ? 12 : 4;
-  const cacheBust = id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" ? "?v=f36" : id === "undeadOx" ? "?v=ox-36" : id === "plague-bearing-cattle" ? "?v=plague-cattle-001" : id === "minor-horror-001" ? "?v=minor-horror-003" : id === "big-blue-ox-002" ? "?v=big-blue-ox-ai-006" : id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : id === "familiar2" ? "?v=familiar2-36" : "";
+  const cacheBust = id === "neera" ? "?v=neera-idle-001" : id === "RoccoTheBird" || id === "wardog2" || id === "EmberedWraith" || id === "zombieDog" ? "?v=f36" : id === "undeadOx" ? "?v=ox-36" : id === "plague-bearing-cattle" ? "?v=plague-cattle-001" : id === "minor-horror-001" ? "?v=minor-horror-003" : id === "big-blue-ox-002" ? "?v=big-blue-ox-ai-006" : id === "troll" ? "?v=11" : id === "Asherah" ? "?v=3" : id === "familiar" ? "?v=6" : id === "aldric" ? "?v=aldric-final-001" : id === "defaultLancer" ? "?v=sheet2" : id === "lancer" ? "?v=3" : id === "sandoval" ? "?v=sandoval-complete-001" : id === "kaelFinal" ? "?v=kael-final-002" : id === "kaelEarly" ? "?v=kael-early" : id === "defaultWarrior" ? "?v=kael-v2" : id === "conjurer" ? "?v=conjurer-complete-003" : id === "familiar2" ? "?v=familiar2-36" : "";
   put("sprites", cut(n, (i) => (id === "conjurer" ? `talk-${i}` : `${i}`), cacheBust));
   const atk = ATTACK_FRAMES[id];
   if (atk) put("attacks", cut(atk.n, (i) => `atk-${i}`, atk.bust));
   const atk2 = ATTACK2_FRAMES[id];
   if (atk2) put("attacks2", cut(atk2.n, (i) => `atk2-${i}`, atk2.bust));
+  if (id === "neera" && atk2) put("attacks2Left", cut(atk2.n, (i) => `atk2-left-${i}`, atk2.bust));
   const short = ATTACK_SHORT_FRAMES[id];
   if (short) put("attacksShort", cut(short.n, (i) => `atk-short-${i}`, short.bust));
   const cast = CAST_FRAMES[id];
@@ -579,6 +586,7 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
   // kaelEarly keeps the original kael-folder 36-frame stand cut. See CLASSES.swordsman vs
   // CLASSES.kaelEarly.
   if (id === "defaultWarrior") put("idles", Promise.all(Array.from({ length: 12 }, (_, i) => loadImage(`/game/sprites/kael-v2/stand-${i + 1}.png?v=kael-v2`))));
+  if (id === "neera") put("idles", cut(36, (i) => `idle-${i}`, "?v=neera-idle-001"));
   if (id === "kaelEarly") put("idles", Promise.all(Array.from({ length: 36 }, (_, i) => loadImage(`/game/sprites/kael/stand-${i + 1}.png?v=kael-early`))));
   // Malrec's second idle loop: his original walk-right cut, kept on disk as idle2-*.png
   // (see GameArt.idles2 / Unit.idleAlt).
@@ -709,6 +717,7 @@ export async function loadGameArt(): Promise<GameArt> {
   const sprites = {} as Record<SpriteId, HTMLImageElement[]>;
   const attacks: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   const attacks2: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
+  const attacks2Left: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   const attacksShort: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   const casts: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   const castsLeft: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
@@ -787,7 +796,7 @@ export async function loadGameArt(): Promise<GameArt> {
   const deaths: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   const deaths2: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
   const hits: Partial<Record<SpriteId, HTMLImageElement[]>> = {};
-  const art: GameArt = { tiles, decorations, sprites, attacks, attacks2, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, walksUp, walksDown, walks2, walksLeft2, deaths, deaths2, hits, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
+  const art: GameArt = { tiles, decorations, sprites, attacks, attacks2, attacks2Left, attacksShort, attacksLeft, casts, castsLeft, counters, countersLeft, walks, walksLeft, idles, idles2, walkDirs, walksUp, walksDown, walks2, walksLeft2, deaths, deaths2, hits, impact, fireballCore, causticVenomCore, arrowCore, lightningCores, webfloor, backdrops };
   await ensureSpriteArt(art, MC_SPRITES);
   try {
     localStorage.setItem(ART_TOTAL_KEY, String(artRequested));

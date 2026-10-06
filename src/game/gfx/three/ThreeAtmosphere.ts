@@ -211,7 +211,8 @@ class GroundMist {
         },
       });
       const mesh = new THREE.Mesh(this.geo, material);
-      mesh.renderOrder = 10 + i;
+      // Below the character billboards (order 2) so ground mist never paints over a unit.
+      mesh.renderOrder = 1.5 + i * 0.1;
       this.materials.push(material);
       this.meshes.push(mesh);
       this.group.add(mesh);
@@ -357,7 +358,8 @@ class GroundMist3 {
         },
       });
       const mesh = new THREE.Mesh(this.geo, material);
-      mesh.renderOrder = 10 + i;
+      // Below the character billboards (order 2) so ground mist never paints over a unit.
+      mesh.renderOrder = 1.5 + i * 0.1;
       this.materials.push(material);
       this.meshes.push(mesh);
       this.group.add(mesh);
@@ -508,7 +510,8 @@ class GroundMist4 {
       },
     });
     this.mesh = new THREE.Mesh(this.geo, this.material);
-    this.mesh.renderOrder = 10;
+    // Below the character billboards (order 2) so ground mist never paints over a unit.
+    this.mesh.renderOrder = 1.5;
     this.group.add(this.mesh);
   }
 

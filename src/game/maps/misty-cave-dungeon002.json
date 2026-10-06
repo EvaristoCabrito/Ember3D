@@ -1174,15 +1174,15 @@
         "level": 10
       },
       {
-        "name": "Mordavian Puppy",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 12,
         "y": 8,
         "level": 9
       },
       {
-        "name": "Mordavian Puppy",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 13,
         "y": 12,
         "level": 9

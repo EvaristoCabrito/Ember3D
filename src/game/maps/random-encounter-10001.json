@@ -634,29 +634,29 @@
     ],
     "enemySpawns": [
       {
-        "name": "Mordavian Puppy",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 3,
         "y": 2,
         "level": 7
       },
       {
-        "name": "Mordavian Puppy",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 10,
         "y": 3,
         "level": 7
       },
       {
-        "name": "Mordavian Puppy",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 2,
         "y": 6,
         "level": 7
       },
       {
-        "name": "Mordavian Puppy",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 11,
         "y": 6,
         "level": 7

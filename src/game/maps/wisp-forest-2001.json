@@ -6726,22 +6726,22 @@
         "level": 1
       },
       {
-        "name": "Mordavian Wolf",
-        "classId": "mordavianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 8,
         "y": 14,
         "level": 1
       },
       {
-        "name": "Mordavian Puppy",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 11,
         "y": 17,
         "level": 1
       },
       {
-        "name": "Mordavian Puppy",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 6,
         "y": 17,
         "level": 1
@@ -6838,15 +6838,15 @@
         "level": 1
       },
       {
-        "name": "Mordavian Wolf",
-        "classId": "mordavianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 7,
         "y": 3,
         "level": 1
       },
       {
-        "name": "Mordavian Puppy",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 15,
         "y": 6,
         "level": 1

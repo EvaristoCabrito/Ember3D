@@ -74,7 +74,7 @@ import { BurningHandsV2VFX, getActiveBurningHandsV2Settings } from "./BurningHan
 import { OldFireBall } from "./OldFireBall";
 import { getDevGfx } from "./devGfx";
 import { pixelPreset, ProceduralElementEmitter, type PixelElement } from "./ProceduralElementEmitter";
-import { CleaveSweepVFX, VarreduraVFX } from "./VarreduraVFX";
+import { CleaveSweepVFX, VarreduraVFX, type VfxLightPool } from "./VarreduraVFX";
 
 const SQRT3 = Math.sqrt(3);
 /** Must match BattleEngine's private boardPad() (tile * 2.4) — duplicated here rather than
@@ -90,11 +90,13 @@ const UNIT_SHADOW_HEIGHT_SCALE = 0.85;
 const DECOR_SHADOW_HEIGHT_SCALE = 0.9;
 
 /** renderOrder floor for a decoration drawn in front of the ground-mist atmosphere sheets
- * (GroundMist2/3 use renderOrder 10-12, GroundMist4 uses 10 flat — see ThreeAtmosphere.ts).
+ * (GroundMist2/3/4 now draw at 1.5-1.7, under the units — see ThreeAtmosphere.ts).
  * Those materials render with depthTest disabled, so they paint over anything behind them by
  * draw order alone; a prop that must read through the mist (any LIGHT_DEFS light source, or a
  * DecorationDef.aboveGroundMist prop) needs a renderOrder safely above that range instead. */
 const ABOVE_GROUND_MIST_ORDER = 15;
+// Authored scenery above fog must also follow Fog 01 (101) and Fog 5 (101+).
+const ABOVE_FOG_SCENERY_ORDER = 110;
 
 /** How far BELOW the ground plane (z=0) every standing shadow-caster's base now extends, world
  * units. The caster's base sits exactly AT z=0 — coplanar with the ground mesh it casts onto —
@@ -346,6 +348,11 @@ const POINT_LIGHT_POOL = 8;
 /** Bounce-fill lights (see BOUNCE_FRACTION): a fixed pool given to the map lights nearest the
  * view, so the per-fragment light count stays bounded however many lamps a map carries. */
 const BOUNCE_LIGHT_POOL = 8;
+/** Lights shared by per-cast effects — see ThreeBattleRenderer.vfxLights. */
+const VFX_LIGHT_POOL = 4;
+/** Spare room in the fixed point-light budget (see balanceLightCount) for spell lights. */
+const LIGHT_BUDGET_HEADROOM = 6;
+const SHADOW_LIGHT_BUDGET_HEADROOM = 3;
 const HEALING_SPELL_GLOW_KINDS = new Set(["holyMinor", "healingHands", "holyMedium", "disease", "food"]);
 /** Rim-glow canvas size relative to the sprite (room for the blur to spread). */
 const GLOW_PAD = 1.7;
@@ -715,6 +722,24 @@ export class ThreeBattleRenderer {
   private pointLights: THREE.PointLight[] = [];
   /** Wide, dim bounce fill for the nearest map lights (see BOUNCE_LIGHT_POOL / syncLights). */
   private bounceLights: THREE.PointLight[] = [];
+  /** Lights per-cast effects (Cleave, Sweep) borrow, so the scene's light count never changes
+   * mid-battle — a change there recompiles every lit material on screen (the spell stall). */
+  private readonly vfxLightPool: THREE.PointLight[] = [];
+  private readonly vfxLights: VfxLightPool = {
+    take: (color, distance, decay) => {
+      const light = this.vfxLightPool.find((l) => l.userData.vfxFree) ?? new THREE.PointLight();
+      light.userData.vfxFree = false;
+      light.color.setHex(color);
+      light.distance = distance;
+      light.decay = decay;
+      light.intensity = 0;
+      return light;
+    },
+    give: (light) => {
+      light.intensity = 0;
+      if (this.vfxLightPool.includes(light)) light.userData.vfxFree = true;
+    },
+  };
   /** One real spell light follows the active holy-heal target; the approved holy-light art
    * remains on the units canvas unchanged. */
   private healingSpellLight = new THREE.PointLight(0xfff4d2, 0, 1, LIGHT_DECAY);
@@ -1009,6 +1034,15 @@ export class ThreeBattleRenderer {
       this.bounceLights.push(bl);
       this.scene.add(bl);
     }
+    // Always in the scene, intensity 0 when idle (see vfxLights). A borrower past the pool gets a
+    // detached light: no glow for that extra target, but no recompile either.
+    for (let i = 0; i < VFX_LIGHT_POOL; i++) {
+      const light = new THREE.PointLight(0xffffff, 0, 1, 2);
+      light.userData.vfxFree = true;
+      this.vfxLightPool.push(light);
+      this.scene.add(light);
+    }
+
     this.scene.add(this.healingSpellLight);
     this.scene.add(this.atmosphere.group);
     // Construct synchronously: every live Fireball impact particle is procedural, so no image
@@ -1566,7 +1600,9 @@ export class ThreeBattleRenderer {
     // render-only scale/mirror settings so the mesh cache cannot keep the old-sized art.
     const placementKey = engine.decorations.map((p) => {
       const def = DECORATIONS[p.id];
-      return `${p.id}@${p.x},${p.y},${p.rot ?? 0},${p.wallOrientation ?? "auto"},${def?.heightScale ?? 1},${def?.artScale ?? 1},${def?.mirrorAlternate ? 1 : 0},${def?.wallTexture ?? ""}`;
+      const image = engine.art.decorations[p.id];
+      const imageReady = image?.naturalWidth ?? 0;
+      return `${p.id}@${p.x},${p.y},${p.rot ?? 0},${p.wallOrientation ?? "auto"},${def?.heightScale ?? 1},${def?.artScale ?? 1},${def?.mirrorAlternate ? 1 : 0},${def?.wallTexture ?? ""},${imageReady}`;
     }).join(";");
     const key = `${engine.mission.id}:${tile}:${engine.tacticsCamera}:${this.trees.revision}:${placementKey}`;
     if (key === this.builtDecorKey) return;
@@ -1744,7 +1780,7 @@ export class ThreeBattleRenderer {
       // renderer; their per-decoration priority resolves overlaps with other foreground props.
       // A light prop explicitly placed behind the characters (the fireplace) stays in the base
       // decoration layer like any other background prop, instead of lifting above them.
-      const mistOrder = def.aboveGroundMist || (lightDef && decorLayer !== "behind") ? ABOVE_GROUND_MIST_ORDER : 0;
+      const mistOrder = def.aboveGroundMist ? ABOVE_FOG_SCENERY_ORDER : (lightDef && decorLayer !== "behind") ? ABOVE_GROUND_MIST_ORDER : 0;
       const tacticalOverlayOrder = def.aboveTacticalOverlays ? ABOVE_GROUND_MIST_ORDER + 1 : 0;
       mesh.renderOrder = Math.max(tacticalOverlayOrder, mistOrder + (decorLayer === "front" ? 3 : 0) + (def.decorRenderOrder ?? 0) * 0.01);
       // Y negated to match the tile/camera convention (see module comment). Z is the prop's
@@ -2335,9 +2371,12 @@ export class ThreeBattleRenderer {
       // Sort artwork by its ground anchor, rather than the center of a tall bitmap.
       // This keeps a nearer post in front of trunks whose painted tops overlap it.
       entry.mesh.renderOrder = 1 + (anchor.x * this.cameraBack.x + anchor.y * this.cameraBack.y + anchor.z * this.cameraBack.z) / (tile * 100000);
+      // Preserve authored fog layering when the camera updates the ground-anchor sort.
+      const def = DECORATIONS[entry.placement.id];
+      if (def?.aboveGroundMist) entry.mesh.renderOrder += ABOVE_FOG_SCENERY_ORDER;
       // Fog renders at order 100. This authored foreground signpost must follow it;
       // syncDecorVisibility still hides the entire prop until its cell is explored.
-      if (DECORATIONS[entry.placement.id]?.aboveTacticalOverlays) entry.mesh.renderOrder = 101;
+      if (def?.aboveTacticalOverlays) entry.mesh.renderOrder = Math.max(entry.mesh.renderOrder, 101);
       if (anchor.flat) entry.mesh.position.z = anchor.z + 0.02;
       else if (anchor.fixed) {
         const right = new THREE.Vector3(1, 0, 0).applyQuaternion(entry.mesh.quaternion);
@@ -2651,12 +2690,12 @@ export class ThreeBattleRenderer {
     const active = engine.activeTurnHighlight();
     if (active) {
       if (active.player) {
-        place(active.x, active.y, "rgba(220,226,235,0.04)", this.focusBorderGeo, 1.035, 0.516);
-        place(active.x, active.y, "rgba(220,226,235,0.08)", this.focusBorderGeo, 1.01, 0.517);
-        place(active.x, active.y, "rgba(220,226,235,0.14)", this.focusBorderGeo, 0.985, 0.518);
+        place(active.x, active.y, "rgba(220,226,235,0.012)", this.focusBorderGeo, 1.035, 0.516);
+        place(active.x, active.y, "rgba(220,226,235,0.022)", this.focusBorderGeo, 1.01, 0.517);
+        place(active.x, active.y, "rgba(220,226,235,0.04)", this.focusBorderGeo, 0.985, 0.518);
       }
       place(active.x, active.y, "rgba(12,20,25,0.85)", this.focusBorderGeo, 0.98, 0.52);
-      place(active.x, active.y, active.fill, this.focusBorderGeo, 0.94, 0.525);
+      place(active.x, active.y, active.player ? fadedFill(active.fill, 0.28) : active.fill, this.focusBorderGeo, 0.94, 0.525);
     }
     const cur = engine.hover ?? engine.cursor;
     const curId = tileAt(engine.tiles, engine.cols, cur.x, cur.y);
@@ -2807,8 +2846,163 @@ export class ThreeBattleRenderer {
     // Bloom samples the real 3D scene, except for authored light-source art. Their point
     // lights still illuminate everything normally, but the torch/candle/brazier sprite itself
     // must not turn into a blinding white halo when bloom is enabled.
-    this.renderBloomWithoutLightSourceArt();
-    this.finalComposer.render();
+    // Spell effects switch their lights' visibility on and off. A hidden light drops out of the
+    // scene's light count, and any change to that count recompiles every lit material on screen
+    // (a visible stall when a spell starts or ends). For the draw, hidden lights count as present
+    // but dark, so the count never changes; their own on/off state is restored right after.
+    const parked = this.parkHiddenLights();
+    this.balanceLightCount();
+    try {
+      this.renderBloomWithoutLightSourceArt();
+      this.finalComposer.render();
+    } finally {
+      this.restoreParkedLights(parked);
+    }
+    this.warmMeleeVfxOnce();
+  }
+
+  private lightBudget: { point: number; shadow: number } | null = null;
+  private readonly fillerLights: { point: THREE.PointLight[]; shadow: THREE.PointLight[] } = { point: [], shadow: [] };
+  /** Pads the drawn point lights up to a fixed budget with dark filler lights, so however spell
+   * effects add, remove, hide or nest their lights, the count the shaders see never changes —
+   * a change recompiles every lit material on screen. Grows (one recompile) only if a battle
+   * ever needs more than the first frame's count plus headroom. */
+  private balanceLightCount(): void {
+    for (const light of [...this.fillerLights.point, ...this.fillerLights.shadow]) light.visible = false;
+    let point = 0;
+    let shadow = 0;
+    this.scene.traverseVisible((o) => {
+      if (!(o as THREE.PointLight).isPointLight) return;
+      if ((o as THREE.PointLight).castShadow) shadow++;
+      else point++;
+    });
+    if (!this.lightBudget) this.lightBudget = { point: point + LIGHT_BUDGET_HEADROOM, shadow: shadow + SHADOW_LIGHT_BUDGET_HEADROOM };
+    this.lightBudget.point = Math.max(this.lightBudget.point, point);
+    this.lightBudget.shadow = Math.max(this.lightBudget.shadow, shadow);
+    const fill = (have: number, budget: number, pool: THREE.PointLight[], castsShadow: boolean) => {
+      for (let i = 0; i < budget - have; i++) {
+        let light = pool[i];
+        if (!light) {
+          light = new THREE.PointLight(0xffffff, 0, 1, 2);
+          if (castsShadow) {
+            light.castShadow = true;
+            light.shadow.mapSize.set(16, 16);
+            light.shadow.autoUpdate = false;
+          }
+          pool.push(light);
+          this.scene.add(light);
+        }
+        light.visible = true;
+      }
+    };
+    fill(point, this.lightBudget.point, this.fillerLights.point, false);
+    fill(shadow, this.lightBudget.shadow, this.fillerLights.shadow, true);
+  }
+
+  private parkHiddenLights(): { light: THREE.Light; intensity: number; autoUpdate: boolean }[] {
+    const parked: { light: THREE.Light; intensity: number; autoUpdate: boolean }[] = [];
+    for (const child of this.scene.children) {
+      if (!(child instanceof THREE.Light) || child.visible || child instanceof THREE.AmbientLight || child instanceof THREE.HemisphereLight) continue;
+      if (this.fillerLights.point.includes(child as THREE.PointLight) || this.fillerLights.shadow.includes(child as THREE.PointLight)) continue;
+      const shadow = (child as THREE.PointLight).shadow;
+      parked.push({ light: child, intensity: child.intensity, autoUpdate: shadow ? shadow.autoUpdate : true });
+      child.visible = true;
+      child.intensity = 0;
+      if (shadow) shadow.autoUpdate = false;
+    }
+    return parked;
+  }
+
+  private restoreParkedLights(parked: { light: THREE.Light; intensity: number; autoUpdate: boolean }[]): void {
+    for (const { light, intensity, autoUpdate } of parked) {
+      light.visible = false;
+      light.intensity = intensity;
+      const shadow = (light as THREE.PointLight).shadow;
+      if (shadow) shadow.autoUpdate = autoUpdate;
+    }
+  }
+
+  private meleeVfxWarm: "pending" | "running" | "done" = "pending";
+  /** True once the first frame is drawn and every spell shader is compiled and linked. */
+  isWarm(): boolean {
+    return this.meleeVfxWarm === "done";
+  }
+  /** On the battle's first rendered frame (lights and shadows final), compile and link the shaders
+   * of every spell effect — the hidden ones (Fireball, Caustic Venom, Phantasmal Force, Bless, ...)
+   * and the per-cast Cleave/Sweep — so no first cast stalls (0.45-1.8 s each before). */
+  private warmMeleeVfxOnce(): void {
+    if (this.meleeVfxWarm !== "pending") return;
+    this.meleeVfxWarm = "running";
+    const before = new Set(this.scene.children);
+    const warm = [
+      new CleaveSweepVFX(this.scene, new THREE.Vector3(), [], 1, {}, this.vfxLights),
+      new VarreduraVFX(this.scene, new THREE.Vector3(), [], 1, this.vfxLights),
+    ];
+    for (const child of this.scene.children) if (!before.has(child)) child.traverse((o) => { o.frustumCulled = false; });
+    // Compile with the same light count every real frame uses (hidden lights parked, see render()).
+    const parkedForCompile = this.parkHiddenLights();
+    this.balanceLightCount();
+    const compiled = this.renderer.compileAsync(this.scene, this.camera);
+    this.restoreParkedLights(parkedForCompile);
+    void compiled.finally(() => {
+      // One real draw into a tiny off-screen target links every program now, not on a first cast.
+      // Hidden effects are shown and un-culled only for this draw, all in this same tick, so
+      // nothing of them ever reaches the screen.
+      const parked = this.parkHiddenLights();
+      this.balanceLightCount();
+      const shown: THREE.Object3D[] = [];
+      const unculled: THREE.Object3D[] = [];
+      this.scene.traverse((o) => {
+        if (!o.visible && !(o instanceof THREE.Light)) { o.visible = true; shown.push(o); }
+        if ((o as THREE.Mesh).isMesh || (o as THREE.Points).isPoints || (o as THREE.Line).isLine) {
+          if (o.frustumCulled) { o.frustumCulled = false; unculled.push(o); }
+        }
+      });
+      // Effects that only build objects mid-cast get a silent dry run (no-op callbacks, never on
+      // screen: everything below happens in this one tick), so those shaders link now too.
+      const dryFrom = new THREE.Vector3(0, 0, 1);
+      const dryTo = new THREE.Vector3(40, 0, 1);
+      const noop = () => {};
+      const caustic = this.causticVenomVfx;
+      const phantasmal = this.phantasmalForceVfx;
+      if (caustic) {
+        caustic.cast({ id: "warmup", origin: dryFrom, target: dryTo, worldScale: 1, impactHexes: [dryTo], onLaunch: noop, onImpact: noop, onComplete: noop });
+        for (let i = 0; i < 3; i++) caustic.update(0.4); // charge, travel, into the impact
+      }
+      if (phantasmal) {
+        phantasmal.restartAt(dryTo, 1);
+        phantasmal.update(0.3);
+      }
+      this.scene.traverse((o) => {
+        if (!o.visible && !(o instanceof THREE.Light)) { o.visible = true; shown.push(o); }
+        if (((o as THREE.Mesh).isMesh || (o as THREE.Points).isPoints || (o as THREE.Line).isLine) && o.frustumCulled) { o.frustumCulled = false; unculled.push(o); }
+      });
+      const target = new THREE.WebGLRenderTarget(4, 4);
+      const previous = this.renderer.getRenderTarget();
+      try {
+        this.renderer.setRenderTarget(target);
+        this.renderer.render(this.scene, this.camera);
+        // Magic Missile draws through its own renderer; warm it with the same light count.
+        const missile = this.magicMissileV2Vfx;
+        const foreground = this.magicMissileForeground;
+        if (missile && foreground && !this.activeMagicMissileV2VfxRequestId) {
+          missile.showAllForWarmup();
+          foreground.render(this.scene, this.camera, 64, 64, 1, true, this.bloomPass);
+          missile.hide();
+          foreground.render(this.scene, this.camera, 64, 64, 1, false, this.bloomPass);
+        }
+      } finally {
+        this.renderer.setRenderTarget(previous);
+        target.dispose();
+        caustic?.cancel();
+        phantasmal?.hide();
+        for (const o of shown) o.visible = false;
+        for (const o of unculled) o.frustumCulled = true;
+        this.restoreParkedLights(parked);
+        for (const fx of warm) fx.dispose();
+        this.meleeVfxWarm = "done";
+      }
+    });
   }
 
   /** Project a legacy top-down screen point onto the actual camera view for map overlays. */
@@ -3059,7 +3253,7 @@ export class ThreeBattleRenderer {
       const source=this.engine.unitAnchor(caster);
       const targets=request.targetIds.map((id)=>this.engine.units.find((unit)=>unit.id===id)).filter((unit)=>!!unit).map((unit)=>{const anchor=this.engine.unitAnchor(unit);return{id:unit.id,position:new THREE.Vector3(anchor.worldX,-anchor.worldY,1)};});
       if(targets.length===0)for(const cell of request.tiles){const anchor=this.engine.effectAnchor(cell.x,cell.y);targets.push({id:`tile-${cell.x}-${cell.y}`,position:new THREE.Vector3(anchor.worldX,-anchor.worldY,1)});}
-      this.varreduraVfx.push(new VarreduraVFX(this.scene,new THREE.Vector3(source.worldX,-source.worldY,1),targets,tile));
+      this.varreduraVfx.push(new VarreduraVFX(this.scene,new THREE.Vector3(source.worldX,-source.worldY,1),targets,tile,this.vfxLights));
     }
     for(let i=this.varreduraVfx.length-1;i>=0;i--){const fx=this.varreduraVfx[i]!;fx.update(dt);if(fx.finished){fx.dispose();this.varreduraVfx.splice(i,1);}}
   }
@@ -3078,7 +3272,7 @@ export class ThreeBattleRenderer {
         const anchor = this.engine.effectAnchor(cell.x, cell.y);
         targets.push({ id: `tile-${cell.x}-${cell.y}`, position: new THREE.Vector3(anchor.worldX, -anchor.worldY, 1) });
       }
-      this.cleaveVfx.push(new CleaveSweepVFX(this.scene, new THREE.Vector3(source.worldX, -source.worldY, 1), targets, tile));
+      this.cleaveVfx.push(new CleaveSweepVFX(this.scene, new THREE.Vector3(source.worldX, -source.worldY, 1), targets, tile, {}, this.vfxLights));
     }
     for (let i = this.cleaveVfx.length - 1; i >= 0; i--) {
       const fx = this.cleaveVfx[i]!;
@@ -3262,6 +3456,10 @@ export class ThreeBattleRenderer {
     this.magicMissileForeground = null;
     this.magicMissileForegroundCanvas = canvas;
     this.magicMissileV2Vfx?.setRenderLayer(MagicMissileForeground.layer);
+    // Build the spell's own renderer and compile its shaders now, at battle load, rather than on
+    // the first cast (that first Magic Missile stalled ~0.9 s).
+    this.magicMissileForeground = new MagicMissileForeground(canvas, this.scene, this.camera);
+    // Its shaders are warmed with every other spell's on the first frame (warmMeleeVfxOnce).
   }
 
   renderMagicMissileForeground(cssW: number, cssH: number): void {

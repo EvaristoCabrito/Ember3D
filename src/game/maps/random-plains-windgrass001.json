@@ -1630,36 +1630,36 @@
     ],
     "enemySpawns": [
       {
-        "name": "Lobo da campina",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 10,
         "y": 6,
         "level": 6
       },
       {
-        "name": "Lobo da campina",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 17,
         "y": 9,
         "level": 6
       },
       {
-        "name": "Lobo da campina",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 20,
         "y": 16,
         "level": 6
       },
       {
-        "name": "Lobo do espigão",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 21,
         "y": 5,
         "level": 6
       },
       {
-        "name": "Guarda do campo",
-        "classId": "morvenianWolf",
+        "name": "Mordavian Wolf Final",
+        "classId": "mordavianWolfFinal",
         "x": 15,
         "y": 13,
         "level": 6

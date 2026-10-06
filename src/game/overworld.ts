@@ -1,7 +1,7 @@
 import { CHEST_LOOT, EMPTY_BAG, EQUIPMENT, heroRecruited, MAX_LEVEL, partyBagHasRoom, POTION_CARRY_MAX, POTIONS, statsFor, weightedLootPick, weightedPotionPick, WEAPONS, WORLD_LOCATIONS } from "./data";
 import { DAILY_HUNGER_COST, drainHunger, fullness, travelHungerCost } from "./hunger";
 import { campaignHour, campaignTimeOfDay, usesTravelClock } from "./campaignTime";
-import { missionsForLocation, RANDOM_ENCOUNTER_REGIONS } from "./mapstore";
+import { ALL_LOCATIONS, missionsForLocation, RANDOM_ENCOUNTER_REGIONS } from "./mapstore";
 import ENCOUNTER_ZONES from "./random-encounter-zones.json";
 import { cubeRound, cubeToOddr, hexNeighbors, key, oddrToCube } from "./pathfinding";
 import type { ClassId, Point, SaveData, TierKey, WorldLocation } from "./types";
@@ -51,6 +51,19 @@ const STONE_BRIDGE_MISSION_IDS = WORLD_LOCATIONS.find((location) => location.id 
 export const ASHEN_FOREST_ENTRANCE = worldToHex(73.61215932167728, 52.5);
 export const ASHEN_FOREST_BLOCKED_HEX = { x: ASHEN_FOREST_ENTRANCE.x + 1, y: ASHEN_FOREST_ENTRANCE.y + 1 };
 
+/** True while Wisp Forest has never been cleared: the party may reach it, but not travel past it
+ * to the east until every mission it holds is completed once. */
+export function wispForestUncleared(save: SaveData): boolean {
+  const wisp = ALL_LOCATIONS.find((location) => location.id === "wisp-forest");
+  return !!wisp && !missionsForLocation(wisp).every((mission) => save.completed.includes(mission.id));
+}
+
+/** The column of Wisp Forest's hex — the eastward line nobody crosses before clearing it. */
+export function wispForestHex(): Point | null {
+  const wisp = ALL_LOCATIONS.find((location) => location.id === "wisp-forest");
+  return wisp ? worldToHex(wisp.x, wisp.y) : null;
+}
+
 /** The opening is deliberately linear: leave the western edge by the east hex, complete
  * the full Stone Bridge mission set, then the full three-way travel choice opens up. Kept in the logic layer so a
  * click or a future renderer cannot bypass the tutorial route. */
@@ -62,6 +75,9 @@ export function canStepOverworld(save: SaveData, from: Point, to: Point, test = 
   // testing movement range/random encounters needs the whole grid open, not just the
   // linear tutorial route out of Stone Bridge.
   if (test) return true;
+  // Nobody travels east past Wisp Forest until it has been cleared once.
+  const wispHex = wispForestHex();
+  if (wispHex && from.x <= wispHex.x && to.x > wispHex.x && wispForestUncleared(save)) return false;
   // The authored opening is the horizontal line Start -> Stone Bridge -> Wisp Forest
   // -> Inn. Do not substitute a general eastward fan or explored-cell escape routes.
   const inn = WORLD_LOCATIONS.find(location => location.id === "estalagem")!;

@@ -10,7 +10,7 @@ from PIL import Image, ImageOps
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_ARCHIVE = ROOT / "assets" / "sprite-sources" / "neera-attack-001"
+SOURCE_ARCHIVE = ROOT / "assets" / "sprite-sources" / "neera-attack-002"
 SOURCE_IMAGE = SOURCE_ARCHIVE / "attack.png"
 SOURCE_JSON = SOURCE_ARCHIVE / "attack.json"
 OUTPUT = ROOT / "public" / "game" / "sprites" / "neera"

@@ -240,16 +240,16 @@
       },
       {
         "level": 7,
-        "classId": "morvenianWolf",
+        "classId": "mordavianWolfFinal",
         "y": 5,
-        "name": "Lobo",
+        "name": "Mordavian Wolf Final",
         "x": 5
       },
       {
         "level": 7,
-        "classId": "morvenianWolf",
+        "classId": "mordavianWolfFinal",
         "y": 5,
-        "name": "Lobo",
+        "name": "Mordavian Wolf Final",
         "x": 8
       }
     ],

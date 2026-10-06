@@ -9,12 +9,17 @@ export function setActiveVarreduraSettings(settings:VarreduraSettings):void{try{
 
 /** Lancer's directional spear sweep, assigned to Cleave. Visual-only: the caller supplies combat's exact
  * target list; this class never queries targets, causes damage, or changes hit rules. */
+/** A fixed set of point lights that always stay in the scene. Effects borrow from it instead of
+ * adding/removing their own: changing the scene's light count makes Three.js recompile every lit
+ * material on screen, which was the stall on every Cleave/Sweep. */
+export type VfxLightPool = { take(color: number, distance: number, decay: number): THREE.PointLight; give(light: THREE.PointLight): void };
+
 export class CleaveSweepVFX {
   private readonly root=new THREE.Group(); private readonly blade:THREE.Mesh; private readonly edge:THREE.Mesh; private readonly wake:THREE.Mesh; private readonly debris:THREE.InstancedMesh;
   private readonly spearhead:THREE.Mesh; private readonly trail:THREE.Line; private readonly trailPositions:THREE.Vector3[]=[];
   private readonly spearLight:THREE.PointLight; private readonly impactLights:THREE.PointLight[]=[]; private readonly impactAt:number[]=[];
   private readonly dummy=new THREE.Object3D(); private readonly targets:VarreduraTarget[]; private elapsed=0; private disposed=false; private readonly settings:VarreduraSettings; private readonly origin:THREE.Vector3; private readonly direction:THREE.Vector2; private rng:number; private readonly tile:number;
-  constructor(private readonly scene:THREE.Object3D, origin:THREE.Vector3, targets:VarreduraTarget[], tile:number, settings:Partial<VarreduraSettings>={}){
+  constructor(private readonly scene:THREE.Object3D, origin:THREE.Vector3, targets:VarreduraTarget[], tile:number, settings:Partial<VarreduraSettings>={}, private readonly lights?:VfxLightPool){
     this.settings={...DEFAULT_VARREDURA_SETTINGS,...settings}; this.targets=targets; this.origin=origin.clone(); this.rng=this.settings.seed>>>0||1; this.tile=tile;
     const avg=new THREE.Vector2(); for(const target of targets)avg.add(new THREE.Vector2(target.position.x-origin.x,target.position.y-origin.y)); if(avg.lengthSq()<.001)avg.set(1,0); this.direction=avg.normalize();
     this.root.position.copy(origin); scene.add(this.root);
@@ -26,8 +31,9 @@ export class CleaveSweepVFX {
     const trailGeometry=new THREE.BufferGeometry(); trailGeometry.setFromPoints([new THREE.Vector3(),new THREE.Vector3()]); const trailMaterial=new THREE.LineBasicMaterial({color:0xdff7ff,transparent:true,opacity:.82,toneMapped:false,depthWrite:false}); this.trail=new THREE.Line(trailGeometry,trailMaterial); this.root.add(this.trail);
     const box=new THREE.BoxGeometry(.065,.075,.065); const debrisMat=new THREE.MeshStandardMaterial({color:0x9a9487,roughness:1}); const n=Math.min(120,Math.max(1,Math.round(this.settings.debrisCount*this.settings.dustAmount))); this.debris=new THREE.InstancedMesh(box,debrisMat,n); this.debris.count=n; this.root.add(this.debris);
     for(let i=0;i<n;i++){this.dummy.position.set(this.random()*tile*.4, this.random()*tile*.28, tile*(.08+this.random()*.35)); this.dummy.scale.setScalar(.6+this.random()*1.5); this.dummy.updateMatrix(); this.debris.setMatrixAt(i,this.dummy.matrix);} this.debris.instanceMatrix.needsUpdate=true;
-    this.spearLight=new THREE.PointLight(0xe8f8ff,0,tile*this.settings.spearRadius,2); this.scene.add(this.spearLight);
-    for(let i=0;i<targets.length;i++){const light=new THREE.PointLight(0xf3fbff,0,tile*this.settings.impactRadius,2); this.scene.add(light); this.impactLights.push(light); this.impactAt.push(-1);}
+    const take=(color:number,distance:number,decay:number)=>{if(this.lights)return this.lights.take(color,distance,decay);const l=new THREE.PointLight(color,0,distance,decay);this.scene.add(l);return l;};
+    this.spearLight=take(0xe8f8ff,tile*this.settings.spearRadius,2);
+    for(let i=0;i<targets.length;i++){const light=take(0xf3fbff,tile*this.settings.impactRadius,2); this.impactLights.push(light); this.impactAt.push(-1);}
   }
   get finished():boolean{return this.elapsed>1.25+this.settings.residualDuration+Math.max(0,.46/Math.max(.25,this.settings.waveSpeed)-.46);}
   update(dt:number):void{
@@ -43,7 +49,10 @@ export class CleaveSweepVFX {
     const n=this.debris.count; for(let i=0;i<n;i++){const target=this.targets[i%Math.max(1,this.targets.length)]; const phase=i/n; const arrival=target? .5+THREE.MathUtils.clamp(new THREE.Vector2(target.position.x-this.origin.x,target.position.y-this.origin.y).dot(this.direction)/(this.settings.radius*this.tile),0,1)*.26:.5; const age=Math.max(0,t-arrival); const distance=age*this.settings.debrisVelocity*this.tile*1.4; const dx=target?target.position.x-this.origin.x:0,dy=target?target.position.y-this.origin.y:0; const radial=dx*this.direction.x+dy*this.direction.y,side=-dx*this.direction.y+dy*this.direction.x; this.dummy.position.x=radial+this.direction.x*distance+Math.sin(i*8.31+age*9)*this.settings.turbulence*this.tile*.25; this.dummy.position.y=side+Math.cos(i*5.17+age*7)*this.settings.turbulence*this.tile*.2; this.dummy.position.z=this.tile*(.14+Math.abs(Math.sin(age*9+i))*this.settings.height*.3); const fade=target?1-THREE.MathUtils.smoothstep(age,.2,.75):1-THREE.MathUtils.smoothstep(t,.72,1.1); this.dummy.scale.setScalar(Math.max(.001,fade*(.4+(i%4)*.15))); this.dummy.rotation.set(age*7+i,age*9,age*4); this.dummy.updateMatrix(); this.debris.setMatrixAt(i,this.dummy.matrix); } this.debris.instanceMatrix.needsUpdate=true;
     for(let i=0;i<this.targets.length;i++){const target=this.targets[i]!, along=new THREE.Vector2(target.position.x-this.origin.x,target.position.y-this.origin.y).dot(this.direction); const arrival=waveStart+THREE.MathUtils.clamp(along/(this.settings.radius*this.tile),0,1)*waveDuration; const light=this.impactLights[i]; if(!light)continue; if(this.impactAt[i]!<0&&t>=arrival)this.impactAt[i]=t; light.position.copy(target.position).add(new THREE.Vector3(0,0,this.tile*.5)); const age=this.impactAt[i]!<0?Infinity:t-this.impactAt[i]!; const amp=1-THREE.MathUtils.smoothstep(age,0,.14); light.distance=this.settings.impactRadius*this.tile*(1+this.settings.impactSize); light.intensity=this.settings.lightEnabled?this.settings.impactLight*amp:0; }
   }
-  dispose():void{if(this.disposed)return;this.disposed=true;this.scene.remove(this.root,this.spearLight,...this.impactLights); for(const child of [this.blade,this.edge,this.wake,this.spearhead,this.trail]){child.geometry.dispose();(child.material as THREE.Material).dispose();} this.debris.geometry.dispose(); (this.debris.material as THREE.Material).dispose();}
+  dispose():void{if(this.disposed)return;this.disposed=true;this.scene.remove(this.root);
+    if(this.lights){this.lights.give(this.spearLight);for(const l of this.impactLights)this.lights.give(l);}else this.scene.remove(this.spearLight,...this.impactLights);
+    // Geometry is freed; materials are not, so their compiled shaders stay cached for the next cast.
+    for(const child of [this.blade,this.edge,this.wake,this.spearhead,this.trail])child.geometry.dispose(); this.debris.geometry.dispose();}
   private makeCrescent(tile:number,radiusScale:number,depth:number,thicknessScale:number):THREE.BufferGeometry{
     const segments=52, sides=8, vertices:number[]=[], indices:number[]=[]; const radius=tile*this.settings.radius*radiusScale; const start=-this.settings.angle*.56, end=this.settings.angle*.44;
     for(let i=0;i<=segments;i++){const u=i/segments,a=start+(end-start)*u,noise=(this.random()-.5)*this.settings.breakup*.055; const r=radius*(.88+.12*u+noise); const cx=Math.cos(a)*r, cy=Math.sin(a)*r; const thick=tile*this.settings.thickness*thicknessScale*(.75+.4*Math.sin(Math.PI*u)); for(let j=0;j<sides;j++){const v=j/sides*Math.PI*2; vertices.push(cx+Math.cos(v)*thick*.5,cy+Math.sin(v)*thick*.15,Math.sin(v)*thick*depth+tile*(.12+u*this.settings.height*.14));}}
@@ -69,7 +78,7 @@ export class VarreduraVFX {
   private elapsed = 0;
   private disposed = false;
 
-  constructor(private readonly scene: THREE.Object3D, private readonly origin: THREE.Vector3, targets: VarreduraTarget[], tile: number) {
+  constructor(private readonly scene: THREE.Object3D, private readonly origin: THREE.Vector3, targets: VarreduraTarget[], tile: number, private readonly lights?: VfxLightPool) {
     this.radius = tile * 3.2;
     this.targetOffsets = targets.map((target) => target.position.clone().sub(origin));
     this.root.position.copy(origin);
@@ -88,11 +97,15 @@ export class VarreduraVFX {
     this.debris = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(tile * 0.035, 0), new THREE.MeshStandardMaterial({ color: 0xcbdce0, roughness: 0.9 }), count);
     this.debris.count = count;
     this.root.add(this.debris);
-    this.edgeLight = new THREE.PointLight(0xdaf8ff, 0, tile * 2.8, 2);
-    scene.add(this.edgeLight);
-    for (let i = 0; i < targets.length; i++) {
-      const light = new THREE.PointLight(0xe7fbff, 0, tile * 1.4, 2);
+    const take = (color: number, distance: number, decay: number) => {
+      if (lights) return lights.take(color, distance, decay);
+      const light = new THREE.PointLight(color, 0, distance, decay);
       scene.add(light);
+      return light;
+    };
+    this.edgeLight = take(0xdaf8ff, tile * 2.8, 2);
+    for (let i = 0; i < targets.length; i++) {
+      const light = take(0xe7fbff, tile * 1.4, 2);
       this.targetLights.push(light);
       this.impactAt.push(-1);
     }
@@ -145,10 +158,12 @@ export class VarreduraVFX {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.scene.remove(this.root, this.edgeLight, ...this.targetLights);
-    for (const mesh of [this.outer, this.inner, this.debris]) {
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
-    }
+    this.scene.remove(this.root);
+    if (this.lights) {
+      this.lights.give(this.edgeLight);
+      for (const light of this.targetLights) this.lights.give(light);
+    } else this.scene.remove(this.edgeLight, ...this.targetLights);
+    // Geometry is freed; materials are not, so their compiled shaders stay cached for the next cast.
+    for (const mesh of [this.outer, this.inner, this.debris]) mesh.geometry.dispose();
   }
 }

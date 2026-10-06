@@ -2913,43 +2913,43 @@
       {
         "x": 18,
         "y": 5,
-        "classId": "mordavianWolf",
-        "name": "Ridge Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {
         "x": 21,
         "y": 9,
-        "classId": "mordavianWolf",
-        "name": "Hollow Pine Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {
         "x": 16,
         "y": 12,
-        "classId": "mordavianWolf",
-        "name": "Hollow Pine Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {
         "x": 22,
         "y": 15,
-        "classId": "morvenianWolf",
-        "name": "Young Ridge Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {
         "x": 12,
         "y": 9,
-        "classId": "morvenianWolf",
-        "name": "Young Ridge Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {
         "x": 19,
         "y": 16,
-        "classId": "mordavianWolf",
-        "name": "Ridge Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       }
     ],

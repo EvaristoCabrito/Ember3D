@@ -70,7 +70,7 @@ for (let n = 1; n <= 3; n++) {
   if (n < 3) link(d, 47, 5, surfaceIds[n]); else { prop(d, 'dungeon-exit', 47, 5); prop(d, 'light-brazier-bowl', 45, 3); }
   for (const [name, classId, x, y] of [
     ['Cobalt Blue Deer', 'swampBlueCalf', 15, 24], ['Cobalt Blue Deer', 'swampBlueCalf', 38, 14],
-    ['Marsh wolf', 'morvenianWolf', 17, 19], ['Marsh wolf', 'morvenianWolf', 35, 23],
+    ['Mordavian Wolf Final', 'mordavianWolfFinal', 17, 19], ['Mordavian Wolf Final', 'mordavianWolfFinal', 35, 23],
     ['Drowned walker', 'zombie', 25, 19], ['Drowned keeper', 'zombie', 25, 10],
     ['Reed stalker', 'archer', 28, 14], ['Causeway raider', 'brigand', 42, 18],
     ['Frozen sentinel', 'pikeman', 43, 8], ['Marsh witch', 'sorcerer', 29, 21],

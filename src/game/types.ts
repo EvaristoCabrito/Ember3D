@@ -1057,10 +1057,11 @@ export interface GameArt {
   decorations: Record<string, HTMLImageElement>;
   sprites: Record<SpriteId, HTMLImageElement[]>;
   attacks: Partial<Record<SpriteId, HTMLImageElement[]>>;
-  /** A second, distinct attack cut for the few sprites that have one (currently just Familiar
-   * 3) — Unit.idleAlt (the same flip Malrec's idles2 uses, see its doc comment) picks between
-   * this and the sprite's regular `attacks` pool, alternating turn to turn. */
+  /** A second, distinct attack cut for sprites with an alternate move (Familiar 3, plus
+   * Neera's placeholder bow-skill ATT). Unit.idleAlt selects it for Familiar 3. */
   attacks2: Partial<Record<SpriteId, HTMLImageElement[]>>;
+  /** Left-facing counterpart for a second attack cut when its source has authored mirrored frames. */
+  attacks2Left: Partial<Record<SpriteId, HTMLImageElement[]>>;
   /** Short-range (off-hand dagger/katar) attack cut, atk-short-*.png, for the sprites that
    * have one (currently Neera). Used instead of `attacks` whenever the strike is with the
    * off-hand weapon — the unit's own off-hand attack or its off-hand counter. */

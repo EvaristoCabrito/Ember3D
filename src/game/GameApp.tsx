@@ -12,6 +12,7 @@ import { BattleCanvas } from "./BattleCanvas";
 import { ELEMENT_LABELS, PLACEABLE_ELEMENT_KINDS, type PlaceableElementKind } from "./gfx/params";
 import { ELEMENT_FX_REGISTRY, pixelDefaults, pixelPresetsFor, type PixelElement, type PixelElementSettings } from "./gfx/three/ProceduralElementEmitter";
 import { THREE_D_DOOR_VARIANTS } from "./data";
+import { SOLID_CART_DECOR_IDS } from "./data";
 import { FANTOM_FORCE } from "./data";
 import { victoryRewardFor } from "./victory-reward";
 import { ENCOUNTER_NPC_IDS, encounterNpcSpawn, type EncounterNpcId } from "./encounter-npcs";
@@ -820,6 +821,21 @@ export function GameApp() {
   const [resumeEditorDraft] = useState<MapDraft | null>(() => (typeof window === "undefined" ? null : readEditorResume()));
   const [screen, setScreen] = useState<ScreenId>(() => (resumeEditorDraft ? "mapEditor" : "title"));
   const loadingCurtain = useLoadingCurtain(screen);
+  // Up from the instant a battle is requested until BattleCanvas reports "ember:battle-ready"
+  // (art loaded, first frame drawn, every spell shader compiled and linked), so all of that
+  // one-time work happens behind it instead of as stalls mid-fight. The timer is only a
+  // safety net so the curtain can never get stuck.
+  const [battleLoading, setBattleLoading] = useState(false);
+  useEffect(() => {
+    if (!battleLoading) return;
+    const done = () => setBattleLoading(false);
+    window.addEventListener("ember:battle-ready", done);
+    const safety = window.setTimeout(done, 20000);
+    return () => {
+      window.removeEventListener("ember:battle-ready", done);
+      window.clearTimeout(safety);
+    };
+  }, [battleLoading]);
   // The currently active map style. Normal campaigns persist their choice in SaveData;
   // test mode deliberately remains session-only.
   const [mapMode, setMapMode] = useState<"classic" | "rpg" | null>(null);
@@ -985,6 +1001,7 @@ export function GameApp() {
       ...data,
       pendingMission: missionId,
       battle: engine.captureSnapshot(),
+      spellUses: { ...data.spellUses, ...engine.spentTiers() },
       bags: { ...data.bags, ...engine.remainingBags() },
       affinityScores: { ...engine.affinityScores },
       unitHp: { ...data.unitHp, ...engine.battlePlayerHp() },
@@ -1088,6 +1105,7 @@ export function GameApp() {
       }
       const resolved = override ?? missionById(id);
       if (!resolved) return;
+      setBattleLoading(true);
       const tutorialMap = resolved.index <= (missionById("thebridge")?.index ?? 3) && !resolved.id.startsWith("random-encounter-");
       // The travel clock drives lighting for random maps and "-crossing" maps only for now — other campaign maps keep their authored time of day.
       const timed = !testMode && !tutorialMap && (resolved.id.startsWith("random-") || resolved.id.endsWith("-crossing")) && resolved.environment !== "indoor" && usesTravelClock(save)
@@ -1184,13 +1202,9 @@ export function GameApp() {
       const equipment = testMode ? undefined : save.equipment;
       const statPointAllocations = testMode ? undefined : save.statPointAllocations;
       const ownedWeaponIds = testMode ? undefined : Object.keys(save.weapons);
-      // Spell tier uses don't refill between missions within the same world-map location's
-      // run (a "scenario") — only once the whole scenario is done, per direct instruction.
-      // Stone Bridge (the tutorial) always resets, and so does the very first mission of any
-      // scenario (nothing to carry over yet).
-      const loc = campaignLocations.find((location) => location.missionIds.includes(m.id));
-      const scenarioStart = !loc || loc.id === "stonebridge" || loc.missionIds.every((mid) => !save.completed.includes(mid));
-      const spellSpent = testMode || scenarioStart ? undefined : save.spellUses;
+      // Loading or re-entering a mission must carry saved expenditure, including
+      // first missions and the tutorial. Replenishment happens at explicit rest/reset events.
+      const spellSpent = testMode ? undefined : save.spellUses;
       // Test mode is god mode (same as promotions/weapons/equipment above) — a real save's
       // starved party must never bleed into a debug fight. Left ungated, a real save with
       // heroHunger at 0 and a maxed hungerStreak benches every hero via heroUnconscious,
@@ -1842,7 +1856,7 @@ export function GameApp() {
 
   return (
     <main className="relative h-dvh min-h-0 bg-bg text-fg overflow-hidden">
-      <LoadingCurtain visible={loadingCurtain} />
+      <LoadingCurtain visible={loadingCurtain || battleLoading} />
       {screen === "boot" && (
         <CutsceneScreen onSoundChange={setMutedUi} src="/game/title-open.mp4" onSkip={leaveBoot} />
       )}
@@ -4863,6 +4877,7 @@ export function MapEditorScreen({
   const selectedPlacementIsSolidHouse = !!selectedPlacement && (
     HOUSE_DECOR_IDS.has(selectedPlacement.id) || BIG_HOUSE_DECOR_IDS.has(selectedPlacement.id) || SOLID_HOUSE_DECOR_IDS.has(selectedPlacement.id)
   );
+  const selectedPlacementIsSolidCart = !!selectedPlacement && SOLID_CART_DECOR_IDS.has(selectedPlacement.id);
   const selectedArchitecture = selectedPlacement ? DECORATIONS[selectedPlacement.id]?.model3d : undefined;
   const selectedPlacementIsSolidArchitecture = selectedArchitecture === "wall" || selectedArchitecture === "door" || selectedArchitecture === "secretDoor";
   const activeWallOrientation = selectedArchitecture
@@ -5029,7 +5044,7 @@ export function MapEditorScreen({
       // Barricade-family City props block like a real barricade without repainting the
       // hex to barricade's dirt/rubble ground art — defaulted on here instead of the
       // author having to remember to check "Bloquear caminho" every time. Houses too.
-      const blocksByDefault = BARRICADE_LIKE_DECOR.has(decoBrush) || HOUSE_DECOR_IDS.has(decoBrush) || BIG_HOUSE_DECOR_IDS.has(decoBrush) || SOLID_HOUSE_DECOR_IDS.has(decoBrush) || SOLID_ROCK_DECOR_IDS.has(decoBrush);
+      const blocksByDefault = BARRICADE_LIKE_DECOR.has(decoBrush) || HOUSE_DECOR_IDS.has(decoBrush) || BIG_HOUSE_DECOR_IDS.has(decoBrush) || SOLID_HOUSE_DECOR_IDS.has(decoBrush) || SOLID_CART_DECOR_IDS.has(decoBrush) || SOLID_ROCK_DECOR_IDS.has(decoBrush);
       const placed: DecorationPlacement = def.model3d
         ? { id: decoBrush, x, y, rot: wallOrientation === "vertical" ? 1 : 0, wallOrientation }
         : blocksByDefault ? { id: decoBrush, x, y, blocksPath: true } : { id: decoBrush, x, y };
@@ -6508,8 +6523,8 @@ export function MapEditorScreen({
               >
                 <input
                   type="checkbox"
-                  disabled={!selectedPlacement || selectedPlacementIsSolidHouse || selectedPlacementIsSolidArchitecture}
-                  checked={!!selectedPlacement?.blocksPath || selectedPlacementIsSolidHouse || selectedPlacementIsSolidArchitecture}
+                  disabled={!selectedPlacement || selectedPlacementIsSolidHouse || selectedPlacementIsSolidCart || selectedPlacementIsSolidArchitecture}
+                  checked={!!selectedPlacement?.blocksPath || selectedPlacementIsSolidHouse || selectedPlacementIsSolidCart || selectedPlacementIsSolidArchitecture}
                   onChange={() => toggleDecorationRule("blocksPath")}
                 />
                 <span className="text-muted">Bloquear caminho</span>

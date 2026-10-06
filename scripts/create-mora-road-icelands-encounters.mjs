@@ -37,7 +37,7 @@ d = make('random-mora-hollow-stream', 'Mora — O Riacho dos Troncos Ocos', 'for
 for (let y = 0; y < rows; y++) { const x = 11 + Math.round(Math.sin(y * 0.5)); rect(d, x, y, x + 1, y, 'water', 22); }
 rect(d, 9, 5, 14, 6, 'plains', 39); rect(d, 9, 12, 14, 13, 'plains', 39); rect(d, 17, 3, 20, 6, 'hill', 4);
 props(d, [['wilds-mossy-log', 5, 6], ['wilds-mossy-log', 16, 11], ['wilds-twisted-tree', 3, 3], ['mossy-boulder', 18, 4], ['wilds-camp', 19, 10], ['chest-medium', 20, 12]]);
-enemies(d, [['Lobo dos troncos', 'morvenianWolf', 7, 9], ['Lobo do vau', 'morvenianWolf', 10, 6], ['Lobo da margem', 'morvenianWolf', 15, 13], ['Arqueiro do riacho', 'archer', 19, 5], ['Saqueador de Mora', 'brigand', 17, 10], ['Chefe dos troncos', 'captain', 20, 9]]);
+enemies(d, [['Mordavian Wolf Final', 'mordavianWolfFinal', 7, 9], ['Mordavian Wolf Final', 'mordavianWolfFinal', 10, 6], ['Mordavian Wolf Final', 'mordavianWolfFinal', 15, 13], ['Arqueiro do riacho', 'archer', 19, 5], ['Saqueador de Mora', 'brigand', 17, 10], ['Chefe dos troncos', 'captain', 20, 9]]);
 
 d = make('random-road-three-routes-market', 'Estrada — O Mercador das Três Rotas', 'road',
   'Elias mantém sua carroça junto ao marco das três rotas. Converse com ele para comprar suprimentos ou equipamentos intermediários (320–1300 Gold), ouvir rumores e conhecer sua história. Salteadores ocupam a saída norte.',
@@ -77,7 +77,7 @@ d = make('random-icelands-blue-antlers', 'Icelands — Os Chifres Azuis', 'ice',
   [['Neera', 'A luz apagou, mas as pedras continuam mornas.'], ['Salazar', 'Alguma coisa ainda dorme abaixo delas. Vamos deixá-la dormir.']]);
 rect(d, 10, 5, 13, 11, 'water', 22); rect(d, 8, 3, 16, 4, 'snow', 15); rect(d, 8, 12, 17, 14, 'snow', 15); rect(d, 17, 5, 21, 10, 'snow', 17);
 props(d, [['rune-stone', 18, 4], ['rune-stone', 21, 11], ['wilds-snowy-pines', 4, 3], ['wilds-snowy-log', 7, 8], ['wilds-snowy-dead-tree', 19, 14], ['chest-medium', 21, 13]]);
-enemies(d, [['Cobalt Blue Deer', 'swampBlueCalf', 16, 7], ['Cobalt Blue Deer', 'swampBlueCalf', 18, 10], ['Lobo da tundra', 'morvenianWolf', 8, 6], ['Lobo da neve', 'morvenianWolf', 15, 13], ['Vigia do círculo', 'archer', 21, 6], ['Guardião das pedras', 'sorcerer', 20, 9]]);
+enemies(d, [['Cobalt Blue Deer', 'swampBlueCalf', 16, 7], ['Cobalt Blue Deer', 'swampBlueCalf', 18, 10], ['Mordavian Wolf Final', 'mordavianWolfFinal', 8, 6], ['Mordavian Wolf Final', 'mordavianWolfFinal', 15, 13], ['Vigia do círculo', 'archer', 21, 6], ['Guardião das pedras', 'sorcerer', 20, 9]]);
 
 d = make('random-icelands-last-beacon', 'Icelands — A Última Baliza', 'ice',
   'A baliza de uma antiga estação ainda queima entre ruínas congeladas. Mortos e saqueadores cercam o abrigo. Os corredores de basalto fornecem cobertura entre as duas encostas.',

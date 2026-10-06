@@ -182,11 +182,11 @@ function preloadExclusiveSfx(file: string): void {
 // Bow cues must be ready before an attack starts: loading either MP3 on its first play can
 // make the shot sound arrive after its projectile. These two small files are used by every
 // ranged attack, so warm them while the game initializes.
-// Each bow has two cues cut from its recording: the string draw (played as the pull begins) and
-// the arrow release (played the instant the arrow leaves the bow).
-for (const file of ["ShortArrowsDraw.mp3", "ShortArrowsRelease.mp3", "Arrows1Draw.mp3", "Arrows1Release.mp3"]) preloadExclusiveSfx(file);
+// Shared bow recordings have draw and release cues; Neera's supplied shot cue plays at the
+// start of her attack so its timing stays aligned with her animation.
+for (const file of ["ShortArrowsDraw.mp3", "ShortArrowsRelease.mp3", "NeeraBowRelease.mp3"]) preloadExclusiveSfx(file);
 // Every other attack/cast cue is warmed too, so none of them loads on its first use.
-for (const file of ["ATT01Blunt.mp3", "Spellcast01.mp3"]) preloadExclusiveSfx(file);
+for (const file of ["ATT01Blunt.mp3", "BladeSlash1Dagger.mp3", "Spellcast01.mp3"]) preloadExclusiveSfx(file);
 if (typeof Audio !== "undefined") {
   for (const file of ["CultistV2Attack.mp3", "CultistV2Spellcast.mp3", "MinorHorrorATT001.mp3", "MinorHorrorCasting001.mp3"]) sfxTemplate(file);
 }
@@ -222,12 +222,8 @@ export const sfxPlay = {
   spell: () => playSfxFileExclusive("Spellcast01.mp3", 0.55),
   dreamingWeb: () => {},
   summonFamiliar: () => {},
-  // meleeAttack (stepCombat's basic melee lunge) and thrust/sweep/trip (a physical skill's
-  // own activation cue) share ATT01Blunt.mp3. spell and heal
-  // (stepSpell's cast cue, magic or physical-skill alike) share Spellcast01.mp3 the same way.
-  // playSfxFileExclusive keeps repeats of either file from stacking into a buzz when several
-  // fire in quick succession.
-  meleeAttack: () => playSfxFileExclusive("ATT01Blunt.mp3", 0.55),
+  // Weapon cues share the exclusive player so rapid repeats never stack.
+  meleeAttack: (blade = false) => playSfxFileExclusive(blade ? "BladeSlash1Dagger.mp3" : "ATT01Blunt.mp3", 0.55),
   // Cultist V2's own authored cues (see attachments/Cultist-V2), one per animation set —
   // played instead of the (now silent) generic attack/cast/move cues whenever the acting
   // unit's sprite is "cultist-v2" (see stepCombat/stepSpell/startSeq in engine.ts).
@@ -238,17 +234,17 @@ export const sfxPlay = {
   cultistV2Spellcast: () => playSfxFile("CultistV2Spellcast.mp3", 0.55),
   cultistV2WalkLeft: () => playSfxFile("CultistV2WalkLeft.mp3", 0.45),
   cultistV2WalkRight: () => playSfxFile("CultistV2WalkRight.mp3", 0.45),
-  arrowAttack: (neera = false) => playSfxFileExclusive(neera ? "Arrows1Draw.mp3" : "ShortArrowsDraw.mp3", 0.55),
-  arrowRelease: (neera = false) => playSfxFileExclusive(neera ? "Arrows1Release.mp3" : "ShortArrowsRelease.mp3", 0.55),
+  arrowAttack: (neera = false) => playSfxFileExclusive(neera ? "NeeraBowRelease.mp3" : "ShortArrowsDraw.mp3", 0.55),
+  arrowRelease: (neera = false) => { if (!neera) playSfxFileExclusive("ShortArrowsRelease.mp3", 0.55); },
   magicAttack: () => playSfxFileExclusive("Spellcast01.mp3", 0.55),
   heal: () => playSfxFileExclusive("Spellcast01.mp3", 0.55),
   stun: () => {},
   miss: () => {},
   chest: () => {},
   loot: () => {},
-  thrust: () => playSfxFileExclusive("ATT01Blunt.mp3", 0.55),
-  sweep: () => playSfxFileExclusive("ATT01Blunt.mp3", 0.55),
-  trip: () => playSfxFileExclusive("ATT01Blunt.mp3", 0.55),
+  thrust: (blade = false) => playSfxFileExclusive(blade ? "BladeSlash1Dagger.mp3" : "ATT01Blunt.mp3", 0.55),
+  sweep: (blade = false) => playSfxFileExclusive(blade ? "BladeSlash1Dagger.mp3" : "ATT01Blunt.mp3", 0.55),
+  trip: (blade = false) => playSfxFileExclusive(blade ? "BladeSlash1Dagger.mp3" : "ATT01Blunt.mp3", 0.55),
   levelUp: () => playSfxFile("LevelUp.mp3", 0.6),
 };
 

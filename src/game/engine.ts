@@ -615,7 +615,7 @@ type Active =
   | { type: "delay"; t: number; dur: number }
   /** Long-sheet wind-up (see startSeq): the caster/archer plays its whole cast or attack
    * sheet before the spell, skill or arrow step it precedes is allowed to start. */
-  | { type: "windup"; id: string; t: number; dur: number; pose: "cast" | "attack" };
+  | { type: "windup"; id: string; t: number; dur: number; pose: "cast" | "attack" | "specialAttack" };
 
 function pub(u: Unit, restrained: boolean, movLeft: number): UnitPublic {
   return {
@@ -2306,9 +2306,9 @@ export class BattleEngine {
       if (step.type === "spell") {
         const caster = this.units.find((u) => u.id === step.att);
         const arrowSpell = step.spellKind === "longShot" || step.spellKind === "multiShot" || step.spellKind === "piercing";
-        const meleeSkill = step.spellKind === "cleave" || step.spellKind === "sweep" || step.spellKind === "shoulderSmash" || step.spellKind === "stampede";
+        const meleeSkill = step.spellKind === "cleave" || step.spellKind === "sweep" || step.spellKind === "shoulderSmash" || step.spellKind === "stampede" || step.spellKind === "piercingThrust" || step.spellKind === "trip" || step.spellKind === "doubleStrike";
         if (arrowSpell) sfxPlay.arrowAttack(caster?.sprite === "neera");
-        else if (meleeSkill) sfxPlay.meleeAttack();
+        else if (meleeSkill) sfxPlay.meleeAttack(!!caster && this.isBladeAttack(caster));
         else if (step.spellKind !== "webOfDreams" && step.spellKind !== "bless" && !meleeSkill) {
           if (caster?.sprite === "minor-horror-001") sfxPlay.minorHorrorCast();
           else if (caster?.sprite === "cultist-v2") sfxPlay.cultistV2Spellcast();
@@ -2324,7 +2324,7 @@ export class BattleEngine {
         } else if (attacker && !this.isArcaneCaster(attacker) && (attacker.sprite !== "kaelFinal" || !!step.customDice)) {
           // Kael's long main-hand swing is cued at its strike instead (see stepCombat's lunge end).
           if (attacker.sprite === "minor-horror-001") sfxPlay.minorHorrorAttack();
-          else sfxPlay.meleeAttack();
+          else sfxPlay.meleeAttack(step.spellKind !== "shieldBash" && this.isBladeAttack(attacker, !!step.customDice));
         }
       } else if (step.type === "heal" || step.type === "cureDisease") {
         sfxPlay.heal();
@@ -2349,18 +2349,21 @@ export class BattleEngine {
         step.type === "spell" &&
         (step.spellKind === "doubleStrike" || step.spellKind === "cleave" || step.spellKind === "piercingThrust" || step.spellKind === "sweep" || step.spellKind === "trip" || step.spellKind === "shoulderSmash" || step.spellKind === "stampede");
       const ranged = !meleeSkill && (step.type !== "combat" || (!!actor && !step.customDice && (this.isArrowAttack(actor) || this.isArcaneCaster(actor))));
-      const pose = step.type === "combat" ? "attack" : "cast";
+      const arrowSkill = step.type === "spell" && (step.spellKind === "longShot" || step.spellKind === "multiShot" || step.spellKind === "piercing");
+      const neeraArrowSkill = !!actor && actor.sprite === "neera" && arrowSkill;
+      const pose = neeraArrowSkill ? "specialAttack" : step.type === "combat" ? "attack" : "cast";
       const frames = actor
-        ? pose === "cast"
+        ? neeraArrowSkill
+          ? (this.art.attacks2[actor.sprite] ?? this.art.attacks[actor.sprite])
+          : pose === "cast"
           ? (this.art.casts[actor.sprite] ?? this.art.attacks[actor.sprite])
-          : actor.classId !== "bigBlueCalf" && actor.idleAlt
+          : actor.classId !== "bigBlueCalf" && actor.sprite !== "neera" && actor.idleAlt
             ? (this.art.attacks2[actor.sprite] ?? this.art.attacks[actor.sprite])
             : this.art.attacks[actor.sprite]
         : undefined;
       const targetAlive = step.type !== "combat" || !!target?.alive;
       if (actor && ranged && targetAlive && (frames?.length ?? 0) >= LONG_SHEET_FRAMES) {
         const arrowAttack = step.type === "combat" && this.isArrowAttack(actor);
-        const arrowSkill = step.type === "spell" && (step.spellKind === "longShot" || step.spellKind === "multiShot" || step.spellKind === "piercing");
         const release = arrowSkill ? LONG_ARROW_SKILL_RELEASE_SECONDS : arrowAttack ? LONG_ARROW_RELEASE_SECONDS : actor.classId === "minorHorror" ? MINOR_HORROR_SECONDS.cast : LONG_ANIM_SECONDS;
         this.woundUp.set(step, release);
         this.queue.unshift(step);
@@ -2707,7 +2710,7 @@ export class BattleEngine {
           this.emitMissileFx(actor.x, actor.y, target.x, target.y, "arcaneBolt");
         } else if (actor.sprite === "kaelFinal" && !this.offHandStrike(a)) {
           // The wind-up is half the sheet; the blow lands now, so the sound lands now.
-          sfxPlay.meleeAttack();
+          sfxPlay.meleeAttack(a.spellKind !== "shieldBash" && this.isBladeAttack(actor));
         }
         a.t = 0;
         a.stage = a.stage === "lunge" ? "hit" : "counterHit";
@@ -2839,7 +2842,7 @@ export class BattleEngine {
                 target.res = Math.round(target.res * keep);
                 target.mov = Math.max(1, Math.round(target.mov * keep));
               }
-              sfxPlay.trip();
+              sfxPlay.trip(this.isBladeAttack(actor));
             }
             if (a.stage === "hit" && a.spellKind === "shieldBash") {
               target.stunned = true;
@@ -2905,7 +2908,7 @@ export class BattleEngine {
               if (def.sprite === "cultist-v2") sfxPlay.cultistV2Attack();
               else sfxPlay.magicAttack();
             } else if (def.sprite === "minor-horror-001") sfxPlay.minorHorrorAttack();
-            else if (def.sprite !== "kaelFinal" || a.counterCustomDice) sfxPlay.meleeAttack();
+            else if (def.sprite !== "kaelFinal" || a.counterCustomDice) sfxPlay.meleeAttack(this.isBladeAttack(def, !!a.counterCustomDice));
             a.stage = "counterLunge";
           }
           else if (!def.alive) a.stage = "fade";
@@ -4035,6 +4038,13 @@ export class BattleEngine {
       burst.kind = kind;
     }
   }
+  /** Resolve the striking hand; shared class pools also contain blunt weapons. */
+  private isBladeAttack(unit: Unit, offHand = false): boolean {
+    if (offHand) return !!unit.offHandId && EQUIPMENT[unit.offHandId]?.kind === "weapon";
+    const weaponId = unit.weaponId ?? starterWeaponFor(unit.classId);
+    return !!weaponId && /^(espada|machado|lamina|adaga|punhal|katar)/.test(weaponId);
+  }
+
   /** True only for bow/crossbow users. Reach weapons strike physically instead of firing arrows. */
   private isArrowAttack(unit: Unit): boolean {
     // Reach weapons are always physical, even if an imported loadout is incorrectly flagged ranged.
@@ -5142,7 +5152,7 @@ export class BattleEngine {
     this.tip = null;
     this.mode = "locked";
     this.queue.push({ type: "spell", att: u.id, tiles, ids, label: SWEEP.name, spellKind: "sweep" });
-    sfxPlay.sweep();
+    sfxPlay.sweep(this.isBladeAttack(u));
   }
 
   startTrip(): void {
@@ -6380,7 +6390,7 @@ export class BattleEngine {
     this.missileTargets = [];
     this.tip = null;
     this.mode = "locked";
-    sfxPlay.thrust();
+    sfxPlay.thrust(this.isBladeAttack(unit));
     this.queue.push({ type: "spell", att: unit.id, tiles: line, ids, label: PIERCING_THRUST.name, spellKind: "piercingThrust" });
   }
 
@@ -9372,6 +9382,8 @@ export class BattleEngine {
 
   private idleFrame(u: Unit, n: number): number {
     if (n <= 1) return 0;
+    // Neera V2 Idle atlas: 36 frames, 98 ms per frame.
+    if (u.sprite === "neera") return Math.floor(u.bob / 0.098) % n;
     const moving = this.active?.type === "move" && this.active.id === u.id;
     if (u.sprite === "minor-horror-001") return Math.floor(u.bob * n / MINOR_HORROR_SECONDS.idle) % n;
     if (u.sprite === "big-blue-ox-002") return Math.floor(u.bob * (moving ? 8 * BIG_BLUE_OX_PACE : n / 5.5)) % n;
@@ -9469,7 +9481,9 @@ export class BattleEngine {
       const frames =
         a.pose === "cast"
           ? (this.art.casts[u.sprite] ?? this.art.attacks[u.sprite])
-          : u.classId !== "bigBlueCalf" && u.idleAlt
+          : a.pose === "specialAttack"
+            ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite])
+          : u.classId !== "bigBlueCalf" && u.sprite !== "neera" && u.idleAlt
             ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite])
             : this.art.attacks[u.sprite];
       const n = frames?.length ?? 0;
@@ -9489,7 +9503,8 @@ export class BattleEngine {
     // existed. Checked first so a caster with both never mixes an index meant for one pool's
     // frame count into the other.
     if ((a.type === "spell" || a.type === "heal") && a.att === u.id) {
-      const castFrames = this.art.casts[u.sprite] ?? this.art.attacks[u.sprite];
+      const neeraArrowSkill = u.sprite === "neera" && a.type === "spell" && (a.spellKind === "longShot" || a.spellKind === "multiShot" || a.spellKind === "piercing");
+      const castFrames = neeraArrowSkill ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.casts[u.sprite] ?? this.art.attacks[u.sprite];
       if (!castFrames || castFrames.length < 3) return null;
       const n = castFrames.length;
       // Familiar Titã goes back to his idle loop once his cast sheet has played, instead of
@@ -9520,7 +9535,7 @@ export class BattleEngine {
       // its own attack stages, same idea as idles2 but for the swing instead of the stand.
       const attackPool = u.classId === "bigBlueCalf"
         ? (a.spellKind === "bullRush" && !counter ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite])
-        : u.idleAlt ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite];
+        : u.sprite !== "neera" && u.idleAlt ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite];
       // A dedicated counter pose (currently just theButcher's counter-*.png) for the
       // defender's stages only — falls back to the same attacks cut every sprite without
       // one already used for countering, same as before this existed.
@@ -9640,15 +9655,21 @@ export class BattleEngine {
     // Same idleAlt alternation attackPose applies to pick its index (see that function's
     // attackPool) — mirrored here so the frame actually drawn comes from the same array.
     const oxRush = u.classId === "bigBlueCalf" && this.active?.type === "combat" && this.active.spellKind === "bullRush" && this.active.att === u.id && !this.active.stage.startsWith("counter");
-    const atkBase = u.classId === "bigBlueCalf"
-      ? (oxRush ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite])
-      : u.idleAlt ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite];
+    const neeraArrowSkill = u.sprite === "neera" && (
+      (this.active?.type === "spell" && this.active.att === u.id && (this.active.spellKind === "longShot" || this.active.spellKind === "multiShot" || this.active.spellKind === "piercing")) ||
+      (this.active?.type === "windup" && this.active.id === u.id && this.active.pose === "specialAttack")
+    );
+    const atkBase = neeraArrowSkill
+      ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite])
+      : u.classId === "bigBlueCalf"
+        ? (oxRush ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite])
+        : u.sprite !== "neera" && u.idleAlt ? (this.art.attacks2[u.sprite] ?? this.art.attacks[u.sprite]) : this.art.attacks[u.sprite];
     const offHandSwing =
       this.active?.type === "combat" &&
       (this.active.stage.startsWith("counter") ? this.active.def : this.active.att) === u.id &&
       this.offHandStrike(this.active);
     const atkShort = offHandSwing ? this.art.attacksShort[u.sprite] : undefined;
-    const atkPool = atkShort ?? (faceRight ? atkBase : (this.art.attacksLeft[u.sprite] ?? atkBase));
+    const atkPool = atkShort ?? (faceRight ? atkBase : (neeraArrowSkill ? (this.art.attacks2Left[u.sprite] ?? atkBase) : (this.art.attacksLeft[u.sprite] ?? atkBase)));
     const walk = atk == null && moving ? walkPool : undefined;
     // attackPose computes its index against whichever pool it picked (casts for a spell/heal
     // cast, counters for the defender's own counter stages, attacks otherwise), so this has
@@ -9656,8 +9677,14 @@ export class BattleEngine {
     const casting =
       this.active &&
       (((this.active.type === "spell" || this.active.type === "heal") && this.active.att === u.id) ||
-        (this.active.type === "windup" && this.active.pose === "cast" && this.active.id === u.id));
-    const castPool = faceRight ? this.art.casts[u.sprite] : (this.art.castsLeft[u.sprite] ?? this.art.casts[u.sprite]);
+        (this.active.type === "windup" && (this.active.pose === "cast" || this.active.pose === "specialAttack") && this.active.id === u.id));
+    const castPool = neeraArrowSkill
+      ? faceRight
+        ? this.art.attacks2[u.sprite]
+        : (this.art.attacks2Left[u.sprite] ?? this.art.attacks2[u.sprite])
+      : faceRight
+        ? this.art.casts[u.sprite]
+        : (this.art.castsLeft[u.sprite] ?? this.art.casts[u.sprite]);
     const countering = this.active?.type === "combat" && this.active.stage.startsWith("counter") && this.active.def === u.id;
     const counterPool = faceRight ? this.art.counters[u.sprite] : (this.art.countersLeft[u.sprite] ?? this.art.counters[u.sprite]);
     // Hit reaction (GameArt.hits): plays for HIT_ANIM_SECONDS after taking damage, unless the
@@ -9782,7 +9809,7 @@ export class BattleEngine {
     // Plague Bearing Cattle: same 640x404 canvas, ground line and standing fill as the Undead Ox.
     const undeadOxHeightScale = u.sprite === "big-blue-ox-002" ? 0.85 : u.sprite === "undeadOx" || u.sprite === "plague-bearing-cattle" ? 1.283 : 1;
     const undeadOxWidthScale = u.sprite === "big-blue-ox-002" ? 1.49 : u.sprite === "undeadOx" || u.sprite === "plague-bearing-cattle" ? 1.889 : 1;
-    const h =
+    let h =
       cell *
       (s >= 4 ? 3.35 : s === 2 ? 1.72 : boss ? 1.44 : 1.42) *
       1.2 *
@@ -9805,7 +9832,7 @@ export class BattleEngine {
       kaelFinalAtkScale *
       neeraAtkScale *
       neeraCastScale;
-    const w =
+    let w =
       cell *
       (s >= 4 ? 2.85 : s === 2 ? 1.85 : boss ? 1.12 : 1.11) *
       1.2 *
@@ -9835,6 +9862,18 @@ export class BattleEngine {
       kaelFinalAtkScale *
       neeraAtkScale *
       neeraCastScale;
+    // Neera V2 exports use different canvas padding. Keep a fixed source-pixel scale
+    // per sheet, measured from its first upright hood-to-boot pose (not the bow).
+    // Weapons and leaning poses can change bounds without resizing her body per frame.
+    const neeraV2Sheet = img?.src.includes("/neera-v2-001/")
+      ? img.src.match(/\/(idle|atk2|atk-short|atk|move)-(?:left-)?\d+\.png/)?.[1] : undefined;
+    if (neeraV2Sheet && img) {
+      const standingBodyPixels: Record<string, number> = { idle: 800, atk: 672, atk2: 755, "atk-short": 675, move: 471 };
+      // 1.53 cells: middle of Kael, Aldric, Salazar and Voss's visible human heights.
+      const worldPerPixel = cell * 1.53 / standingBodyPixels[neeraV2Sheet]!;
+      h = img.naturalHeight * worldPerPixel;
+      w = img.naturalWidth * worldPerPixel;
+    }
     // The cast cut's own content also sits higher inside its canvas than idle/attack's does
     // (feet reach only ~87% of the way down vs idle's ~99%) — without this, boosting h above
     // would float the feet even further off the ground than they already subtly are. Shifts
@@ -9842,7 +9881,7 @@ export class BattleEngine {
     // Kael Final's atk sheet and Neera's atk/cast sheets each measured a smaller, consistent
     // version of the same gap (feet sitting a bit higher in their own canvas than idle's does)
     // — same fix, smaller correction.
-    const footOffset = isCultistV2Casting
+    const footOffset = neeraV2Sheet ? 0 : isCultistV2Casting
       ? h * 0.127
       : isKaelFinalAttacking
         ? h * 0.025
@@ -9866,6 +9905,7 @@ export class BattleEngine {
     // Having a left ATT cut must not suppress the mirror of casts, counters or off-hand art.
     const dirActionAttack = atk != null && !!frames && (
       frames === this.art.attacksLeft[u.sprite] ||
+      frames === this.art.attacks2Left[u.sprite] ||
       frames === this.art.castsLeft[u.sprite] ||
       frames === this.art.countersLeft[u.sprite]
     );
@@ -9884,7 +9924,7 @@ export class BattleEngine {
     // while visibly facing left), and facing left then mirrored that already-left-facing
     // footage into facing right (walked left while visibly facing right) — reported as
     // "two reverse walk" rather than the one intended mirror-for-left-only.
-    const neeraWalkReversed = u.sprite === "neera" && walk != null;
+    const neeraWalkReversed = u.sprite === "neera" && atk == null;
     const deerFacingReversed = u.sprite === "cobalt-blue-deer";
     // Kael Final's idle (1..36.png) is drawn turned three-quarters to the LEFT, while his atk and
     // move cuts face right — so his idle must mirror the other way to face his enemy.
@@ -9894,6 +9934,7 @@ export class BattleEngine {
     // A fixed set of sprites skip the breath squash/stretch entirely (ctx.scale(flip, 1)) —
     // see the identical branch this replaced in renderUnitsAndOverlays.
     const noBreathScale =
+      !!neeraV2Sheet ||
       u.sprite === "defaultWarrior" ||
       u.sprite === "kaelEarly" ||
       u.sprite === "aldric" ||
@@ -10239,9 +10280,9 @@ export class BattleEngine {
       ctx.lineWidth = Math.max(4, tile * 0.11);
       this.hexPath(ctx, cx, cy, tile * 0.94);
       ctx.stroke();
-      ctx.strokeStyle = marker.fill;
+      ctx.strokeStyle = marker.player ? "rgba(220,226,235,0.32)" : marker.fill;
       ctx.shadowColor = marker.fill;
-      ctx.shadowBlur = marker.player ? tile * 0.12 : 0;
+      ctx.shadowBlur = marker.player ? tile * 0.035 : 0;
       ctx.lineWidth = Math.max(2, tile * 0.055);
       ctx.stroke();
       ctx.restore();

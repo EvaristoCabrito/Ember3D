@@ -87,7 +87,7 @@ try {
       });
       if (housesReady && i >= 30) break;
     }
-    if (!housesReady) failures.push('house artwork failed to finish loading for inspection');
+    if (!housesReady) failures.push('house artwork failed to finish loading for inspection: ' + JSON.stringify(houses.map(h => ({ id: h.id, image: engine.art.decorations[h.id]?.src, width: engine.art.decorations[h.id]?.naturalWidth, entries: renderer.decorEntries.filter(e => e.placement.id === h.id).length }))));
     window.__qaCanvas = canvas;
     const debug = document.createElement('canvas');
     debug.width = 1600; debug.height = 1000;

@@ -2953,22 +2953,22 @@
       {
         "x": 10,
         "y": 10,
-        "classId": "mordavianWolf",
-        "name": "Staked Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {
         "x": 14,
         "y": 12,
-        "classId": "mordavianWolf",
-        "name": "Staked Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {
         "x": 15,
         "y": 7,
-        "classId": "mordavianWolf",
-        "name": "Staked Wolf",
+        "classId": "mordavianWolfFinal",
+        "name": "Mordavian Wolf Final",
         "level": 8
       },
       {
