@@ -70,7 +70,7 @@ export class MagicMissileV2VFX {
   private rng = 1;
   private disposed = false;
 
-  constructor(private readonly scene: THREE.Scene) {
+  constructor(private readonly scene: THREE.Object3D) {
     this.particles = new THREE.InstancedMesh(this.particlesGeometry, this.particlesMaterial, 96);
     this.particles.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.particles.frustumCulled = false; this.particles.count = 0;
     this.root.add(this.particles); this.scene.add(this.root);

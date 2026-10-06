@@ -20,6 +20,7 @@ import {
   FRAG_ELEMENTAL,
   FRAG_LIGHT,
   FRAG_PARTICLE,
+  FRAG_SPELL_OVERLAY,
   VERT_FULLSCREEN,
   VERT_QUAD,
 } from "./shaders";
@@ -131,6 +132,8 @@ export class EffectsRenderer {
   private uParticle;
   private progComposite: WebGLProgram;
   private uComposite;
+  private progSpellOverlay: WebGLProgram;
+  private uSpellOverlay;
   private progBrightpass: WebGLProgram;
   private uBrightpass;
   private progBlur: WebGLProgram;
@@ -153,8 +156,8 @@ export class EffectsRenderer {
   private nextId = 1;
   private time = 0;
 
-  constructor(private canvas: HTMLCanvasElement) {
-    const gl = canvas.getContext("webgl2", { alpha: false, antialias: false, premultipliedAlpha: false });
+  constructor(private canvas: HTMLCanvasElement, private readonly overlayOnly = false) {
+    const gl = canvas.getContext("webgl2", { alpha: overlayOnly, antialias: false, premultipliedAlpha: false });
     if (!gl) throw new Error("WebGL2 unavailable");
     this.gl = gl;
 
@@ -206,6 +209,8 @@ export class EffectsRenderer {
 
     this.progComposite = createProgram(gl, VERT_FULLSCREEN, FRAG_COMPOSITE);
     this.uComposite = uniformLocations(gl, this.progComposite, ["u_scene", "u_light", "u_effects", "u_bloom", "u_bloomStrength"] as const);
+    this.progSpellOverlay = createProgram(gl, VERT_FULLSCREEN, FRAG_SPELL_OVERLAY);
+    this.uSpellOverlay = uniformLocations(gl, this.progSpellOverlay, ["u_effects", "u_bloom", "u_bloomStrength"] as const);
 
     this.progBrightpass = createProgram(gl, VERT_FULLSCREEN, FRAG_BRIGHTPASS);
     this.uBrightpass = uniformLocations(gl, this.progBrightpass, ["u_src", "u_threshold"] as const);
@@ -546,21 +551,34 @@ export class EffectsRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.fullW, this.fullH);
     gl.disable(gl.BLEND);
-    gl.useProgram(this.progComposite);
     bindAttrib(gl, this.triBuf, 0, 2);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.sceneTex);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.lightFbo.tex);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.effectsFbo.tex);
-    gl.activeTexture(gl.TEXTURE3);
-    gl.bindTexture(gl.TEXTURE_2D, bloomResult.tex);
-    gl.uniform1i(this.uComposite.u_scene, 0);
-    gl.uniform1i(this.uComposite.u_light, 1);
-    gl.uniform1i(this.uComposite.u_effects, 2);
-    gl.uniform1i(this.uComposite.u_bloom, 3);
-    gl.uniform1f(this.uComposite.u_bloomStrength, GLOBAL_FX_PARAMS.bloomStrength);
+    if (this.overlayOnly) {
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(this.progSpellOverlay);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.effectsFbo.tex);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, bloomResult.tex);
+      gl.uniform1i(this.uSpellOverlay.u_effects, 0);
+      gl.uniform1i(this.uSpellOverlay.u_bloom, 1);
+      gl.uniform1f(this.uSpellOverlay.u_bloomStrength, GLOBAL_FX_PARAMS.bloomStrength);
+    } else {
+      gl.useProgram(this.progComposite);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.sceneTex);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.lightFbo.tex);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, this.effectsFbo.tex);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, bloomResult.tex);
+      gl.uniform1i(this.uComposite.u_scene, 0);
+      gl.uniform1i(this.uComposite.u_light, 1);
+      gl.uniform1i(this.uComposite.u_effects, 2);
+      gl.uniform1i(this.uComposite.u_bloom, 3);
+      gl.uniform1f(this.uComposite.u_bloomStrength, GLOBAL_FX_PARAMS.bloomStrength);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -579,6 +597,7 @@ export class EffectsRenderer {
     gl.deleteProgram(this.progLight);
     gl.deleteProgram(this.progParticle);
     gl.deleteProgram(this.progComposite);
+    gl.deleteProgram(this.progSpellOverlay);
     gl.deleteProgram(this.progBrightpass);
     gl.deleteProgram(this.progBlur);
   }

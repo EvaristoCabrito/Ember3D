@@ -232,7 +232,7 @@ class WebZoneVFX {
   private readonly settings: WebOfDreamsVfxSettings;
 
   constructor(
-    private readonly scene: THREE.Scene,
+    private readonly scene: THREE.Object3D,
     private readonly worldCenter: THREE.Vector3,
     private tile: number,
     radius: number,
@@ -568,7 +568,7 @@ export class WebOfDreamsVFX {
   private previewComplete = false;
   private settings: WebOfDreamsVfxSettings = getActiveWebOfDreamsVfxSettings();
 
-  constructor(private readonly scene: THREE.Scene) {}
+  constructor(private readonly scene: THREE.Object3D) {}
 
   setSettings(settings: WebOfDreamsVfxSettings): void {
     this.settings = { ...settings };

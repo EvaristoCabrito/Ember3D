@@ -690,6 +690,22 @@ void main() {
 }
 `;
 
+/** Transparent overlay for live spell/skill bursts, separate from map-authored elemental FX. */
+export const FRAG_SPELL_OVERLAY = `${VERSION}${PRECISION}
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_effects;
+uniform sampler2D u_bloom;
+uniform float u_bloomStrength;
+void main() {
+  vec4 fx = texture(u_effects, v_uv);
+  vec3 glow = texture(u_bloom, v_uv).rgb * u_bloomStrength;
+  vec3 radiance = max(fx.rgb + glow, vec3(0.0));
+  float alpha = clamp(max(fx.a, max(max(glow.r, glow.g), glow.b)), 0.0, 1.0);
+  fragColor = vec4(alpha > 0.0001 ? radiance / alpha : vec3(0.0), alpha);
+}
+`;
+
 export const FRAG_BRIGHTPASS = `${VERSION}${PRECISION}
 in vec2 v_uv;
 out vec4 fragColor;

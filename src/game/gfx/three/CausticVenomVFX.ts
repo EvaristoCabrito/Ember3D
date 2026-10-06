@@ -102,7 +102,7 @@ export class CausticVenomVFX {
   private flightArc = 0;
   private disposed = false;
 
-  constructor(private readonly scene: THREE.Scene) {
+  constructor(private readonly scene: THREE.Object3D) {
     const sphere = new THREE.IcosahedronGeometry(1, 3);
     this.chargeCore = new THREE.Mesh(sphere, this.makeMaterial(HIGHLIGHT, 0x69d51b, 1.9, 0.18));
     this.chargeShell = new THREE.Mesh(sphere, this.makeMaterial(GREEN, 0x37b509, 1.15, 0.12));

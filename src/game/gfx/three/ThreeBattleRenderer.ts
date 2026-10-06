@@ -77,6 +77,7 @@ import { pixelPreset, ProceduralElementEmitter, type PixelElement } from "./Proc
 import { CleaveSweepVFX, VarreduraVFX, type VfxLightPool } from "./VarreduraVFX";
 
 const SQRT3 = Math.sqrt(3);
+const SPELL_VFX_LAYER = MagicMissileForeground.layer;
 /** Must match BattleEngine's private boardPad() (tile * 2.4) — duplicated here rather than
  * exposed because it's one number, not worth widening engine.ts's public surface for. */
 const BOARD_PAD_MUL = 2.4;
@@ -655,6 +656,7 @@ interface UnitMeshEntry {
 export class ThreeBattleRenderer {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
+  private readonly spellVfxScene = new THREE.Group();
   private fireballVfx: FireballVFX | null = null;
   private causticVenomVfx: CausticVenomVFX | null = null;
   private phantasmalForceVfx: PhantasmalForceVFX | null = null;
@@ -1045,22 +1047,23 @@ export class ThreeBattleRenderer {
 
     this.scene.add(this.healingSpellLight);
     this.scene.add(this.atmosphere.group);
+    this.scene.add(this.spellVfxScene);
     // Construct synchronously: every live Fireball impact particle is procedural, so no image
     // request can leave the spell without its flight or explosion when cast immediately.
-    this.fireballVfx = new FireballVFX(this.scene, this.camera, this.tavernFireball);
+    this.fireballVfx = new FireballVFX(this.spellVfxScene, this.camera, this.tavernFireball);
     this.engine.fireballVfxAvailable = true;
-    this.causticVenomVfx = new CausticVenomVFX(this.scene);
+    this.causticVenomVfx = new CausticVenomVFX(this.spellVfxScene);
     this.engine.causticVenomVfxAvailable = true;
-    this.phantasmalForceVfx = new PhantasmalForceVFX(this.scene);
+    this.phantasmalForceVfx = new PhantasmalForceVFX(this.spellVfxScene);
     this.phantasmalForceVfx.setSettings(getActivePhantasmalForceSettings());
     this.engine.phantasmalForceVfxAvailable = true;
-    this.blessVfx = new BlessVFX(this.scene);
+    this.blessVfx = new BlessVFX(this.spellVfxScene);
     this.blessVfx.setSettings(getActiveBlessVfxSettings());
     this.engine.blessVfxAvailable = true;
-    this.magicMissileV2Vfx = new MagicMissileV2VFX(this.scene);
+    this.magicMissileV2Vfx = new MagicMissileV2VFX(this.spellVfxScene);
     this.magicMissileV2Vfx.setSettings(getActiveMagicMissileV2Settings());
     this.engine.magicMissileV2VfxAvailable = true;
-    this.webOfDreamsVfx = new WebOfDreamsVFX(this.scene);
+    this.webOfDreamsVfx = new WebOfDreamsVFX(this.spellVfxScene);
     this.engine.burningHandsV2VfxAvailable = true;
 
     // Only the wisp embers ever render into the bloom-only pass (everything else gets forced to
@@ -1346,7 +1349,8 @@ export class ThreeBattleRenderer {
     }
     this.water.mesh.visible = true;
     this.water.flat.value = engine.tacticsCamera ? 0 : 1;
-    this.water.time.value = performance.now() / 1000;
+    // Use battle simulation time so water pauses with the scene behind a briefing/dialog.
+    this.water.time.value = engine.time;
   }
 
   private syncTerrainHeight(tile: number): void {
@@ -2799,7 +2803,7 @@ export class ThreeBattleRenderer {
   /** Call once per frame in place of BattleEngine.renderGround — updateCameraLayout runs the
    * exact same camera/visibility bookkeeping renderGround always did (see that method's own
    * comment), just without drawing through the Canvas2D shim afterward. */
-  render(cssW: number, cssH: number): void {
+  render(cssW: number, cssH: number, paused = false): void {
     const tile = this.engine.updateCameraLayout(cssW, cssH);
     this.updateCamera(cssW, cssH, tile);
     this.engine.architectureRenderedInThree = true;
@@ -2815,7 +2819,7 @@ export class ThreeBattleRenderer {
     // Emitter simulation produces its current flicker value, then this same shared light pool
     // applies it to terrain, props and units in the same frame.
     const now = performance.now();
-    const dt = Math.min(0.1, (now - this.lastFrameTime) / 1000);
+    const dt = paused ? 0 : Math.min(0.1, (now - this.lastFrameTime) / 1000);
     this.lastFrameTime = now;
     this.syncPixelElementEmitters(tile, cssW, cssH, dt);
     this.syncLights(tile, cssW, cssH);
@@ -2861,6 +2865,7 @@ export class ThreeBattleRenderer {
     const parked = this.parkHiddenLights();
     this.balanceLightCount();
     try {
+      this.syncSpellVfxLayers();
       // Nothing is drawn until every shader is compiled in the background — the loading curtain
       // is up meanwhile — so no frame (first one included) ever freezes compiling them.
       if (this.meleeVfxWarm !== "done") {
@@ -2948,8 +2953,8 @@ export class ThreeBattleRenderer {
     this.meleeVfxWarm = "running";
     const before = new Set(this.scene.children);
     const warm = [
-      new CleaveSweepVFX(this.scene, new THREE.Vector3(), [], 1, {}, this.vfxLights),
-      new VarreduraVFX(this.scene, new THREE.Vector3(), [], 1, this.vfxLights),
+      new CleaveSweepVFX(this.spellVfxScene, new THREE.Vector3(), [], 1, {}, this.vfxLights),
+      new VarreduraVFX(this.spellVfxScene, new THREE.Vector3(), [], 1, this.vfxLights),
     ];
     for (const child of this.scene.children) if (!before.has(child)) child.traverse((o) => { o.frustumCulled = false; });
     // Effects that only build objects mid-cast get a silent dry run first (no-op callbacks; the
@@ -2988,6 +2993,7 @@ export class ThreeBattleRenderer {
     this.renderer.setRenderTarget(previousTarget);
     if (this.magicMissileV2Vfx && this.magicMissileForeground) {
       this.magicMissileV2Vfx.showAllForWarmup();
+      this.syncSpellVfxLayers();
       jobs.push(this.magicMissileForeground.warm(this.scene, this.camera));
     }
     this.restoreParkedLights(parkedForCompile);
@@ -2995,6 +3001,7 @@ export class ThreeBattleRenderer {
       // One real draw into a tiny off-screen target links every compiled program now, so no
       // first cast ever does it mid-fight.
       reveal(); // per-frame updates may have hidden something again in the meantime
+      this.syncSpellVfxLayers();
       const parked = this.parkHiddenLights();
       this.balanceLightCount();
       const target = new THREE.WebGLRenderTarget(4, 4);
@@ -3277,7 +3284,7 @@ export class ThreeBattleRenderer {
       const source=this.engine.unitAnchor(caster);
       const targets=request.targetIds.map((id)=>this.engine.units.find((unit)=>unit.id===id)).filter((unit)=>!!unit).map((unit)=>{const anchor=this.engine.unitAnchor(unit);return{id:unit.id,position:new THREE.Vector3(anchor.worldX,-anchor.worldY,1)};});
       if(targets.length===0)for(const cell of request.tiles){const anchor=this.engine.effectAnchor(cell.x,cell.y);targets.push({id:`tile-${cell.x}-${cell.y}`,position:new THREE.Vector3(anchor.worldX,-anchor.worldY,1)});}
-      this.varreduraVfx.push(new VarreduraVFX(this.scene,new THREE.Vector3(source.worldX,-source.worldY,1),targets,tile,this.vfxLights));
+      this.varreduraVfx.push(new VarreduraVFX(this.spellVfxScene,new THREE.Vector3(source.worldX,-source.worldY,1),targets,tile,this.vfxLights));
     }
     for(let i=this.varreduraVfx.length-1;i>=0;i--){const fx=this.varreduraVfx[i]!;fx.update(dt);if(fx.finished){fx.dispose();this.varreduraVfx.splice(i,1);}}
   }
@@ -3296,7 +3303,7 @@ export class ThreeBattleRenderer {
         const anchor = this.engine.effectAnchor(cell.x, cell.y);
         targets.push({ id: `tile-${cell.x}-${cell.y}`, position: new THREE.Vector3(anchor.worldX, -anchor.worldY, 1) });
       }
-      this.cleaveVfx.push(new CleaveSweepVFX(this.scene, new THREE.Vector3(source.worldX, -source.worldY, 1), targets, tile, {}, this.vfxLights));
+      this.cleaveVfx.push(new CleaveSweepVFX(this.spellVfxScene, new THREE.Vector3(source.worldX, -source.worldY, 1), targets, tile, {}, this.vfxLights));
     }
     for (let i = this.cleaveVfx.length - 1; i >= 0; i--) {
       const fx = this.cleaveVfx[i]!;
@@ -3487,7 +3494,8 @@ export class ThreeBattleRenderer {
   }
 
   renderMagicMissileForeground(cssW: number, cssH: number): void {
-    const active = this.hasMagicMissileV2Vfx();
+    this.syncSpellVfxLayers();
+    const active = this.hasMagicMissileV2Vfx() || this.hasVisibleSpellVfx();
     if (active && !this.magicMissileForeground && this.magicMissileForegroundCanvas) {
       this.magicMissileForeground = new MagicMissileForeground(this.magicMissileForegroundCanvas, this.scene, this.camera);
     }
@@ -3500,6 +3508,26 @@ export class ThreeBattleRenderer {
     } finally {
       this.restoreParkedLights(parked);
     }
+  }
+
+  private hasVisibleSpellVfx(): boolean {
+    let active = false;
+    this.spellVfxScene.traverse((object) => {
+      if (active || (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line) && !(object instanceof THREE.Points) && !(object instanceof THREE.Sprite))) return;
+      let parent: THREE.Object3D | null = object;
+      while (parent && parent !== this.spellVfxScene) {
+        if (!parent.visible) return;
+        parent = parent.parent;
+      }
+      if (parent === this.spellVfxScene && this.spellVfxScene.visible) active = true;
+    });
+    return active;
+  }
+
+  private syncSpellVfxLayers(): void {
+    // Three.js does not inherit layer masks. This also catches meshes created asynchronously
+    // during a live cast, such as Burning Hands' fire flipbook emitter.
+    this.spellVfxScene.traverse((object) => object.layers.set(SPELL_VFX_LAYER));
   }
 
   private syncMagicMissileV2Vfx(dt: number, tile: number): void {
@@ -3556,7 +3584,7 @@ export class ThreeBattleRenderer {
       const relY = -cell.worldY - origin.y;
       halfWidth = Math.max(halfWidth, Math.abs(-direction.y * relX + direction.x * relY));
     }
-    const effect = new BurningHandsV2VFX(this.scene, {
+    const effect = new BurningHandsV2VFX(this.spellVfxScene, {
       id: request.id,
       origin,
       direction,

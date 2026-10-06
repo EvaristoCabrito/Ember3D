@@ -100,7 +100,7 @@ export class BurningHandsV2VFX {
 
   get finished(): boolean { return this.disposed; }
 
-  constructor(private readonly scene: THREE.Scene, private readonly cast: BurningHandsV2Cast) {
+  constructor(private readonly scene: THREE.Object3D, private readonly cast: BurningHandsV2Cast) {
     this.settings = { ...DEFAULT_BURNING_HANDS_V2_SETTINGS, ...cast.settings };
     this.direction = cast.direction.clone().normalize();
     if (this.direction.lengthSq() < 0.001) this.direction.set(0, 1);

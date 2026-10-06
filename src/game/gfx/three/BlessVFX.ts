@@ -81,7 +81,7 @@ export class BlessVFX {
   private randState = 1;
   private particleSeeds: number[] = [];
 
-  constructor(private readonly scene: THREE.Scene) {
+  constructor(private readonly scene: THREE.Object3D) {
     const positions: number[] = [], indices: number[] = [];
     const segments = 160, sides = 8;
     for (let i=0;i<=segments;i++) { const a=i/segments*Math.PI*2; for(let j=0;j<=sides;j++){ const b=j/sides*Math.PI*2; const r=1+0.07*Math.cos(b); positions.push(Math.cos(a)*r,Math.sin(a)*r,0.07*Math.sin(b)); if(i<segments&&j<sides){const k=i*(sides+1)+j; indices.push(k,k+sides+1,k+1,k+1,k+sides+1,k+sides+2);} } }

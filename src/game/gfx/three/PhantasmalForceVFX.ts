@@ -259,7 +259,7 @@ export class PhantasmalForceVFX {
   private readonly particleEject = new THREE.Vector3();
   private disposed = false;
 
-  constructor(private readonly scene: THREE.Scene) {
+  constructor(private readonly scene: THREE.Object3D) {
     this.coreMat = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 }, uEmission: { value: 1 }, uDistortion: { value: 0.08 } },
       vertexShader: CORE_VERTEX,

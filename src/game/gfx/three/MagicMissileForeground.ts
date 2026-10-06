@@ -4,7 +4,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
-/** A separate DOM surface above water and character canvases. Reuses the live spell,
+/** A separate DOM surface above map FX and character canvases. Reuses live spell/skill effects,
  * camera and lights without advancing its animation or changing its authored settings. */
 export class MagicMissileForeground {
   static readonly layer = 31;
@@ -39,8 +39,8 @@ export class MagicMissileForeground {
     this.bloom.radius = bloom.radius;
     this.bloom.threshold = bloom.threshold;
     this.bloom.enabled = bloom.enabled;
-    // World lights still illuminate the terrain in the main pass and the same missile
-    // materials in this pass. Only missile geometry belongs to the foreground layer.
+    // World lights still illuminate the terrain in the main pass and active spells in this pass.
+    // Only spell/skill geometry belongs to the foreground layer.
     scene.traverse(object => { if (object instanceof THREE.Light) object.layers.enable(MagicMissileForeground.layer); });
     const mask = camera.layers.mask;
     const background = scene.background;

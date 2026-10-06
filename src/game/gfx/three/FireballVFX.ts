@@ -40,7 +40,7 @@ export class FireballVFX {
   private disposed = false;
 
   constructor(
-    private readonly scene: THREE.Scene,
+    private readonly scene: THREE.Object3D,
     private readonly camera: THREE.Camera,
     projectile?: OldFireBall,
   ) {

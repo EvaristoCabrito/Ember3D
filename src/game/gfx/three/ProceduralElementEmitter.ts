@@ -106,7 +106,7 @@ export class ProceduralElementEmitter {
   private fireSettings: FireEmitterSettings | null = null;
   private fireDt = 0;
 
-  constructor(private readonly scene:THREE.Scene, preset:PixelElementPreset, settings:Partial<PixelElementSettings>={}) {
+  constructor(private readonly scene:THREE.Object3D, preset:PixelElementPreset, settings:Partial<PixelElementSettings>={}) {
     this.preset = preset;
     this.settings = { ...pixelDefaults(preset.element, preset.version), ...settings };
     this.seed = this.settings.seed >>> 0 || 1;

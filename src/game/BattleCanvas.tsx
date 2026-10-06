@@ -36,6 +36,7 @@ export function BattleCanvas({
   const atmosphericFx = useSyncExternalStore(subscribeDevGfx, () => getDevGfx().atmosphericFx, () => true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const spellFxCanvasRef = useRef<HTMLCanvasElement>(null);
   const tacticalUnitsCanvasRef = useRef<HTMLCanvasElement>(null);
   const unitsCanvasRef = useRef<HTMLCanvasElement>(null);
   const magicMissileCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -98,6 +99,7 @@ export function BattleCanvas({
     // what the map author placed. Degrades to plain 2D (this canvas stays visible, overlay
     // hidden) if WebGL2 isn't available.
     let fx: EffectsRenderer | null = null;
+    let spellFx: EffectsRenderer | null = null;
     // Fog of war: an effect only draws while its hex is in the party's sight. Its anchor is
     // parked far off-screen otherwise, so a placement or spell in the dark shows nothing —
     // neither over the black of unexplored ground nor as a hint of what is happening there.
@@ -123,6 +125,14 @@ export function BattleCanvas({
       } catch {
         fx = null;
         fxCanvas.style.display = "none";
+      }
+    }
+    const spellFxCanvas = spellFxCanvasRef.current;
+    if (spellFxCanvas) {
+      try {
+        spellFx = new EffectsRenderer(spellFxCanvas, true);
+      } catch {
+        spellFxCanvas.style.display = "none";
       }
     }
 
@@ -206,6 +216,11 @@ export function BattleCanvas({
         fxCanvas.style.width = `${w}px`;
         fxCanvas.style.height = `${h}px`;
       }
+      if (spellFxCanvas) {
+        spellFx?.resize(w, h, dpr);
+        spellFxCanvas.style.width = `${w}px`;
+        spellFxCanvas.style.height = `${h}px`;
+      }
       if (unitsCanvas && unitsRenderer) {
         unitsCanvas.width = pw;
         unitsCanvas.height = ph;
@@ -281,7 +296,7 @@ export function BattleCanvas({
         // ordered between terrain and decorations, not a separate 2D overlay, so a blocking
         // decoration or a unit standing on a highlighted hex stays visible on top of it instead
         // of the highlight's tint painting over it.
-        rendererThree.render(wrap.clientWidth, wrap.clientHeight);
+        rendererThree.render(wrap.clientWidth, wrap.clientHeight, pausedRef.current);
         if (!battleReadySent && rendererThree.isWarm()) {
           battleReadySent = true;
           window.dispatchEvent(new CustomEvent("ember:battle-ready"));
@@ -304,15 +319,16 @@ export function BattleCanvas({
         battleReadySent = true;
         window.dispatchEvent(new CustomEvent("ember:battle-ready"));
       }
-      if (fx) {
+      const spellEffects = spellFx ?? fx;
+      if (spellEffects) {
         // Dreaming Web's shot: one "webShot" beam, repositioned every frame via updateOverride
         // to follow the travelling missile's own timing (see BattleEngine.webShotBeam) — it
         // can't use the fixed getAnchor(col,row) model every other effect here relies on.
         const beam = engine.webShotBeam();
         if (beam) {
-          if (webShotId === null) webShotId = fx.spawnEffect("webShot", 0, 0, { radiusTiles: 0.01 });
+          if (webShotId === null) webShotId = spellEffects.spawnEffect("webShot", 0, 0, { radiusTiles: 0.01 });
           const screen = rendererThree?.projectFlatScreen(beam.x, beam.y, wrap.clientWidth, wrap.clientHeight, true);
-          fx.updateOverride(webShotId, {
+          spellEffects.updateOverride(webShotId, {
             x: screen?.x ?? beam.x,
             y: screen?.y ?? beam.y,
             worldX: beam.worldX,
@@ -326,18 +342,16 @@ export function BattleCanvas({
             rotation: beam.angle,
           });
         } else if (webShotId !== null) {
-          fx.removeEffect(webShotId);
+          spellEffects.removeEffect(webShotId);
           webShotId = null;
         }
-        // Spell-cast elemental FX: one-shot WebGL shader bursts a landed fire/acid/lightning/
-        // holy hit queues on the engine (see BattleEngine.queueElementalFx/elementalFxRequests)
-        // since `fx` only exists in this closure. Each carries its own duration and self-expires
-        // in EffectsRenderer, so draining the queue here is all this loop needs to do.
         if (engine.elementalFxRequests.length) {
           for (const req of engine.elementalFxRequests.splice(0)) {
-            fx.spawnEffect(req.kind, req.x, req.y, { duration: req.duration });
+            spellEffects.spawnEffect(req.kind, req.x, req.y, { duration: req.duration });
           }
         }
+      }
+      if (fx) {
         // Skip the rest of the FX pipeline (scene upload, light/effects/bloom FBO passes)
         // whenever nothing — editor-placed or live spell FX — is actually active, so an
         // ordinary fight never pays for it.
@@ -352,7 +366,7 @@ export function BattleCanvas({
             fxCanvas.style.setProperty("-webkit-mask-repeat", "no-repeat");
             fxCanvas.style.display = "block";
           }
-          fx.render(canvas, dt, fxAnchor);
+          fx.render(canvas, pausedRef.current ? 0 : dt, fxAnchor);
         } else if (fxCanvas) {
           fxCanvas.style.display = "none";
           fxCanvas.style.setProperty("mask-image", "none");
@@ -387,6 +401,12 @@ export function BattleCanvas({
           !!rendererThree,
           !!rendererThree && engine.tacticsCamera,
         );
+      }
+      if (spellFx) {
+        if (spellFx.hasEffects()) {
+          if (spellFxCanvas) spellFxCanvas.style.display = "block";
+          spellFx.render(canvas, pausedRef.current ? 0 : dt, fxAnchor);
+        } else if (spellFxCanvas) spellFxCanvas.style.display = "none";
       }
       // Spell foreground is a distinct canvas above both water and character surfaces.
       rendererThree?.renderMagicMissileForeground(wrap.clientWidth, wrap.clientHeight);
@@ -685,6 +705,7 @@ export function BattleCanvas({
       const w = window as Window & { __emberEngine?: BattleEngine };
       if (w.__emberEngine === engine) delete w.__emberEngine;
       fx?.dispose();
+      spellFx?.dispose();
       rendererThree?.dispose();
     };
   // Keep the renderer and its warmed GPU resources mounted when a briefing/dialog pauses
@@ -718,6 +739,7 @@ export function BattleCanvas({
           canvas, so missiles and other overlays drawn there stay in front of the caster, never behind. */}
       <canvas ref={tacticalUnitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
       <canvas ref={unitsCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
+      <canvas ref={spellFxCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ display: "none" }} />
       <canvas ref={magicMissileCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" style={{ mixBlendMode: "screen" }} />
       <canvas ref={unitHudCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full touch-none" />
       {/* Diorama color grade + vignette: a subtle warm key-light / cool shadow wash from the
