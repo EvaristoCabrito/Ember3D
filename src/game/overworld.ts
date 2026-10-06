@@ -64,7 +64,7 @@ export function wispForestHex(): Point | null {
   return wisp ? worldToHex(wisp.x, wisp.y) : null;
 }
 
-/** The opening is deliberately linear: leave the western edge by the east hex, complete
+/** The opening is deliberately linear: clear O Vau before leaving the western edge, complete
  * the full Stone Bridge mission set, then the full three-way travel choice opens up. Kept in the logic layer so a
  * click or a future renderer cannot bypass the tutorial route. */
 export function canStepOverworld(save: SaveData, from: Point, to: Point, test = false): boolean {
@@ -75,6 +75,7 @@ export function canStepOverworld(save: SaveData, from: Point, to: Point, test = 
   // testing movement range/random encounters needs the whole grid open, not just the
   // linear tutorial route out of Stone Bridge.
   if (test) return true;
+  if (!save.completed.includes("vau")) return false;
   // Nobody travels east past Wisp Forest until it has been cleared once.
   const wispHex = wispForestHex();
   if (wispHex && from.x <= wispHex.x && to.x > wispHex.x && wispForestUncleared(save)) return false;

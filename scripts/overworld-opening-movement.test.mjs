@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createServer } from 'vite';
 import { readFile } from 'node:fs/promises';
 
-test('campaign can walk from the first hex and back before completing opening missions', async () => {
+test('campaign first step requires O Vau completion, then allows walking to the bridge and back', async () => {
   const server = await createServer({ configFile: false, server: { middlewareMode: true }, appType: 'custom' });
   try {
     const { emptySave } = await server.ssrLoadModule('/src/game/save.ts');
@@ -21,8 +21,9 @@ test('campaign can walk from the first hex and back before completing opening mi
       assert.deepEqual(save.overworldPos, { col: OVERWORLD_START_HEX.x, row: OVERWORLD_START_HEX.y });
       const next = neighborsOf(OVERWORLD_START_HEX.x, OVERWORLD_START_HEX.y).find(p => p.x > OVERWORLD_START_HEX.x && isOverworldCell(p.x, p.y));
       assert.ok(next);
-      assert.equal(canStepOverworld(save, OVERWORLD_START_HEX, next), true);
-      assert.equal(canStepOverworld(save, next, OVERWORLD_START_HEX), true, 'The bridge must never trap the player');
+      assert.equal(canStepOverworld(save, OVERWORLD_START_HEX, next), completed.includes('vau'));
+      assert.equal(canStepOverworld(save, next, OVERWORLD_START_HEX), completed.includes('vau'));
+      assert.equal(canStepOverworld(save, OVERWORLD_START_HEX, next, true), true, 'Test mode keeps its movement override');
       for (const neighbor of neighborsOf(OVERWORLD_START_HEX.x, OVERWORLD_START_HEX.y)) {
         if (neighbor.y !== OVERWORLD_START_HEX.y) assert.equal(canStepOverworld(save, OVERWORLD_START_HEX, neighbor), false, 'Stay on the predefined line');
       }

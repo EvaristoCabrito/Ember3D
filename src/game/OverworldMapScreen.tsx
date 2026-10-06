@@ -312,16 +312,18 @@ export function OverworldMapScreen({
   const reachable = useMemo(() => {
     const set = new Set<string>();
     set.add(key(overworldPos.col, overworldPos.row));
-    for (const n of neighborsOf(overworldPos.col, overworldPos.row)) set.add(key(n.x, n.y));
+    for (const n of neighborsOf(overworldPos.col, overworldPos.row)) {
+      if (canStepOverworld(save, { x: overworldPos.col, y: overworldPos.row }, n, test)) set.add(key(n.x, n.y));
+    }
     return set;
-  }, [overworldPos.col, overworldPos.row]);
+  }, [overworldPos.col, overworldPos.row, save, test]);
 
   const wildDots = useMemo(
     () =>
       neighborsOf(overworldPos.col, overworldPos.row)
         .filter((n) => isOverworldCell(n.x, n.y) && canStepOverworld(save, { x: overworldPos.col, y: overworldPos.row }, n, test))
         .map((n) => ({ ...n, world: hexToWorld(n.x, n.y) })),
-    [overworldPos.col, overworldPos.row, test],
+    [overworldPos.col, overworldPos.row, save, test],
   );
 
   // Standing exactly on a location's hex snaps the marker to that location's own authored
@@ -339,6 +341,7 @@ export function OverworldMapScreen({
   // other travel restriction on this map.
   const exploredSet = useMemo(() => new Set(save.exploredHexes ?? []), [save.exploredHexes]);
   const isExplored = (loc: WorldLocation) => {
+    if (!save.completed.includes("vau") && loc.id === "stonebridge") return true;
     if (test || loc.id === "estalagem" || loc.id === standingOn?.id) return true;
     const h = worldToHex(loc.x, loc.y);
     return exploredSet.has(key(h.x, h.y));
@@ -350,6 +353,7 @@ export function OverworldMapScreen({
 
   const walkTo = (col: number, row: number) => {
     if (!movementOpen || stepLock.current || !isOverworldCell(col, row)) return;
+    if (!canStepOverworld(save, { x: overworldPos.col, y: overworldPos.row }, { x: col, y: row }, test)) return;
     stepLock.current = true;
     setMovementOpen(false);
     onStep(col, row);
@@ -658,13 +662,15 @@ export function OverworldMapScreen({
               // gives it. A walkable (adjacent) pin still walks normally even in test mode,
               // so the day-clock/rations math stays visible and testable there too; only a
               // distant pin gets the free teleport.
-              const isReachable = test || walkable;
+              const openingVau = !test && !save.completed.includes("vau") && loc.id === "stonebridge";
+              const isReachable = test || walkable || openingVau;
               const expired = locationExpired(loc, gameClock);
               return (
                 <button
                   key={loc.id}
                   type="button"
                   onClick={() => {
+                    if (openingVau) { onPick("vau"); return; }
                     if (loc.id === standingOn?.id) { enterLocation(loc, st); return; }
                     if (walkable) { walkTo(hex.x, hex.y); return; }
                     if (!isReachable) {
