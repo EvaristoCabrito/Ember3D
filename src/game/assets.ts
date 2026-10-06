@@ -98,7 +98,7 @@ export function tileVariantSrc(id: TerrainId, variant: number): string {
 const HERO_PORTRAIT: Partial<Record<string, string>> = {
   defaultWarrior: "/game/portraits/kael.png?v=2",
   kaelFinal: "/game/portraits/kael-final-face-001.jpg?v=1",
-  neera: "/game/portraits/neera-v2.jpg",
+  neera: "/game/portraits/NeeraProperSide-profile.jpg",
   voss: "/game/portraits/voss.png",
   salazar: "/game/portraits/salazar.png",
   aldric: "/game/portraits/aldric-profile-001.jpg?v=3",
@@ -202,9 +202,11 @@ function releaseLoad(): void {
 function spriteFrameSrc(id: SpriteId, frame: string, cacheBust = ""): string {
   // Conjurer's active art is kept as a complete, source-preserved serial. Talk drives idle; the former Idle sheet drives casting.
   const directory = id === "minor-horror-001" ? "minor-horror-003" : id === "big-blue-ox-002" ? "big-blue-ox-ai-006" : id === "conjurer" ? "conjurer/conjurer-complete-003" : id === "sandoval" ? "sandoval/sandoval-complete-001" : id === "kaelFinal" ? "Kael_Final/kael-final-002" : id === "kaelEarly" ? "kael" : id === "defaultWarrior" ? "kael-v2" : id;
-  if (id === "neera" && /^(?:\d+|idle-\d+|atk-(?:left-)?\d+|atk-short-\d+|atk2-(?:left-)?\d+|move-\d+)$/.test(frame)) {
+  if (id === "neera" && /^(?:\d+|idle-\d+|atk-(?:left-)?\d+|atk-short-\d+|atk2-(?:left-)?\d+|move-(?:left-)?\d+)$/.test(frame)) {
     const currentFrame = /^\d+$/.test(frame) ? `idle-${frame}` : frame;
-    return `/game/sprites/neera/neera-v2-001/${currentFrame}.png?v=neera-v2-001`;
+    // Every frame here was rebuilt in place from Attachments/Nerra V2 (feet on one ground line,
+    // centred, same body size per pose), so they carry their own version.
+    return `/game/sprites/neera/neera-v2-001/${currentFrame}.png?v=neera-v2-003`;
   }
   return `/game/sprites/${directory}/${frame}.png${cacheBust}`;
 }
@@ -416,11 +418,9 @@ const WALK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   // authored left-facing cut (real distinct footage, not the CSS mirror every other
   // sprite absent from walksLeft falls back to).
   familiar2: { n: 36, bust: "?v=familiar2-36" },
-  // Shot facing left, the same "opposite of the usual facing-1-as-drawn convention" case
-  // as the familiar — see computeUnitVisual's neeraWalkReversed in engine.ts, which mirrors
-  // this pool for rightward travel and draws it as-is for leftward travel (backwards from
-  // every other sprite's own walk pool). A plain CSS mirror-on-left-only treatment (as if
-  // this were right-facing footage) used to read as walking backwards in BOTH directions.
+  // Right-facing cut (Nerra V2 Walk Right, move-*.png); her authored Walk Left plays from
+  // walksLeft (move-left-*.png, loaded below) — neither is mirrored while she walks (see
+  // dirActionWalk in engine.ts).
   neera: { n: 36, bust: "" },
   "ancient-golem": { n: 36, bust: "" },
   aldric: { n: 36, bust: "?v=aldric-final-001" },
@@ -573,6 +573,7 @@ async function loadSpritePools(id: SpriteId): Promise<Partial<Record<SpritePoolK
   // Neera's new attack sheet includes its own mirrored left-facing cuts. Keep her walk
   // pool mirrored normally; only regular ATT uses this authored left-facing set.
   if (id === "neera" && atk) put("attacksLeft", cut(atk.n, (i) => `atk-left-${i}`, atk.bust));
+  if (id === "neera" && walk) put("walksLeft", cut(walk.n, (i) => `move-left-${i}`, walk.bust));
   // The Butcher, Cultist V2, Familiar 2 and Familiar 3 each have their own authored
   // left-facing walk cut (same frame count as their right-facing one) but no dedicated
   // left-facing attack cut — their attack keeps mirroring the right-facing pool.
@@ -636,9 +637,17 @@ export function requestSpriteArt(art: GameArt, id: SpriteId): Promise<void> {
   return job;
 }
 
-/** Loads every sprite a battle needs (see requestSpriteArt). */
-export function ensureSpriteArt(art: GameArt, ids: Iterable<SpriteId>): Promise<void> {
-  return Promise.all([...new Set(ids)].map((id) => requestSpriteArt(art, id))).then(() => undefined);
+type LoadProgressCallback = (settled: number, total: number) => void;
+
+/** Loads every sprite a battle needs (see requestSpriteArt). Progress counts complete sprite pools. */
+export function ensureSpriteArt(art: GameArt, ids: Iterable<SpriteId>, onProgress?: LoadProgressCallback): Promise<void> {
+  const unique = [...new Set(ids)];
+  let settled = 0;
+  onProgress?.(settled, unique.length);
+  return Promise.all(unique.map(async (id) => {
+    await requestSpriteArt(art, id);
+    onProgress?.(++settled, unique.length);
+  })).then(() => undefined);
 }
 
 /** Drops every loaded sprite not in `keep`, so memory follows the current battle instead of
@@ -655,39 +664,47 @@ export function releaseSpriteArt(art: GameArt, keep: Iterable<SpriteId>): void {
 }
 
 /** Wait for the painted variants before opening a battle; editor variants load on access. */
-export async function ensureTerrainArt(art: GameArt, tiles: readonly TerrainId[], variants: readonly number[]): Promise<void> {
+export async function ensureTerrainArt(art: GameArt, tiles: readonly TerrainId[], variants: readonly number[], onProgress?: LoadProgressCallback): Promise<void> {
   const images = new Set(tiles.map((id, index) => art.tiles[id][variants[index] ?? 0] ?? art.tiles[id][0]));
+  let settled = 0;
+  onProgress?.(settled, images.size);
   await Promise.all([...images].map(image => {
-    if (image.complete) return Promise.resolve();
-    return new Promise<void>(resolve => {
+    const ready = image.complete ? Promise.resolve() : new Promise<void>(resolve => {
       const finish = () => { image.removeEventListener("load", finish); image.removeEventListener("error", finish); resolve(); };
       image.addEventListener("load", finish); image.addEventListener("error", finish);
     });
+    return ready.then(() => onProgress?.(++settled, images.size));
   }));
 }
 
 /** Load only placed decorations, including their optional mirrored-facing artwork.
  * Reuse renderer-started image requests instead of fetching each asset twice. */
-export async function ensureDecorationArt(art: GameArt, ids: Iterable<string>): Promise<void> {
+export async function ensureDecorationArt(art: GameArt, ids: Iterable<string>, onProgress?: LoadProgressCallback): Promise<void> {
   const files = new Set<string>();
   for (const id of ids) {
     files.add(id);
     if (DECORATIONS[id]?.mirrorAlternate) files.add(decorationSideFile(id, 3));
   }
+  let settled = 0;
+  onProgress?.(settled, files.size);
   await Promise.all([...files].map(async id => {
-    const existing = art.decorations[id];
-    if (existing?.naturalWidth) return;
-    if (existing && !existing.complete) {
-      await new Promise<void>(resolve => {
-        const finish = () => { existing.removeEventListener("load", finish); existing.removeEventListener("error", finish); resolve(); };
-        existing.addEventListener("load", finish);
-        existing.addEventListener("error", finish);
-      });
-      if (existing.naturalWidth) return;
+    try {
+      const existing = art.decorations[id];
+      if (existing?.naturalWidth) return;
+      if (existing && !existing.complete) {
+        await new Promise<void>(resolve => {
+          const finish = () => { existing.removeEventListener("load", finish); existing.removeEventListener("error", finish); resolve(); };
+          existing.addEventListener("load", finish);
+          existing.addEventListener("error", finish);
+        });
+        if (existing.naturalWidth) return;
+      }
+      art.decorations[id] = await loadImage(decorationImage(id))
+        .catch(() => loadImage(decorationImageWebp(id)))
+        .catch(() => new Image());
+    } finally {
+      onProgress?.(++settled, files.size);
     }
-    art.decorations[id] = await loadImage(decorationImage(id))
-      .catch(() => loadImage(decorationImageWebp(id)))
-      .catch(() => new Image());
   }));
 }
 

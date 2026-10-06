@@ -475,6 +475,14 @@ button.ember-chip:hover {
   background: #100d0c;
 }
 
+.loading-progress-sweep {
+  animation: loading-progress-sweep 1.15s ease-in-out infinite alternate;
+}
+@keyframes loading-progress-sweep {
+  from { transform: translateX(-105%); }
+  to { transform: translateX(415%); }
+}
+
 /* Title screen loading bar — dark fantasy. Its own classes; title-hero / title-veil above stay
    untouched. Fill width is driven by real art-loading progress (see TitleLoader in GameApp). */
 .title-loader {

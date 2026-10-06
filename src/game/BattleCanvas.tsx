@@ -42,6 +42,8 @@ export function BattleCanvas({
   const unitHudCanvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hudKey = useRef("");
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -169,7 +171,7 @@ export function BattleCanvas({
     };
     const armReadout = (px: number, py: number, delay: number) => {
       cancelHold();
-      if (paused) return;
+      if (pausedRef.current) return;
       holdTimer = window.setTimeout(() => {
         holdTimer = null;
         holding = true;
@@ -235,7 +237,7 @@ export function BattleCanvas({
       if (!running) return;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      if (!paused) {
+      if (!pausedRef.current) {
         const speed = 520;
         let px = 0;
         let py = 0;
@@ -457,7 +459,7 @@ export function BattleCanvas({
       engine.panBy(oldPoint.x - newPoint.x, oldPoint.y - newPoint.y);
     };
     const onDown = (e: PointerEvent) => {
-      if (paused) return;
+      if (pausedRef.current) return;
       if (e.pointerType === "mouse" && e.button !== 0) return;
       const p = pos(e);
       if (e.pointerType === "mouse") {
@@ -569,7 +571,7 @@ export function BattleCanvas({
         if (!mouseDown) return;
         mouseDown = false;
         dragging = false;
-        if (!dragged && !paused && !wasHolding) {
+        if (!dragged && !pausedRef.current && !wasHolding) {
           const p = pos(e);
           const gp = gamePos(p);
           engine.pointerDown(gp.x, gp.y, "click");
@@ -586,7 +588,7 @@ export function BattleCanvas({
       }
       if (!dragging) return;
       dragging = false;
-      if (!dragged && !paused && !wasHolding) {
+      if (!dragged && !pausedRef.current && !wasHolding) {
         const p = pos(e);
         const gp = gamePos(p);
         engine.pointerDown(gp.x, gp.y, "tap");
@@ -597,7 +599,7 @@ export function BattleCanvas({
       engine.cycleZoom(e.deltaY > 0 ? -1 : 1);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (paused) return;
+      if (pausedRef.current) return;
       const trap = [
         "ArrowLeft",
         "ArrowRight",
@@ -635,7 +637,7 @@ export function BattleCanvas({
 
     const onMenu = (e: MouseEvent) => {
       e.preventDefault();
-      if (paused) return;
+      if (pausedRef.current) return;
       const p = pos(e);
       const inspectedUnitId = engine.inspectAt(p.x, p.y);
       if (inspectedUnitId) {
@@ -685,7 +687,10 @@ export function BattleCanvas({
       fx?.dispose();
       rendererThree?.dispose();
     };
-  }, [engine, onHud, onInspectUnit, paused]);
+  // Keep the renderer and its warmed GPU resources mounted when a briefing/dialog pauses
+  // the board. Rebuilding this effect on pause changes caused a visible renderer reset as
+  // soon as the dialog closed, after the loading curtain had already gone away.
+  }, [engine, onHud, onInspectUnit]);
 
   // Mission.mistType === "vignette" (Map Editor's "Tipo de névoa") turns this from the always-on
   // subtle diorama edge shading into an author-controlled hazy corner effect, driven by the same

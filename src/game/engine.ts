@@ -474,6 +474,8 @@ const OVERLAY_FADE_IN = 0.4;
 const LONG_ANIM_SECONDS = 3;
 /** Kael's 36-frame swing, start to finish — shorter than the 3s every other long sheet gets. */
 const KAEL_FINAL_ATTACK_SECONDS = 2;
+/** Seconds into BladeSlash1Dagger.mp3 Kael's swing sound starts from (see stepCombat). */
+const KAEL_BLADE_SOUND_START = 1.12;
 /** A death sheet (GameArt.deaths) plays over this long, then the body lies still for
  * DEATH_HOLD_SECONDS before fading out like any other fallen unit. */
 const DEATH_ANIM_SECONDS = 3;
@@ -2709,8 +2711,10 @@ export class BattleEngine {
         } else if (arcaneBolt) {
           this.emitMissileFx(actor.x, actor.y, target.x, target.y, "arcaneBolt");
         } else if (actor.sprite === "kaelFinal" && !this.offHandStrike(a)) {
-          // The wind-up is half the sheet; the blow lands now, so the sound lands now.
-          sfxPlay.meleeAttack(a.spellKind !== "shieldBash" && this.isBladeAttack(actor));
+          // Cued here, ~0.74 s into his 2 s sheet. BladeSlash1Dagger.mp3 has ~1.1 s of silence
+          // before its swoosh, loudest at ~1.45 s — starting 1.12 s in lands that peak on
+          // frame 23, the big horizontal slash (~1.07 s). Same for his counter.
+          sfxPlay.meleeAttack(a.spellKind !== "shieldBash" && this.isBladeAttack(actor), KAEL_BLADE_SOUND_START);
         }
         a.t = 0;
         a.stage = a.stage === "lunge" ? "hit" : "counterHit";
@@ -9900,7 +9904,7 @@ export class BattleEngine {
     const footY = s >= 4 ? tile * 0.9 : cell * 0.42;
     // Dedicated left/right walk+attack cuts already face the enemy, so flipping
     // them would put the spear/staff on the wrong side. Idle still flips.
-    const dirActionWalk = (u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval" || u.sprite === "theButcher" || u.sprite === "familiar2" || u.sprite === "familiar3" || u.sprite === "cultist-v2" || u.sprite === "cobalt-blue-deer") && moving;
+    const dirActionWalk = (u.sprite === "aldric" || u.sprite === "defaultLancer" || u.sprite === "lancer" || u.sprite === "sandoval" || u.sprite === "theButcher" || u.sprite === "familiar2" || u.sprite === "familiar3" || u.sprite === "cultist-v2" || u.sprite === "cobalt-blue-deer" || u.sprite === "neera") && moving;
     // Suppress mirroring only when the frame actually came from an authored left cut.
     // Having a left ATT cut must not suppress the mirror of casts, counters or off-hand art.
     const dirActionAttack = atk != null && !!frames && (
@@ -9924,7 +9928,10 @@ export class BattleEngine {
     // while visibly facing left), and facing left then mirrored that already-left-facing
     // footage into facing right (walked left while visibly facing right) — reported as
     // "two reverse walk" rather than the one intended mirror-for-left-only.
-    const neeraWalkReversed = u.sprite === "neera" && atk == null;
+    // (Her walk now has authored Walk Right/Walk Left cuts and is never mirrored — see
+    // dirActionWalk. Her idle must NOT be reversed: it is drawn facing the same way as her
+    // ATT/Special art, so reversing it made her flip sides every time she went idle -> attack.)
+    const neeraWalkReversed = u.sprite === "neera" && atk == null && moving;
     const deerFacingReversed = u.sprite === "cobalt-blue-deer";
     // Kael Final's idle (1..36.png) is drawn turned three-quarters to the LEFT, while his atk and
     // move cuts face right — so his idle must mirror the other way to face his enemy.

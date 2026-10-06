@@ -826,11 +826,28 @@ export function GameApp() {
   // one-time work happens behind it instead of as stalls mid-fight. The timer is only a
   // safety net so the curtain can never get stuck.
   const [battleLoading, setBattleLoading] = useState(false);
+  const [battleLoadingProgress, setBattleLoadingProgress] = useState({ loaded: 0, total: 1 });
+  const battleAssetProgress = useRef({
+    sprites: { loaded: 0, total: 0 },
+    decorations: { loaded: 0, total: 0 },
+    terrain: { loaded: 0, total: 0 },
+  });
+  const reportBattleAssetProgress = useCallback((group: "sprites" | "decorations" | "terrain", loaded: number, total: number) => {
+    battleAssetProgress.current[group] = { loaded, total };
+    const groups = Object.values(battleAssetProgress.current);
+    const loadedAssets = groups.reduce((sum, item) => sum + item.loaded, 0);
+    const assetCount = groups.reduce((sum, item) => sum + item.total, 0);
+    // Keep one final task for the renderer's first complete, warmed frame.
+    setBattleLoadingProgress({ loaded: loadedAssets, total: assetCount + 1 });
+  }, []);
   useEffect(() => {
     if (!battleLoading) return;
-    const done = () => setBattleLoading(false);
+    const done = () => {
+      setBattleLoadingProgress((current) => ({ loaded: current.total, total: current.total }));
+      setBattleLoading(false);
+    };
     window.addEventListener("ember:battle-ready", done);
-    const safety = window.setTimeout(done, 20000);
+    const safety = window.setTimeout(() => setBattleLoading(false), 20000);
     return () => {
       window.removeEventListener("ember:battle-ready", done);
       window.clearTimeout(safety);
@@ -1105,7 +1122,14 @@ export function GameApp() {
       }
       const resolved = override ?? missionById(id);
       if (!resolved) return;
+      const load = ++battleLoadRef.current;
       setBattleLoading(true);
+      battleAssetProgress.current = {
+        sprites: { loaded: 0, total: 0 },
+        decorations: { loaded: 0, total: 0 },
+        terrain: { loaded: 0, total: 0 },
+      };
+      setBattleLoadingProgress({ loaded: 0, total: 1 });
       const tutorialMap = resolved.index <= (missionById("thebridge")?.index ?? 3) && !resolved.id.startsWith("random-encounter-");
       // The travel clock drives lighting for random maps and "-crossing" maps only for now — other campaign maps keep their authored time of day.
       const timed = !testMode && !tutorialMap && (resolved.id.startsWith("random-") || resolved.id.endsWith("-crossing")) && resolved.environment !== "indoor" && usesTravelClock(save)
@@ -1221,11 +1245,13 @@ export function GameApp() {
       // Sprites load per battle (see ensureSpriteArt): the board opens once this battle's own
       // units (and the familiars, with a conjurer in the party) are loaded. If another
       // startBattle comes in meanwhile, the newer one wins.
-      const load = ++battleLoadRef.current;
+      const report = (group: "sprites" | "decorations" | "terrain", loaded: number, total: number) => {
+        if (load === battleLoadRef.current) reportBattleAssetProgress(group, loaded, total);
+      };
       void Promise.all([
-        ensureSpriteArt(art, [...battleSpriteIds(battle), ...(partyHasConjurer ? FAMILIAR_SPRITES : [])]),
-        ensureDecorationArt(art, battle.decorations.map(p => p.id)),
-        ensureTerrainArt(art, battle.tiles, battle.tileVariants),
+        ensureSpriteArt(art, [...battleSpriteIds(battle), ...(partyHasConjurer ? FAMILIAR_SPRITES : [])], (loaded, total) => report("sprites", loaded, total)),
+        ensureDecorationArt(art, battle.decorations.map(p => p.id), (loaded, total) => report("decorations", loaded, total)),
+        ensureTerrainArt(art, battle.tiles, battle.tileVariants, (loaded, total) => report("terrain", loaded, total)),
       ]).then(() => {
         if (load !== battleLoadRef.current) return;
         awardedRef.current = null;
@@ -1240,7 +1266,7 @@ export function GameApp() {
         setScreen("battle");
       });
     },
-    [art, save, testMode, muted, bank, campaignLocations, partyHasConjurer],
+    [art, save, testMode, muted, bank, campaignLocations, partyHasConjurer, reportBattleAssetProgress],
   );
 
   useEffect(() => {
@@ -1623,17 +1649,18 @@ export function GameApp() {
   }, [save, mapMode, testMode, persistCurrent]);
 
   const leaveBoot = useCallback(() => {
-    // Entering the world map is a hard music boundary: do not leave intro.mp3 under it.
-    playTheme("worldMap");
-    // The travel-mode chooser is for Debug only; a campaign goes straight to the RPG map.
+    // Debug boot can still open the travel-mode chooser. A new campaign's vignette
+    // finishes at save-slot selection; the chosen slot then starts O Vau's intro.
     if (testMode) {
+      playTheme("worldMap");
       setScreen("mapChoice");
       return;
     }
-    setMapMode("rpg");
-    persistCurrent({ ...save, mapMode: "rpg" });
-    setScreen("overworldMap");
-  }, [testMode, save, persistCurrent]);
+    setSlotReturnScreen("title");
+    setSlotMode("new");
+    setOverwrite(null);
+    setScreen("saveSlots");
+  }, [testMode]);
 
   const goToTitle = useCallback(() => {
     stopMusic();
@@ -1856,7 +1883,11 @@ export function GameApp() {
 
   return (
     <main className="relative h-dvh min-h-0 bg-bg text-fg overflow-hidden">
-      <LoadingCurtain visible={loadingCurtain || battleLoading} />
+      <LoadingCurtain
+        visible={loadingCurtain || battleLoading}
+        progress={battleLoading || screen === "battle" ? Math.floor((battleLoadingProgress.loaded / Math.max(1, battleLoadingProgress.total)) * 100) : null}
+        status={battleLoading || screen === "battle" ? `Preparando batalha · ${battleLoadingProgress.loaded}/${battleLoadingProgress.total} recursos` : undefined}
+      />
       {screen === "boot" && (
         <CutsceneScreen onSoundChange={setMutedUi} src="/game/title-open.mp4" onSkip={leaveBoot} />
       )}
@@ -1878,7 +1909,7 @@ export function GameApp() {
             setOverwrite(null);
             setSlotReturnScreen("title");
             setSlotMode("new");
-            setScreen("saveSlots");
+            setScreen("boot");
           }}
           onContinue={() => {
             bootAudio();
@@ -7749,6 +7780,12 @@ function BriefingScreen({
   );
 }
 
+/** Battles whose intro dialog has already opened. Saving (or loading/cancelling from the slot
+ * screen) leaves and re-mounts BattleScreen with the same engine — without this, every return
+ * re-ran the lazy init below and reopened the intro. A new battle is a new engine, so it still
+ * gets its intro once. */
+const introDialogShown = new WeakSet<BattleEngine>();
+
 function BattleScreen({
   onUseRation,
   engine,
@@ -7867,7 +7904,10 @@ function BattleScreen({
   // The mission's intro dialog — lazy-init so it only ever opens once, right as this screen
   // first mounts (a fresh mount happens per battle: see BattleEngine construction in
   // startBattle), never on a re-render.
-  const [introDialogOpen, setIntroDialogOpen] = useState(() => !!engine.mission.introDialog && engine.mission.introDialogEnabled !== false);
+  const [introDialogOpen, setIntroDialogOpen] = useState(() => !introDialogShown.has(engine) && !!engine.mission.introDialog && engine.mission.introDialogEnabled !== false);
+  useEffect(() => {
+    if (introDialogOpen) introDialogShown.add(engine);
+  }, [introDialogOpen, engine]);
   const wasWinAvailable = useRef(false);
   const previousExitKey = useRef<string | null>(null);
   useEffect(() => {
@@ -9443,13 +9483,13 @@ function StatusPanel({ unit, statPointAllocation, unspentStatPoints, onAdjustSta
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("long-shot")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs leading-snug">
-                          Longo {longShotFormula(unit.level)} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("longShot")!)]}</span>
+                          {uiText(LONG_SHOT.name)} {longShotFormula(unit.level)} <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("longShot")!)]}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2 py-1.5">
                         <img src={spellIcon("piercing")} alt="" className="size-5 rounded-sm object-cover shrink-0" />
                         <p className="text-xs leading-snug">
-                          Perfura {piercingMul(unit.level)}× dano de arma <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("piercing")!)]}</span>
+                          {uiText(PIERCING.name)} {piercingMul(unit.level)}× dano de arma <span className="tabular-nums text-muted">×{unit.spells[tierKey(spellTier("piercing")!)]}</span>
                         </p>
                       </div>
                     </>

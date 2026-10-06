@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
-/** Keeps the map hidden until its large image has dimensions and React can position its markers. */
-export function useMapLoading() {
-  const [progress, setProgress] = useState(12);
+/** Streams the map image once so the loading bar reports bytes actually received. */
+export function useMapLoading(source: string) {
+  const [progress, setProgress] = useState<number | null>(null);
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [visible, setVisible] = useState(true);
   const finished = useRef(false);
+  const objectUrl = useRef<string | null>(null);
 
   const finish = useCallback(() => {
     if (finished.current) return;
     finished.current = true;
-    setProgress((current) => Math.max(current, 86));
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         setProgress(100);
@@ -18,35 +20,104 @@ export function useMapLoading() {
     });
   }, []);
 
-  useEffect(() => {
-    const art = new Image();
-    art.onload = art.onerror = () => setProgress((current) => Math.max(current, 42));
-    art.src = "/game/ui/loading-screen.jpg?v=1";
-    const warmup = window.setTimeout(() => setProgress((current) => Math.max(current, 58)), 180);
-    // Do not leave the player trapped if the map image fails to load.
-    const fallback = window.setTimeout(finish, 6000);
-    return () => {
-      window.clearTimeout(warmup);
-      window.clearTimeout(fallback);
-    };
-  }, [finish]);
+  const fail = useCallback(() => {
+    if (finished.current) return;
+    finished.current = true;
+    setFailed(true);
+    setVisible(false);
+  }, []);
 
-  return { progress, visible, finish };
+  useEffect(() => {
+    const request = new XMLHttpRequest();
+    let measurable = false;
+    request.open("GET", source);
+    request.responseType = "blob";
+    request.onprogress = (event) => {
+      if (!event.lengthComputable || event.total <= 0) {
+        setProgress(null);
+        return;
+      }
+      measurable = true;
+      // Reserve the final point until the browser has decoded the image and the map has
+      // positioned its markers. The number before then is the exact transfer byte ratio.
+      setProgress(Math.min(99, Math.floor((event.loaded / event.total) * 99)));
+    };
+    request.onload = () => {
+      if (request.status < 200 || request.status >= 300 || !(request.response instanceof Blob)) {
+        fail();
+        return;
+      }
+      if (measurable) setProgress(99);
+      objectUrl.current = URL.createObjectURL(request.response);
+      setImageSrc(objectUrl.current);
+    };
+    request.onerror = fail;
+    request.onabort = fail;
+    request.send();
+    return () => {
+      request.onprogress = null;
+      request.onload = null;
+      request.onerror = null;
+      request.onabort = null;
+      request.abort();
+      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    };
+  }, [source, fail]);
+
+  return { progress, visible, finish, fail, imageSrc, failed };
 }
 
-export function MapLoadingOverlay({ progress, visible }: { progress: number; visible: boolean }) {
-  if (!visible) return null;
+/** The loading art (LoadingSCreen.jpg, 2128x912) scaled to COVER the whole screen — no black
+ * border; on narrower screens the far left/right edges are trimmed, the centred title and bar
+ * never are — with the progress bar inside the art's own bar frame and the status inside the
+ * plaque under it. Positions are fractions of the picture (measured from the file: bar interior
+ * x 752-1362 / y 787-811, plaque x 903-1203 / y 842-881), so they stay in place at any size. */
+const LOADING_ART_SRC = "/game/ui/LoadingSCreen.jpg?v=2";
+// Fetched and decoded once, as soon as the game starts (GameApp imports this module), so the
+// art is already there the first time a loading screen opens.
+const loadingArtPreload = typeof Image !== "undefined" ? new Image() : null;
+if (loadingArtPreload) {
+  loadingArtPreload.src = LOADING_ART_SRC;
+  loadingArtPreload.decode?.().catch(() => {});
+}
+
+function LoadingArt({ progress, label, barLabel, z }: { progress: number | null; label: string; barLabel: string; z: string }) {
+  // The art, bar and plaque text appear together: only the dark backdrop until the picture is
+  // ready, so the bar never shows on its own before the image. (A failed image still reveals
+  // the bar, so loading progress is never hidden.)
+  const [artReady, setArtReady] = useState(() => !!loadingArtPreload?.complete && loadingArtPreload.naturalWidth > 0);
   return (
-    <div className="absolute inset-0 z-[70] grid place-items-end overflow-hidden bg-[#151311] px-6 pb-[max(2.5rem,env(safe-area-inset-bottom))]" aria-live="polite" aria-label={`Carregando mapa: ${progress}%`}>
-      <img src="/game/ui/loading-screen.jpg?v=1" alt="" className="absolute inset-0 size-full object-cover" />
-      <div className="relative w-full max-w-md">
-        <div className="h-3 overflow-hidden rounded-sm border border-[#b4976a]/80 bg-black/80 p-[2px] shadow-[0_2px_18px_rgba(0,0,0,0.8)]">
-          <div className="h-full bg-gradient-to-r from-[#713718] via-[#e1a541] to-[#fff0a2] transition-[width] duration-300 ease-out" style={{ width: `${progress}%` }} />
+    <div className={`absolute inset-0 ${z} overflow-hidden bg-[#151311]`} aria-live="polite" aria-label={label}>
+      <div
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        style={{ width: "max(100vw, calc(100vh * 2128 / 912))", aspectRatio: "2128 / 912", visibility: artReady ? "visible" : "hidden" }}
+      >
+        <img src={LOADING_ART_SRC} alt="" className="absolute inset-0 size-full" onLoad={() => setArtReady(true)} onError={() => setArtReady(true)} />
+        <div
+          className="absolute overflow-hidden"
+          style={{ left: "35.34%", top: "86.29%", width: "28.67%", height: "2.63%", borderRadius: 2 }}
+          role="progressbar" aria-label={barLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress ?? undefined}
+        >
+          <div
+            className={`h-full bg-gradient-to-r from-[#713718] via-[#e1a541] to-[#fff0a2] ${progress === null ? "loading-progress-sweep" : "transition-[width] duration-100 ease-linear"}`}
+            style={{ width: progress === null ? "32%" : `${progress}%` }}
+          />
         </div>
-        <p className="mt-2 text-center text-[11px] uppercase tracking-[0.22em] text-[#eee0c8] drop-shadow-[0_1px_2px_#000]">Carregando o mapa · {progress}%</p>
+        <p
+          className="absolute grid place-items-center text-center uppercase text-[#eee0c8] drop-shadow-[0_1px_2px_#000]"
+          style={{ left: "42.43%", top: "92.32%", width: "14.1%", height: "4.28%", fontSize: "calc(max(100vh, 100vw * 912 / 2128) * 0.0125)", letterSpacing: "0.08em", lineHeight: 1.15 }}
+        >
+          {label}
+        </p>
       </div>
     </div>
   );
+}
+
+export function MapLoadingOverlay({ progress, visible }: { progress: number | null; visible: boolean }) {
+  if (!visible) return null;
+  const label = progress === null ? "Carregando o mapa…" : `Carregando o mapa · ${progress}%`;
+  return <LoadingArt progress={progress} label={label} barLabel="Carregando o mapa" z="z-[70]" />;
 }
 
 /** Screen ids heavy enough (a big map background, the battle canvas' whole art set) that
@@ -77,17 +148,8 @@ export function useLoadingCurtain(screen: string): boolean {
   return visible;
 }
 
-export function LoadingCurtain({ visible }: { visible: boolean }) {
+export function LoadingCurtain({ visible, progress = null, status = "Preparando a tela…" }: { visible: boolean; progress?: number | null; status?: string }) {
   if (!visible) return null;
-  return (
-    <div className="absolute inset-0 z-[80] grid place-items-end overflow-hidden bg-[#151311] px-6 pb-[max(2.5rem,env(safe-area-inset-bottom))]" aria-live="polite" aria-label="Carregando">
-      <img src="/game/ui/loading-screen.jpg?v=1" alt="" className="absolute inset-0 size-full object-cover" />
-      <div className="relative w-full max-w-md">
-        <div className="h-3 overflow-hidden rounded-sm border border-[#b4976a]/80 bg-black/80 p-[2px] shadow-[0_2px_18px_rgba(0,0,0,0.8)]">
-          <div className="h-full w-full bg-gradient-to-r from-[#713718] via-[#e1a541] to-[#fff0a2] animate-pulse" />
-        </div>
-        <p className="mt-2 text-center text-[11px] uppercase tracking-[0.22em] text-[#eee0c8] drop-shadow-[0_1px_2px_#000]">Carregando…</p>
-      </div>
-    </div>
-  );
+  const label = progress === null ? status : `${status} · ${progress}%`;
+  return <LoadingArt progress={progress} label={label} barLabel={status} z="z-[80]" />;
 }

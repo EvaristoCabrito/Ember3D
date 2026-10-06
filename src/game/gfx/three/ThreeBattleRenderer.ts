@@ -2853,12 +2853,17 @@ export class ThreeBattleRenderer {
     const parked = this.parkHiddenLights();
     this.balanceLightCount();
     try {
+      // Nothing is drawn until every shader is compiled in the background — the loading curtain
+      // is up meanwhile — so no frame (first one included) ever freezes compiling them.
+      if (this.meleeVfxWarm !== "done") {
+        this.warmMeleeVfxOnce();
+        return;
+      }
       this.renderBloomWithoutLightSourceArt();
       this.finalComposer.render();
     } finally {
       this.restoreParkedLights(parked);
     }
-    this.warmMeleeVfxOnce();
   }
 
   private lightBudget: { point: number; shadow: number } | null = null;
@@ -2939,63 +2944,74 @@ export class ThreeBattleRenderer {
       new VarreduraVFX(this.scene, new THREE.Vector3(), [], 1, this.vfxLights),
     ];
     for (const child of this.scene.children) if (!before.has(child)) child.traverse((o) => { o.frustumCulled = false; });
-    // Compile with the same light count every real frame uses (hidden lights parked, see render()).
+    // Effects that only build objects mid-cast get a silent dry run first (no-op callbacks; the
+    // loading curtain covers the screen), so their shaders are in the background compile too.
+    const dryFrom = new THREE.Vector3(0, 0, 1);
+    const dryTo = new THREE.Vector3(40, 0, 1);
+    const noop = () => {};
+    const caustic = this.causticVenomVfx;
+    const phantasmal = this.phantasmalForceVfx;
+    if (caustic) {
+      caustic.cast({ id: "warmup", origin: dryFrom, target: dryTo, worldScale: 1, impactHexes: [dryTo], onLaunch: noop, onImpact: noop, onComplete: noop });
+      for (let i = 0; i < 3; i++) caustic.update(0.4); // charge, travel, into the impact
+    }
+    if (phantasmal) {
+      phantasmal.restartAt(dryTo, 1);
+      phantasmal.update(0.3);
+    }
+    // Every hidden effect is revealed for the whole warm-up (nothing is drawn on screen meanwhile —
+    // render() skips drawing until this is done), so the background compile and the final linking
+    // draw see exactly the same objects and lights. Revealing them only for the draw changed the
+    // light count and made every shader compile again in one blocking frame (7.8 s measured).
+    const shown: THREE.Object3D[] = [];
+    const unculled: THREE.Object3D[] = [];
+    const reveal = () => this.scene.traverse((o) => {
+      if (!o.visible && !(o instanceof THREE.Light) && !shown.includes(o)) { o.visible = true; shown.push(o); }
+      if (((o as THREE.Mesh).isMesh || (o as THREE.Points).isPoints || (o as THREE.Line).isLine) && o.frustumCulled) { o.frustumCulled = false; unculled.push(o); }
+    });
+    reveal();
     const parkedForCompile = this.parkHiddenLights();
     this.balanceLightCount();
-    const compiled = this.renderer.compileAsync(this.scene, this.camera);
+    // The scene is always drawn into the composers' buffers, which need a different shader
+    // variant than drawing straight to the canvas — compile that one, or the warm-up is wasted.
+    const previousTarget = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(this.bloomComposer.renderTarget1);
+    const jobs: Promise<unknown>[] = [this.renderer.compileAsync(this.scene, this.camera)];
+    this.renderer.setRenderTarget(previousTarget);
+    if (this.magicMissileV2Vfx && this.magicMissileForeground) {
+      this.magicMissileV2Vfx.showAllForWarmup();
+      jobs.push(this.magicMissileForeground.warm(this.scene, this.camera));
+    }
     this.restoreParkedLights(parkedForCompile);
-    void compiled.finally(() => {
-      // One real draw into a tiny off-screen target links every program now, not on a first cast.
-      // Hidden effects are shown and un-culled only for this draw, all in this same tick, so
-      // nothing of them ever reaches the screen.
+    void Promise.allSettled(jobs).finally(() => {
+      // One real draw into a tiny off-screen target links every compiled program now, so no
+      // first cast ever does it mid-fight.
+      reveal(); // per-frame updates may have hidden something again in the meantime
       const parked = this.parkHiddenLights();
       this.balanceLightCount();
-      const shown: THREE.Object3D[] = [];
-      const unculled: THREE.Object3D[] = [];
-      this.scene.traverse((o) => {
-        if (!o.visible && !(o instanceof THREE.Light)) { o.visible = true; shown.push(o); }
-        if ((o as THREE.Mesh).isMesh || (o as THREE.Points).isPoints || (o as THREE.Line).isLine) {
-          if (o.frustumCulled) { o.frustumCulled = false; unculled.push(o); }
-        }
-      });
-      // Effects that only build objects mid-cast get a silent dry run (no-op callbacks, never on
-      // screen: everything below happens in this one tick), so those shaders link now too.
-      const dryFrom = new THREE.Vector3(0, 0, 1);
-      const dryTo = new THREE.Vector3(40, 0, 1);
-      const noop = () => {};
-      const caustic = this.causticVenomVfx;
-      const phantasmal = this.phantasmalForceVfx;
-      if (caustic) {
-        caustic.cast({ id: "warmup", origin: dryFrom, target: dryTo, worldScale: 1, impactHexes: [dryTo], onLaunch: noop, onImpact: noop, onComplete: noop });
-        for (let i = 0; i < 3; i++) caustic.update(0.4); // charge, travel, into the impact
-      }
-      if (phantasmal) {
-        phantasmal.restartAt(dryTo, 1);
-        phantasmal.update(0.3);
-      }
-      this.scene.traverse((o) => {
-        if (!o.visible && !(o instanceof THREE.Light)) { o.visible = true; shown.push(o); }
-        if (((o as THREE.Mesh).isMesh || (o as THREE.Points).isPoints || (o as THREE.Line).isLine) && o.frustumCulled) { o.frustumCulled = false; unculled.push(o); }
-      });
       const target = new THREE.WebGLRenderTarget(4, 4);
       const previous = this.renderer.getRenderTarget();
       try {
         this.renderer.setRenderTarget(target);
         this.renderer.render(this.scene, this.camera);
-        // Magic Missile draws through its own renderer; warm it with the same light count.
+        // Magic Missile draws through its own renderer; link its programs the same way.
         const missile = this.magicMissileV2Vfx;
         const foreground = this.magicMissileForeground;
         if (missile && foreground && !this.activeMagicMissileV2VfxRequestId) {
+          // At the real canvas size, so the first cast does not also have to resize its buffers.
+          const size = this.renderer.getSize(new THREE.Vector2());
+          const dpr = this.renderer.getPixelRatio();
           missile.showAllForWarmup();
-          foreground.render(this.scene, this.camera, 64, 64, 1, true, this.bloomPass);
+          foreground.render(this.scene, this.camera, size.x, size.y, dpr, true, this.bloomPass);
           missile.hide();
-          foreground.render(this.scene, this.camera, 64, 64, 1, false, this.bloomPass);
+          foreground.render(this.scene, this.camera, size.x, size.y, dpr, false, this.bloomPass);
         }
       } finally {
         this.renderer.setRenderTarget(previous);
         target.dispose();
         caustic?.cancel();
         phantasmal?.hide();
+        this.magicMissileV2Vfx?.hide();
         for (const o of shown) o.visible = false;
         for (const o of unculled) o.frustumCulled = true;
         this.restoreParkedLights(parked);
@@ -3467,7 +3483,15 @@ export class ThreeBattleRenderer {
     if (active && !this.magicMissileForeground && this.magicMissileForegroundCanvas) {
       this.magicMissileForeground = new MagicMissileForeground(this.magicMissileForegroundCanvas, this.scene, this.camera);
     }
-    this.magicMissileForeground?.render(this.scene, this.camera, cssW, cssH, this.renderer.getPixelRatio(), active, this.bloomPass);
+    // Same light treatment as the main draw (see render()), so this pass always sees the same
+    // light count its shaders were compiled for, and never recompiles on a first cast.
+    const parked = this.parkHiddenLights();
+    this.balanceLightCount();
+    try {
+      this.magicMissileForeground?.render(this.scene, this.camera, cssW, cssH, this.renderer.getPixelRatio(), active, this.bloomPass);
+    } finally {
+      this.restoreParkedLights(parked);
+    }
   }
 
   private syncMagicMissileV2Vfx(dt: number, tile: number): void {

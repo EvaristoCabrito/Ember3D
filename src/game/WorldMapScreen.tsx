@@ -61,7 +61,10 @@ export function WorldMapScreen({
 }) {
   const [open, setOpen] = useState<WorldLocation | null>(null);
   const [artOk, setArtOk] = useState(true);
-  const mapLoading = useMapLoading();
+  const mapLoading = useMapLoading("/game/assets/world-map.jpg");
+  useEffect(() => {
+    if (mapLoading.failed) setArtOk(false);
+  }, [mapLoading.failed]);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [zoomIdx, setZoomIdx] = useState(ZOOM_STOPS.length - 1);
   const [audioSettingsOpen, setAudioSettingsOpen] = useState(false);
@@ -312,13 +315,13 @@ export function WorldMapScreen({
         onClickCapture={onClickCapture}
       >
         <div className="relative inline-block m-2" style={{ width: artOk ? `${ZOOM_STOPS[zoomIdx]}%` : undefined }}>
-          {artOk ? (
+          {artOk && mapLoading.imageSrc ? (
             <img
-              src="/game/assets/world-map.jpg"
+              src={mapLoading.imageSrc}
               alt=""
               className="block w-full h-auto rounded-lg select-none"
               draggable={false}
-              onError={() => { setArtOk(false); mapLoading.finish(); }}
+              onError={() => { setArtOk(false); mapLoading.fail(); }}
               // The mount-time centering effect below fires before this image has actually
               // finished loading — with no intrinsic size yet, the viewport's scrollHeight
               // is still near zero at that moment, so recenterOn's own clamp forces the

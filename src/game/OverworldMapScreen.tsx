@@ -207,7 +207,10 @@ export function OverworldMapScreen({
     return () => window.removeEventListener("keydown", cancel);
   }, []);
   const [artOk, setArtOk] = useState(true);
-  const mapLoading = useMapLoading();
+  const mapLoading = useMapLoading("/game/assets/world-map.jpg");
+  useEffect(() => {
+    if (mapLoading.failed) setArtOk(false);
+  }, [mapLoading.failed]);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [zoomIdx, setZoomIdx] = useState(ZOOM_STOPS.length - 1);
@@ -606,13 +609,13 @@ export function OverworldMapScreen({
         onClickCapture={onClickCapture}
       >
         <div className="relative inline-block m-2" style={{ width: artOk ? `${ZOOM_STOPS[zoomIdx]}%` : undefined }}>
-          {artOk ? (
+          {artOk && mapLoading.imageSrc ? (
             <img
-              src="/game/assets/world-map.jpg"
+              src={mapLoading.imageSrc}
               alt=""
               className="block w-full h-auto rounded-lg select-none"
               draggable={false}
-              onError={() => { setArtOk(false); mapLoading.finish(); }}
+              onError={() => { setArtOk(false); mapLoading.fail(); }}
               onLoad={() => {
                 recenterOn(centerFracRef.current.x, centerFracRef.current.y);
                 window.requestAnimationFrame(() => window.requestAnimationFrame(mapLoading.finish));

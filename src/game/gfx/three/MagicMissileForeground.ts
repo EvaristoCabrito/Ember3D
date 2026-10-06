@@ -60,9 +60,14 @@ export class MagicMissileForeground {
     scene.traverse(object => { if (object instanceof THREE.Light) object.layers.enable(MagicMissileForeground.layer); });
     const mask = camera.layers.mask;
     camera.layers.set(MagicMissileForeground.layer);
+    // The composer draws the scene into its own buffer, which needs a different shader variant
+    // than drawing straight to the canvas — compile that variant, or the warm-up is wasted.
+    const previous = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(this.composer.renderTarget1);
     try {
       return this.renderer.compileAsync(scene, camera);
     } finally {
+      this.renderer.setRenderTarget(previous);
       camera.layers.mask = mask;
     }
   }
