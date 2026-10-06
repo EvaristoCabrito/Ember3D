@@ -332,7 +332,10 @@ const ATTACK_FRAMES: Partial<Record<SpriteId, { n: number; bust: string }>> = {
   theButcher: { n: 36, bust: "?v=the-butcher-001" },
   lancer: { n: 6, bust: "?v=3" },
   sandoval: { n: 6, bust: "?v=sandoval-complete-001" },
-  kaelFinal: { n: 36, bust: "?v=kael-final-004-restored" },
+  // atk-*.png rebuilt from work/kael-atk-backup by work/kael_atk_build.py: the generated sheet
+  // zoomed in ~13% and dropped his feet through the swing; every frame now keeps his idle size
+  // and ground line.
+  kaelFinal: { n: 36, bust: "?v=kael-final-005-steady" },
   conjurer: { n: 36, bust: "?v=conjurer-complete-003" },
   "cultist-v2": { n: 36, bust: "" },
   // Familiar 3's primary attack cut — see ATTACK2_FRAMES below for its alternate cut,
