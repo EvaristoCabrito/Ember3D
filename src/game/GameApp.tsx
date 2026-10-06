@@ -2732,7 +2732,7 @@ export function GameApp() {
           onPick={(index) => {
             bootAudio();
             if (slotMode === "new") {
-              const next = writeSlot(bank, index, emptySave(muted));
+              const next = writeSlot(bank, index, { ...emptySave(muted), pendingMission: "vau", mapMode: "rpg" });
               applySlot(next);
               setSlotMode(null);
               setOverwrite(null);
@@ -2740,7 +2740,7 @@ export function GameApp() {
               setLastLoot([]);
               setMissionId(null);
               setEngine(null);
-              setScreen("boot");
+              setScreen("vauIntro");
               return;
             }
             if (slotMode === "continue" || slotMode === "load") {
