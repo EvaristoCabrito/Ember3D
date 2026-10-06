@@ -738,12 +738,9 @@ export function MapPreviewCanvas({
         ref={viewportRef}
         tabIndex={0}
         // cursor-default forces the game pointer with !important, which would hide the grab hand.
-        className={`h-full w-full bg-black ember-scrollbar overflow-x-auto overflow-y-scroll${isDragging || isPanning ? "" : " cursor-default"}`}
+        className={`h-full w-full bg-black ember-scrollbar overflow-x-auto overflow-y-scroll${isDragging || isPanning ? " preview-pan-grab" : " cursor-default"}`}
         style={{
           scrollbarGutter: "stable both-edges",
-          cursor: isDragging || isPanning
-            ? "url('/game/cursors/medieval-gauntlet-grab-small.svg') 13 13, grabbing"
-            : undefined,
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

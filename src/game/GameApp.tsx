@@ -1471,6 +1471,7 @@ export function GameApp() {
   const [missionNotice, setMissionNotice] = useState<string | null>(null);
   const openMission = (id: string) => {
     bootAudio();
+    const flowSave = readMapSave();
     if (!testMode && isGatedMission(id)) {
       const rec = readMapSave();
       if (missionAccess(id, rec, progressionExtras(rec)) !== "available") return;
@@ -1487,14 +1488,18 @@ export function GameApp() {
     const wispForest = campaignLocations.find((location) => location.id === "wisp-forest");
     const enteringWispForest = Boolean(
       wispForest &&
-        !testMode &&
-        !save.seenWispForestIntro &&
+        !flowSave.seenWispForestIntro &&
         wispForest.missionIds.includes(id) &&
-        !wispForest.missionIds.some((mission) => save.completed.includes(mission)),
+        !wispForest.missionIds.some((mission) => flowSave.completed.includes(mission)),
     );
     if (enteringWispForest) {
       setWispForestNextMissionId(id);
       setScreen("wispForestIntro");
+      return;
+    }
+    if (id === "vau" && !flowSave.completed.includes("vau")) {
+      setMissionId(id);
+      setScreen("vauIntro");
       return;
     }
     setWispForestNextMissionId(null);
@@ -1506,7 +1511,11 @@ export function GameApp() {
   const finishWispForestIntro = () => {
     const nextMissionId = wispForestNextMissionId;
     setWispForestNextMissionId(null);
-    persistCurrent({ ...save, seenWispForestIntro: true, pendingMission: null, battle: null });
+    if (testMode) {
+      writeMapSave({ ...readMapSave(), seenWispForestIntro: true, pendingMission: null, battle: null });
+    } else {
+      persistCurrent({ ...save, seenWispForestIntro: true, pendingMission: null, battle: null });
+    }
     if (!nextMissionId) {
       setScreen("overworldMap");
       return;
@@ -1517,8 +1526,11 @@ export function GameApp() {
   };
 
   const finishInnArrivalIntro = () => {
-    const completed = save.completed.includes("estalagem") ? save.completed : [...save.completed, "estalagem"];
-    if (!testMode) {
+    const current = readMapSave();
+    const completed = current.completed.includes("estalagem") ? current.completed : [...current.completed, "estalagem"];
+    if (testMode) {
+      writeMapSave({ ...current, completed, seenInnArrivalIntro: true, pendingMission: null, battle: null });
+    } else {
       persistCurrent({ ...save, completed, seenInnArrivalIntro: true, pendingMission: null, battle: null });
     }
     setScreen("inn");
@@ -1540,7 +1552,7 @@ export function GameApp() {
         startBattle(missionId);
         return;
       }
-      if (!testMode && !save.seenInnArrivalIntro) {
+      if (!readMapSave().seenInnArrivalIntro) {
         setScreen("innArrivalIntro");
         return;
       }
@@ -1889,7 +1901,7 @@ export function GameApp() {
         status={battleLoading || screen === "battle" ? `Preparando batalha · ${battleLoadingProgress.loaded}/${battleLoadingProgress.total} recursos` : undefined}
       />
       {screen === "boot" && (
-        <CutsceneScreen onSoundChange={setMutedUi} src="/game/title-open.mp4" onSkip={leaveBoot} />
+        <CutsceneScreen src="/game/title-open.mp4" onSkip={leaveBoot} />
       )}
       {screen === "title" && (
         <TitleScreen
@@ -1957,7 +1969,7 @@ export function GameApp() {
       )}
 
       {screen === "vauIntro" && (
-        <CutsceneScreen onSoundChange={setMutedUi}
+        <CutsceneScreen
           src="/game/vau-intro.mp4"
           onSkip={() => {
             setMissionId("vau");
@@ -1967,11 +1979,11 @@ export function GameApp() {
       )}
 
       {screen === "wispForestIntro" && (
-        <CutsceneScreen onSoundChange={setMutedUi} src="/game/wisp-entrance.mp4" subtitles={{ pt: "/game/subtitles/wisp-entrance.pt.vtt", en: "/game/subtitles/wisp-entrance.en.vtt" }} onSkip={finishWispForestIntro} />
+        <CutsceneScreen src="/game/wisp-entrance.mp4" subtitles={{ pt: "/game/subtitles/wisp-entrance.pt.vtt", en: "/game/subtitles/wisp-entrance.en.vtt" }} onSkip={finishWispForestIntro} />
       )}
 
       {screen === "innArrivalIntro" && (
-        <CutsceneScreen onSoundChange={setMutedUi} src="/game/inn-arrival.mp4" subtitles={{ pt: "/game/subtitles/inn-arrival.pt.vtt", en: "/game/subtitles/inn-arrival.en.vtt" }} onSkip={finishInnArrivalIntro} />
+        <CutsceneScreen src="/game/inn-arrival.mp4" subtitles={{ pt: "/game/subtitles/inn-arrival.pt.vtt", en: "/game/subtitles/inn-arrival.en.vtt" }} onSkip={finishInnArrivalIntro} />
       )}
 
       {screen === "mapEditor" && art && (
@@ -2454,7 +2466,7 @@ export function GameApp() {
       )}
 
       {screen === "cutscene" && (
-        <CutsceneScreen onSoundChange={setMutedUi}
+        <CutsceneScreen
           src={
             missionId === "aldeia"
               ? "/game/aldeia-intro.mp4"
@@ -2468,7 +2480,7 @@ export function GameApp() {
       )}
 
       {screen === "epilogue" && (
-        <CutsceneScreen onSoundChange={setMutedUi}
+        <CutsceneScreen
           src={missionId === "portao" ? "/game/portao-end.mp4" : "/game/temple-aftermath.mp4"}
           onSkip={() => setScreen("victory")}
         />
@@ -2849,12 +2861,10 @@ export function CutsceneScreen({
   src,
   subtitles,
   onSkip,
-  onSoundChange,
 }: {
   src: string;
   subtitles?: Translations;
   onSkip: () => void;
-  onSoundChange: (muted: boolean) => void;
 }) {
   const prefs = useGamePreferences();
   const ref = useRef<HTMLVideoElement>(null);
@@ -2947,11 +2957,10 @@ export function CutsceneScreen({
             const video = ref.current;
             if (!video) return;
             const enable = video.muted || video.volume <= 0;
-            setMuted(!enable);
-            onSoundChange(!enable);
             if (enable && video.volume <= 0) video.volume = getAudioVolumes().cutscene || 1;
             video.muted = !enable;
             setSoundOn(enable);
+            if (enable) void video.play().catch(() => {});
           }}
         >
           {soundOn ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}

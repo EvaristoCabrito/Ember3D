@@ -1,13 +1,13 @@
 import { getDevGfx, subscribeDevGfx } from "./gfx/three/devGfx";
 import { uiText as t, useGamePreferences } from "./gamePreferences";
 import { useSyncExternalStore } from "react";
-import { getGraphicsQuality, setGraphicsQuality, subscribeGraphicsQuality, graphicsQualityIsCustom, type GraphicsQuality } from "./graphicsQuality";
+import { getGraphicsQuality, getGraphicsQualityServerGfx, setGraphicsQuality, subscribeGraphicsQuality, graphicsQualityIsCustom, type GraphicsQuality } from "./graphicsQuality";
 
 export function GraphicsQualityControl() {
   useGamePreferences();
   const quality = useSyncExternalStore(subscribeGraphicsQuality, getGraphicsQuality, () => "high" as GraphicsQuality);
-  const gfx = useSyncExternalStore(subscribeDevGfx, getDevGfx, getDevGfx);
-  const custom = graphicsQualityIsCustom();
+  const gfx = useSyncExternalStore(subscribeDevGfx, getDevGfx, getGraphicsQualityServerGfx);
+  const custom = graphicsQualityIsCustom(gfx);
   return <fieldset className="rounded-lg border border-border bg-bg/80 p-3">
     <legend className="px-1 text-sm">{t("Qualidade gráfica")}</legend>
     <div className="flex gap-2">{([['low', 'Baixa'], ['medium', 'Média'], ['high', 'Alta']] as const).map(([id, label]) =>

@@ -104,6 +104,11 @@
     cursor: url("/game/ui/pointer-large.svg") 0 0, auto !important;
   }
 
+  /* Restore the map's authored hand while panning or dragging an object. */
+  .preview-pan-grab {
+    cursor: url("/game/cursors/medieval-gauntlet-grab-small.svg") 13 13, grabbing !important;
+  }
+
   body {
     font-family: var(--font-sans);
     margin: 0;

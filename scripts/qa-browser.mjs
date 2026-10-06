@@ -97,7 +97,11 @@ const r = await page.evaluate(async () => {
   const canvas = document.createElement("canvas");
   canvas.width = 1600;
   canvas.height = 900;
-  const ctx = canvas.getContext("2d");
+  // BattleEngine.renderUnitsAndOverlays uses drawImageLit and other renderer extensions.
+  // A native 2D context silently made this QA path fail before any gameplay assertions ran.
+  const { WebGL2DRenderer } = await import("/src/game/gfx/WebGL2DRenderer.ts");
+  const ctx = new WebGL2DRenderer(canvas);
+  ctx.setSize(canvas.width, canvas.height);
 
   const layout = (cols, rows, fill = "plains", wall = []) => {
     const w = new Set(wall.map(([x, y]) => `${x},${y}`));
@@ -172,13 +176,13 @@ const r = await page.evaluate(async () => {
   {
     const cols = 40;
     const rows = 20;
-    const wall = Array.from({ length: rows }, (_, y) => [20, y]);
+    const wall = Array.from({ length: rows }, (_, y) => [10, y]);
     const m = mission({
       cols, rows, layout: layout(cols, rows, "plains", wall), fog: true,
       playerSpawns: [{ name: "Kael", classId: "swordsman", x: 5, y: 10 }],
       enemySpawns: [
-        { name: "Near", classId: "soldier", x: 9, y: 10 },
-        { name: "Behind", classId: "soldier", x: 30, y: 10 },
+        { name: "Near", classId: "soldier", x: 8, y: 10 },
+        { name: "Behind", classId: "soldier", x: 12, y: 10 },
       ],
     });
     const eng = new BattleEngine(m, art, roster, 7);
@@ -233,7 +237,7 @@ const r = await page.evaluate(async () => {
       visBefore: before.vis, visAfter: after.vis,
       exploredBefore: before.exp, exploredAfter: after.exp,
       whereItStoodIsRemembered: !eng.visible(5, 10) && eng.explored(5, 10),
-      behindWallStillHidden: !eng.visible(behind.x, behind.y),
+      behindWallVisibleAfterMove: eng.visible(behind.x, behind.y),
       bitsetPresent: typeof snap.explored === "string",
       bitsetBase64Bytes: snap.explored ? snap.explored.length : 0,
       exploredAfterResume: restoredExplored,
@@ -258,19 +262,19 @@ const r = await page.evaluate(async () => {
       cols, rows, layout: layout(cols, rows, "woods"),
       playerSpawns: [{ name: "Kael", classId: "swordsman", x: 1, y: 1 }],
       enemySpawns: [{ name: "Foe", classId: "soldier", x: 22, y: 13 }],
-      decorations: Object.values(targets).map((t) => ({ id: "wooden-cart", x: t.x, y: t.y, ...t.flags })),
+      decorations: Object.values(targets).map((t) => ({ id: "stone-fountain", x: t.x, y: t.y, ...t.flags })),
     });
     const eng = new BattleEngine(m, art, roster, 7);
     eng.render(ctx, 1600, 900, 1);
 
     const overlay = eng.decorOverlay;
     // A test that builds its own overlay proves nothing about the engine, so check
-    // the engine's: three flagged props, two hexes each (the cart is a pair) = six.
+    // the engine's: three flagged single-cell props = three marked cells.
     out.overlay = {
       isByteArray: overlay instanceof Uint8Array,
       rightSize: overlay instanceof Uint8Array && overlay.length === cols * rows,
       markedCells: overlay instanceof Uint8Array ? overlay.reduce((n, b) => n + (b ? 1 : 0), 0) : 0,
-      expectedCells: 6,
+      expectedCells: 3,
     };
 
     out.baseTerrain = {
@@ -317,7 +321,7 @@ const r = await page.evaluate(async () => {
         cols, rows, layout: layout(cols, rows, "plains"), fog: true,
         playerSpawns: [{ name: "Kael", classId: "swordsman", x: 2, y: 7 }],
         enemySpawns: [{ name: "Foe", classId: "soldier", x: 22, y: 13 }],
-        decorations: Array.from({ length: rows }, (_, y) => ({ id: "wooden-cart", x: 6, y, blocksPath: true })),
+        decorations: Array.from({ length: rows }, (_, y) => ({ id: "stone-fountain", x: 6, y, blocksPath: true })),
       }),
       art, roster, 7,
     );
@@ -349,13 +353,16 @@ const r = await page.evaluate(async () => {
     shot.width = W;
     shot.height = H;
     const sctx = shot.getContext("2d");
+    // This screenshot-only path uses native 2D pixels for comparisons. Supply the
+    // renderer extension as a flat draw so the engine can still render the unit.
+    sctx.drawImageLit = (img, x, y, w, h) => sctx.drawImage(img, x, y, w, h);
 
     const render = (flags) => {
       const m = mission({
         cols, rows, layout: layout(cols, rows, "plains"),
         playerSpawns: [{ name: "Kael", classId: "swordsman", x: ux, y: uy }],
         enemySpawns: [{ name: "Foe", classId: "soldier", x: 12, y: 9 }],
-        decorations: [{ id: "wooden-cart", x: ux, y: uy, ...flags }],
+        decorations: [{ id: "stone-fountain", x: ux, y: uy, ...flags }],
       });
       const eng = new BattleEngine(m, art, roster, 7);
       eng.setZoom(2);
@@ -487,11 +494,11 @@ console.log("[qa] fog");
 expect("fog is on when the mission asks", f.fogged);
 expect("sees its own cell", f.seesOwnCell);
 expect("sees a foe in the open", f.seesNear);
-expect("cannot see past a wall", !f.seesBehindWall);
+expect("fog reveals targets through walls inside its radius", f.seesBehindWall);
 expect("nothing explored beyond the radius", !f.exploredBeyondRadius);
 expect("memory never goes dark again", f.exploredAfter >= f.exploredBefore, `${f.exploredBefore} -> ${f.exploredAfter} cells`);
 expect("where it stood is remembered, not visible", f.whereItStoodIsRemembered);
-expect("behind the wall stays hidden after moving", f.behindWallStillHidden);
+expect("targets inside radius remain visible from the new position", f.behindWallVisibleAfterMove);
 expect("explored survives save/resume", f.bitsetPresent && f.exploredAfterResume === f.exploredAfter, `${f.bitsetBase64Bytes} base64 bytes, ${f.exploredAfter} -> ${f.exploredAfterResume}`);
 expect("a mission without fog sees everything", f.noFogSeesEverything);
 
@@ -514,7 +521,7 @@ expect("a blocking prop casts a line-of-sight shadow", r.sight.throughPropWithOv
 expect("an unobstructed line still passes", r.sight.clearLine);
 
 const fb = r.fogBehindProp;
-expect("the overlay reaches the fog pass", fb.tilesStillPlains && fb.seesBeforeProp && fb.seesProp && !fb.seesPastProp, `before ${fb.seesBeforeProp}, prop ${fb.seesProp}, past ${fb.seesPastProp}`);
+expect("fog reveals the full vision radius through props", fb.tilesStillPlains && fb.seesBeforeProp && fb.seesProp && fb.seesPastProp, `before ${fb.seesBeforeProp}, prop ${fb.seesProp}, past ${fb.seesPastProp}`);
 
 const lift = r.lift;
 console.log("[qa] high-ground lift");

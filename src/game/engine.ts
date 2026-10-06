@@ -489,9 +489,8 @@ const LONG_WALK_SECONDS = 1.5;
 const BIG_BLUE_OX_PACE = 0.75;
 // Sums of the supplied Minor Horror atlas JSON frame durations.
 const MINOR_HORROR_SECONDS = { idle: 3.240, attack: 2.844, cast: 3.168, walk: 3.456, death: 3.924 };
-/** Bow shots on a long sheet, per direct instruction: a normal ATT shot leaves only once the
- * whole attack sheet has played; a bow skill (Special sheet — Long Shot, Multi Shot,
- * Piercing) releases mid-sheet and the archer plays the rest of it while the arrow flies. */
+/** Bow shots on a long sheet: normal ATT shots wait for the full sheet. Bow skills normally
+ * release mid-sheet, except Neera's Special sheet, which must finish before her arrow leaves. */
 const LONG_ARROW_RELEASE_SECONDS = LONG_ANIM_SECONDS;
 const LONG_ARROW_SKILL_RELEASE_SECONDS = 2;
 
@@ -2366,7 +2365,15 @@ export class BattleEngine {
       const targetAlive = step.type !== "combat" || !!target?.alive;
       if (actor && ranged && targetAlive && (frames?.length ?? 0) >= LONG_SHEET_FRAMES) {
         const arrowAttack = step.type === "combat" && this.isArrowAttack(actor);
-        const release = arrowSkill ? LONG_ARROW_SKILL_RELEASE_SECONDS : arrowAttack ? LONG_ARROW_RELEASE_SECONDS : actor.classId === "minorHorror" ? MINOR_HORROR_SECONDS.cast : LONG_ANIM_SECONDS;
+        const release = neeraArrowSkill
+          ? LONG_ANIM_SECONDS
+          : arrowSkill
+            ? LONG_ARROW_SKILL_RELEASE_SECONDS
+            : arrowAttack
+              ? LONG_ARROW_RELEASE_SECONDS
+              : actor.classId === "minorHorror"
+                ? MINOR_HORROR_SECONDS.cast
+                : LONG_ANIM_SECONDS;
         this.woundUp.set(step, release);
         this.queue.unshift(step);
         const look = target ?? (step.type === "spell" ? step.tiles[0] : undefined);

@@ -1,41 +1,73 @@
 import * as THREE from "three";
-import { drawElevationSteps } from "../../elevationSteps";
 
-/** One reused texture per exposed height profile, with relief beneath sprites and water. */
+/** Raised faces for the standard 2D battle camera. Terrain tops are lifted by the renderer;
+ * this mesh fills the exposed sides so high hexes read as raised ground instead of inset discs. */
 export class ThreeElevationSteps {
   readonly group = new THREE.Group();
-  private geometry = new THREE.PlaneGeometry(1, 1);
-  private materials = new Map<string, THREE.MeshBasicMaterial>();
-  rebuild(cols: number, rows: number, tile: number, height: (col: number, row: number) => number): void {
-    this.group.clear();
-    for (const material of this.materials.values()) { material.map?.dispose(); material.dispose(); }
-    this.materials.clear();
-    for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
-      const level = height(col, row);
-      if (level <= 0) continue;
-      // Edges run clockwise from the right side, matching the hex's vertex order.
-      const right = row & 1;
-      const neighbors = [[col+1,row],[col+right,row+1],[col+right-1,row+1],
-        [col-1,row],[col+right-1,row-1],[col+right,row-1]].map(([c,r]) => height(c!,r!));
-      if (neighbors.every(value => value >= level)) continue;
-      const key = JSON.stringify([level, neighbors]);
-      let material = this.materials.get(key);
-      if (!material) {
-        const canvas = document.createElement("canvas"); canvas.width = canvas.height = 128;
-        drawElevationSteps(canvas.getContext("2d")!, 64, 64, 62, level, neighbors);
-        const map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
-        material = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, toneMapped: false });
-        this.materials.set(key, material);
-      }
-      const mesh = new THREE.Mesh(this.geometry, material);
-      mesh.scale.set(tile * 2 * 64 / 62, tile * 2 * 64 / 62, 1);
-      mesh.position.set(tile * Math.sqrt(3) * (col + 0.5*(row&1)+0.5), -tile*(2.4+1.5*row+1), 0.2);
-      this.group.add(mesh);
+  private material = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+
+  rebuild(cols: number, rows: number, tile: number, height: (col: number, row: number) => number, stepHeight: number): void {
+    for (const child of this.group.children) {
+      if (child instanceof THREE.Mesh) child.geometry.dispose();
     }
+    this.group.clear();
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+    const levels = (col: number, row: number) => col < 0 || row < 0 || col >= cols || row >= rows ? 0 : height(col, row);
+    const shades = [0x493d2f, 0x30261b, 0x493d2f, 0x554832, 0x554832, 0x493d2f];
+
+    for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
+      const level = levels(col, row);
+      if (level <= 0) continue;
+      const right = row & 1;
+      const neighbors = [
+        [col + 1, row], [col + right, row + 1], [col + right - 1, row + 1],
+        [col - 1, row], [col + right - 1, row - 1], [col + right, row - 1],
+      ].map(([c, r]) => levels(c!, r!));
+      const centerX = tile * Math.sqrt(3) * (col + 0.5 * right + 0.5);
+      const centerY = -tile * (2.4 + 1.5 * row + 1);
+      const point = (edge: number) => {
+        const angle = (edge * 60 - 30) * Math.PI / 180;
+        return [centerX + Math.cos(angle) * tile, centerY + Math.sin(angle) * tile] as const;
+      };
+
+      for (let edge = 0; edge < 6; edge++) {
+        const lower = neighbors[edge] ?? 0;
+        if (level <= lower) continue;
+        const a = point(edge), b = point((edge + 1) % 6);
+        const bottomZ = lower * stepHeight, topZ = level * stepHeight;
+        const start = positions.length / 3;
+        positions.push(
+          a[0], a[1], bottomZ, b[0], b[1], bottomZ,
+          b[0], b[1], topZ, a[0], a[1], topZ,
+        );
+        const color = new THREE.Color(shades[edge]!);
+        for (let i = 0; i < 4; i++) colors.push(color.r, color.g, color.b);
+        indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+      }
+    }
+
+    if (!positions.length) return;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    this.group.add(new THREE.Mesh(geometry, this.material));
   }
+
   dispose(): void {
-    this.group.removeFromParent(); this.group.clear(); this.geometry.dispose();
-    for (const material of this.materials.values()) { material.map?.dispose(); material.dispose(); }
-    this.materials.clear();
+    this.group.removeFromParent();
+    for (const child of this.group.children) {
+      if (child instanceof THREE.Mesh) child.geometry.dispose();
+    }
+    this.group.clear();
+    this.material.dispose();
   }
 }

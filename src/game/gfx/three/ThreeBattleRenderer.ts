@@ -1305,7 +1305,13 @@ export class ThreeBattleRenderer {
   }
 
   private groundHeight(col: number, row: number, tile = this.builtTile): number {
-    if (!this.engine.tacticsCamera) return 0;
+    if (!this.engine.tacticsCamera) {
+      const index = row * this.engine.cols + col;
+      const id = tileAt(this.engine.tiles, this.engine.cols, col, row);
+      const authored = this.engine.mission.terrainElevations?.[index] ?? 0;
+      const level = Math.max(authored, TERRAIN[id].height ?? 0);
+      return level * tile * 0.35;
+    }
     const point = hexWorld(col, row, tile);
     return this.landscape?.heightAt(point.wx, -point.wy) ?? ((this.engine.mission.terrainElevations?.[row * this.engine.cols + col] ?? TERRAIN[tileAt(this.engine.tiles, this.engine.cols, col, row)].height ?? 0) * tile * 0.65);
   }
@@ -1320,8 +1326,9 @@ export class ThreeBattleRenderer {
       if (col < 0 || row < 0 || col >= engine.cols || row >= engine.rows) return 0;
       const id = tileAt(engine.tiles, engine.cols, col, row);
       if (id === "void") return 0;
-      return engine.mission.terrainElevations?.[row * engine.cols + col] ?? TERRAIN[id].height ?? 0;
-    });
+      const index = row * engine.cols + col;
+      return Math.max(engine.mission.terrainElevations?.[index] ?? 0, TERRAIN[id].height ?? 0);
+    }, tile * 0.35);
     this.scene.add(this.elevationSteps.group);
     this.elevationStepsKey = key;
   }
@@ -1346,7 +1353,8 @@ export class ThreeBattleRenderer {
     const cells: { x: number; y: number; height: number; col: number; row: number; entry: TileMeshEntry }[] = [];
     for (const [key, entry] of this.tileMeshes) {
       const col = key % this.engine.cols, row = Math.floor(key / this.engine.cols);
-      entry.mesh.position.z = 0;
+      const terrainLevel = Math.max(this.engine.mission.terrainElevations?.[key] ?? 0, TERRAIN[entry.id].height ?? 0);
+      entry.mesh.position.z = this.engine.tacticsCamera ? 0 : terrainLevel * tile * 0.35;
       entry.mesh.castShadow = false;
       entry.mesh.visible = !this.engine.tacticsCamera && entry.id !== "void";
       entry.mesh.userData.cell = { col, row };
@@ -1644,7 +1652,7 @@ export class ThreeBattleRenderer {
         const mesh = this.trees.create(def.treeModel ?? (def.propModel as "grey-outcrop" | "tavern-barrel" | "tavern-chair" | "tavern-candlestick" | "tavern-mug" | "tavern-table"), tile);
         if (mesh) {
           const { wx, wy } = hexWorld(p.x, p.y, tile);
-          mesh.position.set(wx, -wy, engine.tacticsCamera ? this.groundHeight(p.x, p.y, tile) : 1);
+          mesh.position.set(wx, -wy, engine.tacticsCamera ? this.groundHeight(p.x, p.y, tile) : this.groundHeight(p.x, p.y, tile) + 1);
           mesh.rotation.z = -(p.rot ?? 0) * Math.PI / 2;
           mesh.layers.enable(PROXY_LAYER);
           this.decorGroup.add(mesh);
@@ -1690,7 +1698,7 @@ export class ThreeBattleRenderer {
           lightTacticsMaterial(material);
         }
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(wx, -wy, engine.tacticsCamera ? this.groundHeight(p.x, p.y, tile) : 1);
+        mesh.position.set(wx, -wy, engine.tacticsCamera ? this.groundHeight(p.x, p.y, tile) : this.groundHeight(p.x, p.y, tile) + 1);
         mesh.castShadow = false;
         mesh.receiveShadow = true;
         mesh.layers.enable(PROXY_LAYER);

@@ -54,6 +54,11 @@ export function getDevGfx(): DevGfxSettings {
   return current;
 }
 
+/** Stable server-render snapshot; browser-only saved overrides apply after hydration. */
+export function getDefaultDevGfx(): DevGfxSettings {
+  return DEFAULTS;
+}
+
 export function setDevGfx(patch: Partial<DevGfxSettings>): void {
   current = { ...current, ...patch };
   try {

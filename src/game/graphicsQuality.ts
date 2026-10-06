@@ -1,4 +1,4 @@
-import { getDevGfx, setDevGfx } from "./gfx/three/devGfx";
+import { getDefaultDevGfx, getDevGfx, setDevGfx, type DevGfxSettings } from "./gfx/three/devGfx";
 
 export type GraphicsQuality = "low" | "medium" | "high";
 const KEY = "emberash:graphicsQuality";
@@ -7,6 +7,8 @@ const profiles = {
   medium: { maxDpr: 1.5, shadowResolution: 2048, realShadows: true, softShadows: true, contactShadows: false, ambientOcclusion: true, localLights: true, atmosphericFx: true },
   high: { maxDpr: 2, shadowResolution: 4096, realShadows: true, softShadows: false, contactShadows: true, ambientOcclusion: true, localLights: true, atmosphericFx: true },
 } as const;
+const { maxDpr: _serverDpr, ...serverLighting } = profiles.high;
+const SERVER_GFX: DevGfxSettings = { ...getDefaultDevGfx(), ...serverLighting };
 let current: GraphicsQuality = "high";
 try {
   const saved = localStorage.getItem(KEY);
@@ -23,10 +25,11 @@ try {
     apply(); localStorage.setItem("emberash:graphicsProfilesVersion", "4");
   }
 } catch { /* Use session defaults. */ }
-export function graphicsQualityIsCustom(): boolean {
-  const gfx = getDevGfx(); const { maxDpr: _, ...profile } = profiles[current];
+export function graphicsQualityIsCustom(gfx: DevGfxSettings = getDevGfx()): boolean {
+  const { maxDpr: _, ...profile } = profiles[current];
   return Object.entries(profile).some(([key, value]) => gfx[key as keyof typeof gfx] !== value);
 }
+export function getGraphicsQualityServerGfx(): DevGfxSettings { return SERVER_GFX; }
 export function getGraphicsQuality(): GraphicsQuality { return current; }
 export function graphicsDpr(): number { return Math.min(window.devicePixelRatio || 1, profiles[current].maxDpr); }
 export function setGraphicsQuality(quality: GraphicsQuality): void {

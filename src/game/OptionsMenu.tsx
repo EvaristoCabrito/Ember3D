@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Monitor, Volume2, Languages, Accessibility, Check } from "lucide-react";
+import { Monitor, Volume2, Languages, Check } from "lucide-react";
 import { GraphicsQualityControl } from "./GraphicsQualityControl";
 import { getDevGfx, setDevGfx, subscribeDevGfx } from "./gfx/three/devGfx";
 import { getGraphicsQuality, subscribeGraphicsQuality } from "./graphicsQuality";
@@ -33,7 +33,7 @@ export function OptionsButton({ muted, onMute }: { muted: boolean; onMute: () =>
  <section className="game-options-section ember-slot space-y-3 p-4"><h3 className="game-options-heading ember-title"><Languages aria-hidden="true" />{t("Idiomas")}</h3>
  {([['uiLanguage','Interface e nomes'],['dialogueLanguage','Diálogos']] as const).map(([key,label]) => <label key={key} className="flex items-center justify-between gap-2 text-sm">{t(label)}<select className="bg-bg border border-border rounded p-2" value={prefs[key]} onChange={e => setGamePreferences({[key]:e.target.value as 'pt'|'en'})}><option value="pt">Português</option><option value="en">English</option></select></label>)}
  <p className="flex justify-between text-sm"><span>{t("Legendas")}</span><span>English</span></p></section>
- <section className="game-options-section ember-slot space-y-3 p-4"><h3 className="game-options-heading ember-title"><Accessibility aria-hidden="true" />{t("Acessibilidade")}</h3><label className="flex justify-between text-sm">{t("Exibir legendas")}<input type="checkbox" checked={prefs.subtitles} onChange={e => setGamePreferences({subtitles:e.target.checked})} /></label>
+ <section className="game-options-section ember-slot space-y-3 p-4"><h3 className="game-options-heading ember-title">{t("Acessibilidade")}</h3><label className="flex justify-between text-sm">{t("Exibir legendas")}<input type="checkbox" checked={prefs.subtitles} onChange={e => setGamePreferences({subtitles:e.target.checked})} /></label>
  <label className="flex justify-between gap-2 text-sm">{t("Tamanho do diálogo")}<select className="bg-bg border border-border rounded p-2" value={prefs.dialogueScale} onChange={e => setGamePreferences({dialogueScale:Number(e.target.value)})}>{([[1,'Normal'],[1.15,'Grande'],[1.3,'Muito grande']] as const).map(([value,label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label></section>
  </div><p className="game-options-footer ember-rule mt-6 pt-4 text-xs text-muted flex items-center justify-center gap-2"><Check className="size-3.5" aria-hidden="true" />{t("Alterações salvas automaticamente.")}</p>
  </dialog></>;
