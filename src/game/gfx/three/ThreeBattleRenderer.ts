@@ -1365,11 +1365,9 @@ export class ThreeBattleRenderer {
       if (entry.id !== "void") cells.push({ x: entry.mesh.position.x, y: entry.mesh.position.y,
         height: (this.engine.mission.terrainElevations?.[key] ?? TERRAIN[entry.id].height ?? 0) * tile * 0.65, col, row, entry });
     }
-    if (!this.engine.tacticsCamera) {
-      if (this.terrainSolid) this.terrainSolid.visible = false;
-      return;
-    }
-    const stamp = `continuous-atlas-v3:${this.engine.cols}:${this.engine.rows}:${tile}:${this.engine.fogged ? this.engine.visVersion : "clear"}:` + cells.map(c =>
+    // Both cameras use the continuous ground fill around the outer hexes. In 2D it
+    // sits beneath the original tiles, preserving their authored elevation steps.
+    const stamp = `continuous-atlas-v4:${this.engine.tacticsCamera}:${this.engine.cols}:${this.engine.rows}:${tile}:${this.engine.fogged ? this.engine.visVersion : "clear"}:` + cells.map(c =>
       `${c.col},${c.row},${c.height},${c.entry.id},${c.entry.variant},${c.entry.rot}`).join(";");
     if (stamp !== this.terrainSolidKey && cells.length) {
       if (!this.cliffMaterial) {
@@ -1384,6 +1382,7 @@ export class ThreeBattleRenderer {
         maxX: Math.max(...cells.map(c => c.x)) + tile,
         maxY: Math.max(...cells.map(c => c.y)) + tile };
       const surface = buildLandscape(bounds, tile * 0.45, tile * 0.45, (x, y) => {
+        if (!this.engine.tacticsCamera) return -0.02;
         // Interpolate nearby terrain elevations into connected slopes. The movement grid
         // supplies placement coordinates but no longer defines the ground's polygon edges.
         const row0 = Math.round((-y / tile - BOARD_PAD_MUL - 1) / 1.5);
@@ -2902,6 +2901,7 @@ export class ThreeBattleRenderer {
         let light = pool[i];
         if (!light) {
           light = new THREE.PointLight(0xffffff, 0, 1, 2);
+          light.layers.enable(SPELL_VFX_LAYER);
           if (castsShadow) {
             light.castShadow = true;
             light.shadow.mapSize.set(16, 16);
@@ -2919,15 +2919,15 @@ export class ThreeBattleRenderer {
 
   private parkHiddenLights(): { light: THREE.Light; intensity: number; autoUpdate: boolean }[] {
     const parked: { light: THREE.Light; intensity: number; autoUpdate: boolean }[] = [];
-    for (const child of this.scene.children) {
-      if (!(child instanceof THREE.Light) || child.visible || child instanceof THREE.AmbientLight || child instanceof THREE.HemisphereLight) continue;
-      if (this.fillerLights.point.includes(child as THREE.PointLight) || this.fillerLights.shadow.includes(child as THREE.PointLight)) continue;
+    this.scene.traverse((child) => {
+      if (!(child instanceof THREE.Light) || child.visible || child instanceof THREE.AmbientLight || child instanceof THREE.HemisphereLight) return;
+      if (this.fillerLights.point.includes(child as THREE.PointLight) || this.fillerLights.shadow.includes(child as THREE.PointLight)) return;
       const shadow = (child as THREE.PointLight).shadow;
       parked.push({ light: child, intensity: child.intensity, autoUpdate: shadow ? shadow.autoUpdate : true });
       child.visible = true;
       child.intensity = 0;
       if (shadow) shadow.autoUpdate = false;
-    }
+    });
     return parked;
   }
 
@@ -3527,7 +3527,12 @@ export class ThreeBattleRenderer {
   private syncSpellVfxLayers(): void {
     // Three.js does not inherit layer masks. This also catches meshes created asynchronously
     // during a live cast, such as Burning Hands' fire flipbook emitter.
-    this.spellVfxScene.traverse((object) => object.layers.set(SPELL_VFX_LAYER));
+    this.spellVfxScene.traverse((object) => {
+      object.layers.set(SPELL_VFX_LAYER);
+      // Light budgets must match in both passes. Spell geometry stays in the foreground,
+      // while its lights also illuminate terrain and actors in the main pass.
+      if (object instanceof THREE.Light) object.layers.enable(0);
+    });
   }
 
   private syncMagicMissileV2Vfx(dt: number, tile: number): void {

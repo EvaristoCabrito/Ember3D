@@ -5620,6 +5620,7 @@ export function MapEditorScreen({
     .sort((a, b) => Number(a.model3d === "wall") - Number(b.model3d === "wall"));
   const decorationSectionFor = (id: string) => {
     if (DECORATIONS[id]?.exitKind) return "Waypoints";
+    if (id === "merchant-covered-cart-001" || id === "city-market-stall" || id === "city-market-stall-2" || id === "city-market-wagon-new") return "Shops";
     // Everything that emits light (see LIGHT_DEFS), burning houses included, in one place.
     if (LIGHT_DEFS[id]) return "Lights";
     if (HOUSE_DECOR_IDS.has(id) || BIG_HOUSE_DECOR_IDS.has(id)) return "Houses";
@@ -5651,7 +5652,7 @@ export function MapEditorScreen({
   };
   // "Todas" stays pinned first (it's the "show everything" reset, not a real category);
   // every actual category below it is kept in alphabetical order.
-  const decorationSections = ["Todas", "Barricada", "Cave", "City", "Forest", "Houses", "Lights", "Madeira Morta", "Natureza", "Objetos", "Pedras e relevo", "Pontes", "Ruínas e construções", "Torture", "Waypoints", "Wilds"];
+  const decorationSections = ["Todas", "Barricada", "Cave", "City", "Forest", "Houses", "Lights", "Madeira Morta", "Natureza", "Objetos", "Pedras e relevo", "Pontes", "Ruínas e construções", "Shops", "Torture", "Waypoints", "Wilds"];
   const visibleDecorOptions = mode === "architecture" ? architectureOptions : decoSection === "Todas" ? decorOptions : decorOptions.filter((dec) => decorationSectionFor(dec.id) === decoSection);
 
   // Clicking a placed prop is also a lookup action: open its palette section and arm the

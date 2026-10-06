@@ -62,8 +62,8 @@ const NPCS = [
   },
   {
     id: "merchant",
-    name: "Mercador Itinerante",
-    role: "Viajante",
+    name: "Rambarton",
+    role: "Mercador Itinerante",
     portrait: "/game/portraits/traveling-merchant.png",
     talk: "Poções, rações e gazuas. Levo pouco, mas escolhi bem.",
     shop: true,
@@ -375,7 +375,7 @@ export function InnScreen({
         </button>
         <div className="min-w-0 flex-1">
           <p className="text-xs ember-kicker">{startInMerchant ? (startInMerchantGear ? "Entre os picos nevados" : "Parada na estrada") : "Pousada à margem da cinza"}</p>
-          <h1 className="font-display text-2xl leading-none ember-title">{startInMerchant ? "Mercador Itinerante" : "A Estalagem do Osso Seco"}</h1>
+          <h1 className="font-display text-2xl leading-none ember-title">{startInMerchant ? "Rambarton - Mercador Itinerante" : "A Estalagem do Osso Seco"}</h1>
         </div>
         <button
           type="button"
@@ -422,7 +422,7 @@ export function InnScreen({
           <img src={npc.portrait} alt="" className="h-24 w-16 object-cover rounded-md shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-medium">
-              {npc.name} · {npc.role}
+              {npc.id === "merchant" ? `${npc.name} - ${npc.role}` : `${npc.name} · ${npc.role}`}
             </p>
             <p className="mt-1 text-sm leading-relaxed text-fg/90">{npc.talk}</p>
           </div>
@@ -1032,7 +1032,7 @@ function SmithPanel({
   return (
     <section className="shop-surface relative h-dvh min-h-0 flex flex-col overflow-hidden bg-bg">
       <img src={merchantGear ? merchantBackdrop ?? "/game/assets/merchant-snow-market-background-001.jpg" : "/game/ui/smith-background.jpg"} alt="" className="absolute inset-0 h-full w-full object-cover object-left" />
-      {merchantGear && <img src="/game/decorations/merchant-covered-cart-002.png" alt="" className="pointer-events-none absolute z-[1] bottom-0 left-0 w-[min(48vw,680px)] max-h-[70vh] object-contain object-bottom drop-shadow-2xl" />}
+      {merchantGear && <img src="/game/decorations/merchant-covered-cart-001.png" alt="" className="pointer-events-none absolute z-[1] bottom-0 left-0 w-[min(48vw,680px)] max-h-[70vh] object-contain object-bottom drop-shadow-2xl" />}
       <header className="relative z-10 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
         {/* Back always sits at the far left, across every screen, so it never gets lost. */}
         <button type="button" onClick={onBack} className="h-10 px-3 rounded-md ember-chip text-xs uppercase tracking-[0.14em]">
