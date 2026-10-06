@@ -191,7 +191,7 @@ if (typeof Audio !== "undefined") {
   for (const file of ["CultistV2Attack.mp3", "CultistV2Spellcast.mp3", "MinorHorrorATT001.mp3", "MinorHorrorCasting001.mp3"]) sfxTemplate(file);
 }
 
-function playSfxFileExclusive(file: string, volume = 0.55): void {
+function playSfxFileExclusive(file: string, volume = 0.55, startAt = 0): void {
   if (muted || typeof Audio === "undefined") return;
   let el = exclusiveSfxEls.get(file);
   if (!el) {
@@ -202,7 +202,7 @@ function playSfxFileExclusive(file: string, volume = 0.55): void {
     el.load();
   }
   el.volume = volume * sfxVolume;
-  el.currentTime = 0;
+  el.currentTime = startAt;
   el.muted = muted;
   el.play().catch(() => {});
 }
@@ -223,7 +223,9 @@ export const sfxPlay = {
   dreamingWeb: () => {},
   summonFamiliar: () => {},
   // Weapon cues share the exclusive player so rapid repeats never stack.
-  meleeAttack: (blade = false) => playSfxFileExclusive(blade ? "BladeSlash1Dagger.mp3" : "ATT01Blunt.mp3", 0.55),
+  // bladeStartAt: seconds into the blade recording to start from (Kael's long swing skips its
+  // silent lead-in so the swoosh lands on his slash). The blunt cue always starts at 0.
+  meleeAttack: (blade = false, bladeStartAt = 0) => playSfxFileExclusive(blade ? "BladeSlash1Dagger.mp3" : "ATT01Blunt.mp3", 0.55, blade ? bladeStartAt : 0),
   // Cultist V2's own authored cues (see attachments/Cultist-V2), one per animation set —
   // played instead of the (now silent) generic attack/cast/move cues whenever the acting
   // unit's sprite is "cultist-v2" (see stepCombat/stepSpell/startSeq in engine.ts).
@@ -315,7 +317,7 @@ function getTrack(theme: Theme): HTMLAudioElement | null {
     // The world map's own piece, under the name it was delivered as. Encoded because that
     // name carries spaces.
     if (!worldMapEl)
-      worldMapEl = attachTrack(new Audio(`/game/MUSIC/${encodeURIComponent("Tragic Architecture True Persona-WorldMap-Balanced-High.mp3")}`), 0.4);
+      worldMapEl = attachTrack(new Audio(`/game/MUSIC/${encodeURIComponent("Tragic Arqui TruePersonaWorldMapEmber-Balanced-High.mp3")}`), 0.4);
     return worldMapEl;
   }
   // The battle theme's own track, recovered from an earlier build's output where it was the
